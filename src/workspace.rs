@@ -1,22 +1,23 @@
-use crate::{procedure_prims::ProcedurePrims, world::World};
+use std::{cell::RefCell, rc::Rc};
 
-#[derive(Debug, Default)]
+use crate::{procedure::ProcedureManager, rng::{NextInt, RandIntGenerator}, world::World};
+
+#[derive(Debug)]
 pub struct Workspace {
-    pub procedure_prims: ProcedurePrims,
+    pub procedures: ProcedureManager,
     pub world: World,
-    pub updater: Updater,
+    pub rng: Rc<RefCell<dyn NextInt>>,
     // TODO
-    // rng
     // plot manager
-}
-
-#[derive(Debug, Default)]
-pub struct Updater {
-    // TODO
 }
 
 impl Workspace {
     pub fn new() -> Self {
-        Workspace::default()
+        let rng = Rc::new(RefCell::new(RandIntGenerator::new()));
+        Self {
+            procedures: ProcedureManager::new(),
+            world: World::new(rng.clone()),
+            rng,
+        }
     }
 }

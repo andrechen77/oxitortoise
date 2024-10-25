@@ -1,36 +1,22 @@
-use std::iter;
+use std::{cell::RefCell, iter, rc::Rc};
 
-use crate::{observer::Observer, turtle_manager::TurtleManager};
+use crate::{agent::Agent, agent_id::AgentId, observer::Observer, rng::NextInt, turtle::TurtleManager};
 
 #[derive(Debug)]
 pub struct World {
-    // self manager
-    // breed manager
-    pub link_manager: LinkManager,
     pub observer: Observer,
-    pub self_manager: SelfManager,
-    pub ticker: Ticker,
-    pub topology: Topology,
     pub turtle_manager: TurtleManager,
-    pub patch_manager: PatchManager,
     // TODO
 }
 
-impl Default for World {
-    fn default() -> Self {
-        World {
-            link_manager: LinkManager::default(),
+impl World {
+    pub fn new(rng: Rc<RefCell<dyn NextInt>>) -> Self {
+        Self {
             observer: Observer::default(),
-            self_manager: SelfManager::default(),
-            ticker: Ticker::default(),
-            topology: Topology::default(),
-            turtle_manager: TurtleManager::new(iter::empty(), vec![], vec![]),
-            patch_manager: PatchManager::default(),
+            turtle_manager: TurtleManager::new(iter::empty(), vec![], vec![], rng),
         }
     }
-}
 
-impl World {
     pub fn clear_all(&mut self) {
         /*
         @observer.clearCodeGlobals()
@@ -52,15 +38,13 @@ impl World {
         return
          */ // TODO
     }
-}
 
-#[derive(Debug, Default)]
-pub struct LinkManager {}
-#[derive(Debug, Default)]
-pub struct SelfManager {}
-#[derive(Debug, Default)]
-pub struct Ticker {}
-#[derive(Debug, Default)]
-pub struct Topology {}
-#[derive(Debug, Default)]
-pub struct PatchManager {}
+    pub fn get_agent(&self, id: AgentId) -> Option<Agent> {
+        match id {
+            AgentId::Observer => todo!(),
+            AgentId::Turtle(id) => Some(Agent::Turtle(self.turtle_manager.get_turtle(id)?)),
+            AgentId::Patch(_id) => todo!(),
+            AgentId::Link(_id) => todo!(),
+        }
+    }
+}

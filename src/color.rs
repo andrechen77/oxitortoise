@@ -7,8 +7,8 @@ pub struct Color(pub f64); // do we need this much precision? does it matter?
 
 pub static COLOR_MAX: Color = Color(140.0);
 
-pub fn random_color(next_int: &mut NextInt) -> Color {
-    Color(next_int.next(base_colors().len() as i32).into())
+pub fn random_color(next_int: &mut dyn NextInt) -> Color {
+    Color(next_int.next_int(base_colors().len() as i32).into())
 }
 
 pub fn base_colors() -> &'static [Color] {
@@ -19,3 +19,5 @@ pub fn base_colors() -> &'static [Color] {
             .collect()
     })
 }
+
+pub static RED: Color = Color(15.0);
