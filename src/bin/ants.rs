@@ -5,7 +5,7 @@ use oxitortoise::agent::Agent;
 use oxitortoise::agent_id::AgentId;
 use oxitortoise::procedure::{AnonCommand, Command};
 use oxitortoise::turtle::{Shape, BREED_NAME_TURTLES};
-use oxitortoise::updater::PrintUpdate;
+use oxitortoise::updater::{PrintUpdate, TurtleProperty};
 use oxitortoise::value::Value;
 use oxitortoise::{color, value};
 use oxitortoise::workspace::Workspace;
@@ -48,7 +48,7 @@ fn create_ants_model() -> Workspace {
                     update.update_turtle(turtle, FlagSet::default())
                 }
             );
-            let on_creation: AnonCommand = Box::new(|world, executor, _update| {
+            let on_creation: AnonCommand = Box::new(|world, executor, update| {
                 // get the currently executing agent
                 let executor = world.get_agent(executor).expect("a command should be executed by an existing agent");
                 let Agent::Turtle(turtle) = executor else {
@@ -61,6 +61,8 @@ fn create_ants_model() -> Workspace {
 
                 // `set color red`
                 turtle.set_color(color::RED);
+
+                update.update_turtle(&*turtle, TurtleProperty::Size | TurtleProperty::Color);
             });
             for turtle in new_turtles {
                 on_creation(world, turtle.into(), update);
@@ -77,5 +79,4 @@ fn main() {
     let mut workspace = create_ants_model();
     let setup = &workspace.procedures.get_command_by_name("setup").unwrap().action;
     setup(&mut workspace.world, AgentId::Observer, &mut PrintUpdate);
-    println!("{:#?}", workspace);
 }

@@ -4,7 +4,9 @@ use crate::turtle::Turtle;
 
 pub trait Update {
     /// Records in the updater that the specified properties of a turtle have
-    /// changed to their new values.
+    /// changed to their new values. If this is called on a turtle that the
+    /// updater hasn't seen before, the updater also records that the turtle has
+    /// been created.
     fn update_turtle(&mut self, turtle: &Turtle, properties_to_update: FlagSet<TurtleProperty>);
 
     /// TODO Gets all the updates recorded in this updater since the last time
