@@ -3,7 +3,7 @@ use std::rc::Rc;
 use flagset::FlagSet;
 use oxitortoise::agent::Agent;
 use oxitortoise::agent_id::AgentId;
-use oxitortoise::procedure::{AnonCommand, Command};
+use oxitortoise::execution::{RenameMe, CommandProcedure};
 use oxitortoise::turtle::{Shape, BREED_NAME_TURTLES};
 use oxitortoise::updater::{PrintUpdate, TurtleProperty};
 use oxitortoise::value::Value;
@@ -18,7 +18,7 @@ fn create_ants_model() -> Workspace {
     // `globals [ population ]`
     workspace.world.observer.create_global(Rc::from("population"), Value::Float(value::Float(2.0)));
 
-    workspace.procedures.define_command(Command {
+    workspace.procedures.define_command(CommandProcedure {
         name: Rc::from("setup"),
         start: 637,
         end: 715,
@@ -48,7 +48,7 @@ fn create_ants_model() -> Workspace {
                     update.update_turtle(turtle, FlagSet::default())
                 }
             );
-            let on_creation: AnonCommand = Box::new(|world, executor, update| {
+            let on_creation: RenameMe = Box::new(|world, executor, update| {
                 // get the currently executing agent
                 let executor = world.get_agent(executor).expect("a command should be executed by an existing agent");
                 let Agent::Turtle(turtle) = executor else {
