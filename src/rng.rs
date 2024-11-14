@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::{cell::RefCell, fmt::Debug, rc::Rc};
 
 use rand::{rngs::StdRng, Rng as _, SeedableRng as _};
 
@@ -7,6 +7,12 @@ use rand::{rngs::StdRng, Rng as _, SeedableRng as _};
 
 pub trait NextInt: Debug {
     fn next_int(&mut self, max: i32) -> i32;
+}
+
+impl<N: NextInt + ?Sized> NextInt for Rc<RefCell<N>> {
+    fn next_int(&mut self, max: i32) -> i32 {
+        self.borrow_mut().next_int(max)
+    }
 }
 
 #[derive(Debug)]

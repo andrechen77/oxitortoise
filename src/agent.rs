@@ -1,12 +1,12 @@
 use std::{cell::RefCell, rc::Rc};
 
-use crate::{turtle::Turtle, world::World};
+use crate::{patch::PatchId, turtle::Turtle, world::World};
 
 #[derive(Debug, Clone)]
 pub enum Agent {
     Observer(Rc<RefCell<World>>),
     Turtle(Rc<RefCell<Turtle>>),
-    Patch(/* TODO */),
+    Patch(Rc<RefCell<World>>, PatchId),
     Link(/* TODO */),
 }
 
@@ -15,7 +15,7 @@ impl Agent {
         match self {
             Agent::Observer(world) => world.clone(),
             Agent::Turtle(turtle) => turtle.borrow().get_world(),
-            Agent::Patch(/* TODO */) => unimplemented!(),
+            Agent::Patch(world, _) => world.clone(),
             Agent::Link(/* TODO */) => unimplemented!(),
         }
     }
