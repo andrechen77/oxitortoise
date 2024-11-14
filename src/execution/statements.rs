@@ -3,12 +3,11 @@ use std::{mem, rc::Rc};
 use flagset::FlagSet;
 
 use crate::{
-    agent::AgentId,
+    agent::{AgentId, AgentMut},
     rng::NextInt,
     topology::Point,
     updater::Update,
     value::{self, Value},
-    world::AgentMut,
 };
 
 use super::ExecutionContext;

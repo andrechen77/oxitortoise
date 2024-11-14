@@ -1,6 +1,6 @@
 use std::convert::Infallible;
 
-use crate::{patch::PatchId, turtle::TurtleId};
+use crate::{observer::Observer, patch::{Patch, PatchId}, turtle::{Turtle, TurtleId}};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AgentId {
@@ -20,4 +20,18 @@ impl From<PatchId> for AgentId {
     fn from(patch: PatchId) -> Self {
         AgentId::Patch(patch)
     }
+}
+
+pub enum Agent<'a> {
+    Observer(&'a Observer),
+    Turtle(&'a Turtle),
+    Patch(&'a Patch),
+    Link(Infallible /* TODO */),
+}
+
+pub enum AgentMut<'a> {
+    Observer(&'a mut Observer),
+    Turtle(&'a mut Turtle),
+    Patch(&'a mut Patch),
+    Link(Infallible /* TODO */),
 }

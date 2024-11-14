@@ -6,7 +6,7 @@ use std::{
 };
 
 use crate::{
-    agent::AgentId,
+    agent::{Agent, AgentId, AgentMut},
     observer::Observer,
     patch::{Patch, Patches},
     topology::Topology,
@@ -93,17 +93,4 @@ impl World {
             AgentId::Link(_id) => todo!(),
         }
     }
-}
-pub enum Agent<'a> {
-    Observer(&'a Observer),
-    Turtle(&'a Turtle),
-    Patch(&'a Patch),
-    Link(Infallible /* TODO */),
-}
-
-pub enum AgentMut<'a> {
-    Observer(&'a mut Observer),
-    Turtle(&'a mut Turtle),
-    Patch(&'a mut Patch),
-    Link(Infallible /* TODO */),
 }
