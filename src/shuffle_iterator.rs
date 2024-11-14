@@ -1,6 +1,8 @@
 // TODO this is not exactly the same implementation as the one in Tortoise but
 // it should work for proof of concept
 
+use std::mem;
+
 use crate::rng::NextInt;
 
 pub struct ShuffleIterator<'a, T, R> {
@@ -24,31 +26,20 @@ where
     type Item = &'a mut T;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.remaining.is_empty() {
+        let remaining = mem::take(&mut self.remaining);
+        if remaining.is_empty() {
             return None;
         }
 
-        let next = self.rng.next_int(self.remaining.len() as i32) as usize;
-        self.remaining.swap(0, next);
+        let next = self.rng.next_int(remaining.len() as i32) as usize;
+        remaining.swap(0, next);
 
-        let (head, tail) = self
-            .remaining
+        let (head, tail) = remaining
             .split_first_mut()
             .expect("should not be empty");
 
-        // Safety: We know that both `head` and `tail` are valid mutable
-        // reference that are valid for 'a, because `Self` lives for 'a, meaning
-        // that it was initialized with a slice that lived for 'a, which means
-        // every item in the slice also lives for &'a. For a split second, both
-        // `self.remaining` and the temporary returned by `from_raw_parts` point
-        // to overlapping memory, but that should be okay (verified by miri)
-        // since they both originate from the same borrow. `item` is created
-        // after `self.remaining` is updated, so it always has exclusive access
-        // to that item.
-        self.remaining = unsafe { std::slice::from_raw_parts_mut(tail.as_mut_ptr(), tail.len()) };
-        let item: &'a mut T = unsafe { &mut *(head as *mut T) };
-
-        Some(item)
+        self.remaining = tail;
+        Some(head)
     }
 }
 
