@@ -6,6 +6,7 @@ use slotmap::SlotMap;
 
 use crate::color::{self, Color};
 use crate::rng::NextInt;
+use crate::topology::Point;
 use crate::world::World;
 
 /// The who number of a turtle.
@@ -117,8 +118,7 @@ impl Turtles {
         &mut self,
         count: u64,
         breed_name: &str,
-        xcor: f64,
-        ycor: f64,
+        spawn_point: Point,
         mut on_create: impl FnMut(TurtleId),
         next_int: &mut dyn NextInt,
     ) {
@@ -144,8 +144,7 @@ impl Turtles {
                 breed: breed.clone(),
                 color,
                 heading,
-                xcor,
-                ycor,
+                position: spawn_point,
                 label: String::new(),
                 label_color: color, // TODO use a default label color
                 hidden: false,
@@ -180,8 +179,7 @@ pub struct Turtle {
     // linkmanager
     color: Color,
     heading: f64,
-    xcor: f64,
-    ycor: f64,
+    position: Point,
     label: String,
     label_color: Color,
     hidden: bool,
@@ -217,12 +215,8 @@ impl Turtle {
         self.heading
     }
 
-    pub fn xcor(&self) -> f64 {
-        self.xcor
-    }
-
-    pub fn ycor(&self) -> f64 {
-        self.ycor
+    pub fn position(&self) -> Point {
+        self.position
     }
 
     pub fn label(&self) -> &str {

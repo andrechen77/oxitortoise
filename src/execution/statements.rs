@@ -5,6 +5,7 @@ use flagset::FlagSet;
 use crate::{
     agent::AgentId,
     rng::NextInt,
+    topology::Point,
     updater::Update,
     value::{self, Value},
     world::AgentMut,
@@ -156,8 +157,7 @@ impl Statement for CreateTurtles {
             context.world.turtles.create_turtles(
                 count,
                 &self.breed_name,
-                0.0, // TODO magic numbers
-                0.0,
+                Point::ORIGIN,
                 |turtle| new_turtles.push(turtle),
                 context.next_int,
             );

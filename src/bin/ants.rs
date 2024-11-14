@@ -3,7 +3,7 @@ use std::rc::Rc;
 
 use flagset::FlagSet;
 use oxitortoise::shuffle_iterator::ShuffleIterator;
-use oxitortoise::topology::Topology;
+use oxitortoise::topology::{Point, Topology};
 use oxitortoise::turtle::{Shape, BREED_NAME_TURTLES};
 use oxitortoise::updater::{PrintUpdate, TurtleProperty, Update};
 use oxitortoise::value::Value;
@@ -49,8 +49,7 @@ fn run_ants_model() -> Rc<RefCell<Workspace>> {
     world.turtles.create_turtles(
         num,
         BREED_NAME_TURTLES,
-        0.0,
-        0.0,
+        Point::ORIGIN,
         |turtle| new_turtles.push(turtle.clone()),
         &mut *workspace.rng.borrow_mut(),
     );

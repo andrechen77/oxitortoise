@@ -18,6 +18,10 @@ pub struct Point {
     pub y: f64,
 }
 
+impl Point {
+    pub const ORIGIN: Point = Point { x: 0.0, y: 0.0 };
+}
+
 pub fn euclidean_distance_unwrapped(a: Point, b: Point) -> f64 {
     let dx = a.x - b.x;
     let dy = a.y - b.y;

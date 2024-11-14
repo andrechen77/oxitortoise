@@ -25,8 +25,7 @@ flags! {
         PenMode,
         Shape,
         Size,
-        XCor,
-        YCor,
+        Position,
     }
 }
 
@@ -46,8 +45,7 @@ impl Update for PrintUpdate {
                 TurtleProperty::PenMode => todo!(),
                 TurtleProperty::Shape => format!("Shape: {:?}", turtle.shape()),
                 TurtleProperty::Size => format!("Size: {:?}", turtle.size()),
-                TurtleProperty::XCor => format!("XCor: {:?}", turtle.xcor()),
-                TurtleProperty::YCor => format!("YCor: {:?}", turtle.ycor()),
+                TurtleProperty::Position => format!("Position: {:?}", turtle.position()),
             };
             updated_properties.push(value);
         }
