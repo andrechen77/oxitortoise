@@ -34,9 +34,7 @@ where
         let next = self.rng.next_int(remaining.len() as i32) as usize;
         remaining.swap(0, next);
 
-        let (head, tail) = remaining
-            .split_first_mut()
-            .expect("should not be empty");
+        let (head, tail) = remaining.split_first_mut().expect("should not be empty");
 
         self.remaining = tail;
         Some(head)

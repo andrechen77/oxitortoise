@@ -3,10 +3,11 @@ use std::{mem, rc::Rc};
 use flagset::FlagSet;
 
 use crate::{
-    agent::Agent,
+    agent::AgentId,
     rng::NextInt,
     updater::Update,
     value::{self, Value},
+    world::AgentMut,
 };
 
 use super::ExecutionContext;
@@ -37,7 +38,10 @@ pub trait Statement {
     /// the state in its execution context (which uses RefCell heavily) is
     /// currently unborrowed, so a statement should make sure that it stops
     /// borrowing that state when it calls other statements.
-    fn execute<'r, U, R>(&self, context: &mut ExecutionContext<'r, U, R>) -> StatementOutcome
+    fn execute<'w, 'r, U, R>(
+        &self,
+        context: &mut ExecutionContext<'w, 'r, U, R>,
+    ) -> StatementOutcome
     where
         U: Update,
         R: NextInt;
@@ -52,7 +56,10 @@ pub enum StatementKind {
 
 // essentially manually doing dynamic dispatch for `StatementKind`
 impl Statement for StatementKind {
-    fn execute<'r, U, R>(&self, context: &mut ExecutionContext<'r, U, R>) -> StatementOutcome
+    fn execute<'w, 'r, U, R>(
+        &self,
+        context: &mut ExecutionContext<'w, 'r, U, R>,
+    ) -> StatementOutcome
     where
         U: Update,
         R: NextInt,
@@ -82,7 +89,10 @@ pub struct CompoundStatement {
 }
 
 impl Statement for CompoundStatement {
-    fn execute<'r, U, R>(&self, context: &mut ExecutionContext<'r, U, R>) -> StatementOutcome
+    fn execute<'w, 'r, U, R>(
+        &self,
+        context: &mut ExecutionContext<'w, 'r, U, R>,
+    ) -> StatementOutcome
     where
         U: Update,
         R: NextInt,
@@ -97,12 +107,15 @@ impl Statement for CompoundStatement {
 pub struct ClearAll {}
 
 impl Statement for ClearAll {
-    fn execute<'r, U, R>(&self, context: &mut ExecutionContext<'r, U, R>) -> StatementOutcome
+    fn execute<'w, 'r, U, R>(
+        &self,
+        context: &mut ExecutionContext<'w, 'r, U, R>,
+    ) -> StatementOutcome
     where
         U: Update,
         R: NextInt,
     {
-        context.executor.get_world().borrow_mut().clear_all();
+        context.world.clear_all();
         StatementOutcome::Return(None)
     }
 }
@@ -140,18 +153,12 @@ impl Statement for CreateTurtles {
         // create the turtles
         let new_turtles = {
             let mut new_turtles = Vec::new();
-            let world = context.executor.get_world();
-            world.borrow_mut().turtle_manager.create_turtles(
+            context.world.turtles.create_turtles(
                 count,
                 &self.breed_name,
                 0.0, // TODO magic numbers
                 0.0,
-                |turtle| {
-                    new_turtles.push(turtle.clone());
-                    context
-                        .updater
-                        .update_turtle(&turtle.borrow(), FlagSet::default());
-                },
+                |turtle| new_turtles.push(turtle),
                 context.next_int,
             );
             new_turtles
@@ -163,7 +170,8 @@ impl Statement for CreateTurtles {
             let my_asker = mem::replace(&mut context.asker, context.executor.clone());
 
             for turtle in new_turtles {
-                context.executor = Agent::Turtle(turtle.clone());
+                // TODO shuffle first
+                context.executor = AgentId::Turtle(turtle.clone());
                 let _ = execute_with_ctrl_flow!(commands, context);
             }
 
@@ -182,7 +190,10 @@ pub struct SetTurtleSize {
 }
 
 impl Statement for SetTurtleSize {
-    fn execute<'r, U, R>(&self, context: &mut ExecutionContext<'r, U, R>) -> StatementOutcome
+    fn execute<'w, 'r, U, R>(
+        &self,
+        context: &mut ExecutionContext<'w, 'r, U, R>,
+    ) -> StatementOutcome
     where
         U: Update,
         R: NextInt,
@@ -199,17 +210,16 @@ impl Statement for SetTurtleSize {
             ));
         };
 
-        // set the size of the turtle
-        if let Agent::Turtle(turtle) = &context.executor {
-            turtle.borrow_mut().set_size(size);
-            context
-                .updater
-                .update_turtle(&turtle.borrow(), FlagSet::default());
-            StatementOutcome::Return(None)
-        } else {
-            StatementOutcome::Error(value::String::from(
+        // get the executor
+        let Some(AgentMut::Turtle(turtle)) = context.world.get_agent_mut(context.executor) else {
+            return StatementOutcome::Error(value::String::from(
                 "`set-turtle-size` can only be executed by a turtle",
-            ))
-        }
+            ));
+        };
+
+        // set the size of the turtle
+        turtle.set_size(size);
+        context.updater.update_turtle(turtle, FlagSet::default());
+        StatementOutcome::Return(None)
     }
 }

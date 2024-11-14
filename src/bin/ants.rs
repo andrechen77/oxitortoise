@@ -2,8 +2,6 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use flagset::FlagSet;
-use oxitortoise::agent::Agent;
-use oxitortoise::agent_id::AgentId;
 use oxitortoise::shuffle_iterator::ShuffleIterator;
 use oxitortoise::topology::Topology;
 use oxitortoise::turtle::{Shape, BREED_NAME_TURTLES};
@@ -37,7 +35,7 @@ fn run_ants_model() -> Rc<RefCell<Workspace>> {
 
     // `set-default-shape turtles "bug"`
     world
-        .turtle_manager
+        .turtles
         .set_default_shape(BREED_NAME_TURTLES, Shape {});
 
     // `create-turtles ...`
@@ -48,20 +46,20 @@ fn run_ants_model() -> Rc<RefCell<Workspace>> {
         .to_u64_round_to_zero()
         .expect("compiler assumes this is a number");
     let mut new_turtles = Vec::new();
-    world.turtle_manager.create_turtles(
+    world.turtles.create_turtles(
         num,
         BREED_NAME_TURTLES,
         0.0,
         0.0,
-        |turtle| {
-            new_turtles.push(turtle.clone());
-            updater.update_turtle(&turtle.borrow(), FlagSet::default());
-        },
+        |turtle| new_turtles.push(turtle.clone()),
         &mut *workspace.rng.borrow_mut(),
     );
 
     for turtle in ShuffleIterator::new(&mut new_turtles, workspace.rng.clone()) {
-        let mut turtle = turtle.borrow_mut();
+        let turtle = world
+            .turtles
+            .get_mut_by_index(*turtle)
+            .expect("turtle should exist because it was just created");
 
         // `set size 2`
         turtle.set_size(2.0);
@@ -76,7 +74,6 @@ fn run_ants_model() -> Rc<RefCell<Workspace>> {
     let mut patches: Vec<_> = world.patches.patch_ids_iter().collect();
     for patch in ShuffleIterator::new(&mut patches, Rc::clone(&workspace.rng)) {
         // setup-nest
-
 
         // setup-food
 

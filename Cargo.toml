@@ -6,3 +6,4 @@ edition = "2021"
 [dependencies]
 flagset = "0.4.6"
 rand = "0.8.5"
+slotmap = "1.0.7"

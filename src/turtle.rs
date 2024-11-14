@@ -2,36 +2,46 @@ use std::fmt::{self, Debug};
 use std::rc::Weak;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
+use slotmap::SlotMap;
+
 use crate::color::{self, Color};
 use crate::rng::NextInt;
 use crate::world::World;
 
-/// A reference to a turtle.
+/// The who number of a turtle.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub struct TurtleId(u64); // this is just the who number of the turtle
+pub struct TurtleWho(u64);
 
-impl TurtleId {
-    pub const INITIAL: TurtleId = TurtleId(0);
+impl TurtleWho {
+    pub const INITIAL: TurtleWho = TurtleWho(0);
 }
 
-impl fmt::Display for TurtleId {
+impl fmt::Display for TurtleWho {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "(turtle {})", self.0)
     }
 }
 
-#[derive(Debug)]
-pub struct TurtleManager {
-    /// A back-reference to the world that includes this turtle manager.
-    pub world: Weak<RefCell<World>>,
-    /// The id to be given to the next turtle.
-    next_id: TurtleId,
-    breeds: HashMap<Rc<str>, Rc<RefCell<Breed>>>, // TODO why store by name? what if we just passed around an index?
-    turtles_by_id: HashMap<TurtleId, Rc<RefCell<Turtle>>>,
-    // updater
+slotmap::new_key_type! {
+    /// An invalidate-able reference to a turtle. This is implemented as a
+    /// generational index into the [`Turtles`] data structure.
+    pub struct TurtleId;
 }
 
-impl TurtleManager {
+#[derive(Debug)]
+pub struct Turtles {
+    /// A back-reference to the world that includes this turtle manager.
+    pub world: Weak<RefCell<World>>,
+    /// The who number to be given to the next turtle.
+    next_who: TurtleWho,
+    // TODO do we need to store the breeds in a refcell?
+    // TODO why store by name? what if we just passed around an index?
+    breeds: HashMap<Rc<str>, Rc<RefCell<Breed>>>,
+    who_map: HashMap<TurtleWho, TurtleId>,
+    turtle_storage: SlotMap<TurtleId, Turtle>,
+}
+
+impl Turtles {
     pub fn new(
         additional_breeds: impl IntoIterator<Item = Breed>,
         turtles_owns: Vec<Rc<str>>,
@@ -61,11 +71,12 @@ impl TurtleManager {
             Rc::from(BREED_NAME_LINKS),
             Rc::new(RefCell::new(link_breed)),
         );
-        TurtleManager {
+        Turtles {
             world: Weak::new(),
-            next_id: TurtleId::INITIAL,
+            next_who: TurtleWho::INITIAL,
             breeds,
-            turtles_by_id: HashMap::new(),
+            who_map: HashMap::new(),
+            turtle_storage: SlotMap::with_key(),
         }
     }
 
@@ -77,14 +88,22 @@ impl TurtleManager {
             .shape = Some(Rc::new(shape));
     }
 
-    pub fn get_turtle(&self, id: TurtleId) -> Option<Rc<RefCell<Turtle>>> {
-        self.turtles_by_id.get(&id).cloned()
+    pub fn get_by_index(&self, turtle_ref: TurtleId) -> Option<&Turtle> {
+        self.turtle_storage.get(turtle_ref)
+    }
+
+    pub fn get_mut_by_index(&mut self, turtle_ref: TurtleId) -> Option<&mut Turtle> {
+        self.turtle_storage.get_mut(turtle_ref)
+    }
+
+    pub fn translate_who(&self, who: TurtleWho) -> Option<TurtleId> {
+        self.who_map.get(&who).copied()
     }
 
     /// Sets the backreferences of this structure and all structures owned by it
     /// to point to the specified world.
     pub fn set_world(&mut self, world: Weak<RefCell<World>>) {
-        if !self.turtles_by_id.is_empty() {
+        if !self.turtle_storage.is_empty() {
             // This could be implemented by setting the world of the turtles
             // but there's no reason to implement it since the workspace should
             // be set before it is used.
@@ -100,15 +119,15 @@ impl TurtleManager {
         breed_name: &str,
         xcor: f64,
         ycor: f64,
-        mut on_create: impl FnMut(&Rc<RefCell<Turtle>>),
+        mut on_create: impl FnMut(TurtleId),
         next_int: &mut dyn NextInt,
     ) {
         let breed = self.breeds.get(breed_name).unwrap().clone(); // TODO deal with unwrap
         for _ in 0..count {
             let color = color::random_color(next_int);
             let heading = next_int.next_int(360) as f64;
-            let id = self.next_id;
-            self.next_id.0 += 1;
+            let who = self.next_who;
+            self.next_who.0 += 1;
             let shape = breed.borrow().shape.clone().unwrap_or_else(|| {
                 self.breeds
                     .get(BREED_NAME_TURTLES)
@@ -119,9 +138,9 @@ impl TurtleManager {
                     .expect("default turtle breed should have a shape")
                     .clone()
             });
-            let turtle = Rc::new(RefCell::new(Turtle {
+            let turtle = Turtle {
                 world: self.world.clone(),
-                id,
+                id: who,
                 breed: breed.clone(),
                 color,
                 heading,
@@ -132,15 +151,17 @@ impl TurtleManager {
                 hidden: false,
                 size: 1.0,
                 shape,
-            }));
-            on_create(&turtle);
-            self.turtles_by_id.insert(id, turtle);
+            };
+            let turtle_ref = self.turtle_storage.insert(turtle);
+            self.who_map.insert(who, turtle_ref);
+            on_create(turtle_ref);
         }
     }
 
     pub fn clear_turtles(&mut self) {
-        self.turtles_by_id.clear();
-        self.next_id = TurtleId::INITIAL;
+        self.turtle_storage.clear();
+        self.who_map.clear();
+        self.next_who = TurtleWho::INITIAL;
     }
 }
 
@@ -148,7 +169,7 @@ impl TurtleManager {
 pub struct Turtle {
     /// A back-reference to the world that includes this turtle.
     world: Weak<RefCell<World>>,
-    id: TurtleId,
+    id: TurtleWho,
     breed: Rc<RefCell<Breed>>,
     /// The shape of this turtle due to its breed. This may or may not be the
     /// default shape of the turtle's breed.
@@ -168,7 +189,7 @@ pub struct Turtle {
 }
 
 impl Turtle {
-    pub fn id(&self) -> TurtleId {
+    pub fn id(&self) -> TurtleWho {
         self.id
     }
 

@@ -1,16 +1,16 @@
 use std::{
     cell::RefCell,
+    convert::Infallible,
     iter,
     rc::{Rc, Weak},
 };
 
 use crate::{
-    agent::Agent,
-    agent_id::AgentId,
+    agent::AgentId,
     observer::Observer,
-    patch::Patches,
-    topology::{self, Topology},
-    turtle::TurtleManager,
+    patch::{Patch, Patches},
+    topology::Topology,
+    turtle::{Turtle, Turtles},
     workspace::Workspace,
 };
 
@@ -19,7 +19,7 @@ pub struct World {
     /// A back-reference to the workspace that includes this world.
     pub workspace: Weak<RefCell<Workspace>>,
     pub observer: Observer,
-    pub turtle_manager: TurtleManager,
+    pub turtles: Turtles,
     pub patches: Patches,
     // TODO add other fields
 }
@@ -29,7 +29,7 @@ impl World {
         let world = Rc::new(RefCell::new(Self {
             workspace: Weak::new(),
             observer: Observer::default(),
-            turtle_manager: TurtleManager::new(iter::empty(), vec![], vec![]),
+            turtles: Turtles::new(iter::empty(), vec![], vec![]),
             patches: Patches::new(topology),
         }));
 
@@ -38,7 +38,7 @@ impl World {
         {
             let mut w = world.borrow_mut();
             w.observer.set_world(Rc::downgrade(&world));
-            w.turtle_manager.set_world(Rc::downgrade(&world));
+            w.turtles.set_world(Rc::downgrade(&world));
         }
 
         world
@@ -53,7 +53,7 @@ impl World {
     pub fn clear_all(&mut self) {
         self.observer.clear_globals();
         self.patches.clear_all_patches();
-        self.turtle_manager.clear_turtles();
+        self.turtles.clear_turtles();
         /*
         @observer.resetPerspective()
         @clearLinks()
@@ -72,12 +72,38 @@ impl World {
          */ // TODO
     }
 
-    pub fn get_agent(&self, id: AgentId) -> Option<Agent> {
-        match id {
-            AgentId::Observer => todo!(),
-            AgentId::Turtle(id) => Some(Agent::Turtle(self.turtle_manager.get_turtle(id)?)),
+    pub fn get_agent(&self, agent_ref: AgentId) -> Option<Agent<'_>> {
+        match agent_ref {
+            AgentId::Observer => Some(Agent::Observer(&self.observer)),
+            AgentId::Turtle(turtle_ref) => {
+                Some(Agent::Turtle(self.turtles.get_by_index(turtle_ref)?))
+            }
             AgentId::Patch(_id) => todo!(),
             AgentId::Link(_id) => todo!(),
         }
     }
+
+    pub fn get_agent_mut(&mut self, agent_ref: AgentId) -> Option<AgentMut<'_>> {
+        match agent_ref {
+            AgentId::Observer => Some(AgentMut::Observer(&mut self.observer)),
+            AgentId::Turtle(turtle_ref) => {
+                Some(AgentMut::Turtle(self.turtles.get_mut_by_index(turtle_ref)?))
+            }
+            AgentId::Patch(_id) => todo!(),
+            AgentId::Link(_id) => todo!(),
+        }
+    }
+}
+pub enum Agent<'a> {
+    Observer(&'a Observer),
+    Turtle(&'a Turtle),
+    Patch(&'a Patch),
+    Link(Infallible /* TODO */),
+}
+
+pub enum AgentMut<'a> {
+    Observer(&'a mut Observer),
+    Turtle(&'a mut Turtle),
+    Patch(&'a mut Patch),
+    Link(Infallible /* TODO */),
 }
