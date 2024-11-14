@@ -1,15 +1,18 @@
-use std::ops::DerefMut;
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use std::fmt::{self, Debug};
+use std::rc::Weak;
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-use crate::{
-    color::{self, Color},
-    rng::NextInt,
-};
+use crate::color::{self, Color};
+use crate::rng::NextInt;
+use crate::world::World;
 
 /// A reference to a turtle.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct TurtleId(u64); // this is just the who number of the turtle
+
+impl TurtleId {
+    pub const INITIAL: TurtleId = TurtleId(0);
+}
 
 impl fmt::Display for TurtleId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -19,12 +22,13 @@ impl fmt::Display for TurtleId {
 
 #[derive(Debug)]
 pub struct TurtleManager {
+    /// A back-reference to the world that includes this turtle manager.
+    pub world: Weak<RefCell<World>>,
     /// The id to be given to the next turtle.
     next_id: TurtleId,
     breeds: HashMap<Rc<str>, Rc<RefCell<Breed>>>, // TODO why store by name? what if we just passed around an index?
     turtles_by_id: HashMap<TurtleId, Rc<RefCell<Turtle>>>,
     // updater
-    next_int: Rc<RefCell<dyn NextInt>>,
 }
 
 impl TurtleManager {
@@ -32,7 +36,6 @@ impl TurtleManager {
         additional_breeds: impl IntoIterator<Item = Breed>,
         turtles_owns: Vec<Rc<str>>,
         links_owns: Vec<Rc<str>>,
-        next_int: Rc<RefCell<dyn NextInt>>,
     ) -> Self {
         let turtle_breed = Breed {
             original_name: Rc::from("turtles"),
@@ -48,12 +51,7 @@ impl TurtleManager {
         };
         let mut breeds: HashMap<_, _> = additional_breeds
             .into_iter()
-            .map(|breed| {
-                (
-                    breed.original_name.clone(),
-                    Rc::new(RefCell::new(breed)),
-                )
-            })
+            .map(|breed| (breed.original_name.clone(), Rc::new(RefCell::new(breed))))
             .collect();
         breeds.insert(
             Rc::from(BREED_NAME_TURTLES),
@@ -64,10 +62,10 @@ impl TurtleManager {
             Rc::new(RefCell::new(link_breed)),
         );
         TurtleManager {
-            next_id: TurtleId(0),
+            world: Weak::new(),
+            next_id: TurtleId::INITIAL,
             breeds,
             turtles_by_id: HashMap::new(),
-            next_int,
         }
     }
 
@@ -82,9 +80,19 @@ impl TurtleManager {
     pub fn get_turtle(&self, id: TurtleId) -> Option<Rc<RefCell<Turtle>>> {
         self.turtles_by_id.get(&id).cloned()
     }
-}
 
-impl TurtleManager {
+    /// Sets the backreferences of this structure and all structures owned by it
+    /// to point to the specified world.
+    pub fn set_world(&mut self, world: Weak<RefCell<World>>) {
+        if !self.turtles_by_id.is_empty() {
+            // This could be implemented by setting the world of the turtles
+            // but there's no reason to implement it since the workspace should
+            // be set before it is used.
+            panic!("cannot set world when there are turtles");
+        }
+        self.world = world;
+    }
+
     /// Creates the turtles and returns a list of their ids.
     pub fn create_turtles(
         &mut self,
@@ -92,13 +100,12 @@ impl TurtleManager {
         breed_name: &str,
         xcor: f64,
         ycor: f64,
-        mut on_create: impl FnMut(&Turtle),
+        mut on_create: impl FnMut(&Rc<RefCell<Turtle>>),
+        next_int: &mut dyn NextInt,
     ) {
-        let mut next_int = self.next_int.borrow_mut();
-
         let breed = self.breeds.get(breed_name).unwrap().clone(); // TODO deal with unwrap
         for _ in 0..count {
-            let color = color::random_color(next_int.deref_mut());
+            let color = color::random_color(next_int);
             let heading = next_int.next_int(360) as f64;
             let id = self.next_id;
             self.next_id.0 += 1;
@@ -112,7 +119,8 @@ impl TurtleManager {
                     .expect("default turtle breed should have a shape")
                     .clone()
             });
-            let turtle = Turtle {
+            let turtle = Rc::new(RefCell::new(Turtle {
+                world: self.world.clone(),
                 id,
                 breed: breed.clone(),
                 color,
@@ -124,15 +132,22 @@ impl TurtleManager {
                 hidden: false,
                 size: 1.0,
                 shape,
-            };
+            }));
             on_create(&turtle);
-            self.turtles_by_id.insert(id, Rc::new(RefCell::new(turtle)));
+            self.turtles_by_id.insert(id, turtle);
         }
+    }
+
+    pub fn clear_turtles(&mut self) {
+        self.turtles_by_id.clear();
+        self.next_id = TurtleId::INITIAL;
     }
 }
 
 #[derive(Debug)]
 pub struct Turtle {
+    /// A back-reference to the world that includes this turtle.
+    world: Weak<RefCell<World>>,
     id: TurtleId,
     breed: Rc<RefCell<Breed>>,
     /// The shape of this turtle due to its breed. This may or may not be the
@@ -203,6 +218,12 @@ impl Turtle {
 
     pub fn size(&self) -> f64 {
         self.size
+    }
+
+    pub fn get_world(&self) -> Rc<RefCell<World>> {
+        self.world
+            .upgrade()
+            .expect("turtle's world should have been set")
     }
 }
 

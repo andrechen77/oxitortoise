@@ -37,21 +37,25 @@ impl Update for PrintUpdate {
         let mut updated_properties = vec![];
         for property in properties_to_update {
             let value = match property {
-            TurtleProperty::Breed => format!("Breed: {:?}", turtle.breed()),
-            TurtleProperty::Color => format!("Color: {:?}", turtle.color()),
-            TurtleProperty::Heading => format!("Heading: {:?}", turtle.heading()),
-            TurtleProperty::LabelColor => format!("LabelColor: {:?}", turtle.label_color()),
-            TurtleProperty::Hidden => format!("Hidden: {:?}", turtle.hidden()),
-            TurtleProperty::PenSize => todo!(),
-            TurtleProperty::PenMode => todo!(),
-            TurtleProperty::Shape => format!("Shape: {:?}", turtle.shape()),
-            TurtleProperty::Size => format!("Size: {:?}", turtle.size()),
-            TurtleProperty::XCor => format!("XCor: {:?}", turtle.xcor()),
-            TurtleProperty::YCor => format!("YCor: {:?}", turtle.ycor()),
+                TurtleProperty::Breed => format!("Breed: {:?}", turtle.breed()),
+                TurtleProperty::Color => format!("Color: {:?}", turtle.color()),
+                TurtleProperty::Heading => format!("Heading: {:?}", turtle.heading()),
+                TurtleProperty::LabelColor => format!("LabelColor: {:?}", turtle.label_color()),
+                TurtleProperty::Hidden => format!("Hidden: {:?}", turtle.hidden()),
+                TurtleProperty::PenSize => todo!(),
+                TurtleProperty::PenMode => todo!(),
+                TurtleProperty::Shape => format!("Shape: {:?}", turtle.shape()),
+                TurtleProperty::Size => format!("Size: {:?}", turtle.size()),
+                TurtleProperty::XCor => format!("XCor: {:?}", turtle.xcor()),
+                TurtleProperty::YCor => format!("YCor: {:?}", turtle.ycor()),
             };
             updated_properties.push(value);
         }
-        println!("Turtle {} updated: {{ {} }}", turtle.id(), updated_properties.join(", "));
+        println!(
+            "Turtle {} updated: {{ {} }}",
+            turtle.id(),
+            updated_properties.join(", ")
+        );
     }
 
     fn get_update(&mut self) -> ! {

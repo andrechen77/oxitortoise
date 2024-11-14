@@ -4,7 +4,7 @@ pub enum AgentId {
     Observer,
     Turtle(TurtleId),
     Patch(PatchId),
-    Link(LinkId)
+    Link(LinkId),
 }
 
 impl From<TurtleId> for AgentId {

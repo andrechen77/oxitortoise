@@ -5,7 +5,7 @@ use crate::rng::NextInt;
 
 pub struct ShuffleIterator<'a, T, R> {
     remaining: &'a mut [T],
-    rng: R
+    rng: R,
 }
 
 impl<'a, T, R> ShuffleIterator<'a, T, R> {
@@ -18,7 +18,8 @@ impl<'a, T, R> ShuffleIterator<'a, T, R> {
 }
 
 impl<'a, T, R> Iterator for ShuffleIterator<'a, T, R>
-where R: NextInt
+where
+    R: NextInt,
 {
     type Item = &'a mut T;
 
@@ -30,7 +31,10 @@ where R: NextInt
         let next = self.rng.next_int(self.remaining.len() as i32) as usize;
         self.remaining.swap(0, next);
 
-        let (head, tail) = self.remaining.split_first_mut().expect("should not be empty");
+        let (head, tail) = self
+            .remaining
+            .split_first_mut()
+            .expect("should not be empty");
 
         // Safety: We know that both `head` and `tail` are valid mutable
         // reference that are valid for 'a, because `Self` lives for 'a, meaning
@@ -67,7 +71,9 @@ mod tests {
                 next
             }
         }
-        let rng = R { remaining: vec![5, 2, 2, 2, 0, 0].into() };
+        let rng = R {
+            remaining: vec![5, 2, 2, 2, 0, 0].into(),
+        };
         let mut items = [0, 1, 2, 3, 4, 5];
         let mut iter = ShuffleIterator::new(&mut items, rng);
 
