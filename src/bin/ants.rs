@@ -4,6 +4,7 @@ use std::rc::Rc;
 use flagset::FlagSet;
 use oxitortoise::agent::Agent;
 use oxitortoise::agent_id::AgentId;
+use oxitortoise::topology::Topology;
 use oxitortoise::turtle::{Shape, BREED_NAME_TURTLES};
 use oxitortoise::updater::{PrintUpdate, TurtleProperty, Update};
 use oxitortoise::value::Value;
@@ -12,16 +13,19 @@ use oxitortoise::{color, value};
 
 // define the Ants model. this is a direct translation of this code
 // https://github.com/NetLogo/Tortoise/blob/master/resources/test/dumps/Ants.js
-fn create_ants_model() -> Rc<RefCell<Workspace>> {
-    let w = Workspace::new();
-    let workspace = w.borrow_mut();
+fn run_ants_model() -> Rc<RefCell<Workspace>> {
+    let w = Workspace::new(Topology {
+        world_width: 25,
+        world_height: 25,
+    });
+    let mut workspace = w.borrow_mut();
 
     // `globals [ population ]`
     workspace
         .world
         .borrow_mut()
         .observer
-        .create_global(Rc::from("population"), Value::Float(value::Float(2.0)));
+        .create_widget_global(Rc::from("population"), Value::Float(value::Float(2.0)));
 
     // to setup
     let setup = |workspace: &mut Workspace, update: &mut dyn Update| {
@@ -70,6 +74,7 @@ fn create_ants_model() -> Rc<RefCell<Workspace>> {
             // on_creation(world, turtle.into(), update);
         }
     };
+    setup(&mut *workspace, &mut PrintUpdate);
 
     // TODO add the rest of the model
 
@@ -78,5 +83,5 @@ fn create_ants_model() -> Rc<RefCell<Workspace>> {
 }
 
 fn main() {
-
+    run_ants_model();
 }

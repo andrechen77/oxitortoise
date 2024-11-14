@@ -6,13 +6,28 @@ use std::{
 
 use crate::{value::Value, world::World};
 
+#[derive(Debug)]
+enum GlobalVariable {
+    CodeDefined(Value),
+    WidgetDefined(Value),
+}
+
+impl GlobalVariable {
+    fn get(&self) -> &Value {
+        match self {
+            GlobalVariable::CodeDefined(value) => value,
+            GlobalVariable::WidgetDefined(value) => value,
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct Observer {
     /// A back-reference to the world that includes this observer.
     world: Weak<RefCell<World>>,
     /// The global variables that are accessible to all agents.
-    variables: HashMap<Rc<str>, Value>,
-    // TODO
+    variables: HashMap<Rc<str>, GlobalVariable>,
+    // TODO add other fields
 }
 
 impl Observer {
@@ -23,14 +38,16 @@ impl Observer {
     }
 
     pub fn get_global(&self, name: &str) -> Option<&Value> {
-        self.variables.get(name)
+        self.variables.get(name).map(GlobalVariable::get)
     }
 
-    pub fn create_global(&mut self, name: Rc<str>, value: Value) {
-        self.variables.insert(name, value);
+    pub fn create_widget_global(&mut self, name: Rc<str>, value: Value) {
+        self.variables
+            .insert(name, GlobalVariable::WidgetDefined(value));
     }
 
     pub fn clear_globals(&mut self) {
-        self.variables.clear();
+        self.variables
+            .retain(|_, variable| !matches!(variable, GlobalVariable::CodeDefined(_)));
     }
 }

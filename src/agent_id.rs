@@ -26,8 +26,7 @@ impl From<LinkId> for AgentId {
 /// A reference to a patch.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PatchId {
-    // The index of the patch counting from the corner of the world,
-    // left-to-right and then top-down. 0 is the top-left corner of the world.
+    // The index of the patch in the [`Patches`] struct.
     grid_index: usize,
 }
 

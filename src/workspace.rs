@@ -3,6 +3,7 @@ use std::{cell::RefCell, rc::Rc};
 use crate::{
     execution::ProcedureManager,
     rng::{NextInt, RandIntGenerator},
+    topology::Topology,
     world::World,
 };
 
@@ -16,12 +17,12 @@ pub struct Workspace {
 }
 
 impl Workspace {
-    pub fn new() -> Rc<RefCell<Self>> {
+    pub fn new(topology: Topology) -> Rc<RefCell<Self>> {
         // create the structure first without worrying about backreferences
         let rng = Rc::new(RefCell::new(RandIntGenerator::new()));
         let workspace = Rc::new(RefCell::new(Self {
             procedures: ProcedureManager::new(),
-            world: World::new(),
+            world: World::new(topology),
             rng,
         }));
 

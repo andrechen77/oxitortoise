@@ -5,7 +5,12 @@ use std::{
 };
 
 use crate::{
-    agent::Agent, agent_id::AgentId, observer::Observer, turtle::TurtleManager,
+    agent::Agent,
+    agent_id::AgentId,
+    observer::Observer,
+    patch::Patches,
+    topology::{self, Topology},
+    turtle::TurtleManager,
     workspace::Workspace,
 };
 
@@ -15,24 +20,28 @@ pub struct World {
     pub workspace: Weak<RefCell<Workspace>>,
     pub observer: Observer,
     pub turtle_manager: TurtleManager,
-    // TODO
+    pub patches: Patches,
+    // TODO add other fields
 }
 
 impl World {
-    pub fn new() -> Rc<RefCell<Self>> {
+    pub fn new(topology: Topology) -> Rc<RefCell<Self>> {
         let world = Rc::new(RefCell::new(Self {
             workspace: Weak::new(),
             observer: Observer::default(),
             turtle_manager: TurtleManager::new(iter::empty(), vec![], vec![]),
+            patches: Patches::new(topology),
         }));
 
         // now we must set all back-references to have a consistent data
         // structure
-        let mut w = world.borrow_mut();
-        w.observer.set_world(Rc::downgrade(&world));
-        w.turtle_manager.set_world(Rc::downgrade(&world));
+        {
+            let mut w = world.borrow_mut();
+            w.observer.set_world(Rc::downgrade(&world));
+            w.turtle_manager.set_world(Rc::downgrade(&world));
+        }
 
-        todo!()
+        world
     }
 
     /// Sets the backreferences of this structure and all structures owned by it
@@ -43,10 +52,10 @@ impl World {
 
     pub fn clear_all(&mut self) {
         self.observer.clear_globals();
+        self.patches.clear_all_patches();
+        self.turtle_manager.clear_turtles();
         /*
         @observer.resetPerspective()
-        @turtleManager.clearTurtles()
-        @clearPatches()
         @clearLinks()
         @_declarePatchesAllBlack()
         @_resetPatchLabelCount()

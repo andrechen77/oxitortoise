@@ -2,7 +2,12 @@ use std::{mem, rc::Rc};
 
 use flagset::FlagSet;
 
-use crate::{agent::Agent, rng::NextInt, updater::Update, value::{self, Value}};
+use crate::{
+    agent::Agent,
+    rng::NextInt,
+    updater::Update,
+    value::{self, Value},
+};
 
 use super::ExecutionContext;
 

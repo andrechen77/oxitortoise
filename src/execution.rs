@@ -1,6 +1,4 @@
-use crate::{
-    agent::Agent, value,
-};
+use crate::{agent::Agent, value};
 
 mod manager;
 mod procedure;
