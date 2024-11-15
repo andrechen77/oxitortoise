@@ -4,6 +4,7 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use slotmap::SlotMap;
 
+use crate::agent_variables::{CustomAgentVariables, VarIndex, VariableMapper};
 use crate::color::{self, Color};
 use crate::rng::NextInt;
 use crate::topology::Point;
@@ -51,14 +52,14 @@ impl Turtles {
         let turtle_breed = Breed {
             original_name: Rc::from("turtles"),
             original_name_singular: Rc::from("turtle"),
-            variable_names: turtles_owns,
             shape: Some(Rc::new(TURTLE_DEFAULT_SHAPE)),
+            variable_mapper: VariableMapper::new(),
         };
         let link_breed = Breed {
             original_name: Rc::from("links"),
             original_name_singular: Rc::from("link"),
-            variable_names: links_owns,
             shape: Some(Rc::new(LINK_DEFAULT_SHAPE)),
+            variable_mapper: VariableMapper::new(),
         };
         let mut breeds: HashMap<_, _> = additional_breeds
             .into_iter()
@@ -72,6 +73,9 @@ impl Turtles {
             Rc::from(BREED_NAME_LINKS),
             Rc::new(RefCell::new(link_breed)),
         );
+
+        // TODO variable mappings
+
         Turtles {
             world: Weak::new(),
             next_who: TurtleWho::INITIAL,
@@ -81,12 +85,8 @@ impl Turtles {
         }
     }
 
-    pub fn set_default_shape(&mut self, breed_name: &str, shape: Shape) {
-        self.breeds
-            .get_mut(breed_name)
-            .unwrap() // TODO
-            .borrow_mut()
-            .shape = Some(Rc::new(shape));
+    pub fn get_breed(&self, breed_name: &str) -> Option<Rc<RefCell<Breed>>> {
+        self.breeds.get(breed_name).cloned()
     }
 
     pub fn get_by_index(&self, turtle_ref: TurtleId) -> Option<&Turtle> {
@@ -99,6 +99,38 @@ impl Turtles {
 
     pub fn translate_who(&self, who: TurtleWho) -> Option<TurtleId> {
         self.who_map.get(&who).copied()
+    }
+
+    pub fn declare_custom_variables<'a>(
+        &mut self,
+        variables_by_breed: impl Iterator<Item = (&'a str, Vec<Rc<str>>)>,
+    ) {
+        // create a mapping from a changed breed to its new-to-old custom
+        // indexes. store the breeds by their address instead of their contents.
+        // this is not only faster, but ensures that in the degenerate case,
+        // breeds with the same contents are treated as distinct (however note
+        // that this case should never happen as long as breeds are stored by
+        // their names)
+        let mut new_mappings = HashMap::new();
+
+        for (breed_name, new_custom_variables) in variables_by_breed {
+            let breed = self.breeds.get(breed_name).expect("breed should exist");
+            let new_to_old_custom_idxs = breed
+                .borrow_mut()
+                .variable_mapper
+                .declare_custom_variables(new_custom_variables);
+            new_mappings.insert(Rc::as_ptr(breed), new_to_old_custom_idxs);
+        }
+
+        // make sure all turtles have the correct mappings in their custom
+        // variables
+        for (_, turtle) in &mut self.turtle_storage {
+            if let Some(new_to_old_idxs) = new_mappings.get(&Rc::as_ptr(&turtle.breed)) {
+                turtle
+                    .custom_variables
+                    .set_variable_mapping(new_to_old_idxs);
+            }
+        }
     }
 
     /// Sets the backreferences of this structure and all structures owned by it
@@ -140,7 +172,7 @@ impl Turtles {
             });
             let turtle = Turtle {
                 world: self.world.clone(),
-                id: who,
+                who,
                 breed: breed.clone(),
                 color,
                 heading,
@@ -150,6 +182,7 @@ impl Turtles {
                 hidden: false,
                 size: 1.0,
                 shape,
+                custom_variables: CustomAgentVariables::new(),
             };
             let turtle_ref = self.turtle_storage.insert(turtle);
             self.who_map.insert(who, turtle_ref);
@@ -168,14 +201,12 @@ impl Turtles {
 pub struct Turtle {
     /// A back-reference to the world that includes this turtle.
     world: Weak<RefCell<World>>,
-    id: TurtleWho,
+    who: TurtleWho,
     breed: Rc<RefCell<Breed>>,
     /// The shape of this turtle due to its breed. This may or may not be the
     /// default shape of the turtle's breed.
     shape: Rc<Shape>,
     // name
-    // updateVarsByName
-    // varmanager
     // linkmanager
     color: Color,
     heading: f64,
@@ -184,11 +215,12 @@ pub struct Turtle {
     label_color: Color,
     hidden: bool,
     size: f64,
+    custom_variables: CustomAgentVariables,
 }
 
 impl Turtle {
-    pub fn id(&self) -> TurtleWho {
-        self.id
+    pub fn who(&self) -> TurtleWho {
+        self.who
     }
 
     pub fn set_size(&mut self, size: f64) {
@@ -247,8 +279,7 @@ pub struct Breed {
     original_name: Rc<str>,
     #[allow(dead_code)]
     original_name_singular: Rc<str>,
-    #[allow(dead_code)]
-    variable_names: Vec<Rc<str>>,
+    variable_mapper: VariableMapper<Turtle>,
     /// The default shape of this breed. `None` means that this breed should
     /// use the same shape as the default breed's shape. This must not be `None`
     /// if it is a default breed.
@@ -256,7 +287,9 @@ pub struct Breed {
 }
 
 impl Breed {
-    pub fn get_shape(&self) {}
+    pub fn set_default_shape(&mut self, shape: Rc<Shape>) {
+        self.shape = Some(shape);
+    }
 }
 
 pub const BREED_NAME_TURTLES: &str = "TURTLES";

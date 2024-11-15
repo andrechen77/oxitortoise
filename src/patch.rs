@@ -1,6 +1,10 @@
-use std::ops::Index;
+use std::{mem, ops::Index, rc::Rc};
 
-use crate::topology::{Point, Topology};
+use crate::{
+    agent_variables::{CustomAgentVariables, VarIndex, VariableDescriptor, VariableMapper},
+    topology::{CoordInt, Point, PointInt, Topology},
+    value::{self, Value},
+};
 
 /// A reference to a patch.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -15,12 +19,15 @@ pub struct Patches {
     /// contains the patches with the highest `pycor`, and the first column
     /// contains the patches with the lowest `pxcor`.
     patches: Vec<Patch>,
+    /// A mapping between variable names and variable descriptors for patches.
+    variable_mapper: VariableMapper<Patch>,
     /// The topology of the world.
     topology: Topology,
 }
 
 impl Patches {
     pub fn new(topology: Topology) -> Self {
+        // create the world
         let Topology {
             world_width,
             world_height,
@@ -30,14 +37,47 @@ impl Patches {
         let mut patches = Vec::with_capacity((world_width * world_height) as usize);
         for j in 0..world_height {
             for i in 0..world_width {
-                let x = (min_pxcor + i as i64) as f64;
-                let y = (max_pycor - j as i64) as f64;
-                patches.push(Patch {
-                    location: Point { x, y },
-                });
+                let x = min_pxcor + i as CoordInt;
+                let y = max_pycor - j as CoordInt;
+                patches.push(Patch::at(PointInt { x, y }));
             }
         }
-        Self { patches, topology }
+
+        let mut variable_mapper = VariableMapper::new();
+        let built_in_variables: &[(Rc<str>, fn(&Patch) -> Value)] = &[
+            (Rc::from("pxcor"), |patch| {
+                value::Float::from(patch.position().x).into()
+            }),
+            (Rc::from("pycor"), |patch| {
+                value::Float::from(patch.position().y).into()
+            }),
+            // TODO add other variables
+        ];
+        for (name, getter) in built_in_variables {
+            variable_mapper.declare_built_in_variable(name.clone(), *getter);
+        }
+
+        Self {
+            patches,
+            topology,
+            variable_mapper,
+        }
+    }
+
+    pub fn declare_custom_variables(&mut self, variables: Vec<Rc<str>>) {
+        let new_to_old_custom_idxs = self.variable_mapper.declare_custom_variables(variables);
+
+        // make sure all patches have the correct mappings in their custom
+        // variables
+        for patch in &mut self.patches {
+            patch
+                .custom_variables
+                .set_variable_mapping(&new_to_old_custom_idxs);
+        }
+    }
+
+    pub fn look_up_variable(&self, name: &str) -> Option<VariableDescriptor<Patch>> {
+        self.variable_mapper.look_up_variable(name)
     }
 
     pub fn patch_ids_iter(&self) -> impl Iterator<Item = PatchId> {
@@ -45,8 +85,9 @@ impl Patches {
     }
 
     pub fn clear_all_patches(&mut self) {
-        // TODO keep this up to date with new patch variables. reset all
-        // variables to their default values
+        for patch in &mut self.patches {
+            patch.custom_variables.reset_all();
+        }
     }
 }
 
@@ -60,6 +101,20 @@ impl Index<PatchId> for Patches {
 
 #[derive(Debug)]
 pub struct Patch {
-    location: Point,
+    position: PointInt,
+    custom_variables: CustomAgentVariables,
     // TODO some way of tracking what turtles are on this patch.
+}
+
+impl Patch {
+    pub fn at(position: PointInt) -> Self {
+        Self {
+            position,
+            custom_variables: CustomAgentVariables::new(),
+        }
+    }
+
+    pub fn position(&self) -> PointInt {
+        self.position
+    }
 }

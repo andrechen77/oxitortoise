@@ -1,8 +1,14 @@
 use std::convert::Infallible;
 
-use crate::{observer::Observer, patch::{Patch, PatchId}, turtle::{Turtle, TurtleId}};
+use derive_more::derive::From;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+use crate::{
+    observer::Observer,
+    patch::{Patch, PatchId},
+    turtle::{Turtle, TurtleId},
+};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, From)]
 pub enum AgentId {
     Observer,
     Turtle(TurtleId),
@@ -10,18 +16,7 @@ pub enum AgentId {
     Link(Infallible /* TODO */),
 }
 
-impl From<TurtleId> for AgentId {
-    fn from(turtle: TurtleId) -> Self {
-        AgentId::Turtle(turtle)
-    }
-}
-
-impl From<PatchId> for AgentId {
-    fn from(patch: PatchId) -> Self {
-        AgentId::Patch(patch)
-    }
-}
-
+#[derive(Debug, Clone, Copy, From)]
 pub enum Agent<'a> {
     Observer(&'a Observer),
     Turtle(&'a Turtle),
@@ -29,6 +24,7 @@ pub enum Agent<'a> {
     Link(Infallible /* TODO */),
 }
 
+#[derive(Debug, From)]
 pub enum AgentMut<'a> {
     Observer(&'a mut Observer),
     Turtle(&'a mut Turtle),

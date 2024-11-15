@@ -1,6 +1,9 @@
 use flagset::{flags, FlagSet};
 
-use crate::turtle::Turtle;
+use crate::{
+    patch::{Patch, PatchId},
+    turtle::Turtle,
+};
 
 pub trait Update {
     /// Records in the updater that the specified properties of a turtle have
@@ -8,6 +11,10 @@ pub trait Update {
     /// updater hasn't seen before, the updater also records that the turtle has
     /// been created.
     fn update_turtle(&mut self, turtle: &Turtle, properties_to_update: FlagSet<TurtleProperty>);
+
+    /// Records in the updater that the specified properties of a patch have
+    /// changed to their new values.
+    fn update_patch(&mut self, patch: &Patch, properties_to_update: FlagSet<PatchProperty>);
 
     /// TODO Gets all the updates recorded in this updater since the last time
     /// this method was called.
@@ -26,6 +33,11 @@ flags! {
         Shape,
         Size,
         Position,
+    }
+}
+
+flags! {
+    pub enum PatchProperty: u32 {
     }
 }
 
@@ -51,7 +63,20 @@ impl Update for PrintUpdate {
         }
         println!(
             "Turtle {} updated: {{ {} }}",
-            turtle.id(),
+            turtle.who(),
+            updated_properties.join(", ")
+        );
+    }
+
+    fn update_patch(&mut self, patch: &Patch, properties_to_update: FlagSet<PatchProperty>) {
+        let mut updated_properties: Vec<String> = vec![];
+        for property in properties_to_update {
+            let value = match property {};
+            updated_properties.push(value);
+        }
+        println!(
+            "Patch {} updated: {{ {} }}",
+            patch.position(),
             updated_properties.join(", ")
         );
     }

@@ -1,7 +1,18 @@
-#[derive(Debug)]
+use derive_more::derive::From;
+
+use crate::topology::CoordInt;
+
+#[derive(Debug, Clone, From, PartialEq)]
 pub enum Value {
+    #[from]
     Float(Float),
     // TODO other types: string, boolean, agent, agentset, list, reporter, command
+}
+
+impl Default for Value {
+    fn default() -> Self {
+        Value::Float(Float(0.0))
+    }
 }
 
 impl Value {
@@ -20,12 +31,24 @@ impl Value {
             _ => None,
         }
     }
+
+    /// Resets the value to its default value.
+    /// TODO should this always be zero?
+    pub fn reset(&mut self) {
+        *self = Value::default();
+    }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, From, PartialEq, PartialOrd)] // TODO also ord and eq
 pub struct Float(pub f64);
 
-#[derive(Debug)]
+impl From<CoordInt> for Float {
+    fn from(value: CoordInt) -> Self {
+        Float(value as f64)
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct String(/* TODO */);
 
 impl From<&str> for String {

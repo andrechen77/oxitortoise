@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use flagset::FlagSet;
+use oxitortoise::agent_variables::VariableDescriptor;
 use oxitortoise::shuffle_iterator::ShuffleIterator;
 use oxitortoise::topology::{Point, Topology};
 use oxitortoise::turtle::{Shape, BREED_NAME_TURTLES};
@@ -23,12 +24,40 @@ fn run_ants_model() -> Rc<RefCell<Workspace>> {
     let mut world = workspace.world.borrow_mut();
     let mut updater = PrintUpdate;
 
-    // `globals [ population ]`
+    // declare widget variable
     workspace
         .world
         .borrow_mut()
         .observer
         .create_widget_global(Rc::from("population"), Value::Float(value::Float(2.0)));
+
+    // `patches-own [...]`
+    let patch_var_names = [
+        Rc::from("chemical"),
+        Rc::from("food"),
+        Rc::from("nest?"),
+        Rc::from("nest-scent"),
+        Rc::from("food-source-number"),
+    ];
+    world
+        .patches
+        .declare_custom_variables(patch_var_names.to_vec());
+    let &[patch_chemical, patch_food, patch_nest, patch_nest_scent, patch_food_source_number] =
+        patch_var_names
+            .into_iter()
+            .map(|name| {
+                let Some(VariableDescriptor::Custom(var_idx)) =
+                    world.patches.look_up_variable(&name)
+                else {
+                    unreachable!("variable should exist");
+                };
+                var_idx
+            })
+            .collect::<Vec<_>>()
+            .as_slice()
+    else {
+        unreachable!("the length of the array is correct");
+    };
 
     // `clear-all`
     world.clear_all();
@@ -36,7 +65,10 @@ fn run_ants_model() -> Rc<RefCell<Workspace>> {
     // `set-default-shape turtles "bug"`
     world
         .turtles
-        .set_default_shape(BREED_NAME_TURTLES, Shape {});
+        .get_breed(BREED_NAME_TURTLES)
+        .expect("default turtle breed should exist")
+        .borrow_mut()
+        .set_default_shape(Rc::new(Shape {}));
 
     // `create-turtles ...`
     let num = world

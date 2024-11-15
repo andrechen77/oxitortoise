@@ -26,6 +26,7 @@ pub struct Observer {
     /// A back-reference to the world that includes this observer.
     world: Weak<RefCell<World>>,
     /// The global variables that are accessible to all agents.
+    /// TODO use a CustomAgentVariable struct alongside a WidgetVariables struct
     variables: HashMap<Rc<str>, GlobalVariable>,
     // TODO add other fields
 }
