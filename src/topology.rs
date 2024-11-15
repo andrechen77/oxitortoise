@@ -34,6 +34,15 @@ impl fmt::Display for Point {
     }
 }
 
+impl From<PointInt> for Point {
+    fn from(point: PointInt) -> Self {
+        Point {
+            x: point.x as CoordFloat,
+            y: point.y as CoordFloat,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Topology {
     /// The `pxcor` of the leftmost patch. Since `pxcor` describes the point at

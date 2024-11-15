@@ -7,7 +7,7 @@ use crate::{
     rng::NextInt,
     topology::Point,
     updater::Update,
-    value::{self, Value},
+    value,
 };
 
 use super::ExecutionContext;
@@ -15,12 +15,12 @@ use super::ExecutionContext;
 pub enum StatementOutcome {
     /// The statement executed successfully and returned. If the statement was
     /// a reporter, then the value is returned.
-    Return(Option<Value>),
+    Return(Option<value::Value>),
     /// While executing the statement, an early return was encountered. This
     /// aborts execution of all statements higher up in the call stack up to the
     /// next procedure boundary. If we are currently a reporter, then the value
     /// is returned.
-    EarlyReturn(Option<Value>),
+    EarlyReturn(Option<value::Value>),
     /// While executing the statement, an error occurred. This aborts execution
     /// of all statements higher up in the call stack up to the next `carefully`
     /// statement.

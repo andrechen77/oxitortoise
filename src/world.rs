@@ -1,6 +1,5 @@
 use std::{
     cell::RefCell,
-    convert::Infallible,
     iter,
     rc::{Rc, Weak},
 };
@@ -8,9 +7,9 @@ use std::{
 use crate::{
     agent::{Agent, AgentId, AgentMut},
     observer::Observer,
-    patch::{Patch, Patches},
+    patch::Patches,
     topology::Topology,
-    turtle::{Turtle, Turtles},
+    turtle::Turtles,
     workspace::Workspace,
 };
 
@@ -29,7 +28,7 @@ impl World {
         let world = Rc::new(RefCell::new(Self {
             workspace: Weak::new(),
             observer: Observer::default(),
-            turtles: Turtles::new(iter::empty(), vec![], vec![]),
+            turtles: Turtles::new(iter::empty()),
             patches: Patches::new(topology),
         }));
 

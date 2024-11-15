@@ -1,5 +1,6 @@
 use std::{
     collections::{hash_map::Entry, HashMap},
+    ops::{Index, IndexMut},
     rc::Rc,
 };
 
@@ -135,18 +136,6 @@ impl CustomAgentVariables {
         Self { values: Vec::new() }
     }
 
-    pub fn get(&self, id: VarIndex) -> &Value {
-        &self.values[id.0]
-    }
-
-    pub fn get_mut(&mut self, id: VarIndex) -> &mut Value {
-        &mut self.values[id.0]
-    }
-
-    pub fn set(&mut self, id: VarIndex, value: Value) {
-        self.values[id.0] = value;
-    }
-
     pub fn reset_all(&mut self) {
         for value in &mut self.values {
             value.reset();
@@ -168,6 +157,20 @@ impl CustomAgentVariables {
             }
         }
         self.values = new_values;
+    }
+}
+
+impl Index<VarIndex> for CustomAgentVariables {
+    type Output = Value;
+
+    fn index(&self, index: VarIndex) -> &Self::Output {
+        &self.values[index.0]
+    }
+}
+
+impl IndexMut<VarIndex> for CustomAgentVariables {
+    fn index_mut(&mut self, index: VarIndex) -> &mut Self::Output {
+        &mut self.values[index.0]
     }
 }
 
@@ -277,8 +280,8 @@ mod test {
         // create CustomAgentVariables and set initial values
         let mut custom_vars = CustomAgentVariables::new();
         custom_vars.set_variable_mapping(&initial_custom_mapping);
-        custom_vars.set(VarIndex(0), Value::Float(1.0.into()));
-        custom_vars.set(VarIndex(1), Value::Float(2.0.into()));
+        custom_vars[VarIndex(0)] = Value::Float(1.0.into());
+        custom_vars[VarIndex(1)] = Value::Float(2.0.into());
 
         // declare new custom variables, reusing one old name and adding a new one
         let new_custom_names = vec![Rc::from("custom1"), Rc::from("custom2")];
@@ -288,7 +291,7 @@ mod test {
         custom_vars.set_variable_mapping(&new_custom_mapping);
 
         // ensure values are preserved for variables with the same name
-        assert_eq!(custom_vars.get(VarIndex(0)), &Value::Float(2.0.into())); // custom1
-        assert_eq!(custom_vars.get(VarIndex(1)), &Value::default()); // custom2 is new
+        assert_eq!(custom_vars[VarIndex(0)], Value::Float(2.0.into())); // custom1
+        assert_eq!(custom_vars[VarIndex(1)], Value::default()); // custom2 is new
     }
 }

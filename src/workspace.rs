@@ -12,7 +12,7 @@ pub struct Workspace {
     pub procedures: ProcedureManager,
     pub world: Rc<RefCell<World>>,
     pub rng: Rc<RefCell<dyn NextInt>>,
-    // TODO
+    // TODO add other fields
     // plot manager
 }
 

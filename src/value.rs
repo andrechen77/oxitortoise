@@ -52,7 +52,7 @@ impl From<CoordInt> for Float {
 pub struct String(/* TODO */);
 
 impl From<&str> for String {
-    fn from(value: &str) -> Self {
+    fn from(_value: &str) -> Self {
         todo!()
     }
 }

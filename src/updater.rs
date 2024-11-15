@@ -1,9 +1,6 @@
 use flagset::{flags, FlagSet};
 
-use crate::{
-    patch::{Patch, PatchId},
-    turtle::Turtle,
-};
+use crate::{patch::Patch, turtle::Turtle};
 
 pub trait Update {
     /// Records in the updater that the specified properties of a turtle have

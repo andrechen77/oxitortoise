@@ -1,8 +1,11 @@
-use std::{mem, ops::Index, rc::Rc};
+use std::{
+    ops::{Index, IndexMut},
+    rc::Rc,
+};
 
 use crate::{
     agent_variables::{CustomAgentVariables, VarIndex, VariableDescriptor, VariableMapper},
-    topology::{CoordInt, Point, PointInt, Topology},
+    topology::{CoordInt, PointInt, Topology},
     value::{self, Value},
 };
 
@@ -99,6 +102,12 @@ impl Index<PatchId> for Patches {
     }
 }
 
+impl IndexMut<PatchId> for Patches {
+    fn index_mut(&mut self, index: PatchId) -> &mut Self::Output {
+        &mut self.patches[index.grid_index]
+    }
+}
+
 #[derive(Debug)]
 pub struct Patch {
     position: PointInt,
@@ -116,5 +125,13 @@ impl Patch {
 
     pub fn position(&self) -> PointInt {
         self.position
+    }
+
+    pub fn get_custom(&self, var_idx: VarIndex) -> &Value {
+        &self.custom_variables[var_idx]
+    }
+
+    pub fn set_custom(&mut self, var_idx: VarIndex, value: Value) {
+        self.custom_variables[var_idx] = value;
     }
 }

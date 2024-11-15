@@ -8,6 +8,7 @@ use crate::agent_variables::{CustomAgentVariables, VarIndex, VariableMapper};
 use crate::color::{self, Color};
 use crate::rng::NextInt;
 use crate::topology::Point;
+use crate::value;
 use crate::world::World;
 
 /// The who number of a turtle.
@@ -44,11 +45,7 @@ pub struct Turtles {
 }
 
 impl Turtles {
-    pub fn new(
-        additional_breeds: impl IntoIterator<Item = Breed>,
-        turtles_owns: Vec<Rc<str>>,
-        links_owns: Vec<Rc<str>>,
-    ) -> Self {
+    pub fn new(additional_breeds: impl IntoIterator<Item = Breed>) -> Self {
         let turtle_breed = Breed {
             original_name: Rc::from("turtles"),
             original_name_singular: Rc::from("turtle"),
@@ -73,8 +70,6 @@ impl Turtles {
             Rc::from(BREED_NAME_LINKS),
             Rc::new(RefCell::new(link_breed)),
         );
-
-        // TODO variable mappings
 
         Turtles {
             world: Weak::new(),
@@ -265,6 +260,14 @@ impl Turtle {
 
     pub fn size(&self) -> f64 {
         self.size
+    }
+
+    pub fn get_custom(&self, index: VarIndex) -> &value::Value {
+        &self.custom_variables[index]
+    }
+
+    pub fn set_custom(&mut self, index: VarIndex, value: value::Value) {
+        self.custom_variables[index] = value;
     }
 
     pub fn get_world(&self) -> Rc<RefCell<World>> {
