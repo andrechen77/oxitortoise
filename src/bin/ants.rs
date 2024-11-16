@@ -2,13 +2,13 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use oxitortoise::agent_variables::VariableDescriptor;
-use oxitortoise::color;
 use oxitortoise::shuffle_iterator::ShuffleIterator;
 use oxitortoise::topology::{Point, Topology};
 use oxitortoise::turtle::{Shape, BREED_NAME_TURTLES};
 use oxitortoise::updater::{PrintUpdate, TurtleProperty, Update};
 use oxitortoise::value;
 use oxitortoise::workspace::Workspace;
+use oxitortoise::{color, topology};
 
 // define the Ants model. this is a direct translation of this code
 // https://github.com/NetLogo/Tortoise/blob/master/resources/test/dumps/Ants.js
@@ -26,7 +26,7 @@ fn run_ants_model() -> Rc<RefCell<Workspace>> {
     // declare widget variable
     world
         .observer
-        .create_widget_global(Rc::from("population"), value::Value::Float(2.0.into()));
+        .create_widget_global(Rc::from("population"), value::Float::new(2.0).into());
 
     // `patches-own [...]`
     let patch_var_names = [
@@ -72,8 +72,9 @@ fn run_ants_model() -> Rc<RefCell<Workspace>> {
         .observer
         .get_global("population")
         .expect("compiler assumes this variable exists")
-        .to_u64_round_to_zero()
-        .expect("compiler assumes this is a number");
+        .get::<value::Float>()
+        .expect("compiler assumes this is a number")
+        .to_u64_round_to_zero();
     let mut new_turtles = Vec::new();
     world.turtles.create_turtles(
         num,
@@ -104,6 +105,12 @@ fn run_ants_model() -> Rc<RefCell<Workspace>> {
         let patch = &mut world.patches[patch];
 
         // setup-nest
+        let local_0 = topology::euclidean_distance_unwrapped(
+            patch.position().into(),
+            Point { x: 0.0, y: 0.0 },
+        );
+        let local_1 = local_0 < 5.0;
+        patch.set_custom(patch_nest, value::Boolean(local_1).into());
 
         // setup-food
 

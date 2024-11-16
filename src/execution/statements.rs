@@ -144,11 +144,12 @@ impl Statement for CreateTurtles {
                 "input to `create-turtles` must return a value",
             ));
         };
-        let Some(count) = count.to_u64_round_to_zero() else {
+        let Some(count) = count.into::<value::Float>() else {
             return StatementOutcome::Error(value::String::from(
                 "`create-turtles` expected this input to be a number",
             ));
         };
+        let count = count.to_u64_round_to_zero();
 
         // create the turtles
         let new_turtles = {
@@ -203,7 +204,7 @@ impl Statement for SetTurtleSize {
                 "input to `set-turtle-size` must return a value",
             ));
         };
-        let Some(size) = size.to_f64() else {
+        let Some(size) = size.into::<value::Float>() else {
             return StatementOutcome::Error(value::String::from(
                 "`set-turtle-size` expected this input to be a number",
             ));
@@ -217,7 +218,7 @@ impl Statement for SetTurtleSize {
         };
 
         // set the size of the turtle
-        turtle.set_size(size);
+        turtle.set_size(size.get());
         context.updater.update_turtle(turtle, FlagSet::default());
         StatementOutcome::Return(None)
     }

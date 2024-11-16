@@ -1,15 +1,16 @@
 use std::{
     collections::{hash_map::Entry, HashMap},
+    mem,
     ops::{Index, IndexMut},
     rc::Rc,
 };
 
-use crate::value::Value;
+use crate::value;
 
 /// Describes the location of a certain variable in an agent of type `A`.
 #[derive(Debug, PartialEq, Eq, Hash)] // TODO equality derives don't work
 pub enum VariableDescriptor<A> {
-    BuiltIn(fn(&A) -> Value),
+    BuiltIn(fn(&A) -> value::Value),
     Custom(VarIndex),
 }
 
@@ -100,7 +101,7 @@ impl<A> VariableMapper<A> {
     /// # Panics
     ///
     /// Panics if the variable name has already been used.
-    pub fn declare_built_in_variable(&mut self, name: Rc<str>, getter: fn(&A) -> Value) {
+    pub fn declare_built_in_variable(&mut self, name: Rc<str>, getter: fn(&A) -> value::Value) {
         match self.name_to_descriptor.entry(name) {
             Entry::Occupied(e) => {
                 panic!(
@@ -126,9 +127,9 @@ impl<A> VariableMapper<A> {
 
 /// Holds the values of the non-built-in variables for an agent. An instance of
 /// this struct is associated with each agent.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Default)]
 pub struct CustomAgentVariables {
-    values: Vec<Value>,
+    values: Vec<value::Value>,
 }
 
 impl CustomAgentVariables {
@@ -152,8 +153,8 @@ impl CustomAgentVariables {
         let mut new_values = Vec::with_capacity(new_to_old_idxs.len());
         for &mapping in new_to_old_idxs {
             match mapping {
-                Some(id) => new_values.push(self.values[id.0].clone()),
-                None => new_values.push(Value::default()),
+                Some(id) => new_values.push(mem::take(&mut self.values[id.0])),
+                None => new_values.push(value::Value::default()),
             }
         }
         self.values = new_values;
@@ -161,7 +162,7 @@ impl CustomAgentVariables {
 }
 
 impl Index<VarIndex> for CustomAgentVariables {
-    type Output = Value;
+    type Output = value::Value;
 
     fn index(&self, index: VarIndex) -> &Self::Output {
         &self.values[index.0]
@@ -184,8 +185,8 @@ mod test {
     }
 
     impl Agent {
-        fn get_built_in_var(&self) -> Value {
-            Value::Float(self.built_in_var.into())
+        fn get_built_in_var(&self) -> value::Value {
+            value::Float::new(self.built_in_var).into()
         }
     }
 
@@ -208,7 +209,7 @@ mod test {
         else {
             panic!("Expected built-in variable descriptor");
         };
-        assert_eq!(getter(&agent), Value::Float(42.0.into()));
+        assert_eq!(getter(&agent), value::Float::new(42.0).into());
 
         // check custom variables
         for (i, name) in custom_names.iter().enumerate() {
@@ -255,7 +256,7 @@ mod test {
             panic!("expected built-in variable descriptor");
         };
         let agent = Agent { built_in_var: 42.0 };
-        assert_eq!(getter(&agent), Value::Float(42.0.into()));
+        assert_eq!(getter(&agent), value::Float::new(42.0).into());
 
         // ensure old mappings that do not appear in new mappings are forgotten
         assert!(mapper.look_up_variable("custom0").is_none());
@@ -280,8 +281,8 @@ mod test {
         // create CustomAgentVariables and set initial values
         let mut custom_vars = CustomAgentVariables::new();
         custom_vars.set_variable_mapping(&initial_custom_mapping);
-        custom_vars[VarIndex(0)] = Value::Float(1.0.into());
-        custom_vars[VarIndex(1)] = Value::Float(2.0.into());
+        custom_vars[VarIndex(0)] = value::Float::new(1.0).into();
+        custom_vars[VarIndex(1)] = value::Float::new(2.0).into();
 
         // declare new custom variables, reusing one old name and adding a new one
         let new_custom_names = vec![Rc::from("custom1"), Rc::from("custom2")];
@@ -291,7 +292,7 @@ mod test {
         custom_vars.set_variable_mapping(&new_custom_mapping);
 
         // ensure values are preserved for variables with the same name
-        assert_eq!(custom_vars[VarIndex(0)], Value::Float(2.0.into())); // custom1
-        assert_eq!(custom_vars[VarIndex(1)], Value::default()); // custom2 is new
+        assert_eq!(custom_vars[VarIndex(0)], value::Float::new(2.0).into()); // custom1
+        assert_eq!(custom_vars[VarIndex(1)], value::Value::default()); // custom2 is new
     }
 }
