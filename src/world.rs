@@ -5,12 +5,7 @@ use std::{
 };
 
 use crate::{
-    agent::{Agent, AgentId, AgentMut},
-    observer::Observer,
-    patch::Patches,
-    topology::Topology,
-    turtle::Turtles,
-    workspace::Workspace,
+    agent::{Agent, AgentId, AgentMut}, observer::Observer, patch::Patches, tick::Tick, topology::Topology, turtle::Turtles, workspace::Workspace
 };
 
 #[derive(Debug)]
@@ -21,6 +16,7 @@ pub struct World {
     pub turtles: Turtles,
     pub patches: Patches,
     pub topology: Topology,
+    pub tick_counter: Tick,
     // TODO add other fields
 }
 
@@ -32,6 +28,7 @@ impl World {
             turtles: Turtles::new(iter::empty()),
             patches: Patches::new(&topology),
             topology,
+            tick_counter: Tick::default(),
         }));
 
         // now we must set all back-references to have a consistent data

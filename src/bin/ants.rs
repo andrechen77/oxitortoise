@@ -9,21 +9,12 @@ use oxitortoise::turtle::{Shape, BREED_NAME_TURTLES};
 use oxitortoise::updater::{PatchProperty, PrintUpdate, TurtleProperty, Update};
 use oxitortoise::value;
 use oxitortoise::workspace::Workspace;
+use oxitortoise::world::World;
 use oxitortoise::{color, topology};
 
-// define the Ants model. this is a direct translation of this code
-// https://github.com/NetLogo/Tortoise/blob/master/resources/test/dumps/Ants.js
-#[allow(unused_variables)]
-fn run_ants_model() -> Rc<RefCell<Workspace>> {
-    let w = Workspace::new(Topology {
-        min_pxcor: -12,
-        max_pycor: 12,
-        world_width: 25,
-        world_height: 25,
-    });
-    let workspace = w.borrow_mut();
+
+fn ants_setup(workspace: &mut Workspace, updater: &mut impl Update) {
     let mut world = workspace.world.borrow_mut();
-    let mut updater = PrintUpdate;
 
     // declare widget variable
     world
@@ -238,10 +229,29 @@ fn run_ants_model() -> Rc<RefCell<Workspace>> {
         updater.update_patch(&world.patches[patch], PatchProperty::Pcolor.into());
     }
 
-    // TODO add the rest of the model
+    // `reset-ticks`
+    // TODO reset-ticks does more than just clear the tick counter
+    world.tick_counter.clear();
+}
 
-    drop(world);
-    drop(workspace);
+// define the Ants model. this is a direct translation of this code
+// https://github.com/NetLogo/Tortoise/blob/master/resources/test/dumps/Ants.js
+#[allow(unused_variables)]
+fn run_ants_model() -> Rc<RefCell<Workspace>> {
+    let mut updater = PrintUpdate;
+
+    let w = Workspace::new(Topology {
+        min_pxcor: -12,
+        max_pycor: 12,
+        world_width: 25,
+        world_height: 25,
+    });
+
+    // run the `setup` function
+    ants_setup(&mut *w.borrow_mut(), &mut updater);
+
+    // TODO repeatedly run the `go` function
+
     w
 }
 
