@@ -206,7 +206,7 @@ pub struct Turtle {
     color: Color,
     heading: f64,
     position: Point,
-    label: String,
+    label: String, // TODO consider using the netlogo version of string for this
     label_color: Color,
     hidden: bool,
     size: f64,

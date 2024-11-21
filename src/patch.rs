@@ -104,7 +104,9 @@ impl IndexMut<PatchId> for Patches {
 #[derive(Debug)]
 pub struct Patch {
     position: PointInt,
-    color: Color,
+    pcolor: Color,
+    plabel: String, // TODO consider using the netlogo version of string for this
+    plabel_color: Color,
     custom_variables: CustomAgentVariables,
     // TODO some way of tracking what turtles are on this patch.
 }
@@ -113,7 +115,9 @@ impl Patch {
     pub fn at(position: PointInt) -> Self {
         Self {
             position,
-            color: Color::BLACK,
+            pcolor: Color::BLACK,
+            plabel: String::new(),
+            plabel_color: Color::BLACK, // TODO use some default label color
             custom_variables: CustomAgentVariables::new(),
         }
     }
@@ -122,12 +126,28 @@ impl Patch {
         self.position
     }
 
-    pub fn get_color(&self) -> Color {
-        self.color
+    pub fn get_pcolor(&self) -> Color {
+        self.pcolor
     }
 
-    pub fn set_color(&mut self, color: Color) {
-        self.color = color;
+    pub fn set_pcolor(&mut self, color: Color) {
+        self.pcolor = color;
+    }
+
+    pub fn get_plabel(&self) -> &str {
+        &self.plabel
+    }
+
+    pub fn set_plabel(&mut self, label: String) {
+        self.plabel = label;
+    }
+
+    pub fn get_plabel_color(&self) -> Color {
+        self.plabel_color
+    }
+
+    pub fn set_plabel_color(&mut self, color: Color) {
+        self.plabel_color = color;
     }
 
     pub fn get_custom(&self, var_idx: VarIndex) -> &PolyValue {

@@ -201,7 +201,7 @@ fn run_ants_model() -> Rc<RefCell<Workspace>> {
             .unwrap()
             .0
         {
-            world.patches[patch].set_color(Color::VIOLET);
+            world.patches[patch].set_pcolor(Color::VIOLET);
         } else if *world.patches[patch]
             .get_custom(patch_food)
             .get::<value::Float>()
@@ -213,13 +213,13 @@ fn run_ants_model() -> Rc<RefCell<Workspace>> {
                 .get::<value::Float>()
                 .unwrap();
             if food_source_number == value::Float::new(1.0) {
-                world.patches[patch].set_color(Color::CYAN);
+                world.patches[patch].set_pcolor(Color::CYAN);
             }
             if food_source_number == value::Float::new(2.0) {
-                world.patches[patch].set_color(Color::SKY);
+                world.patches[patch].set_pcolor(Color::SKY);
             }
             if food_source_number == value::Float::new(3.0) {
-                world.patches[patch].set_color(Color::BLUE);
+                world.patches[patch].set_pcolor(Color::BLUE);
             }
         } else {
             let chemical = *world.patches[patch]
@@ -232,10 +232,10 @@ fn run_ants_model() -> Rc<RefCell<Workspace>> {
                 value::Float::new(0.1),
                 value::Float::new(5.0),
             );
-            world.patches[patch].set_color(scaled_color);
+            world.patches[patch].set_pcolor(scaled_color);
         }
 
-        updater.update_patch(&world.patches[patch], PatchProperty::Color.into());
+        updater.update_patch(&world.patches[patch], PatchProperty::Pcolor.into());
     }
 
     // TODO add the rest of the model

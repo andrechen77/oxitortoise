@@ -35,7 +35,9 @@ flags! {
 
 flags! {
     pub enum PatchProperty: u32 {
-        Color,
+        Pcolor,
+        Plabel,
+        PlabelColor,
     }
 }
 
@@ -70,7 +72,9 @@ impl Update for PrintUpdate {
         let mut updated_properties: Vec<String> = vec![];
         for property in properties_to_update {
             let value = match property {
-                PatchProperty::Color => format!("Color: {:?}", patch.get_color()),
+                PatchProperty::Pcolor => format!("Color: {:?}", patch.get_pcolor()),
+                PatchProperty::Plabel => format!("Label: {:?}", patch.get_plabel()),
+                PatchProperty::PlabelColor => format!("LabelColor: {:?}", patch.get_plabel_color()),
             };
             updated_properties.push(value);
         }
