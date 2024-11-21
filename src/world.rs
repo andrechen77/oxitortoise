@@ -20,6 +20,7 @@ pub struct World {
     pub observer: Observer,
     pub turtles: Turtles,
     pub patches: Patches,
+    pub topology: Topology,
     // TODO add other fields
 }
 
@@ -29,7 +30,8 @@ impl World {
             workspace: Weak::new(),
             observer: Observer::default(),
             turtles: Turtles::new(iter::empty()),
-            patches: Patches::new(topology),
+            patches: Patches::new(&topology),
+            topology,
         }));
 
         // now we must set all back-references to have a consistent data

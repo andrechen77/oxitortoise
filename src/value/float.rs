@@ -1,14 +1,16 @@
-use derive_more::derive::From;
+use derive_more::derive::{Add, AddAssign, Div, DivAssign, From, Mul, MulAssign, Sub, SubAssign};
 
 use crate::topology::CoordInt;
 
 /// A double-precision floating-point number which is guaranteed to be finite
 /// (not Infinity or NaN).
 #[derive(Debug, Clone, Copy, From, PartialEq, PartialOrd)] // TODO also ord and eq
+#[derive(Add, AddAssign, Sub, SubAssign, Mul, MulAssign, Div, DivAssign)] // TODO how to keep guaranteeing that the result is finite?
 pub struct Float(f64);
 
 impl Float {
     pub fn new(value: f64) -> Self {
+        debug_assert!(value.is_finite());
         Self(value)
     }
 

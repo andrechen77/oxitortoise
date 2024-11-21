@@ -2,10 +2,11 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use oxitortoise::agent_variables::VariableDescriptor;
+use oxitortoise::color::Color;
 use oxitortoise::shuffle_iterator::ShuffleIterator;
 use oxitortoise::topology::{Point, Topology};
 use oxitortoise::turtle::{Shape, BREED_NAME_TURTLES};
-use oxitortoise::updater::{PrintUpdate, TurtleProperty, Update};
+use oxitortoise::updater::{PatchProperty, PrintUpdate, TurtleProperty, Update};
 use oxitortoise::value;
 use oxitortoise::workspace::Workspace;
 use oxitortoise::{color, topology};
@@ -95,7 +96,7 @@ fn run_ants_model() -> Rc<RefCell<Workspace>> {
         turtle.set_size(2.0);
 
         // `set color red`
-        turtle.set_color(color::RED);
+        turtle.set_color(Color::RED);
 
         updater.update_turtle(&*turtle, TurtleProperty::Size | TurtleProperty::Color);
     }
@@ -103,19 +104,138 @@ fn run_ants_model() -> Rc<RefCell<Workspace>> {
     // setup-patches
     let mut patches: Vec<_> = world.patches.patch_ids_iter().collect();
     for &mut patch in ShuffleIterator::new(&mut patches, Rc::clone(&workspace.rng)) {
-        let patch = &mut world.patches[patch];
-
-        // setup-nest
+        // set nest? (distancexy 0 0) < 5
         let local_0 = topology::euclidean_distance_unwrapped(
-            patch.position().into(),
+            world.patches[patch].position().into(),
             Point { x: 0.0, y: 0.0 },
         );
         let local_1 = local_0 < 5.0;
-        patch.set_custom(patch_nest, value::Boolean(local_1).into());
+        world.patches[patch].set_custom(patch_nest, value::Boolean(local_1).into());
+
+        // set nest-scent 200 - distancexy 0 0
+        let local_2 = 200.0 - local_0;
+        world.patches[patch].set_custom(patch_nest_scent, value::Float::new(local_2).into());
 
         // setup-food
 
+        let max_pxcor = world.topology.max_pxcor() as f64;
+        let max_pycor = world.topology.max_pycor as f64;
+
+        // ;; setup food source one on the right
+        // if (distancexy (0.6 * max-pxcor) 0) < 5
+        // [ set food-source-number 1 ]
+        if topology::euclidean_distance_unwrapped(
+            world.patches[patch].position().into(),
+            Point {
+                x: 0.6 * max_pxcor,
+                y: 0.0,
+            },
+        ) < 5.0
+        {
+            world.patches[patch]
+                .set_custom(patch_food_source_number, value::Float::new(1.0).into());
+        }
+
+        // ;; setup food source two on the lower-left
+        // if (distancexy (-0.6 * max-pxcor) (-0.6 * max-pycor)) < 5
+        // [ set food-source-number 2 ]
+        if topology::euclidean_distance_unwrapped(
+            world.patches[patch].position().into(),
+            Point {
+                x: -0.6 * max_pxcor,
+                y: -0.6 * max_pycor,
+            },
+        ) < 5.0
+        {
+            world.patches[patch]
+                .set_custom(patch_food_source_number, value::Float::new(2.0).into());
+        }
+
+        // ;; setup food source three on the upper-left
+        // if (distancexy (-0.8 * max-pxcor) (0.8 * max-pycor)) < 5
+        // [ set food-source-number 3 ]
+        if topology::euclidean_distance_unwrapped(
+            world.patches[patch].position().into(),
+            Point {
+                x: -0.8 * max_pxcor,
+                y: 0.8 * max_pycor,
+            },
+        ) < 5.0
+        {
+            world.patches[patch]
+                .set_custom(patch_food_source_number, value::Float::new(3.0).into());
+        }
+
+        // ;; set "food" at sources to either 1 or 2, randomly
+        // if food-source-number > 0
+        // [ set food one-of [1 2] ]
+        if *world.patches[patch]
+            .get_custom(patch_food_source_number)
+            .get::<value::Float>()
+            .unwrap()
+            > value::Float::new(0.0)
+        {
+            let rand_index = workspace.rng.borrow_mut().next_int(2);
+            let food_value = match rand_index {
+                0 => value::Float::new(1.0),
+                1 => value::Float::new(2.0),
+                _ => unreachable!("rand_index should be 0 or 1"),
+            };
+            world.patches[patch].set_custom(patch_food, food_value.into());
+        }
+
         // recolor-patch
+
+        // ;; give color to nest and food sources
+        // ifelse nest?
+        // [ set pcolor violet ]
+        // [ ifelse food > 0
+        //     [ if food-source-number = 1 [ set pcolor cyan ]
+        //     if food-source-number = 2 [ set pcolor sky  ]
+        //     if food-source-number = 3 [ set pcolor blue ] ]
+        //     ;; scale color to show chemical concentration
+        //     [ set pcolor scale-color green chemical 0.1 5 ] ]
+        if world.patches[patch]
+            .get_custom(patch_nest)
+            .get::<value::Boolean>()
+            .unwrap()
+            .0
+        {
+            world.patches[patch].set_color(Color::VIOLET);
+        } else if *world.patches[patch]
+            .get_custom(patch_food)
+            .get::<value::Float>()
+            .unwrap()
+            > value::Float::new(0.0)
+        {
+            let food_source_number = *world.patches[patch]
+                .get_custom(patch_food_source_number)
+                .get::<value::Float>()
+                .unwrap();
+            if food_source_number == value::Float::new(1.0) {
+                world.patches[patch].set_color(Color::CYAN);
+            }
+            if food_source_number == value::Float::new(2.0) {
+                world.patches[patch].set_color(Color::SKY);
+            }
+            if food_source_number == value::Float::new(3.0) {
+                world.patches[patch].set_color(Color::BLUE);
+            }
+        } else {
+            let chemical = *world.patches[patch]
+                .get_custom(patch_chemical)
+                .get::<value::Float>()
+                .unwrap();
+            let scaled_color = color::scale_color(
+                Color::GREEN,
+                chemical,
+                value::Float::new(0.1),
+                value::Float::new(5.0),
+            );
+            world.patches[patch].set_color(scaled_color);
+        }
+
+        updater.update_patch(&world.patches[patch], PatchProperty::Color.into());
     }
 
     // TODO add the rest of the model

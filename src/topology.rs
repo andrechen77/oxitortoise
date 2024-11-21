@@ -59,6 +59,18 @@ pub struct Topology {
     pub world_height: CoordInt,
 }
 
+impl Topology {
+    /// Returns the `pxcor` of the rightmost patch.
+    pub fn max_pxcor(&self) -> CoordInt {
+        self.min_pxcor + self.world_width - 1
+    }
+
+    /// Returns the `pycor` of the bottommost patch.
+    pub fn min_pycor(&self) -> CoordInt {
+        self.max_pycor - self.world_height + 1
+    }
+}
+
 pub fn euclidean_distance_unwrapped(a: Point, b: Point) -> CoordFloat {
     let dx = a.x - b.x;
     let dy = a.y - b.y;

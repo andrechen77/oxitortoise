@@ -6,6 +6,7 @@ use rand::{rngs::StdRng, Rng as _, SeedableRng as _};
 // be made to match the behavior of NetLogo Desktop
 
 pub trait NextInt: Debug {
+    /// Returns a random integer between 0 (inclusive) and `max` (exclusive).
     fn next_int(&mut self, max: i32) -> i32;
 }
 

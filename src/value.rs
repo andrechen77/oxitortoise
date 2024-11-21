@@ -2,13 +2,13 @@
 
 mod boolean;
 mod float;
-mod string;
 mod polyvalue;
+mod string;
 
 pub use boolean::Boolean;
 pub use float::Float;
-pub use string::String;
 pub use polyvalue::{PolyValue, Type};
+pub use string::String;
 
 // TODO add other types such as link references, agentsets, lists, reporters,
 // commmands

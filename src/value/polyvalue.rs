@@ -113,7 +113,7 @@ impl PolyValue {
     pub fn get<T: ContainedInValue>(&self) -> Option<&T> {
         if self.r#type == T::TYPE_TAG {
             // SAFETY: type tag ensures valid union access
-            Some(unsafe { self.get_unchecked()})
+            Some(unsafe { self.get_unchecked() })
         } else {
             None
         }
@@ -122,7 +122,7 @@ impl PolyValue {
     pub fn get_mut<T: ContainedInValue>(&mut self) -> Option<&mut T> {
         if self.r#type == T::TYPE_TAG {
             // SAFETY: type tag ensures valid union access
-            Some(unsafe { self.get_mut_unchecked()})
+            Some(unsafe { self.get_mut_unchecked() })
         } else {
             None
         }
@@ -131,7 +131,7 @@ impl PolyValue {
     pub fn into<T: ContainedInValue>(self) -> Option<T> {
         if self.r#type == T::TYPE_TAG {
             // SAFETY: type tag ensures valid union access
-            Some(unsafe { self.into_unchecked()})
+            Some(unsafe { self.into_unchecked() })
         } else {
             None
         }
@@ -303,7 +303,10 @@ impl Drop for PolyValue {
 
 impl<T: ContainedInValue> From<T> for PolyValue {
     fn from(inner: T) -> Self {
-        let mut value = PolyValue { r#type: T::TYPE_TAG, data: UntypedData { unit: () } };
+        let mut value = PolyValue {
+            r#type: T::TYPE_TAG,
+            data: UntypedData { unit: () },
+        };
 
         // SAFETY: the pointer was created to an in-bounds allocation
         let data_ptr = unsafe { T::location_in_mut(&raw mut value) };
@@ -336,7 +339,6 @@ macro_rules! impl_conv {
                 // the pointer because the cast is between types with the same
                 // layout and bit validity (i.e. T and ManuallyDrop<T>)
                 unsafe { &raw const (*value).data.$union_field }.cast()
-
             }
 
             unsafe fn location_in_mut(value: *mut PolyValue) -> *mut Self {
@@ -438,4 +440,3 @@ mod tests {
         assert!(value.get::<Boolean>().is_none());
     }
 }
-

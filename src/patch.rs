@@ -5,6 +5,7 @@ use std::{
 
 use crate::{
     agent_variables::{CustomAgentVariables, VarIndex, VariableDescriptor, VariableMapper},
+    color::Color,
     topology::{CoordInt, PointInt, Topology},
     value::{self, PolyValue},
 };
@@ -24,24 +25,17 @@ pub struct Patches {
     patches: Vec<Patch>,
     /// A mapping between variable names and variable descriptors for patches.
     variable_mapper: VariableMapper<Patch>,
-    /// The topology of the world.
-    topology: Topology,
 }
 
 impl Patches {
-    pub fn new(topology: Topology) -> Self {
+    pub fn new(topology: &Topology) -> Self {
         // create the world
-        let Topology {
-            world_width,
-            world_height,
-            min_pxcor,
-            max_pycor,
-        } = topology;
-        let mut patches = Vec::with_capacity((world_width * world_height) as usize);
-        for j in 0..world_height {
-            for i in 0..world_width {
-                let x = min_pxcor + i as CoordInt;
-                let y = max_pycor - j as CoordInt;
+        let mut patches =
+            Vec::with_capacity((topology.world_width * topology.world_height) as usize);
+        for j in 0..topology.world_height {
+            for i in 0..topology.world_width {
+                let x = topology.min_pxcor + i as CoordInt;
+                let y = topology.max_pycor - j as CoordInt;
                 patches.push(Patch::at(PointInt { x, y }));
             }
         }
@@ -62,7 +56,6 @@ impl Patches {
 
         Self {
             patches,
-            topology,
             variable_mapper,
         }
     }
@@ -111,6 +104,7 @@ impl IndexMut<PatchId> for Patches {
 #[derive(Debug)]
 pub struct Patch {
     position: PointInt,
+    color: Color,
     custom_variables: CustomAgentVariables,
     // TODO some way of tracking what turtles are on this patch.
 }
@@ -119,12 +113,21 @@ impl Patch {
     pub fn at(position: PointInt) -> Self {
         Self {
             position,
+            color: Color::BLACK,
             custom_variables: CustomAgentVariables::new(),
         }
     }
 
     pub fn position(&self) -> PointInt {
         self.position
+    }
+
+    pub fn get_color(&self) -> Color {
+        self.color
+    }
+
+    pub fn set_color(&mut self, color: Color) {
+        self.color = color;
     }
 
     pub fn get_custom(&self, var_idx: VarIndex) -> &PolyValue {
