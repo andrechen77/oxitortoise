@@ -1,3 +1,31 @@
+//! A container that can hold any of the possible types of values in NetLogo,
+//! with optional type safety.
+//!
+//! A `PolyValue` consists of some data, which can be of various NetLogo runtime
+//! type (see [`super`], as well as a type tag, which indicates the type of the
+//! data. However, unlike regular Rust enums or tagged unions, there is an
+//! additional type tag, [`Type::Erased`], which indicates that the type of the
+//! item is untracked at runtime. This requires the user to manually remember
+//! what the type of the value was, so that the correct type can be retrieved
+//! later.
+//!
+//! A `PolyValue` is considered either "type-erased" (tagged with
+//! [`Type::Erased`]) or "type-checked".
+//!
+//! A type-checked `PolyValue` is like a Rust enum, with a tag that indicates
+//! which variant is stored. This module guarantees the validity of the tag
+//! and the stored type for type-checked `PolyValue`s. Upon dropping, a
+//! type-checked `PolyValue` will run the destructor for the stored type.
+//!
+//! A type-erased `PolyValue` provides no runtime checks for accessing the
+//! correct data. All the safe accessors will fail (i.e. return `None`) with
+//! type-erased values. The only way to access the value is with unsafe methods
+//! (with names ending in `_unchecked`). Type-erased `PolyValue`s must not be
+//! dropped: the caller must remember to either extract the inner value using
+//! [`PolyValue::into_unchecked`] (which can then be dropped as desired), or
+//! change to a type-checked `PolyValue` using [`PolyValue::assert_type`] (which
+//! will run the correct destructor upon dropping).
+
 use std::{fmt::Debug, mem::ManuallyDrop};
 
 use crate::{patch::PatchId, turtle::TurtleId};
@@ -12,8 +40,8 @@ pub enum Type {
     /// if the caller is confident that they are reading the correct type.
     Erased,
     /// Indicates that there is no data stored in the value. Dropping a
-    /// [`Value`] with this type does nothing.
-    Uninit,
+    /// [`PolyValue`] with this type does nothing.
+    Uninit, // TODO does this need to exist?
     Float,
     Boolean,
     String,
@@ -31,14 +59,14 @@ union UntypedData {
     patch: PatchId,
 }
 
-pub struct Value {
+pub struct PolyValue {
     /// The type of the data. If it is not erased, then the data field is
     /// guaranteed to be of the specified type.
     r#type: Type,
     data: UntypedData,
 }
 
-impl Value {
+impl PolyValue {
     pub const NOBODY: Self = Self {
         r#type: Type::Nobody,
         data: UntypedData { unit: () },
@@ -146,24 +174,25 @@ impl Value {
         let ptr: *const T = unsafe { T::location_in(&*self) }.cast();
         // SAFETY: preconditioned that the value actually holds this type
         let inner = unsafe { ptr.read() };
+        self.r#type = Type::Uninit;
         drop(inner);
     }
 
     /// Resets the value to its default value.
     /// TODO should this always be zero?
     pub fn reset(&mut self) {
-        *self = Value::default();
+        *self = PolyValue::default();
     }
 }
 
-/// A data type that is contained inside a [`Value`].
+/// A data type that is contained inside a [`PolyValue`].
 ///
 /// # Safety
 ///
-/// This trait is unsafe to implement because it triggers impls for conversions
-/// between `Self` and [`Value`]. To be safe, it must be able to guarantee that
+/// This trait is unsafe to implement because it triggers methods for conversions
+/// between `Self` and [`PolyValue`]. To be safe, it must be able to guarantee that
 /// the `location_in` method always returns a pointer that is valid, either if
-/// the [`Type`] tag of the [`Value`] matches `TYPE_TAG`, or if the data in the
+/// the [`Type`] tag of the [`PolyValue`] matches `TYPE_TAG`, or if the data in the
 /// value was last stored as a valid instance of `Self`.
 pub unsafe trait ContainedInValue {
     const TYPE_TAG: Type;
@@ -171,33 +200,17 @@ pub unsafe trait ContainedInValue {
     /// # Safety
     ///
     /// Must be called with an in-bounds pointer.
-    unsafe fn location_in(value: *const Value) -> *const Self;
+    unsafe fn location_in(value: *const PolyValue) -> *const Self;
 
     /// # Safety
     ///
     /// Must be called with an in-bounds pointer.
-    unsafe fn location_in_mut(value: *mut Value) -> *mut Self;
-
-    // /// # Safety
-    // ///
-    // /// The contents of the [`Value`] must actually be of type `Self` in a way
-    // /// that extracting it is valid.
-    // unsafe fn get_unchecked(value: &Value) -> &Self;
-
-    // /// # Safety
-    // ///
-    // /// The contents of the [`Value`] must actually be of type `Self` in a way
-    // /// that extracting it is valid.
-    // unsafe fn get_mut_unchecked(value: &mut Value) -> &mut Self;
-
-    // // unsafe fn set_unchecked(value: &mut Value, )
-
-    // unsafe fn into_unchecked(value: Value) -> Self;
+    unsafe fn location_in_mut(value: *mut PolyValue) -> *mut Self;
 }
 
-impl Default for Value {
+impl Default for PolyValue {
     fn default() -> Self {
-        Value {
+        PolyValue {
             r#type: Type::Float,
             data: UntypedData {
                 float: Float::new(0.0),
@@ -207,7 +220,7 @@ impl Default for Value {
 }
 
 // TODO nobody semantics: a dead turtle ID compares equal to nobody
-impl PartialEq for Value {
+impl PartialEq for PolyValue {
     fn eq(&self, other: &Self) -> bool {
         // this macro must only be called if you are sure that the values are in
         // the specified field for both self and other
@@ -233,7 +246,7 @@ impl PartialEq for Value {
     }
 }
 
-impl Debug for Value {
+impl Debug for PolyValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // SAFETY: type tag ensures valid union access
         match self.r#type {
@@ -249,7 +262,10 @@ impl Debug for Value {
     }
 }
 
-impl Drop for Value {
+// TODO what if we made Drop a no-op, with just a debug_assert that the valcleaue is
+// uninit? then that allows performance-sensitive code to avoid dropping while
+// still ensuring in tests that the model code properly drops the values.
+impl Drop for PolyValue {
     fn drop(&mut self) {
         println!("dropping {:?}", self);
         match self.r#type {
@@ -265,9 +281,9 @@ impl Drop for Value {
     }
 }
 
-impl<T: ContainedInValue> From<T> for Value {
+impl<T: ContainedInValue> From<T> for PolyValue {
     fn from(inner: T) -> Self {
-        let mut value = Value { r#type: T::TYPE_TAG, data: UntypedData { unit: () } };
+        let mut value = PolyValue { r#type: T::TYPE_TAG, data: UntypedData { unit: () } };
 
         // SAFETY: the pointer was created to an in-bounds allocation
         let data_ptr = unsafe { T::location_in_mut(&raw mut value) };
@@ -280,12 +296,12 @@ impl<T: ContainedInValue> From<T> for Value {
     }
 }
 
-/// Implements infallible conversion from subtype to [`Value`], fallible
-/// conversions from [`Value`] to subtype, and unchecked conversions from
-/// [`Value`] to subtype. To be safe, invocations of the macro must guarantee
-/// that for any [`Value`] `v`, `v.data.$union_field` has some type that is
+/// Implements infallible conversion from subtype to [`PolyValue`], fallible
+/// conversions from [`PolyValue`] to subtype, and unchecked conversions from
+/// [`PolyValue`] to subtype. To be safe, invocations of the macro must guarantee
+/// that for any [`PolyValue`] `v`, `v.data.$union_field` has some type that is
 /// bitwise identical to `$type`, and that that `v.data.$union_field` field is
-/// valid, either if `v.r#type` of the [`Value`] matches `$type_tag`, or if the
+/// valid, either if `v.r#type` of the [`PolyValue`] matches `$type_tag`, or if the
 /// data in the value was last stored as a valid instance of `Self`.
 macro_rules! impl_conv {
     ($type:ty, $type_tag:expr, $union_field:ident) => {
@@ -293,7 +309,7 @@ macro_rules! impl_conv {
         unsafe impl ContainedInValue for $type {
             const TYPE_TAG: Type = $type_tag;
 
-            unsafe fn location_in(value: *const Value) -> *const Self {
+            unsafe fn location_in(value: *const PolyValue) -> *const Self {
                 // SAFETY: we are not accessing the value, just computing the
                 // projection. the projection is known to be in bounds because
                 // it came from a reference. The cast retains the validity of
@@ -303,7 +319,7 @@ macro_rules! impl_conv {
 
             }
 
-            unsafe fn location_in_mut(value: *mut Value) -> *mut Self {
+            unsafe fn location_in_mut(value: *mut PolyValue) -> *mut Self {
                 // SAFETY: we are not accessing the value, just computing the
                 // projection. the projection is known to be in bounds because
                 // it came from a reference. The cast retains the validity of
@@ -326,31 +342,49 @@ mod tests {
 
     #[test]
     fn drop_test() {
-        let mut value: Value = Float::new(3.14).into();
+        #[allow(unused_assignments)]
+        let mut value: PolyValue = Float::new(3.14).into();
         value = Boolean(true).into();
         drop(value);
     }
 
     #[test]
+    #[should_panic]
+    fn cannot_drop_erased() {
+        let mut value = PolyValue::default();
+        value.r#type = Type::Erased;
+        drop(value);
+    }
+
+    #[test]
+    fn correctly_drop_erased() {
+        let mut value = PolyValue::default();
+        value.r#type = Type::Erased;
+        unsafe { value.drop_erased_as_unchecked::<Float>() };
+        drop(value);
+    }
+
+    #[test]
     fn store_retrieve_safely() {
-        let value = Value::from(Float::new(3.14));
+        let value = PolyValue::from(Float::new(3.14));
         assert_eq!(value.r#type, Type::Float);
         assert_eq!(value.get::<Float>().unwrap().get(), 3.14);
     }
 
     #[test]
     fn store_retrieve_unsafely() {
-
+        let value = PolyValue::from(Float::new(3.14));
+        assert_eq!(unsafe { value.get_unchecked::<Float>() }.get(), 3.14);
     }
 
     #[test]
     fn nobody_equality() {
-        assert_eq!(Value::NOBODY, Value::NOBODY);
+        assert_eq!(PolyValue::NOBODY, PolyValue::NOBODY);
     }
 
     #[test]
     fn test_get_unchecked() {
-        let value = Value::from(Float::new(3.14));
+        let value = PolyValue::from(Float::new(3.14));
         unsafe {
             assert_eq!(value.get_unchecked::<Float>().get(), 3.14);
         }
@@ -358,7 +392,7 @@ mod tests {
 
     #[test]
     fn test_get_mut_unchecked() {
-        let mut value = Value::from(Float::new(3.14));
+        let mut value = PolyValue::from(Float::new(3.14));
         unsafe {
             assert_eq!(value.get_mut_unchecked::<Float>().get(), 3.14);
             *value.get_mut_unchecked::<Float>() = Float::new(2.71);
@@ -368,7 +402,7 @@ mod tests {
 
     #[test]
     fn test_into_unchecked() {
-        let value = Value::from(Float::new(3.14));
+        let value = PolyValue::from(Float::new(3.14));
         unsafe {
             let float: Float = value.into_unchecked();
             assert_eq!(float.get(), 3.14);
@@ -377,7 +411,7 @@ mod tests {
 
     #[test]
     fn test_store_as_float_retrieve_as_boolean() {
-        let value = Value::from(Float::new(3.14));
+        let value = PolyValue::from(Float::new(3.14));
         assert!(value.get::<Boolean>().is_none());
     }
 }

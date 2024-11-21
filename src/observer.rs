@@ -4,16 +4,16 @@ use std::{
     rc::{Rc, Weak},
 };
 
-use crate::{value::Value, world::World};
+use crate::{value::PolyValue, world::World};
 
 #[derive(Debug)]
 enum GlobalVariable {
-    CodeDefined(Value),
-    WidgetDefined(Value),
+    CodeDefined(PolyValue),
+    WidgetDefined(PolyValue),
 }
 
 impl GlobalVariable {
-    fn get(&self) -> &Value {
+    fn get(&self) -> &PolyValue {
         match self {
             GlobalVariable::CodeDefined(value) => value,
             GlobalVariable::WidgetDefined(value) => value,
@@ -38,11 +38,11 @@ impl Observer {
         self.world = world;
     }
 
-    pub fn get_global(&self, name: &str) -> Option<&Value> {
+    pub fn get_global(&self, name: &str) -> Option<&PolyValue> {
         self.variables.get(name).map(GlobalVariable::get)
     }
 
-    pub fn create_widget_global(&mut self, name: Rc<str>, value: Value) {
+    pub fn create_widget_global(&mut self, name: Rc<str>, value: PolyValue) {
         self.variables
             .insert(name, GlobalVariable::WidgetDefined(value));
     }

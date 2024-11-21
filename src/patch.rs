@@ -6,7 +6,7 @@ use std::{
 use crate::{
     agent_variables::{CustomAgentVariables, VarIndex, VariableDescriptor, VariableMapper},
     topology::{CoordInt, PointInt, Topology},
-    value::{self, Value},
+    value::{self, PolyValue},
 };
 
 /// A reference to a patch.
@@ -47,7 +47,7 @@ impl Patches {
         }
 
         let mut variable_mapper = VariableMapper::new();
-        let built_in_variables: &[(Rc<str>, fn(&Patch) -> Value)] = &[
+        let built_in_variables: &[(Rc<str>, fn(&Patch) -> PolyValue)] = &[
             (Rc::from("pxcor"), |patch| {
                 value::Float::from(patch.position().x).into()
             }),
@@ -127,11 +127,11 @@ impl Patch {
         self.position
     }
 
-    pub fn get_custom(&self, var_idx: VarIndex) -> &Value {
+    pub fn get_custom(&self, var_idx: VarIndex) -> &PolyValue {
         &self.custom_variables[var_idx]
     }
 
-    pub fn set_custom(&mut self, var_idx: VarIndex, value: Value) {
+    pub fn set_custom(&mut self, var_idx: VarIndex, value: PolyValue) {
         self.custom_variables[var_idx] = value;
     }
 }

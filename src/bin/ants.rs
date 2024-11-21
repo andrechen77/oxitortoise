@@ -12,6 +12,7 @@ use oxitortoise::{color, topology};
 
 // define the Ants model. this is a direct translation of this code
 // https://github.com/NetLogo/Tortoise/blob/master/resources/test/dumps/Ants.js
+#[allow(unused_variables)]
 fn run_ants_model() -> Rc<RefCell<Workspace>> {
     let w = Workspace::new(Topology {
         min_pxcor: -12,

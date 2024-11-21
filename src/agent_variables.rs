@@ -10,7 +10,7 @@ use crate::value;
 /// Describes the location of a certain variable in an agent of type `A`.
 #[derive(Debug, PartialEq, Eq, Hash)] // TODO equality derives don't work
 pub enum VariableDescriptor<A> {
-    BuiltIn(fn(&A) -> value::Value),
+    BuiltIn(fn(&A) -> value::PolyValue),
     Custom(VarIndex),
 }
 
@@ -101,7 +101,7 @@ impl<A> VariableMapper<A> {
     /// # Panics
     ///
     /// Panics if the variable name has already been used.
-    pub fn declare_built_in_variable(&mut self, name: Rc<str>, getter: fn(&A) -> value::Value) {
+    pub fn declare_built_in_variable(&mut self, name: Rc<str>, getter: fn(&A) -> value::PolyValue) {
         match self.name_to_descriptor.entry(name) {
             Entry::Occupied(e) => {
                 panic!(
@@ -129,7 +129,7 @@ impl<A> VariableMapper<A> {
 /// this struct is associated with each agent.
 #[derive(Debug, Default)]
 pub struct CustomAgentVariables {
-    values: Vec<value::Value>,
+    values: Vec<value::PolyValue>,
 }
 
 impl CustomAgentVariables {
@@ -154,7 +154,7 @@ impl CustomAgentVariables {
         for &mapping in new_to_old_idxs {
             match mapping {
                 Some(id) => new_values.push(mem::take(&mut self.values[id.0])),
-                None => new_values.push(value::Value::default()),
+                None => new_values.push(value::PolyValue::default()),
             }
         }
         self.values = new_values;
@@ -162,7 +162,7 @@ impl CustomAgentVariables {
 }
 
 impl Index<VarIndex> for CustomAgentVariables {
-    type Output = value::Value;
+    type Output = value::PolyValue;
 
     fn index(&self, index: VarIndex) -> &Self::Output {
         &self.values[index.0]
@@ -185,7 +185,7 @@ mod test {
     }
 
     impl Agent {
-        fn get_built_in_var(&self) -> value::Value {
+        fn get_built_in_var(&self) -> value::PolyValue {
             value::Float::new(self.built_in_var).into()
         }
     }
@@ -293,6 +293,6 @@ mod test {
 
         // ensure values are preserved for variables with the same name
         assert_eq!(custom_vars[VarIndex(0)], value::Float::new(2.0).into()); // custom1
-        assert_eq!(custom_vars[VarIndex(1)], value::Value::default()); // custom2 is new
+        assert_eq!(custom_vars[VarIndex(1)], value::PolyValue::default()); // custom2 is new
     }
 }

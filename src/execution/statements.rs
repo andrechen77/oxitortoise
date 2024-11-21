@@ -15,12 +15,12 @@ use super::ExecutionContext;
 pub enum StatementOutcome {
     /// The statement executed successfully and returned. If the statement was
     /// a reporter, then the value is returned.
-    Return(Option<value::Value>),
+    Return(Option<value::PolyValue>),
     /// While executing the statement, an early return was encountered. This
     /// aborts execution of all statements higher up in the call stack up to the
     /// next procedure boundary. If we are currently a reporter, then the value
     /// is returned.
-    EarlyReturn(Option<value::Value>),
+    EarlyReturn(Option<value::PolyValue>),
     /// While executing the statement, an error occurred. This aborts execution
     /// of all statements higher up in the call stack up to the next `carefully`
     /// statement.

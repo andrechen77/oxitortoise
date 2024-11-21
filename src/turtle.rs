@@ -262,11 +262,11 @@ impl Turtle {
         self.size
     }
 
-    pub fn get_custom(&self, index: VarIndex) -> &value::Value {
+    pub fn get_custom(&self, index: VarIndex) -> &value::PolyValue {
         &self.custom_variables[index]
     }
 
-    pub fn set_custom(&mut self, index: VarIndex, value: value::Value) {
+    pub fn set_custom(&mut self, index: VarIndex, value: value::PolyValue) {
         self.custom_variables[index] = value;
     }
 
