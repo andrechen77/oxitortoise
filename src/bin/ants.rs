@@ -234,13 +234,23 @@ fn ants_setup(workspace: &mut Workspace, updater: &mut impl Update) {
     world.tick_counter.clear();
 }
 
+fn ants_go(workspace: &mut Workspace, updater: &mut impl Update) {
+    let mut world = workspace.world.borrow_mut();
+
+    // ask turtles [...]
+    let mut turtles: Vec<_> = world.turtles.turtle_ids_iter().collect();
+    for &mut turtle in ShuffleIterator::new(&mut turtles, Rc::clone(&workspace.rng)) {
+        world.turtles.get_by_index(turtle).unwrap()
+    }
+}
+
 // define the Ants model. this is a direct translation of this code
 // https://github.com/NetLogo/Tortoise/blob/master/resources/test/dumps/Ants.js
 #[allow(unused_variables)]
-fn run_ants_model() -> Rc<RefCell<Workspace>> {
+fn run_ants_model() {
     let mut updater = PrintUpdate;
 
-    let w = Workspace::new(Topology {
+    let workspace = Workspace::new(Topology {
         min_pxcor: -12,
         max_pycor: 12,
         world_width: 25,
@@ -248,11 +258,12 @@ fn run_ants_model() -> Rc<RefCell<Workspace>> {
     });
 
     // run the `setup` function
-    ants_setup(&mut *w.borrow_mut(), &mut updater);
+    ants_setup(&mut *workspace.borrow_mut(), &mut updater);
 
     // TODO repeatedly run the `go` function
-
-    w
+    for _ in 0..100 {
+        ants_go(&mut *workspace.borrow_mut().world.borrow_mut(), &mut updater);
+    }
 }
 
 fn main() {

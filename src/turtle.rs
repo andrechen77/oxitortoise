@@ -92,6 +92,10 @@ impl Turtles {
         self.turtle_storage.get_mut(turtle_ref)
     }
 
+    pub fn turtle_ids_iter(&self) -> impl Iterator<Item = TurtleId> + use<'_> {
+        self.turtle_storage.keys()
+    }
+
     pub fn translate_who(&self, who: TurtleWho) -> Option<TurtleId> {
         self.who_map.get(&who).copied()
     }
