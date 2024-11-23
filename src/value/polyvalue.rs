@@ -42,7 +42,7 @@ pub enum Type {
     /// Indicates that the type of the value is unknown. The only way to get the
     /// value is to unsafely read from the union, which should only be done
     /// if the caller is confident that they are reading the correct type.
-    Erased,
+    Erased = 0,
     /// Indicates that there is no data stored in the value. Dropping a
     /// [`PolyValue`] with this type does nothing.
     Uninit,
@@ -84,6 +84,18 @@ pub struct PolyValue {
 }
 
 impl PolyValue {
+    /// A type-erased `PolyValue` with no data in it. This should be the
+    /// quickest to initialize.
+    pub const ERASED: Self = Self {
+        r#type: Type::Erased,
+        data: UntypedData { unit: () },
+    };
+
+    pub const UNINIT: Self = Self {
+        r#type: Type::Uninit,
+        data: UntypedData { unit: () },
+    };
+
     pub const NOBODY: Self = Self {
         r#type: Type::Nobody,
         data: UntypedData { unit: () },
