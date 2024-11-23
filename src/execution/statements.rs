@@ -38,9 +38,9 @@ pub trait Statement {
     /// the state in its execution context (which uses RefCell heavily) is
     /// currently unborrowed, so a statement should make sure that it stops
     /// borrowing that state when it calls other statements.
-    fn execute<'w, 'r, U, R>(
+    fn execute<'w, U, R>(
         &self,
-        context: &mut ExecutionContext<'w, 'r, U, R>,
+        context: &mut ExecutionContext<'w, U, R>,
     ) -> StatementOutcome
     where
         U: Update,
@@ -56,9 +56,9 @@ pub enum StatementKind {
 
 // essentially manually doing dynamic dispatch for `StatementKind`
 impl Statement for StatementKind {
-    fn execute<'w, 'r, U, R>(
+    fn execute<'w, U, R>(
         &self,
-        context: &mut ExecutionContext<'w, 'r, U, R>,
+        context: &mut ExecutionContext<'w, U, R>,
     ) -> StatementOutcome
     where
         U: Update,
@@ -89,9 +89,9 @@ pub struct CompoundStatement {
 }
 
 impl Statement for CompoundStatement {
-    fn execute<'w, 'r, U, R>(
+    fn execute<'w, U, R>(
         &self,
-        context: &mut ExecutionContext<'w, 'r, U, R>,
+        context: &mut ExecutionContext<'w, U, R>,
     ) -> StatementOutcome
     where
         U: Update,
@@ -107,9 +107,9 @@ impl Statement for CompoundStatement {
 pub struct ClearAll {}
 
 impl Statement for ClearAll {
-    fn execute<'w, 'r, U, R>(
+    fn execute<'w, U, R>(
         &self,
-        context: &mut ExecutionContext<'w, 'r, U, R>,
+        context: &mut ExecutionContext<'w, U, R>,
     ) -> StatementOutcome
     where
         U: Update,
@@ -190,9 +190,9 @@ pub struct SetTurtleSize {
 }
 
 impl Statement for SetTurtleSize {
-    fn execute<'w, 'r, U, R>(
+    fn execute<'w, U, R>(
         &self,
-        context: &mut ExecutionContext<'w, 'r, U, R>,
+        context: &mut ExecutionContext<'w, U, R>,
     ) -> StatementOutcome
     where
         U: Update,

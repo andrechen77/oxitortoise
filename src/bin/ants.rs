@@ -77,7 +77,7 @@ fn ants_setup(workspace: &mut Workspace, updater: &mut impl Update) {
         &mut *workspace.rng.borrow_mut(),
     );
 
-    for turtle in ShuffleIterator::new(&mut new_turtles, workspace.rng.clone()) {
+    for turtle in ShuffleIterator::new(&mut new_turtles, Rc::clone(&workspace.rng)) {
         let turtle = world
             .turtles
             .get_mut_by_index(*turtle)

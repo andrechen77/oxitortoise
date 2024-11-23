@@ -2,6 +2,11 @@ use flagset::{flags, FlagSet};
 
 use crate::{patch::Patch, turtle::Turtle};
 
+// TODO is there a better way to send the updates without having to create
+// a reference to the agent being updated? for example, we could just save the
+// agent id and OR all the changed flags together to find all the properties
+// that were changed
+
 pub trait Update {
     /// Records in the updater that the specified properties of a turtle have
     /// changed to their new values. If this is called on a turtle that the
