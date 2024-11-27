@@ -1,21 +1,28 @@
 use std::fmt::Debug;
 use std::rc::Rc;
 
-use super::statements::CompoundStatement;
+use super::vm::instruction::Instruction;
 
-pub struct CommandProcedure {
-    pub name: Rc<str>,
-    pub start: i32, // TODO consider making (start, end) its own type indicating a NetLogo source range
-    pub end: i32,
-    pub action: CompoundStatement,
+#[derive(Debug)]
+pub struct Procedure {
+    name: Rc<str>,
+    instructions: Vec<Instruction>,
 }
 
-impl Debug for CommandProcedure {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Command")
-            .field("name", &self.name)
-            .field("start", &self.start)
-            .field("end", &self.end)
-            .finish_non_exhaustive()
+impl Procedure {
+    /// # Safety
+    ///
+    /// See [`here`](super::vm::Execute::execute) for invariants that must be
+    /// upheld by the instructions.
+    pub unsafe fn new(name: Rc<str>, instructions: Vec<Instruction>) -> Self {
+        Self { name, instructions }
+    }
+
+    pub fn name(&self) -> &Rc<str> {
+        &self.name
+    }
+
+    pub fn instructions(&self) -> &[Instruction] {
+        &self.instructions
     }
 }

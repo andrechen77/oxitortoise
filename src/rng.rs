@@ -35,3 +35,8 @@ impl NextInt for RandIntGenerator {
         self.rng.gen_range(0..max)
     }
 }
+
+// The canonical RNG to use for this engine. This is aliased here to make it
+// easier to change the RNG used in the future, and really only exists for
+// debugging purposes. Feel free to remove.
+pub type CanonRng = RandIntGenerator;

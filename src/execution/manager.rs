@@ -1,17 +1,17 @@
 use std::{collections::HashMap, rc::Rc};
 
-use crate::execution::procedure::CommandProcedure;
+use crate::execution::procedure::Procedure;
 
 #[derive(Debug)]
 pub struct ProcedureManager {
-    commands: HashMap<Rc<str>, CommandProcedure>,
+    procedures: HashMap<Rc<str>, Procedure>,
     // TODO other fields
 }
 
 impl Default for ProcedureManager {
     fn default() -> Self {
         Self {
-            commands: HashMap::default(),
+            procedures: HashMap::default(),
         }
     }
 }
@@ -19,15 +19,15 @@ impl Default for ProcedureManager {
 impl ProcedureManager {
     pub fn new() -> Self {
         Self {
-            commands: HashMap::new(),
+            procedures: HashMap::new(),
         }
     }
 
-    pub fn define_command(&mut self, command: CommandProcedure) {
-        self.commands.insert(command.name.clone(), command);
+    pub fn define_procedure(&mut self, procedure: Procedure) {
+        self.procedures.insert(procedure.name().clone(), procedure);
     }
 
-    pub fn get_command_by_name(&mut self, name: &str) -> Option<&CommandProcedure> {
-        self.commands.get(name)
+    pub fn get_procedure(&mut self, name: &str) -> Option<&Procedure> {
+        self.procedures.get(name)
     }
 }

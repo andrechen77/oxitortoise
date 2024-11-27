@@ -3,7 +3,7 @@ use std::rc::Rc;
 
 use oxitortoise::agent_variables::VariableDescriptor;
 use oxitortoise::color::Color;
-use oxitortoise::shuffle_iterator::ShuffleIterator;
+use oxitortoise::shuffle_iterator::ShuffledMut;
 use oxitortoise::topology::{Point, Topology};
 use oxitortoise::turtle::{Shape, BREED_NAME_TURTLES};
 use oxitortoise::updater::{PatchProperty, PrintUpdate, TurtleProperty, Update};
@@ -12,8 +12,7 @@ use oxitortoise::workspace::Workspace;
 use oxitortoise::world::World;
 use oxitortoise::{color, topology};
 
-
-fn ants_setup(workspace: &mut Workspace, updater: &mut impl Update) {
+fn direct_setup_ants(workspace: &mut Workspace, updater: &mut impl Update) {
     let mut world = workspace.world.borrow_mut();
 
     // declare widget variable
@@ -77,7 +76,7 @@ fn ants_setup(workspace: &mut Workspace, updater: &mut impl Update) {
         &mut *workspace.rng.borrow_mut(),
     );
 
-    for turtle in ShuffleIterator::new(&mut new_turtles, workspace.rng.clone()) {
+    for turtle in ShuffledMut::new(&mut new_turtles, Rc::clone(&workspace.rng)) {
         let turtle = world
             .turtles
             .get_mut_by_index(*turtle)
@@ -94,7 +93,7 @@ fn ants_setup(workspace: &mut Workspace, updater: &mut impl Update) {
 
     // setup-patches
     let mut patches: Vec<_> = world.patches.patch_ids_iter().collect();
-    for &mut patch in ShuffleIterator::new(&mut patches, Rc::clone(&workspace.rng)) {
+    for &mut patch in ShuffledMut::new(&mut patches, Rc::clone(&workspace.rng)) {
         // set nest? (distancexy 0 0) < 5
         let local_0 = topology::euclidean_distance_unwrapped(
             world.patches[patch].position().into(),
@@ -237,7 +236,7 @@ fn ants_setup(workspace: &mut Workspace, updater: &mut impl Update) {
 // define the Ants model. this is a direct translation of this code
 // https://github.com/NetLogo/Tortoise/blob/master/resources/test/dumps/Ants.js
 #[allow(unused_variables)]
-fn run_ants_model() -> Rc<RefCell<Workspace>> {
+fn direct_run_ants() -> Rc<RefCell<Workspace>> {
     let mut updater = PrintUpdate;
 
     let w = Workspace::new(Topology {
@@ -248,7 +247,7 @@ fn run_ants_model() -> Rc<RefCell<Workspace>> {
     });
 
     // run the `setup` function
-    ants_setup(&mut *w.borrow_mut(), &mut updater);
+    direct_setup_ants(&mut *w.borrow_mut(), &mut updater);
 
     // TODO repeatedly run the `go` function
 
@@ -256,5 +255,5 @@ fn run_ants_model() -> Rc<RefCell<Workspace>> {
 }
 
 fn main() {
-    run_ants_model();
+    direct_run_ants();
 }
