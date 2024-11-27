@@ -30,6 +30,8 @@
 //! (with names ending in `_unchecked`). Type-erased `PolyValue`s can be unsafely
 //! dropped using [`PolyValue::drop_inner_unchecked`].
 
+// TODO update documentation to allow automatic dropping using RAII.
+
 use std::{fmt::Debug, mem::ManuallyDrop};
 
 use crate::{patch::PatchId, turtle::TurtleId};
@@ -309,7 +311,16 @@ impl Debug for PolyValue {
 
 impl Drop for PolyValue {
     fn drop(&mut self) {
-        debug_assert!(!self.r#type.needs_drop());
+        match self.r#type {
+            Type::Erased => panic!("cannot safely drop a type-erased value"),
+            Type::Uninit => (),
+            Type::Float | Type::Boolean | Type::Nobody | Type::Patch | Type::Turtle => {}
+            Type::String => {
+                // SAFETY: type tag ensures valid union access. the data is not
+                // used again because this is the destructor
+                unsafe { ManuallyDrop::drop(&mut self.data.string) };
+            }
+        }
     }
 }
 
