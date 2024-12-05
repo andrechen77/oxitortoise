@@ -4,12 +4,16 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use slotmap::SlotMap;
 
-use crate::agent_variables::{CustomAgentVariables, VarIndex, VariableMapper};
-use crate::color::{self, Color};
-use crate::rng::NextInt;
-use crate::topology::Point;
-use crate::value;
-use crate::world::{AgentIndexIntoWorld, World};
+use crate::{
+    sim::{
+        agent_variables::{CustomAgentVariables, VarIndex, VariableMapper},
+        color::{self, Color},
+        topology::Point,
+        value,
+        world::{AgentIndexIntoWorld, World}
+    },
+    rng::NextInt,
+};
 
 /// The who number of a turtle.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]

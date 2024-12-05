@@ -1,6 +1,10 @@
 use std::{cell::RefCell, rc::Rc};
 
-use crate::{agent::AgentId, rng::CanonRng, updater::Update, value::PolyValue, world::World};
+use crate::{
+    sim::{agent::AgentId, value::PolyValue, world::World},
+    rng::CanonRng,
+    updater::Update,
+};
 
 use instruction::Instruction;
 use structure::StructureFrame;

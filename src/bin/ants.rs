@@ -1,16 +1,20 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use oxitortoise::agent_variables::VariableDescriptor;
-use oxitortoise::color::Color;
-use oxitortoise::shuffle_iterator::ShuffledMut;
-use oxitortoise::topology::{Point, Topology};
-use oxitortoise::turtle::{Shape, BREED_NAME_TURTLES};
-use oxitortoise::updater::{PatchProperty, PrintUpdate, TurtleProperty, Update};
-use oxitortoise::value;
-use oxitortoise::workspace::Workspace;
-use oxitortoise::world::World;
-use oxitortoise::{color, topology};
+use oxitortoise::{
+    sim::{
+        agent_variables::VariableDescriptor,
+        color::{self, Color},
+        topology::{Point, Topology},
+        turtle::{Shape, BREED_NAME_TURTLES},
+        value,
+        world::World,
+        topology,
+    },
+    workspace::Workspace,
+    shuffle_iterator::ShuffledMut,
+    updater::{PatchProperty, PrintUpdate, TurtleProperty, Update},
+};
 
 fn direct_setup_ants(workspace: &mut Workspace, updater: &mut impl Update) {
     let mut world = workspace.world.borrow_mut();

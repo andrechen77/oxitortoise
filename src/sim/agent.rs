@@ -2,7 +2,7 @@ use std::convert::Infallible;
 
 use derive_more::derive::{From, TryInto};
 
-use crate::{
+use crate::sim::{
     observer::Observer,
     patch::{Patch, PatchId},
     turtle::{Turtle, TurtleId},

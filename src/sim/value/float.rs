@@ -1,6 +1,6 @@
 use derive_more::derive::{Add, AddAssign, Div, DivAssign, From, Mul, MulAssign, Sub, SubAssign};
 
-use crate::topology::CoordInt;
+use crate::sim::topology::CoordInt;
 
 /// A double-precision floating-point number which is guaranteed to be finite
 /// (not Infinity or NaN).

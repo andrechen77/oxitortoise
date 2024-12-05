@@ -5,12 +5,14 @@ use std::{
 };
 
 use crate::{
-    agent::{Agent, AgentId, AgentMut},
-    observer::Observer,
-    patch::Patches,
-    tick::Tick,
-    topology::Topology,
-    turtle::Turtles,
+    sim::{
+        agent::{Agent, AgentId, AgentMut},
+        observer::Observer,
+        patch::Patches,
+        tick::Tick,
+        topology::Topology,
+        turtle::Turtles,
+    },
     workspace::Workspace,
 };
 

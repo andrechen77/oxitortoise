@@ -5,7 +5,7 @@ use std::{
     rc::Rc,
 };
 
-use crate::value;
+use crate::sim::value;
 
 /// Describes the location of a certain variable in an agent of type `A`.
 #[derive(Debug, PartialEq, Eq, Hash)] // TODO equality derives don't work

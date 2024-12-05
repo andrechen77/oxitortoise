@@ -1,4 +1,4 @@
-use crate::{agent::{AgentId, AgentMut}, value::{ContainedInValue, PolyValue}, world::{AgentIndexIntoWorld, World}};
+use crate::sim::{agent::{AgentId, AgentMut}, value::{ContainedInValue, PolyValue}, world::{AgentIndexIntoWorld, World}};
 
 pub(crate) fn unwrap_option<T>(option: Option<T>) -> T {
     #[cfg(debug_assertions)]

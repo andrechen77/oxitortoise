@@ -3,7 +3,7 @@ use std::{
     rc::Rc,
 };
 
-use crate::{
+use crate::sim::{
     agent_variables::{CustomAgentVariables, VarIndex, VariableDescriptor, VariableMapper},
     color::Color,
     topology::{CoordInt, PointInt, Topology},

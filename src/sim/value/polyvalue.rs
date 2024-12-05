@@ -34,7 +34,7 @@
 
 use std::{fmt::Debug, mem::ManuallyDrop};
 
-use crate::{patch::PatchId, turtle::TurtleId};
+use crate::sim::{patch::PatchId, turtle::TurtleId};
 
 use super::{Boolean, Float, String};
 

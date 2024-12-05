@@ -1,16 +1,7 @@
-pub mod agent;
-pub mod agent_variables;
-pub mod color;
 pub mod execution;
-pub mod observer;
-pub mod patch;
-pub mod rng;
 pub mod shuffle_iterator;
-pub mod tick;
-pub mod topology;
-pub mod turtle;
 mod unsafe_getter;
 pub mod updater;
-pub mod value;
+pub mod sim;
+pub mod rng;
 pub mod workspace;
-pub mod world;

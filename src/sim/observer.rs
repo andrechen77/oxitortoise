@@ -4,7 +4,7 @@ use std::{
     rc::{Rc, Weak},
 };
 
-use crate::{value::PolyValue, world::World};
+use crate::sim::{value::PolyValue, world::World};
 
 #[derive(Debug)]
 enum GlobalVariable {

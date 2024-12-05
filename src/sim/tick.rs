@@ -1,4 +1,4 @@
-use crate::value;
+use crate::sim::value;
 
 /// A sentinel value representing a clear tick counter.
 const CLEAR_TICK: f64 = -1.0;
