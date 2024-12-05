@@ -98,3 +98,11 @@ impl World {
         }
     }
 }
+
+pub trait AgentIndexIntoWorld {
+    type Output;
+
+    fn index_into_world(self, world: &World) -> Option<&Self::Output>;
+
+    fn index_into_world_mut(self, world: &mut World) -> Option<&mut Self::Output>;
+}

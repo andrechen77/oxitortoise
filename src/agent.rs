@@ -1,6 +1,6 @@
 use std::convert::Infallible;
 
-use derive_more::derive::From;
+use derive_more::derive::{From, TryInto};
 
 use crate::{
     observer::Observer,
@@ -8,7 +8,7 @@ use crate::{
     turtle::{Turtle, TurtleId},
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, From)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, From, TryInto)]
 pub enum AgentId {
     Observer,
     Turtle(TurtleId),
@@ -16,7 +16,7 @@ pub enum AgentId {
     Link(Infallible /* TODO */),
 }
 
-#[derive(Debug, Clone, Copy, From)]
+#[derive(Debug, Clone, Copy, From, TryInto)]
 pub enum Agent<'a> {
     Observer(&'a Observer),
     Turtle(&'a Turtle),
@@ -24,7 +24,7 @@ pub enum Agent<'a> {
     Link(Infallible /* TODO */),
 }
 
-#[derive(Debug, From)]
+#[derive(Debug, From, TryInto)]
 pub enum AgentMut<'a> {
     Observer(&'a mut Observer),
     Turtle(&'a mut Turtle),

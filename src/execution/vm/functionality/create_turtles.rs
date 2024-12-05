@@ -38,6 +38,10 @@ use crate::{
 /// these instructions for that turtle. If there are no turtles left to iterate,
 /// either this instruction or `ContinueCrtAsk` will pop the `CrtAskFrame` and
 /// jump to the instruction after this construct.
+///
+/// ## Return
+///
+/// This instruction leaves no extra operands on the stack.
 #[derive(Debug)]
 pub struct CreateTurtlesWithCommands {
     /// The name of the breed of turtles to create.

@@ -51,7 +51,8 @@ where
             .last_mut()
             .expect("a frame should exist")
             .try_into()
-            .unwrap_or_else(|_| panic!("previously checked that the frame was the correct type")),
+            .ok()
+            .expect("previously checked that the frame was the correct type"),
     );
 }
 

@@ -9,7 +9,7 @@ use crate::color::{self, Color};
 use crate::rng::NextInt;
 use crate::topology::Point;
 use crate::value;
-use crate::world::World;
+use crate::world::{AgentIndexIntoWorld, World};
 
 /// The who number of a turtle.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -29,6 +29,18 @@ slotmap::new_key_type! {
     /// An invalidate-able reference to a turtle. This is implemented as a
     /// generational index into the [`Turtles`] data structure.
     pub struct TurtleId;
+}
+
+impl AgentIndexIntoWorld for TurtleId {
+    type Output = Turtle;
+
+    fn index_into_world(self, world: &World) -> Option<&Self::Output> {
+        world.turtles.get_by_index(self)
+    }
+
+    fn index_into_world_mut(self, world: &mut World) -> Option<&mut Self::Output> {
+        world.turtles.get_mut_by_index(self)
+    }
 }
 
 #[derive(Debug)]
