@@ -5,7 +5,7 @@ use crate::{
         topology::Topology,
         world::World,
     },
-    rng::{NextInt, RandIntGenerator},
+    util::rng::{NextInt, RandIntGenerator},
     execution::ProcedureManager,
 };
 

@@ -1,6 +1,6 @@
 use std::sync::OnceLock;
 
-use crate::{rng::NextInt, sim::value::Float};
+use crate::{util::rng::NextInt, sim::value::Float};
 
 /// A NetLogo color. This is a floating point value guaranteed to be in the
 /// range 0.0..140.0. Values with more than one decimal place of precision are

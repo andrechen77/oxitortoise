@@ -12,7 +12,7 @@ use oxitortoise::{
         topology,
     },
     workspace::Workspace,
-    shuffle_iterator::ShuffledMut,
+    util::shuffle_iterator::ShuffledMut,
     updater::{PatchProperty, PrintUpdate, TurtleProperty, Update},
 };
 

@@ -2,7 +2,7 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     sim::{agent::AgentId, value::PolyValue, world::World},
-    rng::CanonRng,
+    util::rng::CanonRng,
     updater::Update,
 };
 

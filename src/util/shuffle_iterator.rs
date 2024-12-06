@@ -3,7 +3,7 @@
 
 use std::{collections::VecDeque, mem};
 
-use crate::rng::NextInt;
+use crate::util::rng::NextInt;
 
 /// A borrowing iterator that shuffles a mutable slice. If [`Iterator::next`] is
 /// called `n` times, then the first `n` elements of the slice will contain the

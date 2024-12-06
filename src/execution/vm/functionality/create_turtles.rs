@@ -7,13 +7,15 @@ use crate::{
         turtle::TurtleId,
         value::{self},
     },
-    rng::CanonRng,
+    util::{
+        rng::CanonRng,
+        shuffle_iterator::ShuffledOwned,
+    },
     execution::vm::{
         instruction::Instruction,
         structure::{pop_until_structure_frame, StructureFrame},
         Execute, ExecutionContext,
     },
-    shuffle_iterator::ShuffledOwned,
     unsafe_getter::{unwrap_option, unwrap_polyvalue},
 };
 

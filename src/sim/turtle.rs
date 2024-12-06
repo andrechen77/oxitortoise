@@ -12,7 +12,7 @@ use crate::{
         value,
         world::{AgentIndexIntoWorld, World}
     },
-    rng::NextInt,
+    util::rng::NextInt,
 };
 
 /// The who number of a turtle.
