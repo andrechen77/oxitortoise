@@ -5,8 +5,8 @@ use crate::updater::Update;
 use super::{functionality, Execute, ExecutionContext};
 
 pub use functionality::clear_all::ClearAll;
-pub use functionality::create_turtles::CreateTurtlesWithCommands;
 pub use functionality::create_turtles::ContinueCrtAsk;
+pub use functionality::create_turtles::CreateTurtlesWithCommands;
 
 #[derive(Debug)]
 pub enum Instruction {

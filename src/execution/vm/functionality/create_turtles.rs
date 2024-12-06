@@ -1,22 +1,19 @@
 use std::{cell::RefCell, collections::VecDeque, ops::DerefMut as _, rc::Rc};
 
 use crate::{
+    execution::vm::{
+        instruction::Instruction,
+        structure::{pop_until_structure_frame, StructureFrame},
+        Execute, ExecutionContext,
+    },
     sim::{
         agent::AgentId,
         topology::Point,
         turtle::TurtleId,
         value::{self},
     },
-    util::{
-        rng::CanonRng,
-        shuffle_iterator::ShuffledOwned,
-    },
-    execution::vm::{
-        instruction::Instruction,
-        structure::{pop_until_structure_frame, StructureFrame},
-        Execute, ExecutionContext,
-    },
     unsafe_getter::{unwrap_option, unwrap_polyvalue},
+    util::{rng::CanonRng, shuffle_iterator::ShuffledOwned},
 };
 
 /// Creates turtles and sets up initialization for each turtle.

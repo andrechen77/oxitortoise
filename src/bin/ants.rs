@@ -5,15 +5,15 @@ use oxitortoise::{
     sim::{
         agent_variables::VariableDescriptor,
         color::{self, Color},
+        topology,
         topology::{Point, Topology},
         turtle::{Shape, BREED_NAME_TURTLES},
         value,
         world::World,
-        topology,
     },
-    workspace::Workspace,
-    util::shuffle_iterator::ShuffledMut,
     updater::{PatchProperty, PrintUpdate, TurtleProperty, Update},
+    util::shuffle_iterator::ShuffledMut,
+    workspace::Workspace,
 };
 
 fn direct_setup_ants(workspace: &mut Workspace, updater: &mut impl Update) {

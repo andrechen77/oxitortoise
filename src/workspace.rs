@@ -1,12 +1,9 @@
 use std::{cell::RefCell, rc::Rc};
 
 use crate::{
-    sim::{
-        topology::Topology,
-        world::World,
-    },
-    util::rng::{NextInt, RandIntGenerator},
     execution::ProcedureManager,
+    sim::{topology::Topology, world::World},
+    util::rng::{NextInt, RandIntGenerator},
 };
 
 #[derive(Debug)]

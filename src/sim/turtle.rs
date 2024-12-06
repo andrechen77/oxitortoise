@@ -10,7 +10,7 @@ use crate::{
         color::{self, Color},
         topology::Point,
         value,
-        world::{AgentIndexIntoWorld, World}
+        world::{AgentIndexIntoWorld, World},
     },
     util::rng::NextInt,
 };

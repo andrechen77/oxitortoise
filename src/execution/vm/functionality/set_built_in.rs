@@ -1,11 +1,11 @@
 //! Functionality for setting the built-in variables of agents.
 
 use crate::{
+    execution::vm::{Execute, ExecutionContext},
     sim::{
         turtle::{Turtle, TurtleId},
         value,
     },
-    execution::vm::{Execute, ExecutionContext},
     unsafe_getter::{unwrap_agent_id_mut, unwrap_option, unwrap_polyvalue},
 };
 

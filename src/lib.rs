@@ -1,6 +1,6 @@
 pub mod execution;
+pub mod sim;
 mod unsafe_getter;
 pub mod updater;
-pub mod sim;
-pub mod workspace;
 pub mod util;
+pub mod workspace;

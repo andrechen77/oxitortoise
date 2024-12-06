@@ -1,4 +1,8 @@
-use crate::sim::{agent::{AgentId, AgentMut}, value::{ContainedInValue, PolyValue}, world::{AgentIndexIntoWorld, World}};
+use crate::sim::{
+    agent::{AgentId, AgentMut},
+    value::{ContainedInValue, PolyValue},
+    world::{AgentIndexIntoWorld, World},
+};
 
 pub(crate) fn unwrap_option<T>(option: Option<T>) -> T {
     #[cfg(debug_assertions)]
@@ -23,7 +27,10 @@ where
 {
     #[cfg(debug_assertions)]
     {
-        let id: I = id.try_into().ok().expect("agent should be of the correct type");
+        let id: I = id
+            .try_into()
+            .ok()
+            .expect("agent should be of the correct type");
         return id.index_into_world_mut(world).expect("agent should exist");
     }
 
@@ -34,9 +41,15 @@ where
     }
 }
 
-pub(crate) fn convert<T, U>(value: T) -> U where T: TryInto<U> {
+pub(crate) fn convert<T, U>(value: T) -> U
+where
+    T: TryInto<U>,
+{
     #[cfg(debug_assertions)]
-    return value.try_into().ok().expect("value should be of the correct type");
+    return value
+        .try_into()
+        .ok()
+        .expect("value should be of the correct type");
 
     #[cfg(not(debug_assertions))]
     return value.try_into().unwrap_unchecked();

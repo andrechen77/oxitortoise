@@ -2,8 +2,8 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     sim::{agent::AgentId, value::PolyValue, world::World},
-    util::rng::CanonRng,
     updater::Update,
+    util::rng::CanonRng,
 };
 
 use instruction::Instruction;
