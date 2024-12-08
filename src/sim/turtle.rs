@@ -191,7 +191,7 @@ impl Turtles {
                 label: String::new(),
                 label_color: color, // TODO use a default label color
                 hidden: false,
-                size: 1.0,
+                size: value::Float::new(1.0),
                 shape,
                 custom_variables: CustomAgentVariables::new(),
             };
@@ -225,7 +225,7 @@ pub struct Turtle {
     label: String, // TODO consider using the netlogo version of string for this
     label_color: Color,
     hidden: bool,
-    size: f64,
+    size: value::Float,
     custom_variables: CustomAgentVariables,
 }
 
@@ -234,7 +234,7 @@ impl Turtle {
         self.who
     }
 
-    pub fn set_size(&mut self, size: f64) {
+    pub fn set_size(&mut self, size: value::Float) {
         self.size = size;
     }
 
@@ -274,7 +274,7 @@ impl Turtle {
         self.hidden
     }
 
-    pub fn size(&self) -> f64 {
+    pub fn size(&self) -> value::Float {
         self.size
     }
 

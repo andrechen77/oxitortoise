@@ -2,21 +2,73 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use oxitortoise::{
+    primitive::{self, world::look_up_agent, ExecutionContext},
     sim::{
-        agent_variables::VariableDescriptor,
-        color::{self, Color},
-        topology,
-        topology::{Point, Topology},
-        turtle::{Shape, BREED_NAME_TURTLES},
-        value,
-        world::World,
+        agent::AgentId, agent_variables::VariableDescriptor, color::{self, Color}, topology::{self, Point, Topology}, turtle::{Shape, Turtle, TurtleId, BREED_NAME_TURTLES}, value, world::World
     },
     updater::{PatchProperty, PrintUpdate, TurtleProperty, Update},
     util::shuffle_iterator::ShuffledMut,
     workspace::Workspace,
 };
 
-fn direct_setup_ants(workspace: &mut Workspace, updater: &mut impl Update) {
+fn create_workspace() -> Rc<RefCell<Workspace>> {
+    let w = Workspace::new(Topology {
+        min_pxcor: -12,
+        max_pycor: 12,
+        world_width: 25,
+        world_height: 25,
+    });
+
+    {
+        let workspace = w.borrow_mut();
+        let mut world = workspace.world.borrow_mut();
+
+        // declare widget variable
+        world
+            .observer
+            .create_widget_global(Rc::from("population"), value::Float::new(2.0).into());
+
+        // `patches-own [...]`
+        let patch_var_names = [
+            Rc::from("chemical"),
+            Rc::from("food"),
+            Rc::from("nest?"),
+            Rc::from("nest-scent"),
+            Rc::from("food-source-number"),
+        ];
+        world
+            .patches
+            .declare_custom_variables(patch_var_names.to_vec());
+    }
+
+    w
+}
+
+fn setup<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
+    // clear-all
+    primitive::clear::clear_all(context);
+
+    // create-turtles
+    primitive::create_agent::create_turtles_with_cmd(
+        context,
+        value::Float::new(2.0),
+        BREED_NAME_TURTLES,
+        |context| {
+            let this_turtle = look_up_agent::<TurtleId, _>(context.executor, context.world);
+            Turtle::set_size(this_turtle, value::Float::new(2.0));
+            Turtle::set_color(this_turtle, Color::RED);
+            context
+                .updater
+                .update_turtle(this_turtle, TurtleProperty::Size | TurtleProperty::Color);
+        },
+    );
+
+    // setup-patches
+    // primitive::ask::ask(context, value::agentset::AllPatches::in_world(context.world.clone()))
+}
+
+
+/* fn direct_setup_ants(workspace: &mut Workspace, updater: &mut impl Update) {
     let mut world = workspace.world.borrow_mut();
 
     // declare widget variable
@@ -87,7 +139,7 @@ fn direct_setup_ants(workspace: &mut Workspace, updater: &mut impl Update) {
             .expect("turtle should exist because it was just created");
 
         // `set size 2`
-        turtle.set_size(2.0);
+        // turtle.set_size(2.0);
 
         // `set color red`
         turtle.set_color(Color::RED);
@@ -236,26 +288,30 @@ fn direct_setup_ants(workspace: &mut Workspace, updater: &mut impl Update) {
     // TODO reset-ticks does more than just clear the tick counter
     world.tick_counter.clear();
 }
+*/
 
 // define the Ants model. this is a direct translation of this code
 // https://github.com/NetLogo/Tortoise/blob/master/resources/test/dumps/Ants.js
 #[allow(unused_variables)]
-fn direct_run_ants() -> Rc<RefCell<Workspace>> {
-    let mut updater = PrintUpdate;
+fn direct_run_ants() {
+    let updater = PrintUpdate;
 
-    let w = Workspace::new(Topology {
-        min_pxcor: -12,
-        max_pycor: 12,
-        world_width: 25,
-        world_height: 25,
-    });
+    let w = create_workspace();
+
+    let workspace = w.borrow_mut();
+    let mut world = workspace.world.borrow_mut();
+    let mut context = ExecutionContext {
+        world: &mut *world,
+        executor: AgentId::Observer,
+        asker: AgentId::Observer,
+        updater: updater,
+        next_int: Rc::new(RefCell::new(oxitortoise::util::rng::CanonRng::new())),
+    };
 
     // run the `setup` function
-    direct_setup_ants(&mut *w.borrow_mut(), &mut updater);
+    setup(&mut context);
 
     // TODO repeatedly run the `go` function
-
-    w
 }
 
 fn main() {

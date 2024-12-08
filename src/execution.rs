@@ -1,5 +1,10 @@
-mod manager;
-mod procedure;
-pub mod vm;
+#[derive(Debug)]
+pub struct ProcedureManager {
+    // TODO add fields
+}
 
-pub use manager::ProcedureManager;
+impl ProcedureManager {
+    pub fn new() -> Self {
+        Self {}
+    }
+}

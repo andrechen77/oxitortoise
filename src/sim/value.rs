@@ -1,5 +1,6 @@
 //! NetLogo runtime values.
 
+pub mod agentset;
 mod boolean;
 mod float;
 mod polyvalue;
@@ -10,5 +11,5 @@ pub use float::Float;
 pub use polyvalue::{ContainedInValue, PolyValue, Type};
 pub use string::String;
 
-// TODO add other types such as link references, agentsets, lists, reporters,
+// TODO add other types such as link references, lists, reporters,
 // commmands

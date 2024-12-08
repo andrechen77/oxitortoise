@@ -1,6 +1,6 @@
 use derive_more::derive::{Add, AddAssign, Div, DivAssign, From, Mul, MulAssign, Sub, SubAssign};
 
-use crate::sim::topology::CoordInt;
+use crate::sim::{color::Color, topology::CoordInt};
 
 /// A double-precision floating-point number which is guaranteed to be finite
 /// (not Infinity or NaN).
@@ -22,6 +22,12 @@ impl Float {
 impl From<CoordInt> for Float {
     fn from(value: CoordInt) -> Self {
         Float(value as f64)
+    }
+}
+
+impl From<Color> for Float {
+    fn from(value: Color) -> Self {
+        value.to_float()
     }
 }
 

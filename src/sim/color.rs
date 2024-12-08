@@ -30,6 +30,10 @@ impl Color {
     pub fn to_darkest_shade(self) -> Color {
         Color((self.0 / SHADE_RANGE).floor() * SHADE_RANGE)
     }
+
+    pub fn to_float(self) -> Float {
+        Float::new(self.0)
+    }
 }
 
 impl From<Float> for Color {

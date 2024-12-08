@@ -3,6 +3,8 @@ use std::{
     rc::Rc,
 };
 
+use derive_more::derive::From;
+
 use crate::sim::{
     agent_variables::{CustomAgentVariables, VarIndex, VariableDescriptor, VariableMapper},
     color::Color,
@@ -11,7 +13,7 @@ use crate::sim::{
 };
 
 /// A reference to a patch.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, From)]
 pub struct PatchId {
     // The index of the patch in the [`Patches`] struct.
     grid_index: usize,
