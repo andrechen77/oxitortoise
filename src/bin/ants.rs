@@ -1,10 +1,18 @@
-use std::cell::RefCell;
 use std::rc::Rc;
+use std::{cell::RefCell, ops::DerefMut};
 
+use oxitortoise::primitive::world::look_up_patch;
 use oxitortoise::{
-    primitive::{self, world::look_up_agent, ExecutionContext},
+    primitive::{self, world::look_up_turtle, ExecutionContext},
     sim::{
-        agent::AgentId, agent_variables::VariableDescriptor, color::{self, Color}, topology::{self, Point, Topology}, turtle::{Shape, Turtle, TurtleId, BREED_NAME_TURTLES}, value, world::World
+        agent::{AgentId, AgentPosition},
+        agent_variables::{VarIndex, VariableDescriptor},
+        color::{self, Color},
+        patch::{Patch, PatchId},
+        topology::{self, Point, Topology},
+        turtle::{Shape, Turtle, TurtleId, BREED_NAME_TURTLES},
+        value::{self, PolyValue},
+        world::World,
     },
     updater::{PatchProperty, PrintUpdate, TurtleProperty, Update},
     util::shuffle_iterator::ShuffledMut,
@@ -26,6 +34,7 @@ fn create_workspace() -> Rc<RefCell<Workspace>> {
         // declare widget variable
         world
             .observer
+            .borrow_mut()
             .create_widget_global(Rc::from("population"), value::Float::new(2.0).into());
 
         // `patches-own [...]`
@@ -54,19 +63,58 @@ fn setup<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
         value::Float::new(2.0),
         BREED_NAME_TURTLES,
         |context| {
-            let this_turtle = look_up_agent::<TurtleId, _>(context.executor, context.world);
-            Turtle::set_size(this_turtle, value::Float::new(2.0));
-            Turtle::set_color(this_turtle, Color::RED);
-            context
-                .updater
-                .update_turtle(this_turtle, TurtleProperty::Size | TurtleProperty::Color);
+            let Some(this_turtle) = look_up_turtle(context.executor, context.world) else {
+                return;
+            };
+            let mut this_turtle = this_turtle.borrow_mut();
+            this_turtle.set_size(value::Float::new(2.0));
+            this_turtle.set_color(Color::RED);
+            context.updater.update_turtle(
+                this_turtle.deref_mut(),
+                TurtleProperty::Size | TurtleProperty::Color,
+            );
         },
     );
 
     // setup-patches
-    // primitive::ask::ask(context, value::agentset::AllPatches::in_world(context.world.clone()))
-}
+    primitive::ask::ask(context, &mut value::agentset::AllPatches, |context| {
+        let Some(this_patch) = look_up_patch(context.executor, context.world) else {
+            return;
+        };
+        let mut this_patch = this_patch.borrow_mut();
 
+        // set nest? (distancexy 0 0) < 5
+        {
+            let distance = primitive::topology::distancexy_euclidean(
+                &*this_patch,
+                value::Float::new(0.0),
+                value::Float::new(0.0),
+            );
+            let distance = PolyValue::from(distance);
+            Patch::set_custom(&mut *this_patch, VarIndex::from_index(2), distance);
+        }
+
+        // set nest-scent 200
+        {
+            let lit = value::Float::new(200.0);
+            let lit = PolyValue::from(lit);
+            let patch_nest_scent = VarIndex::from_index(3);
+            Patch::set_custom(&mut *this_patch, patch_nest_scent, lit);
+        }
+
+        // setup-food
+        {
+            let max_pxcor: value::Float = value::Float::from(context.world.topology.max_pxcor());
+            let max_pycor = value::Float::from(context.world.topology.max_pycor);
+
+            // if (distancexy (0.6 * max-pxcor) 0) < 5 [ set food-source-number 1 ]
+            let x = value::Float::new(0.6) * max_pxcor;
+            let y = value::Float::new(0.0);
+            let distance = primitive::topology::distancexy_euclidean(&mut *this_patch, x, y);
+            let condition = distance < value::Float::new(5.0);
+        }
+    });
+}
 
 /* fn direct_setup_ants(workspace: &mut Workspace, updater: &mut impl Update) {
     let mut world = workspace.world.borrow_mut();

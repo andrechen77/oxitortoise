@@ -6,7 +6,7 @@ use std::{
 
 use crate::{
     sim::{
-        agent::{Agent, AgentId, AgentMut},
+        agent::{Agent, AgentId},
         observer::Observer,
         patch::Patches,
         tick::Tick,
@@ -20,7 +20,7 @@ use crate::{
 pub struct World {
     /// A back-reference to the workspace that includes this world.
     pub workspace: Weak<RefCell<Workspace>>,
-    pub observer: Observer,
+    pub observer: RefCell<Observer>,
     pub turtles: Turtles,
     pub patches: Patches,
     pub topology: Topology,
@@ -32,7 +32,7 @@ impl World {
     pub fn new(topology: Topology) -> Rc<RefCell<Self>> {
         let world = Rc::new(RefCell::new(Self {
             workspace: Weak::new(),
-            observer: Observer::default(),
+            observer: RefCell::new(Observer::default()),
             turtles: Turtles::new(iter::empty()),
             patches: Patches::new(&topology),
             topology,
@@ -43,7 +43,7 @@ impl World {
         // structure
         {
             let mut w = world.borrow_mut();
-            w.observer.set_world(Rc::downgrade(&world));
+            w.observer.borrow_mut().set_world(Rc::downgrade(&world));
             w.turtles.set_world(Rc::downgrade(&world));
         }
 
@@ -56,8 +56,8 @@ impl World {
         self.workspace = workspace;
     }
 
-    pub fn clear_all(&mut self) {
-        self.observer.clear_globals();
+    pub fn clear_all(&self) {
+        self.observer.borrow_mut().clear_globals();
         self.patches.clear_all_patches();
         self.turtles.clear_turtles();
         /*
@@ -88,23 +88,4 @@ impl World {
             AgentId::Link(_id) => todo!(),
         }
     }
-
-    pub fn get_agent_mut(&mut self, agent_ref: AgentId) -> Option<AgentMut<'_>> {
-        match agent_ref {
-            AgentId::Observer => Some(AgentMut::Observer(&mut self.observer)),
-            AgentId::Turtle(turtle_ref) => {
-                Some(AgentMut::Turtle(self.turtles.get_mut_by_index(turtle_ref)?))
-            }
-            AgentId::Patch(_id) => todo!(),
-            AgentId::Link(_id) => todo!(),
-        }
-    }
-}
-
-pub trait AgentIndexIntoWorld {
-    type Output;
-
-    fn index_into_world(self, world: &World) -> Option<&Self::Output>;
-
-    fn index_into_world_mut(self, world: &mut World) -> Option<&mut Self::Output>;
 }

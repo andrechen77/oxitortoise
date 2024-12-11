@@ -1,4 +1,4 @@
-use std::convert::Infallible;
+use std::{cell::RefCell, convert::Infallible, rc::Rc};
 
 use derive_more::derive::{From, TryInto};
 
@@ -8,6 +8,8 @@ use crate::sim::{
     turtle::{Turtle, TurtleId},
 };
 
+use super::{topology::Point, world::World};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, From, TryInto)]
 pub enum AgentId {
     Observer,
@@ -16,18 +18,21 @@ pub enum AgentId {
     Link(Infallible /* TODO */),
 }
 
-#[derive(Debug, Clone, Copy, From, TryInto)]
+#[derive(Debug, Clone, From, TryInto)]
 pub enum Agent<'a> {
-    Observer(&'a Observer),
-    Turtle(&'a Turtle),
-    Patch(&'a Patch),
+    Observer(&'a RefCell<Observer>),
+    Turtle(Rc<RefCell<Turtle>>),
+    Patch(&'a RefCell<Patch>),
     Link(Infallible /* TODO */),
 }
 
-#[derive(Debug, From, TryInto)]
-pub enum AgentMut<'a> {
-    Observer(&'a mut Observer),
-    Turtle(&'a mut Turtle),
-    Patch(&'a mut Patch),
-    Link(Infallible /* TODO */),
+pub trait AgentIndexIntoWorld {
+    type Output<'w>;
+
+    fn index_into_world<'w>(self, world: &'w World) -> Option<Self::Output<'w>>;
+}
+
+// A trait for getting the position of an agent in the world.
+pub trait AgentPosition {
+    fn position(&self) -> Point;
 }

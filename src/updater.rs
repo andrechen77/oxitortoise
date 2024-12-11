@@ -1,6 +1,6 @@
 use flagset::{flags, FlagSet};
 
-use crate::sim::{patch::Patch, turtle::Turtle};
+use crate::sim::{agent::AgentPosition as _, patch::Patch, turtle::Turtle};
 
 // TODO is there a better way to send the updates without having to create
 // a reference to the agent being updated? for example, we could just save the
@@ -85,7 +85,7 @@ impl Update for PrintUpdate {
         }
         println!(
             "Patch {} updated: {{ {} }}",
-            patch.position(),
+            patch.position_int(),
             updated_properties.join(", ")
         );
     }

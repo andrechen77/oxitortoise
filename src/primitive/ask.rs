@@ -11,7 +11,7 @@ pub fn ask<'w, A: IterateAgentset, U: Update>(
     operation: Closure<'w, U>,
 ) {
     let asker = mem::replace(&mut context.asker, context.executor);
-    for agent in agentset.iter(context.next_int.clone()) {
+    for agent in agentset.iter(context.world, context.next_int.clone()) {
         context.executor = agent.into();
         operation(context);
     }

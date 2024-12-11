@@ -6,6 +6,8 @@ use crate::sim::{color::Color, topology::CoordInt};
 /// (not Infinity or NaN).
 #[derive(Debug, Clone, Copy, From, PartialEq, PartialOrd)] // TODO also ord and eq
 #[derive(Add, AddAssign, Sub, SubAssign, Mul, MulAssign, Div, DivAssign)] // TODO how to keep guaranteeing that the result is finite?
+#[mul(forward)]
+#[div(forward)]
 pub struct Float(f64);
 
 impl Float {

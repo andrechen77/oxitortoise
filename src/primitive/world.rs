@@ -1,15 +1,23 @@
 use crate::{
     sim::{
-        agent::AgentId,
-        world::{AgentIndexIntoWorld, World},
+        agent::{AgentId, AgentIndexIntoWorld},
+        patch::PatchId,
+        turtle::TurtleId,
+        world::World,
     },
-    unsafe_getter::unwrap_agent_id_mut,
+    unsafe_getter::unwrap_agent_id,
 };
 
-pub fn look_up_agent<I, A>(id: AgentId, world: &mut World) -> &mut A
-where
-    AgentId: TryInto<I>,
-    I: AgentIndexIntoWorld<Output = A>,
-{
-    unwrap_agent_id_mut(id, world)
+pub fn look_up_turtle(
+    id: AgentId,
+    world: &World,
+) -> Option<<TurtleId as AgentIndexIntoWorld>::Output<'_>> {
+    unwrap_agent_id::<TurtleId, _>(id, world)
+}
+
+pub fn look_up_patch(
+    id: AgentId,
+    world: &World,
+) -> Option<<PatchId as AgentIndexIntoWorld>::Output<'_>> {
+    unwrap_agent_id::<PatchId, _>(id, world)
 }

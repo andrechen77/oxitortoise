@@ -1,3 +1,4 @@
+use std::cell::Cell;
 use std::fmt::{self, Debug};
 use std::rc::Weak;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
@@ -10,10 +11,12 @@ use crate::{
         color::{self, Color},
         topology::Point,
         value,
-        world::{AgentIndexIntoWorld, World},
+        world::World,
     },
     util::rng::NextInt,
 };
+
+use super::agent::{AgentIndexIntoWorld, AgentPosition};
 
 /// The who number of a turtle.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -36,14 +39,10 @@ slotmap::new_key_type! {
 }
 
 impl AgentIndexIntoWorld for TurtleId {
-    type Output = Turtle;
+    type Output<'w> = Rc<RefCell<Turtle>>;
 
-    fn index_into_world(self, world: &World) -> Option<&Self::Output> {
+    fn index_into_world(self, world: &World) -> Option<Self::Output<'static>> {
         world.turtles.get_by_index(self)
-    }
-
-    fn index_into_world_mut(self, world: &mut World) -> Option<&mut Self::Output> {
-        world.turtles.get_mut_by_index(self)
     }
 }
 
@@ -52,12 +51,17 @@ pub struct Turtles {
     /// A back-reference to the world that includes this turtle manager.
     pub world: Weak<RefCell<World>>,
     /// The who number to be given to the next turtle.
-    next_who: TurtleWho,
+    next_who: Cell<TurtleWho>,
     // TODO do we need to store the breeds in a refcell?
     // TODO why store by name? what if we just passed around an index?
     breeds: HashMap<Rc<str>, Rc<RefCell<Breed>>>,
-    who_map: HashMap<TurtleWho, TurtleId>,
-    turtle_storage: SlotMap<TurtleId, Turtle>,
+    who_map: RefCell<HashMap<TurtleWho, TurtleId>>,
+    // TODO consider not using an Rc, to allow for indexing to return a direct
+    // &RefCell<Turtle> instead. this would also prevent from having to ensure
+    // at runtime that the turtles are not borrowed if the `Turtles` is
+    // exclusively borrowed. however, this would have safety concerns if we used
+    // Box, which asserts uniqueness over its contents
+    turtle_storage: RefCell<SlotMap<TurtleId, Rc<RefCell<Turtle>>>>,
 }
 
 impl Turtles {
@@ -89,10 +93,10 @@ impl Turtles {
 
         Turtles {
             world: Weak::new(),
-            next_who: TurtleWho::INITIAL,
+            next_who: Cell::new(TurtleWho::INITIAL),
             breeds,
-            who_map: HashMap::new(),
-            turtle_storage: SlotMap::with_key(),
+            who_map: RefCell::new(HashMap::new()),
+            turtle_storage: RefCell::new(SlotMap::with_key()),
         }
     }
 
@@ -100,18 +104,18 @@ impl Turtles {
         self.breeds.get(breed_name).cloned()
     }
 
-    pub fn get_by_index(&self, turtle_ref: TurtleId) -> Option<&Turtle> {
-        self.turtle_storage.get(turtle_ref)
-    }
-
-    pub fn get_mut_by_index(&mut self, turtle_ref: TurtleId) -> Option<&mut Turtle> {
-        self.turtle_storage.get_mut(turtle_ref)
+    pub fn get_by_index(&self, turtle_ref: TurtleId) -> Option<Rc<RefCell<Turtle>>> {
+        self.turtle_storage.borrow().get(turtle_ref).cloned()
     }
 
     pub fn translate_who(&self, who: TurtleWho) -> Option<TurtleId> {
-        self.who_map.get(&who).copied()
+        self.who_map.borrow().get(&who).copied()
     }
 
+    // # Safety
+    //
+    // This method mutably borrows from every included `RefCell<Turtle>`. You
+    // must ensure at runtime that there are no borrows to any included turtle.
     pub fn declare_custom_variables<'a>(
         &mut self,
         variables_by_breed: impl Iterator<Item = (&'a str, Vec<Rc<str>>)>,
@@ -135,7 +139,8 @@ impl Turtles {
 
         // make sure all turtles have the correct mappings in their custom
         // variables
-        for (_, turtle) in &mut self.turtle_storage {
+        for (_, turtle) in self.turtle_storage.get_mut().iter() {
+            let mut turtle = turtle.borrow_mut();
             if let Some(new_to_old_idxs) = new_mappings.get(&Rc::as_ptr(&turtle.breed)) {
                 turtle
                     .custom_variables
@@ -147,7 +152,7 @@ impl Turtles {
     /// Sets the backreferences of this structure and all structures owned by it
     /// to point to the specified world.
     pub fn set_world(&mut self, world: Weak<RefCell<World>>) {
-        if !self.turtle_storage.is_empty() {
+        if !self.turtle_storage.get_mut().is_empty() {
             // This could be implemented by setting the world of the turtles
             // but there's no reason to implement it since the workspace should
             // be set before it is used.
@@ -158,7 +163,7 @@ impl Turtles {
 
     /// Creates the turtles and returns a list of their ids.
     pub fn create_turtles(
-        &mut self,
+        &self,
         count: u64,
         breed_name: &str,
         spawn_point: Point,
@@ -169,8 +174,8 @@ impl Turtles {
         for _ in 0..count {
             let color = color::random_color(next_int);
             let heading = next_int.next_int(360) as f64;
-            let who = self.next_who;
-            self.next_who.0 += 1;
+            let who = self.next_who.get();
+            self.next_who.set(TurtleWho(who.0 + 1));
             let shape = breed.borrow().shape.clone().unwrap_or_else(|| {
                 self.breeds
                     .get(BREED_NAME_TURTLES)
@@ -195,16 +200,19 @@ impl Turtles {
                 shape,
                 custom_variables: CustomAgentVariables::new(),
             };
-            let turtle_ref = self.turtle_storage.insert(turtle);
-            self.who_map.insert(who, turtle_ref);
+            let turtle_ref = self
+                .turtle_storage
+                .borrow_mut()
+                .insert(Rc::new(RefCell::new(turtle)));
+            self.who_map.borrow_mut().insert(who, turtle_ref);
             on_create(turtle_ref);
         }
     }
 
-    pub fn clear_turtles(&mut self) {
-        self.turtle_storage.clear();
-        self.who_map.clear();
-        self.next_who = TurtleWho::INITIAL;
+    pub fn clear_turtles(&self) {
+        self.turtle_storage.borrow_mut().clear();
+        self.who_map.borrow_mut().clear();
+        self.next_who.set(TurtleWho::INITIAL);
     }
 }
 
@@ -258,10 +266,6 @@ impl Turtle {
         self.heading
     }
 
-    pub fn position(&self) -> Point {
-        self.position
-    }
-
     pub fn label(&self) -> &str {
         &self.label
     }
@@ -290,6 +294,12 @@ impl Turtle {
         self.world
             .upgrade()
             .expect("turtle's world should have been set")
+    }
+}
+
+impl AgentPosition for Turtle {
+    fn position(&self) -> Point {
+        self.position
     }
 }
 

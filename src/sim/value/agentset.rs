@@ -3,7 +3,7 @@
 use std::{cell::RefCell, collections::VecDeque, rc::Rc};
 
 use crate::{
-    sim::{agent::AgentId, turtle::TurtleId},
+    sim::{agent::AgentId, patch::PatchId, turtle::TurtleId, world::World},
     util::{
         rng::CanonRng,
         shuffle_iterator::{ShuffledMut, ShuffledOwned},
@@ -22,9 +22,43 @@ pub enum Agentset {
 pub trait IterateAgentset {
     type Item: Into<AgentId>;
 
-    fn iter(&mut self, rng: Rc<RefCell<CanonRng>>) -> impl Iterator<Item = Self::Item>;
+    // TODO is it technically correct to use `+ 's` on the bound here?
+    // should `use<'s>` be used instead?
+    fn iter<'s>(
+        &'s mut self,
+        world: &World,
+        rng: Rc<RefCell<CanonRng>>,
+    ) -> impl Iterator<Item = Self::Item> + 's;
 
-    fn into_iter(self, rng: Rc<RefCell<CanonRng>>) -> impl Iterator<Item = Self::Item>;
+    fn into_iter(
+        self,
+        world: &World,
+        rng: Rc<RefCell<CanonRng>>,
+    ) -> impl Iterator<Item = Self::Item> + 'static;
+}
+
+pub struct AllPatches;
+
+impl IterateAgentset for AllPatches {
+    type Item = PatchId;
+
+    fn iter<'s>(
+        &'s mut self,
+        world: &World,
+        rng: Rc<RefCell<CanonRng>>,
+    ) -> impl Iterator<Item = Self::Item> + 's {
+        let patch_ids: VecDeque<PatchId> = world.patches.patch_ids_iter().collect();
+        ShuffledOwned::new(patch_ids, rng)
+    }
+
+    fn into_iter(
+        self,
+        world: &World,
+        rng: Rc<RefCell<CanonRng>>,
+    ) -> impl Iterator<Item = Self::Item> + 'static {
+        let patch_ids: VecDeque<PatchId> = world.patches.patch_ids_iter().collect();
+        ShuffledOwned::new(patch_ids, rng)
+    }
 }
 
 #[derive(Debug, Default, Clone)]
@@ -41,11 +75,19 @@ impl TurtleSet {
 impl IterateAgentset for TurtleSet {
     type Item = TurtleId;
 
-    fn iter(&mut self, rng: Rc<RefCell<CanonRng>>) -> impl Iterator<Item = Self::Item> {
+    fn iter<'s>(
+        &'s mut self,
+        _: &World,
+        rng: Rc<RefCell<CanonRng>>,
+    ) -> impl Iterator<Item = Self::Item> + 's {
         ShuffledMut::new(&mut self.turtles, rng).map(|id| *id)
     }
 
-    fn into_iter(self, rng: Rc<RefCell<CanonRng>>) -> impl Iterator<Item = Self::Item> {
+    fn into_iter(
+        self,
+        _: &World,
+        rng: Rc<RefCell<CanonRng>>,
+    ) -> impl Iterator<Item = Self::Item> + 'static {
         ShuffledOwned::new(VecDeque::from(self.turtles), rng)
     }
 }

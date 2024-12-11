@@ -1,4 +1,5 @@
 use std::{
+    cell::RefCell,
     ops::{Index, IndexMut},
     rc::Rc,
 };
@@ -12,6 +13,10 @@ use crate::sim::{
     value::{self, PolyValue},
 };
 
+use crate::sim::agent::AgentIndexIntoWorld;
+
+use super::{agent::AgentPosition, topology::Point, world::World};
+
 /// A reference to a patch.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, From)]
 pub struct PatchId {
@@ -19,12 +24,20 @@ pub struct PatchId {
     grid_index: usize,
 }
 
+impl AgentIndexIntoWorld for PatchId {
+    type Output<'w> = &'w RefCell<Patch>;
+
+    fn index_into_world<'w>(self, world: &'w World) -> Option<Self::Output<'w>> {
+        Some(&world.patches[self])
+    }
+}
+
 #[derive(Debug)]
 pub struct Patches {
     /// The patches in the world, stored in row-major order. The first row
     /// contains the patches with the highest `pycor`, and the first column
     /// contains the patches with the lowest `pxcor`.
-    patches: Vec<Patch>,
+    patches: Vec<RefCell<Patch>>,
     /// A mapping between variable names and variable descriptors for patches.
     variable_mapper: VariableMapper<Patch>,
 }
@@ -38,17 +51,17 @@ impl Patches {
             for i in 0..topology.world_width {
                 let x = topology.min_pxcor + i as CoordInt;
                 let y = topology.max_pycor - j as CoordInt;
-                patches.push(Patch::at(PointInt { x, y }));
+                patches.push(RefCell::new(Patch::at(PointInt { x, y })));
             }
         }
 
         let mut variable_mapper = VariableMapper::new();
         let built_in_variables: &[(Rc<str>, fn(&Patch) -> PolyValue)] = &[
             (Rc::from("pxcor"), |patch| {
-                value::Float::from(patch.position().x).into()
+                value::Float::from(patch.position_int().x).into()
             }),
             (Rc::from("pycor"), |patch| {
-                value::Float::from(patch.position().y).into()
+                value::Float::from(patch.position_int().y).into()
             }),
             // TODO add other variables
         ];
@@ -69,6 +82,7 @@ impl Patches {
         // variables
         for patch in &mut self.patches {
             patch
+                .get_mut()
                 .custom_variables
                 .set_variable_mapping(&new_to_old_custom_idxs);
         }
@@ -82,15 +96,19 @@ impl Patches {
         (0..self.patches.len()).map(|i| PatchId { grid_index: i })
     }
 
-    pub fn clear_all_patches(&mut self) {
-        for patch in &mut self.patches {
-            patch.custom_variables.reset_all();
+    /// # Safety
+    ///
+    /// The data of the patches must not be borrowed when this function is
+    /// called.
+    pub fn clear_all_patches(&self) {
+        for patch in &self.patches {
+            patch.borrow_mut().custom_variables.reset_all();
         }
     }
 }
 
 impl Index<PatchId> for Patches {
-    type Output = Patch;
+    type Output = RefCell<Patch>;
 
     fn index(&self, index: PatchId) -> &Self::Output {
         &self.patches[index.grid_index]
@@ -124,7 +142,7 @@ impl Patch {
         }
     }
 
-    pub fn position(&self) -> PointInt {
+    pub fn position_int(&self) -> PointInt {
         self.position
     }
 
@@ -158,5 +176,11 @@ impl Patch {
 
     pub fn set_custom(&mut self, var_idx: VarIndex, value: PolyValue) {
         self.custom_variables[var_idx] = value;
+    }
+}
+
+impl AgentPosition for Patch {
+    fn position(&self) -> Point {
+        self.position.into()
     }
 }

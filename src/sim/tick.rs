@@ -1,15 +1,17 @@
+use std::cell::Cell;
+
 use crate::sim::value;
 
 /// A sentinel value representing a clear tick counter.
 const CLEAR_TICK: f64 = -1.0;
 
 /// The current tick number of an NetLogo simulation instance.
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
-pub struct Tick(f64);
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
+pub struct Tick(Cell<f64>);
 
 impl Default for Tick {
     fn default() -> Self {
-        Self(CLEAR_TICK)
+        Self(Cell::new(CLEAR_TICK))
     }
 }
 
@@ -18,40 +20,35 @@ impl Tick {
         if self.is_clear() {
             None
         } else {
-            Some(self.0)
+            Some(self.0.get())
         }
     }
 
     /// Attempts to advance the tick counter by one. Returns `true` if successful, and
     /// false if the counter was cleared.
     #[must_use]
-    pub fn advance(&mut self) -> bool {
-        if self.is_clear() {
-            return false;
-        }
-
-        self.0 += 1.0;
-        true
+    pub fn advance(&self) -> bool {
+        self.advance_by(1.0)
     }
 
     /// Attempts to advance the tick counter by the specified amount. Returns `true` if
     /// successful, and false if the counter was cleared.
     #[must_use]
-    pub fn advance_by(&mut self, amount: f64) -> bool {
+    pub fn advance_by(&self, amount: f64) -> bool {
         if self.is_clear() {
             return false;
         }
 
-        self.0 += amount;
+        self.0.set(self.0.get() + amount);
         true
     }
 
     pub fn is_clear(&self) -> bool {
-        self.0 == CLEAR_TICK
+        self.0.get() == CLEAR_TICK
     }
 
-    pub fn clear(&mut self) {
-        self.0 = CLEAR_TICK;
+    pub fn clear(&self) {
+        self.0.set(CLEAR_TICK);
     }
 }
 
@@ -64,7 +61,7 @@ impl TryFrom<Tick> for value::Float {
         if tick.is_clear() {
             Err(())
         } else {
-            Ok(value::Float::new(tick.0))
+            Ok(value::Float::new(tick.0.get()))
         }
     }
 }

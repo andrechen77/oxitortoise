@@ -26,6 +26,12 @@ impl<A> Copy for VariableDescriptor<A> {}
 #[derive(Debug, PartialEq, Eq, Copy, Clone, Hash)]
 pub struct VarIndex(usize);
 
+impl VarIndex {
+    pub fn from_index(idx: usize) -> Self {
+        Self(idx)
+    }
+}
+
 /// Maps between variable names and variable indices for an agent of type A,
 /// allowing the engine to work directly with indices instead of strings. This
 /// struct should be associated with a subcategory of agent.

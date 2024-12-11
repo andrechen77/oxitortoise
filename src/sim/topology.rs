@@ -1,5 +1,7 @@
 use std::fmt;
 
+use super::value;
+
 /// The type used to refer to integer patch coordinates.
 pub type CoordInt = i32;
 
@@ -71,8 +73,8 @@ impl Topology {
     }
 }
 
-pub fn euclidean_distance_unwrapped(a: Point, b: Point) -> CoordFloat {
+pub fn euclidean_distance_unwrapped(a: Point, b: Point) -> value::Float {
     let dx = a.x - b.x;
     let dy = a.y - b.y;
-    (dx * dx + dy * dy).sqrt()
+    value::Float::new((dx * dx + dy * dy).sqrt())
 }

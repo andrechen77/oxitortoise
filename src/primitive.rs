@@ -11,7 +11,7 @@ use crate::{
 
 pub struct ExecutionContext<'w, U> {
     /// The world in which the execution is occurring.
-    pub world: &'w mut World,
+    pub world: &'w World,
     /// The agent that is executing the current command. The `self` reporter in
     /// NetLogo returns this value if it is not the observer.
     pub executor: AgentId,
@@ -31,4 +31,5 @@ pub type Closure<'w, U> = fn(&mut ExecutionContext<'w, U>);
 pub mod ask;
 pub mod clear;
 pub mod create_agent;
+pub mod topology;
 pub mod world;
