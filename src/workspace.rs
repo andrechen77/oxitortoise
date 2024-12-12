@@ -1,14 +1,12 @@
 use std::{cell::RefCell, rc::Rc};
 
 use crate::{
-    execution::ProcedureManager,
     sim::{topology::Topology, world::World},
     util::rng::{NextInt, RandIntGenerator},
 };
 
 #[derive(Debug)]
 pub struct Workspace {
-    pub procedures: ProcedureManager,
     pub world: Rc<RefCell<World>>,
     pub rng: Rc<RefCell<dyn NextInt>>,
     // TODO add other fields
@@ -20,7 +18,6 @@ impl Workspace {
         // create the structure first without worrying about backreferences
         let rng = Rc::new(RefCell::new(RandIntGenerator::new()));
         let workspace = Rc::new(RefCell::new(Self {
-            procedures: ProcedureManager::new(),
             world: World::new(topology),
             rng,
         }));

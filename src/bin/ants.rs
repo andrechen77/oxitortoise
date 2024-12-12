@@ -1,9 +1,9 @@
 use std::rc::Rc;
 use std::{cell::RefCell, ops::DerefMut};
 
-use oxitortoise::primitive::world::look_up_patch;
+use oxitortoise::scripting::world::look_up_patch;
 use oxitortoise::{
-    primitive::{self, world::look_up_turtle, ExecutionContext},
+    scripting::{self, world::look_up_turtle, ExecutionContext},
     sim::{
         agent::{AgentId, AgentPosition},
         agent_variables::{VarIndex, VariableDescriptor},
@@ -55,10 +55,10 @@ fn create_workspace() -> Rc<RefCell<Workspace>> {
 
 fn setup<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
     // clear-all
-    primitive::clear::clear_all(context);
+    scripting::clear::clear_all(context);
 
     // create-turtles
-    primitive::create_agent::create_turtles_with_cmd(
+    scripting::create_agent::create_turtles_with_cmd(
         context,
         value::Float::new(2.0),
         BREED_NAME_TURTLES,
@@ -77,7 +77,7 @@ fn setup<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
     );
 
     // setup-patches
-    primitive::ask::ask(context, &mut value::agentset::AllPatches, |context| {
+    scripting::ask::ask(context, &mut value::agentset::AllPatches, |context| {
         let Some(this_patch) = look_up_patch(context.executor, context.world) else {
             return;
         };
@@ -85,7 +85,7 @@ fn setup<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
 
         // set nest? (distancexy 0 0) < 5
         {
-            let distance = primitive::topology::distancexy_euclidean(
+            let distance = scripting::topology::distancexy_euclidean(
                 &*this_patch,
                 value::Float::new(0.0),
                 value::Float::new(0.0),
@@ -110,7 +110,7 @@ fn setup<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
             // if (distancexy (0.6 * max-pxcor) 0) < 5 [ set food-source-number 1 ]
             let x = value::Float::new(0.6) * max_pxcor;
             let y = value::Float::new(0.0);
-            let distance = primitive::topology::distancexy_euclidean(&mut *this_patch, x, y);
+            let distance = scripting::topology::distancexy_euclidean(&mut *this_patch, x, y);
             let condition = distance < value::Float::new(5.0);
         }
     });

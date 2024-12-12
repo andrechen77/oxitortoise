@@ -1,5 +1,4 @@
-pub mod execution;
-pub mod primitive;
+pub mod scripting;
 pub mod sim;
 mod unsafe_getter;
 pub mod updater;

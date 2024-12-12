@@ -5,10 +5,13 @@ use derive_more::derive::{From, TryInto};
 use crate::sim::{
     observer::Observer,
     patch::{Patch, PatchId},
-    turtle::{Turtle, TurtleId},
 };
 
-use super::{topology::Point, world::World};
+use super::{
+    topology::Point,
+    turtle::{Turtle, TurtleId},
+    world::World,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, From, TryInto)]
 pub enum AgentId {
@@ -21,7 +24,7 @@ pub enum AgentId {
 #[derive(Debug, Clone, From, TryInto)]
 pub enum Agent<'a> {
     Observer(&'a RefCell<Observer>),
-    Turtle(Rc<RefCell<Turtle>>),
+    Turtle(&'a RefCell<Turtle>),
     Patch(&'a RefCell<Patch>),
     Link(Infallible /* TODO */),
 }

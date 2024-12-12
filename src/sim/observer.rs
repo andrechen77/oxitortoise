@@ -23,8 +23,6 @@ impl GlobalVariable {
 
 #[derive(Debug, Default)]
 pub struct Observer {
-    /// A back-reference to the world that includes this observer.
-    world: Weak<RefCell<World>>,
     /// The global variables that are accessible to all agents.
     /// TODO use a CustomAgentVariable struct alongside a WidgetVariables struct
     variables: HashMap<Rc<str>, GlobalVariable>,
@@ -32,12 +30,6 @@ pub struct Observer {
 }
 
 impl Observer {
-    /// Sets the backreferences of this structure and all structures owned by it
-    /// to point to the specified world.
-    pub fn set_world(&mut self, world: Weak<RefCell<World>>) {
-        self.world = world;
-    }
-
     pub fn get_global(&self, name: &str) -> Option<&PolyValue> {
         self.variables.get(name).map(GlobalVariable::get)
     }
