@@ -1,13 +1,15 @@
 use std::{
-    cell::RefCell,
     collections::HashMap,
-    rc::{Rc, Weak},
+    rc::Rc,
 };
 
-use crate::sim::{value::PolyValue, world::World};
+use crate::sim::value::PolyValue;
+
+// TOOD change observer to use the same variable system as the agents
 
 #[derive(Debug)]
 enum GlobalVariable {
+    #[allow(dead_code)]
     CodeDefined(PolyValue),
     WidgetDefined(PolyValue),
 }

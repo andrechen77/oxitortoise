@@ -92,6 +92,10 @@ impl Patches {
         self.variable_mapper.look_up_variable(name)
     }
 
+    pub fn patches_iter(&self) -> impl Iterator<Item = &RefCell<Patch>> {
+        self.patches.iter()
+    }
+
     pub fn patch_ids_iter(&self) -> impl Iterator<Item = PatchId> {
         (0..self.patches.len()).map(|i| PatchId { grid_index: i })
     }
