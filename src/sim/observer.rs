@@ -1,7 +1,4 @@
-use std::{
-    collections::HashMap,
-    rc::Rc,
-};
+use std::{collections::HashMap, rc::Rc};
 
 use crate::sim::value::PolyValue;
 

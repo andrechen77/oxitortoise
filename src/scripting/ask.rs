@@ -1,6 +1,6 @@
 use std::mem;
 
-use crate::sim::value::agentset::IterateAgentset;
+use crate::sim::{agent::AgentIndexIntoWorld, value::agentset::IterateAgentset};
 use crate::updater::Update;
 
 use super::{Closure, ExecutionContext};
@@ -11,7 +11,10 @@ pub fn ask<'w, A: IterateAgentset, U: Update>(
     operation: Closure<'w, U>,
 ) {
     let asker = mem::replace(&mut context.asker, context.executor);
-    for agent in agentset.iter(context.world, context.next_int.clone()) {
+    for agent_id in agentset.iter(context.world, context.next_int.clone()) {
+        let Some(agent) = agent_id.index_into_world(&context.world) else {
+            continue;
+        };
         context.executor = agent.into();
         operation(context);
     }

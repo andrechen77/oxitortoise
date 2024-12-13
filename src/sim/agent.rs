@@ -21,7 +21,7 @@ pub enum AgentId {
     Link(Infallible /* TODO */),
 }
 
-#[derive(Debug, Clone, From, TryInto)]
+#[derive(Debug, Clone, Copy, From, TryInto)]
 pub enum Agent<'a> {
     Observer(&'a RefCell<Observer>),
     Turtle(&'a RefCell<Turtle>),
@@ -30,7 +30,7 @@ pub enum Agent<'a> {
 }
 
 pub trait AgentIndexIntoWorld {
-    type Output<'w>;
+    type Output<'w>: Into<Agent<'w>>;
 
     fn index_into_world<'w>(self, world: &'w World) -> Option<Self::Output<'w>>;
 }

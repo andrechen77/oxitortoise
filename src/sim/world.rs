@@ -5,13 +5,7 @@ use std::{
 };
 
 use crate::{
-    sim::{
-        observer::Observer,
-        patch::Patches,
-        tick::Tick,
-        topology::Topology,
-        turtle::Turtles,
-    },
+    sim::{observer::Observer, patch::Patches, tick::Tick, topology::Topology, turtle::Turtles},
     workspace::Workspace,
 };
 

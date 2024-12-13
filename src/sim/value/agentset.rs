@@ -3,7 +3,12 @@
 use std::{cell::RefCell, collections::VecDeque, rc::Rc};
 
 use crate::{
-    sim::{agent::AgentId, patch::PatchId, turtle::TurtleId, world::World},
+    sim::{
+        agent::{AgentId, AgentIndexIntoWorld},
+        patch::PatchId,
+        turtle::TurtleId,
+        world::World,
+    },
     util::{
         rng::CanonRng,
         shuffle_iterator::{ShuffledMut, ShuffledOwned},
@@ -20,7 +25,7 @@ pub enum Agentset {
 }
 
 pub trait IterateAgentset {
-    type Item: Into<AgentId>;
+    type Item: AgentIndexIntoWorld;
 
     // TODO is it technically correct to use `+ 's` on the bound here?
     // should `use<'s>` be used instead?

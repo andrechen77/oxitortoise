@@ -1,10 +1,10 @@
 use std::rc::Rc;
 use std::{cell::RefCell, ops::DerefMut};
 
-use oxitortoise::scripting::world::look_up_patch;
+use oxitortoise::sim::agent::Agent;
 use oxitortoise::util::rng::NextInt as _;
 use oxitortoise::{
-    scripting::{self, world::look_up_turtle, ExecutionContext},
+    scripting::{self, ExecutionContext},
     sim::{
         agent::{AgentId, AgentPosition},
         agent_variables::{VarIndex, VariableDescriptor},
@@ -64,8 +64,8 @@ fn setup<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
         value::Float::new(2.0),
         BREED_NAME_TURTLES,
         |context| {
-            let Some(this_turtle) = look_up_turtle(context.executor, context.world) else {
-                return;
+            let Agent::Turtle(this_turtle) = context.executor else {
+                panic!("must be executed by a turtle");
             };
             let mut this_turtle = this_turtle.borrow_mut();
             this_turtle.set_size(value::Float::new(2.0));
@@ -79,8 +79,8 @@ fn setup<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
 
     // setup-patches
     scripting::ask::ask(context, &mut value::agentset::AllPatches, |context| {
-        let Some(this_patch) = look_up_patch(context.executor, context.world) else {
-            return;
+        let Agent::Patch(this_patch) = context.executor else {
+            panic!("must be executed by a patch");
         };
         let mut this_patch = this_patch.borrow_mut();
 
@@ -118,7 +118,8 @@ fn setup<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
                 let distance = scripting::topology::distancexy_euclidean(&mut *this_patch, x, y);
                 let condition = distance < value::Float::new(5.0);
                 if condition {
-                    this_patch.set_custom(food_source_number, PolyValue::from(value::Float::new(1.0)));
+                    this_patch
+                        .set_custom(food_source_number, PolyValue::from(value::Float::new(1.0)));
                 }
             }
 
@@ -129,7 +130,8 @@ fn setup<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
                 let distance = scripting::topology::distancexy_euclidean(&mut *this_patch, x, y);
                 let condition = distance < value::Float::new(5.0);
                 if condition {
-                    this_patch.set_custom(food_source_number, PolyValue::from(value::Float::new(2.0)));
+                    this_patch
+                        .set_custom(food_source_number, PolyValue::from(value::Float::new(2.0)));
                 }
             }
 
@@ -140,7 +142,8 @@ fn setup<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
                 let distance = scripting::topology::distancexy_euclidean(&mut *this_patch, x, y);
                 let condition = distance < value::Float::new(5.0);
                 if condition {
-                    this_patch.set_custom(food_source_number, PolyValue::from(value::Float::new(3.0)));
+                    this_patch
+                        .set_custom(food_source_number, PolyValue::from(value::Float::new(3.0)));
                 }
             }
 
@@ -215,12 +218,16 @@ fn setup<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
             }
         }
 
-        context.updater.update_patch(&*this_patch, PatchProperty::Pcolor.into());
+        context
+            .updater
+            .update_patch(&*this_patch, PatchProperty::Pcolor.into());
     });
 
     // reset-ticks
     scripting::clear::reset_ticks(context);
 }
+
+fn go<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {}
 
 // define the Ants model. this is a direct translation of this code
 // https://github.com/NetLogo/Tortoise/blob/master/resources/test/dumps/Ants.js
@@ -231,11 +238,11 @@ fn direct_run_ants() {
     let w = create_workspace();
 
     let workspace = w.borrow_mut();
-    let mut world = workspace.world.borrow_mut();
+    let world = workspace.world.borrow_mut();
     let mut context = ExecutionContext {
-        world: &mut *world,
-        executor: AgentId::Observer,
-        asker: AgentId::Observer,
+        world: &*world,
+        executor: Agent::Observer(&world.observer),
+        asker: Agent::Observer(&world.observer),
         updater: updater,
         next_int: Rc::new(RefCell::new(oxitortoise::util::rng::CanonRng::new())),
     };
