@@ -4,13 +4,13 @@ use std::{cell::RefCell, ops::DerefMut};
 use oxitortoise::sim::agent::Agent;
 use oxitortoise::util::rng::NextInt as _;
 use oxitortoise::{
-    scripting::{self, ExecutionContext},
+    scripting::{self as s, ExecutionContext},
     sim::{
         agent::{AgentId, AgentPosition},
         agent_variables::{VarIndex, VariableDescriptor},
         color::{self, Color},
         patch::{Patch, PatchId},
-        topology::{self, Point, Topology},
+        topology::{self, Point, TopologySpec},
         turtle::{Shape, Turtle, TurtleId, BREED_NAME_TURTLES},
         value::{self, PolyValue},
         world::World,
@@ -21,11 +21,13 @@ use oxitortoise::{
 };
 
 fn create_workspace() -> Rc<RefCell<Workspace>> {
-    let w = Workspace::new(Topology {
+    let w = Workspace::new(TopologySpec {
         min_pxcor: -12,
         max_pycor: 12,
-        world_width: 25,
-        world_height: 25,
+        patches_width: 25,
+        patches_height: 25,
+        wrap_x: false,
+        wrap_y: false,
     });
 
     {
@@ -56,10 +58,10 @@ fn create_workspace() -> Rc<RefCell<Workspace>> {
 
 fn setup<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
     // clear-all
-    scripting::clear::clear_all(context);
+    s::clear_all(context);
 
     // create-turtles
-    scripting::create_agent::create_turtles_with_cmd(
+    s::create_turtles_with_cmd(
         context,
         value::Float::new(2.0),
         BREED_NAME_TURTLES,
@@ -68,8 +70,8 @@ fn setup<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
                 panic!("must be executed by a turtle");
             };
             let mut this_turtle = this_turtle.borrow_mut();
-            this_turtle.set_size(value::Float::new(2.0));
-            this_turtle.set_color(Color::RED);
+            this_turtle.size = value::Float::new(2.0);
+            this_turtle.color = Color::RED;
             context.updater.update_turtle(
                 this_turtle.deref_mut(),
                 TurtleProperty::Size | TurtleProperty::Color,
@@ -78,7 +80,7 @@ fn setup<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
     );
 
     // setup-patches
-    scripting::ask::ask(context, &mut value::agentset::AllPatches, |context| {
+    s::ask(context, &mut value::agentset::AllPatches, |context| {
         let Agent::Patch(this_patch) = context.executor else {
             panic!("must be executed by a patch");
         };
@@ -86,7 +88,7 @@ fn setup<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
 
         // set nest? (distancexy 0 0) < 5
         {
-            let distance = scripting::topology::distancexy_euclidean(
+            let distance = s::distancexy_euclidean(
                 &*this_patch,
                 value::Float::new(0.0),
                 value::Float::new(0.0),
@@ -108,14 +110,14 @@ fn setup<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
         {
             let food_source_number = VarIndex::from_index(4);
 
-            let max_pxcor: value::Float = value::Float::from(context.world.topology.max_pxcor());
-            let max_pycor = value::Float::from(context.world.topology.max_pycor);
+            let max_pxcor: value::Float = value::Float::from(s::max_pxcor(context.world));
+            let max_pycor = value::Float::from(s::max_pycor(context.world));
 
             // if (distancexy (0.6 * max-pxcor) 0) < 5 [ set food-source-number 1 ]
             {
                 let x = value::Float::new(0.6) * max_pxcor;
                 let y = value::Float::new(0.0);
-                let distance = scripting::topology::distancexy_euclidean(&mut *this_patch, x, y);
+                let distance = s::distancexy_euclidean(&mut *this_patch, x, y);
                 let condition = distance < value::Float::new(5.0);
                 if condition {
                     this_patch
@@ -127,7 +129,7 @@ fn setup<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
             {
                 let x = value::Float::new(-0.6) * max_pxcor;
                 let y = value::Float::new(-0.6) * max_pycor;
-                let distance = scripting::topology::distancexy_euclidean(&mut *this_patch, x, y);
+                let distance = s::distancexy_euclidean(&mut *this_patch, x, y);
                 let condition = distance < value::Float::new(5.0);
                 if condition {
                     this_patch
@@ -139,7 +141,7 @@ fn setup<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
             {
                 let x = value::Float::new(-0.8) * max_pxcor;
                 let y = value::Float::new(0.8) * max_pycor;
-                let distance = scripting::topology::distancexy_euclidean(&mut *this_patch, x, y);
+                let distance = s::distancexy_euclidean(&mut *this_patch, x, y);
                 let condition = distance < value::Float::new(5.0);
                 if condition {
                     this_patch
@@ -224,10 +226,68 @@ fn setup<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
     });
 
     // reset-ticks
-    scripting::clear::reset_ticks(context);
+    s::reset_ticks(context.world);
 }
 
-fn go<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {}
+fn go<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
+    // TODO everything below here is just to make the model work and not
+    // what the script would actually look like
+
+    println!("tick is {}", context.world.tick_counter.get().unwrap());
+
+    s::ask(context, &mut value::agentset::AllTurtles, |context| {
+        let Agent::Turtle(this_turtle) = context.executor else {
+            panic!("agent should be a turtle");
+        };
+
+        // if who >= ticks [ stop ]
+        let who: value::Float = this_turtle.borrow().who().into();
+        let Some(ticks) = context.world.tick_counter.get() else {
+            panic!("ticks have not started yet");
+        };
+        if who >= ticks {
+            return;
+        }
+
+        // ifelse color = red
+        if this_turtle.borrow().color == Color::RED {
+            // look-for-food
+            look_for_food(context);
+        } else {
+            // return-to-nest
+            return_to_nest(context);
+        }
+
+        // wiggle
+        wiggle(context);
+
+        // fd 1
+        s::fd_one(context.world, this_turtle);
+
+        context
+            .updater
+            .update_turtle(&*this_turtle.borrow(), TurtleProperty::Position.into());
+    });
+
+    s::advance_tick(context.world);
+}
+
+fn look_for_food<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
+    // TODO everything below here is just to make the model work and not
+    // what the script would actually look like
+
+    let Agent::Turtle(this_turtle) = context.executor else {
+        panic!("agent should be a turtle");
+    };
+}
+
+fn return_to_nest<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
+    println!("TODO: turtle is returning to nest");
+}
+
+fn wiggle<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
+    println!("TODO: turtle is wigglin");
+}
 
 // define the Ants model. this is a direct translation of this code
 // https://github.com/NetLogo/Tortoise/blob/master/resources/test/dumps/Ants.js
@@ -251,6 +311,9 @@ fn direct_run_ants() {
     setup(&mut context);
 
     // TODO repeatedly run the `go` function
+    for _ in 0..10 {
+        go(&mut context);
+    }
 }
 
 fn main() {

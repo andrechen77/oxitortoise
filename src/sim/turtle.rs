@@ -13,6 +13,7 @@ use crate::{
 };
 
 use super::agent::{AgentIndexIntoWorld, AgentPosition};
+use super::topology::Heading;
 
 mod turtle_storage;
 
@@ -20,7 +21,8 @@ use turtle_storage::TurtleStorage;
 
 /// The who number of a turtle.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Default)]
-pub struct TurtleWho(u64);
+#[repr(transparent)]
+pub struct TurtleWho(pub u64);
 
 impl fmt::Display for TurtleWho {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -92,6 +94,10 @@ impl Turtles {
         self.turtle_storage.get_turtle(turtle_id)
     }
 
+    pub fn turtle_ids(&self) -> Vec<TurtleId> {
+        self.turtle_storage.turtle_ids()
+    }
+
     pub fn translate_who(&self, who: TurtleWho) -> Option<TurtleId> {
         self.turtle_storage.translate_who(who)
     }
@@ -140,7 +146,7 @@ impl Turtles {
         let breed = self.breeds.get(breed_name).unwrap(); // TODO deal with unwrap
         for _ in 0..count {
             let color = color::random_color(next_int);
-            let heading = next_int.next_int(360) as f64;
+            let heading = Heading::random(next_int);
             let who = self.turtle_storage.take_next_who();
             let shape = breed.borrow().shape.clone().unwrap_or_else(|| {
                 self.breeds
@@ -179,65 +185,25 @@ impl Turtles {
 #[derive(Debug)]
 pub struct Turtle {
     who: TurtleWho,
-    breed: Rc<RefCell<Breed>>,
+    pub breed: Rc<RefCell<Breed>>,
     /// The shape of this turtle due to its breed. This may or may not be the
     /// default shape of the turtle's breed.
-    shape: Rc<Shape>,
+    pub shape: Rc<Shape>,
     // name
     // linkmanager
-    color: Color,
-    heading: f64,
-    position: Point,
-    label: String, // TODO consider using the netlogo version of string for this
-    label_color: Color,
-    hidden: bool,
-    size: value::Float,
+    pub color: Color,
+    pub heading: Heading,
+    pub position: Point,
+    pub label: String, // TODO consider using the netlogo version of string for this
+    pub label_color: Color,
+    pub hidden: bool,
+    pub size: value::Float,
     custom_variables: CustomAgentVariables,
 }
 
 impl Turtle {
     pub fn who(&self) -> TurtleWho {
         self.who
-    }
-
-    pub fn set_size(&mut self, size: value::Float) {
-        self.size = size;
-    }
-
-    pub fn set_color(&mut self, color: Color) {
-        self.color = color;
-    }
-
-    pub fn breed(&self) -> Rc<RefCell<Breed>> {
-        self.breed.clone()
-    }
-
-    pub fn shape(&self) -> Rc<Shape> {
-        self.shape.clone()
-    }
-
-    pub fn color(&self) -> Color {
-        self.color
-    }
-
-    pub fn heading(&self) -> f64 {
-        self.heading
-    }
-
-    pub fn label(&self) -> &str {
-        &self.label
-    }
-
-    pub fn label_color(&self) -> Color {
-        self.label_color
-    }
-
-    pub fn hidden(&self) -> bool {
-        self.hidden
-    }
-
-    pub fn size(&self) -> value::Float {
-        self.size
     }
 
     pub fn get_custom(&self, index: VarIndex) -> &value::PolyValue {

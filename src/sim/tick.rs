@@ -16,11 +16,11 @@ impl Default for Tick {
 }
 
 impl Tick {
-    pub fn get(&self) -> Option<f64> {
+    pub fn get(&self) -> Option<value::Float> {
         if self.is_clear() {
             None
         } else {
-            Some(self.0.get())
+            Some(value::Float::new(self.0.get()))
         }
     }
 
@@ -47,8 +47,14 @@ impl Tick {
         self.0.get() == CLEAR_TICK
     }
 
+    /// Clears the tick counter.
     pub fn clear(&self) {
         self.0.set(CLEAR_TICK);
+    }
+
+    /// Sets the tick counter to zero.
+    pub fn reset(&self) {
+        self.0.set(0.0);
     }
 }
 
@@ -58,10 +64,6 @@ impl TryFrom<Tick> for value::Float {
     /// Converts a tick number into a NetLogo float value. Errors if the tick
     /// counter was clear
     fn try_from(tick: Tick) -> Result<Self, Self::Error> {
-        if tick.is_clear() {
-            Err(())
-        } else {
-            Ok(value::Float::new(tick.0.get()))
-        }
+        tick.get().ok_or(())
     }
 }

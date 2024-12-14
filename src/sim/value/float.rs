@@ -1,13 +1,16 @@
-use derive_more::derive::{Add, AddAssign, Div, DivAssign, From, Mul, MulAssign, Sub, SubAssign};
+use derive_more::derive::{
+    Add, AddAssign, Display, Div, DivAssign, From, Mul, MulAssign, Sub, SubAssign,
+};
 
-use crate::sim::{color::Color, topology::CoordInt};
+use crate::sim::{color::Color, topology::CoordInt, turtle::TurtleWho};
 
 /// A double-precision floating-point number which is guaranteed to be finite
 /// (not Infinity or NaN).
-#[derive(Debug, Clone, Copy, From, PartialEq, PartialOrd)] // TODO also ord and eq
+#[derive(Debug, Display, Clone, Copy, From, PartialEq, PartialOrd)] // TODO also ord and eq
 #[derive(Add, AddAssign, Sub, SubAssign, Mul, MulAssign, Div, DivAssign)] // TODO how to keep guaranteeing that the result is finite?
 #[mul(forward)]
 #[div(forward)]
+#[repr(transparent)]
 pub struct Float(f64);
 
 impl Float {
@@ -30,6 +33,12 @@ impl From<CoordInt> for Float {
 impl From<Color> for Float {
     fn from(value: Color) -> Self {
         value.to_float()
+    }
+}
+
+impl From<TurtleWho> for Float {
+    fn from(value: TurtleWho) -> Self {
+        Float(value.0 as f64)
     }
 }
 

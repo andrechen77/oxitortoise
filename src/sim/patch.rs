@@ -9,7 +9,7 @@ use derive_more::derive::From;
 use crate::sim::{
     agent_variables::{CustomAgentVariables, VarIndex, VariableDescriptor, VariableMapper},
     color::Color,
-    topology::{CoordInt, PointInt, Topology},
+    topology::{CoordInt, PointInt, TopologySpec},
     value::{self, PolyValue},
 };
 
@@ -43,14 +43,21 @@ pub struct Patches {
 }
 
 impl Patches {
-    pub fn new(topology: &Topology) -> Self {
+    pub fn new(topology_spec: &TopologySpec) -> Self {
+        let TopologySpec {
+            min_pxcor,
+            max_pycor,
+            patches_height,
+            patches_width,
+            ..
+        } = topology_spec;
+
         // create the world
-        let mut patches =
-            Vec::with_capacity((topology.world_width * topology.world_height) as usize);
-        for j in 0..topology.world_height {
-            for i in 0..topology.world_width {
-                let x = topology.min_pxcor + i as CoordInt;
-                let y = topology.max_pycor - j as CoordInt;
+        let mut patches = Vec::with_capacity((patches_width * patches_height) as usize);
+        for j in 0..*patches_height {
+            for i in 0..*patches_width {
+                let x = min_pxcor + i as CoordInt;
+                let y = max_pycor - j as CoordInt;
                 patches.push(RefCell::new(Patch::at(PointInt { x, y })));
             }
         }

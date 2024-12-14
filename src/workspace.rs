@@ -1,7 +1,7 @@
 use std::{cell::RefCell, rc::Rc};
 
 use crate::{
-    sim::{topology::Topology, world::World},
+    sim::{topology::TopologySpec, world::World},
     util::rng::{NextInt, RandIntGenerator},
 };
 
@@ -14,7 +14,7 @@ pub struct Workspace {
 }
 
 impl Workspace {
-    pub fn new(topology: Topology) -> Rc<RefCell<Self>> {
+    pub fn new(topology: TopologySpec) -> Rc<RefCell<Self>> {
         // create the structure first without worrying about backreferences
         let rng = Rc::new(RefCell::new(RandIntGenerator::new()));
         let workspace = Rc::new(RefCell::new(Self {

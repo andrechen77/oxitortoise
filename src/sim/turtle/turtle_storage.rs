@@ -59,6 +59,16 @@ impl TurtleStorage {
         Some(turtle)
     }
 
+    // if lazy iteration is necessary, will have to create a custom
+    // iterator type to hold on to the inner borrow. however, needing to do this
+    // in the first place might be a red flag something bad, since it probably
+    // means doing something else with the world in between iterations, which
+    // might want to mutably borrow the inner data.
+    pub(super) fn turtle_ids(&self) -> Vec<TurtleId> {
+        let t = self.inner.borrow();
+        t.owning_ptrs.keys().collect()
+    }
+
     pub(super) fn add_turtle(&self, turtle: Turtle) -> TurtleId {
         let mut turtle_storage = self.inner.borrow_mut();
 

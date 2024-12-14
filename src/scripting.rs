@@ -31,4 +31,13 @@ pub type Closure<'world, U> = fn(&mut ExecutionContext<'world, U>);
 pub mod ask;
 pub mod clear;
 pub mod create_agent;
+pub mod ticks;
 pub mod topology;
+pub mod turtle;
+
+pub use ask::*;
+pub use clear::*;
+pub use create_agent::*;
+pub use ticks::*;
+pub use topology::*;
+pub use turtle::*;
