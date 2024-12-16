@@ -3,34 +3,13 @@
 //!
 //! A `PolyValue` consists of some data, which can be of various NetLogo runtime
 //! type (see [`super`], as well as a type tag, which indicates the type of the
-//! data. However, unlike regular Rust enums or tagged unions, there is an
-//! additional type tag, [`Type::Erased`], which indicates that the type of the
-//! item is untracked at runtime. This requires the user to manually remember
-//! what the type of the value was, so that the correct type can be retrieved
-//! later.
+//! data.
 //!
-//! A `PolyValue` is considered either "uninitalized" (tagged with [`Type::Uninit`]), "type-erased" (tagged with
-//! [`Type::Erased`]), or "type-checked" (tagged with an actual type). All
-//! initialized `PolyValues` with inner values that implement `Drop` must manually drop their inner value before the
-//! entire `PolyValue` itself is dropped, including when assigning to the entire
-//! `PolyValue` (there is a check for this in the debug build).
+//! The inner value of a `PolyValue` can be safely retrieved using using the
+//! [`PolyValue::get`] and [`PolyValue::get_mut`] methods, or unsafely using the
+//! [`PolyValue::get_unchecked`] and [`PolyValue::get_mut_unchecked`] methods.
+//! The inner value is always safely dropped when the `PolyValue` is dropped.
 //!
-//! A type-checked `PolyValue` is like a Rust enum, with a tag that indicates
-//! which variant is stored. This module guarantees the validity of the tag
-//! and the stored type for type-checked `PolyValue`s. The inner value of a
-//! type-checked `PolyValue` can be safely retrieved using using the [`PolyValue::get`]
-//! and [`PolyValue::get_mut`] methods, or unsafely using the [`PolyValue::get_unchecked`]
-//! and [`PolyValue::get_mut_unchecked`] methods. The inner value can be
-//! safely dropped using the [`PolyValue::drop_inner`] method, or unsafely using the
-//! [`PolyValue::drop_inner_unchecked`] method.
-//!
-//! A type-erased `PolyValue` provides no runtime checks for accessing the
-//! correct data. All the safe accessors will fail (i.e. return `None`) with
-//! type-erased values. The only way to access the value is with unsafe methods
-//! (with names ending in `_unchecked`). Type-erased `PolyValue`s can be unsafely
-//! dropped using [`PolyValue::drop_inner_unchecked`].
-
-// TODO update documentation to allow automatic dropping using RAII.
 
 use std::{fmt::Debug, mem::ManuallyDrop};
 
@@ -41,32 +20,15 @@ use super::{Boolean, Float, String};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum Type {
-    /// Indicates that the type of the value is unknown. The only way to get the
-    /// value is to unsafely read from the union, which should only be done
-    /// if the caller is confident that they are reading the correct type.
-    Erased = 0,
     /// Indicates that there is no data stored in the value. Dropping a
     /// [`PolyValue`] with this type does nothing.
-    Uninit,
+    Uninit = 0,
     Float,
     Boolean,
     String,
     Nobody,
     Turtle,
     Patch,
-}
-
-impl Type {
-    /// Returns whether the type needs to run a destructor when dropped; i.e.
-    /// whether the associated type implements [`Drop`].
-    const fn needs_drop(&self) -> bool {
-        match self {
-            Type::Erased => true,
-            Type::Uninit => false,
-            Type::Float | Type::Boolean | Type::Nobody | Type::Turtle | Type::Patch => false,
-            Type::String => true,
-        }
-    }
 }
 
 union UntypedData {
@@ -79,20 +41,13 @@ union UntypedData {
 }
 
 pub struct PolyValue {
-    /// The type of the data. If it is not erased, then the data field is
-    /// guaranteed to be of the specified type.
+    /// The type of the data, guaranteed to be of the correct type.
     r#type: Type,
+    /// The data stored in the polyvalue.
     data: UntypedData,
 }
 
 impl PolyValue {
-    /// A type-erased `PolyValue` with no data in it. This should be the
-    /// quickest to initialize.
-    pub const ERASED: Self = Self {
-        r#type: Type::Erased,
-        data: UntypedData { unit: () },
-    };
-
     pub const UNINIT: Self = Self {
         r#type: Type::Uninit,
         data: UntypedData { unit: () },
@@ -104,25 +59,7 @@ impl PolyValue {
     };
 
     // SAFETY: much of this code relies on the equality operator to check the
-    // tag of the value and make sure that it has the correct type, which is not
-    // technically allowed. See
-    // https://doc.rust-lang.org/std/cmp/trait.PartialEq.html. However, as long
-    // as the implementation of PartialEq for Type is actually correct, this
-    // will be correct.
-
-    /// Asserts that the value is of a certain type. This should only be called
-    /// when the value is initialized to the specified type.
-    pub unsafe fn assert_type(&mut self, r#type: Type) {
-        if self.r#type == r#type {
-            return;
-        }
-        debug_assert_eq!(
-            self.r#type,
-            Type::Erased,
-            "cannot assert the type of a value that is already known to have a different type"
-        );
-        self.r#type = r#type;
-    }
+    // tag of the value and make sure that it has the correct type.
 
     pub fn get<T: ContainedInValue>(&self) -> Option<&T> {
         if self.r#type == T::TYPE_TAG {
@@ -187,46 +124,7 @@ impl PolyValue {
         unsafe { ptr.read() }
     }
 
-    /// Safely runs the destructor for the inner value.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the value is uninitialized or type-erased.
-    pub fn drop_inner(&mut self) {
-        // set the type to uninit up-front for exception safety reasons
-        let old_type = self.r#type;
-        self.r#type = Type::Uninit;
-        match old_type {
-            Type::Erased => panic!("cannot safely drop a type-erased value"),
-            Type::Uninit => panic!("cannot drop an uninitialized value"),
-            Type::Float | Type::Boolean | Type::Nobody | Type::Patch | Type::Turtle => {}
-            Type::String => {
-                // SAFETY: type tag ensures valid union access. the data is not
-                // used again because this is the destructor
-                unsafe { ManuallyDrop::drop(&mut self.data.string) };
-            }
-        }
-    }
-
-    /// Runs the destructor for the inner type stored in the value.
-    ///
-    /// # Safety
-    ///
-    /// The value must actually contain the specified type.
-    pub unsafe fn drop_inner_unchecked<T: ContainedInValue>(&mut self) {
-        debug_assert!(self.r#type == Type::Erased || self.r#type == T::TYPE_TAG);
-
-        self.r#type = Type::Uninit;
-
-        // SAFETY: value is an in-bounds, valid allocation
-        let ptr: *const T = unsafe { T::location_in(&*self) }.cast();
-        // SAFETY: preconditioned that the value actually holds this type
-        let inner = unsafe { ptr.read() };
-        drop(inner);
-    }
-
     /// Resets the value to its default value.
-    /// TODO should this always be zero?
     pub fn reset(&mut self) {
         *self = PolyValue::default();
     }
@@ -236,11 +134,11 @@ impl PolyValue {
 ///
 /// # Safety
 ///
-/// This trait is unsafe to implement because it triggers methods for conversions
-/// between `Self` and [`PolyValue`]. To be safe, it must be able to guarantee that
-/// the `location_in` method always returns a pointer that is valid, either if
-/// the [`Type`] tag of the [`PolyValue`] matches `TYPE_TAG`, or if the data in the
-/// value was last stored as a valid instance of `Self`.
+/// This trait is unsafe to implement because it triggers methods for
+/// conversions between `Self` and [`PolyValue`]. To be safe, it must be able to
+/// guarantee that the `location_in` method always returns a pointer that is
+/// valid, either if the [`Type`] tag of the [`PolyValue`] matches `TYPE_TAG`,
+/// or if the data in the value was last stored as a valid instance of `Self`.
 pub unsafe trait ContainedInValue {
     const TYPE_TAG: Type;
 
@@ -266,7 +164,8 @@ impl Default for PolyValue {
     }
 }
 
-// TODO nobody semantics: a dead turtle ID compares equal to nobody
+// TODO equality checks should also take a reference to the world, for the
+// purpose of e.g. nobody semantics: a dead turtle's ID compares equal to nobody
 impl PartialEq for PolyValue {
     fn eq(&self, other: &Self) -> bool {
         // this macro must only be called if you are sure that the values are in
@@ -280,7 +179,6 @@ impl PartialEq for PolyValue {
             }};
         }
         match (self.r#type, other.r#type) {
-            (Type::Erased, _) | (_, Type::Erased) => panic!("cannot compare type-erased value"),
             (Type::Uninit, _) | (_, Type::Uninit) => panic!("cannot compare uninitialized value"),
             (Type::Float, Type::Float) => compare_by_field!(float),
             (Type::Boolean, Type::Boolean) => compare_by_field!(boolean),
@@ -297,7 +195,6 @@ impl Debug for PolyValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // SAFETY: type tag ensures valid union access
         match self.r#type {
-            Type::Erased => write!(f, "Value::Erased"),
             Type::Uninit => write!(f, "Value::Uninit"),
             Type::Float => write!(f, "Value::Float({:?})", unsafe { self.data.float }),
             Type::Boolean => write!(f, "Value::Boolean({:?})", unsafe { self.data.boolean }),
@@ -312,7 +209,6 @@ impl Debug for PolyValue {
 impl Drop for PolyValue {
     fn drop(&mut self) {
         match self.r#type {
-            Type::Erased => panic!("cannot safely drop a type-erased value"),
             Type::Uninit => (),
             Type::Float | Type::Boolean | Type::Nobody | Type::Patch | Type::Turtle => {}
             Type::String => {
@@ -387,32 +283,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn drop_test() {
-        let mut value: PolyValue = String::new().into();
-        value.drop_inner(); // string needs to be dropped
-        value = Boolean(true).into();
-        // boolean does not need to be dropped
-        drop(value);
-    }
-
-    #[test]
-    #[should_panic]
-    fn cannot_forget_to_drop() {
-        #[allow(unused_assignments)]
-        let mut value: PolyValue = String::new().into();
-        value = Boolean(true).into(); // panics here
-        drop(value);
-    }
-
-    #[test]
-    fn drop_test_erased() {
-        let mut value: PolyValue = String::new().into();
-        value.r#type = Type::Erased;
-        unsafe { value.drop_inner_unchecked::<String>() };
-        drop(value);
-    }
-
-    #[test]
     fn store_retrieve_safely() {
         let value = PolyValue::from(Float::new(3.14));
         assert_eq!(value.r#type, Type::Float);
@@ -428,12 +298,6 @@ mod tests {
     #[test]
     fn nobody_equality() {
         assert_eq!(PolyValue::NOBODY, PolyValue::NOBODY);
-    }
-
-    #[test]
-    fn test_get_unchecked() {
-        let value = PolyValue::from(Float::new(3.14));
-        assert_eq!(unsafe { value.get_unchecked::<Float>() }.get(), 3.14);
     }
 
     #[test]
