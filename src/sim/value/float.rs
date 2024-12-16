@@ -14,12 +14,12 @@ use crate::sim::{color::Color, topology::CoordInt, turtle::TurtleWho};
 pub struct Float(f64);
 
 impl Float {
-    pub fn new(value: f64) -> Self {
+    pub const fn new(value: f64) -> Self {
         debug_assert!(value.is_finite());
         Self(value)
     }
 
-    pub fn get(&self) -> f64 {
+    pub const fn get(&self) -> f64 {
         self.0
     }
 }

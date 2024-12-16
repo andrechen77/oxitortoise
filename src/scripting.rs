@@ -28,6 +28,7 @@ pub struct ExecutionContext<'world, U> {
 /// should accept.
 pub type Closure<'world, U> = fn(&mut ExecutionContext<'world, U>);
 
+pub mod agent_lookup;
 pub mod ask;
 pub mod clear;
 pub mod create_agent;
@@ -36,6 +37,7 @@ pub mod ticks;
 pub mod topology;
 pub mod turtle;
 
+pub use agent_lookup::*;
 pub use ask::*;
 pub use clear::*;
 pub use create_agent::*;

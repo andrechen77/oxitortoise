@@ -27,7 +27,7 @@ impl<A> Copy for VariableDescriptor<A> {}
 pub struct VarIndex(usize);
 
 impl VarIndex {
-    pub fn from_index(idx: usize) -> Self {
+    pub const fn from_index(idx: usize) -> Self {
         Self(idx)
     }
 }

@@ -1,4 +1,4 @@
-use std::sync::OnceLock;
+use std::{ops::{Add, AddAssign}, sync::OnceLock};
 
 use crate::{sim::value::Float, util::rng::NextInt};
 
@@ -27,6 +27,10 @@ impl Color {
     pub const MAGENTA: Color = Color(125.0);
     pub const PINK: Color = Color(135.0);
 
+    pub fn random(next_int: &mut dyn NextInt) -> Color {
+        Color(next_int.next_int(base_colors().len() as i64) as f64)
+    }
+
     pub fn to_darkest_shade(self) -> Color {
         Color((self.0 / SHADE_RANGE).floor() * SHADE_RANGE)
     }
@@ -42,8 +46,18 @@ impl From<Float> for Color {
     }
 }
 
-pub fn random_color(next_int: &mut dyn NextInt) -> Color {
-    Color(next_int.next_int(base_colors().len() as i64) as f64)
+impl Add<Float> for Color {
+    type Output = Color;
+
+    fn add(self, rhs: Float) -> Self::Output {
+        Color((self.0 + rhs.get()) % COLOR_MAX)
+    }
+}
+
+impl AddAssign<Float> for Color {
+    fn add_assign(&mut self, rhs: Float) {
+        self.0 = (self.0 + rhs.get()) % COLOR_MAX;
+    }
 }
 
 const COLOR_MAX: f64 = 140.0;

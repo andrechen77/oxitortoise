@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 
-use crate::sim::{turtle::Turtle, value, world::World};
+use crate::sim::{patch::PatchId, turtle::Turtle, value, world::World};
 
 pub fn fd_one(world: &World, turtle: &RefCell<Turtle>) {
     let mut turtle = turtle.borrow_mut();
@@ -24,4 +24,8 @@ pub fn can_move(world: &World, turtle: &RefCell<Turtle>, distance: value::Float)
 pub fn turn(turtle: &RefCell<Turtle>, angle: value::Float) {
     let mut turtle = turtle.borrow_mut();
     turtle.heading += angle;
+}
+
+pub fn patch_here<'w>(world: &'w World, turtle: &RefCell<Turtle>) -> PatchId {
+    world.patch_at(turtle.borrow().position.round_to_int())
 }

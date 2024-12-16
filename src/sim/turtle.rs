@@ -4,7 +4,7 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use crate::{
     sim::{
         agent_variables::{CustomAgentVariables, VarIndex, VariableMapper},
-        color::{self, Color},
+        color::Color,
         topology::Point,
         value,
         world::World,
@@ -145,7 +145,7 @@ impl Turtles {
     ) {
         let breed = self.breeds.get(breed_name).unwrap(); // TODO deal with unwrap
         for _ in 0..count {
-            let color = color::random_color(next_int);
+            let color = Color::random(next_int);
             let heading = Heading::random(next_int);
             let who = self.turtle_storage.take_next_who();
             let shape = breed.borrow().shape.clone().unwrap_or_else(|| {

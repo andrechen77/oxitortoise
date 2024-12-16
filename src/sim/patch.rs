@@ -21,7 +21,7 @@ use super::{agent::AgentPosition, topology::Point, world::World};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, From)]
 pub struct PatchId {
     // The index of the patch in the [`Patches`] struct.
-    grid_index: usize,
+    pub grid_index: usize,
 }
 
 impl AgentIndexIntoWorld for PatchId {
