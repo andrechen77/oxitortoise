@@ -1,4 +1,4 @@
-use std::ops::AddAssign;
+use std::ops::{Add, AddAssign};
 
 use crate::{
     sim::value::{self, Float},
@@ -45,10 +45,17 @@ impl Heading {
     }
 }
 
+impl Add<value::Float> for Heading {
+    type Output = Heading;
+
+    fn add(self, rhs: value::Float) -> Self::Output {
+        Heading((self.0 + rhs.get()) % HEADING_MAX)
+    }
+}
+
 impl AddAssign<value::Float> for Heading {
     fn add_assign(&mut self, rhs: value::Float) {
-        self.0 += rhs.get();
-        self.0 %= HEADING_MAX;
+        *self = *self + rhs;
     }
 }
 

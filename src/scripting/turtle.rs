@@ -29,3 +29,18 @@ pub fn turn(turtle: &RefCell<Turtle>, angle: value::Float) {
 pub fn patch_here<'w>(world: &'w World, turtle: &RefCell<Turtle>) -> PatchId {
     world.patch_at(turtle.borrow().position.round_to_int())
 }
+
+pub fn patch_at_angle<'w>(
+    world: &'w World,
+    turtle: &RefCell<Turtle>,
+    angle: value::Float,
+    distance: value::Float,
+) -> Option<PatchId> {
+    let turtle = turtle.borrow();
+    let actual_heading = turtle.heading + angle;
+    let new_point =
+        world
+            .topology
+            .offset_distance_by_heading(turtle.position, actual_heading, distance)?;
+    Some(world.patch_at(new_point.round_to_int()))
+}

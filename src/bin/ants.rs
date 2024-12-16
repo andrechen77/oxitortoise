@@ -6,17 +6,14 @@ use oxitortoise::util::rng::NextInt as _;
 use oxitortoise::{
     scripting::{self as s, ExecutionContext},
     sim::{
-        agent::{AgentId, AgentPosition},
-        agent_variables::{VarIndex, VariableDescriptor},
+        agent_variables::VarIndex,
         color::{self, Color},
-        patch::{Patch, PatchId},
-        topology::{self, Point, TopologySpec},
-        turtle::{Shape, Turtle, TurtleId, BREED_NAME_TURTLES},
+        patch::Patch,
+        topology::TopologySpec,
+        turtle::BREED_NAME_TURTLES,
         value::{self, PolyValue},
-        world::World,
     },
     updater::{PatchProperty, PrintUpdate, TurtleProperty, Update},
-    util::shuffle_iterator::ShuffledMut,
     workspace::Workspace,
 };
 
@@ -104,11 +101,11 @@ fn setup<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
             Patch::set_custom(&mut *this_patch, PATCH_NEST, condition);
         }
 
-        // set nest-scent 200
+        // set nest-scent 200 - distancexy 0 0
         {
-            let lit = value::Float::new(200.0);
-            let lit = PolyValue::from(lit);
-            Patch::set_custom(&mut *this_patch, PATCH_NEST_SCENT, lit);
+            let distance = s::distancexy_euclidean(&*this_patch, 0.0.into(), 0.0.into());
+            let nest_scent = value::Float::new(200.0) - distance;
+            Patch::set_custom(&mut *this_patch, PATCH_NEST_SCENT, nest_scent.into());
         }
 
         // setup-food
@@ -123,8 +120,10 @@ fn setup<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
                 let distance = s::distancexy_euclidean(&mut *this_patch, x, y);
                 let condition = distance < value::Float::new(5.0);
                 if condition {
-                    this_patch
-                        .set_custom(PATCH_FOOD_SOURCE_NUMBER, PolyValue::from(value::Float::new(1.0)));
+                    this_patch.set_custom(
+                        PATCH_FOOD_SOURCE_NUMBER,
+                        PolyValue::from(value::Float::new(1.0)),
+                    );
                 }
             }
 
@@ -135,8 +134,10 @@ fn setup<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
                 let distance = s::distancexy_euclidean(&mut *this_patch, x, y);
                 let condition = distance < value::Float::new(5.0);
                 if condition {
-                    this_patch
-                        .set_custom(PATCH_FOOD_SOURCE_NUMBER, PolyValue::from(value::Float::new(2.0)));
+                    this_patch.set_custom(
+                        PATCH_FOOD_SOURCE_NUMBER,
+                        PolyValue::from(value::Float::new(2.0)),
+                    );
                 }
             }
 
@@ -147,8 +148,10 @@ fn setup<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
                 let distance = s::distancexy_euclidean(&mut *this_patch, x, y);
                 let condition = distance < value::Float::new(5.0);
                 if condition {
-                    this_patch
-                        .set_custom(PATCH_FOOD_SOURCE_NUMBER, PolyValue::from(value::Float::new(3.0)));
+                    this_patch.set_custom(
+                        PATCH_FOOD_SOURCE_NUMBER,
+                        PolyValue::from(value::Float::new(3.0)),
+                    );
                 }
             }
 
@@ -284,7 +287,11 @@ fn look_for_food<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
     let patch_here = s::look_up_patch(&context.world, patch_here_id);
 
     // if food > 0
-    let food = *patch_here.borrow().get_custom(PATCH_FOOD).get::<value::Float>().unwrap();
+    let food = *patch_here
+        .borrow()
+        .get_custom(PATCH_FOOD)
+        .get::<value::Float>()
+        .unwrap();
     if food > value::Float::new(0.0) {
         // set color orange + 1
         let new_color = Color::ORANGE + value::Float::new(1.0);
@@ -292,7 +299,9 @@ fn look_for_food<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
 
         // set food food - 1
         let new_food = food - value::Float::new(1.0);
-        patch_here.borrow_mut().set_custom(PATCH_FOOD, PolyValue::from(new_food));
+        patch_here
+            .borrow_mut()
+            .set_custom(PATCH_FOOD, PolyValue::from(new_food));
 
         // rt 180
         s::turn(this_turtle, value::Float::new(180.0));
@@ -302,19 +311,100 @@ fn look_for_food<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
     }
 
     // if (chemical >= 0.05) and (chemical < 2)
-    let chemical = *patch_here.borrow().get_custom(PATCH_CHEMICAL).get::<value::Float>().unwrap();
+    let chemical = *patch_here
+        .borrow()
+        .get_custom(PATCH_CHEMICAL)
+        .get::<value::Float>()
+        .unwrap();
     if (chemical >= value::Float::new(0.05)) && (chemical < value::Float::new(2.0)) {
         // uphill-chemical
-        uphill_chemical(context);
+        uphill_patch_variable(context, PATCH_CHEMICAL);
     }
 }
 
-fn uphill_chemical<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
-    println!("TODO: turtle is moving uphill chemical");
+fn uphill_patch_variable<'w, U: Update>(
+    context: &mut ExecutionContext<'w, U>,
+    patch_variable: VarIndex,
+) {
+    let Agent::Turtle(this_turtle) = context.executor else {
+        panic!("agent should be a turtle");
+    };
+
+    // let scent-ahead chemical-scent-at-angle 0
+    // let scent-right nest-scent-at-angle  45
+    // let scent-left  nest-scent-at-angle -45
+    let scent_ahead = patch_variable_at_angle(context, value::Float::new(0.0), patch_variable);
+    let scent_right = patch_variable_at_angle(context, value::Float::new(45.0), patch_variable);
+    let scent_left = patch_variable_at_angle(context, value::Float::new(-45.0), patch_variable);
+
+    // if (scent-right > scent-ahead) or (scent-left > scent-ahead)
+    if (scent_right > scent_ahead) || (scent_left > scent_ahead) {
+        // ifelse scent-right > scent-left
+        if scent_right > scent_left {
+            // rt 45
+            s::turn(this_turtle, value::Float::new(45.0));
+        } else {
+            // lt 45
+            s::turn(this_turtle, value::Float::new(-45.0));
+        }
+    }
+}
+
+fn patch_variable_at_angle<'w, U: Update>(
+    context: &mut ExecutionContext<'w, U>,
+    angle: value::Float,
+    patch_variable: VarIndex,
+) -> value::Float {
+    let Agent::Turtle(this_turtle) = context.executor else {
+        panic!("agent should be a turtle");
+    };
+    let patch_ahead = s::patch_at_angle(&context.world, this_turtle, angle, value::Float::new(1.0));
+    if let Some(patch_ahead) = patch_ahead {
+        let patch_ahead = s::look_up_patch(&context.world, patch_ahead);
+        *patch_ahead
+            .borrow()
+            .get_custom(patch_variable)
+            .get::<value::Float>()
+            .unwrap()
+    } else {
+        value::Float::new(0.0)
+    }
 }
 
 fn return_to_nest<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
-    println!("TODO: turtle is returning to nest");
+    let Agent::Turtle(this_turtle) = context.executor else {
+        panic!("agent should be a turtle");
+    };
+
+    // ifelse nest?
+    let patch_id = s::patch_here(&context.world, this_turtle);
+    let patch = s::look_up_patch(&context.world, patch_id);
+    let nest = *patch
+        .borrow()
+        .get_custom(PATCH_NEST)
+        .get::<value::Boolean>()
+        .unwrap();
+    if nest.0 {
+        // set color red
+        this_turtle.borrow_mut().color = Color::RED;
+
+        // rt 180
+        s::turn(this_turtle, value::Float::new(180.0));
+    } else {
+        // set chemical chemical + 60
+        let chemical = *patch
+            .borrow()
+            .get_custom(PATCH_CHEMICAL)
+            .get::<value::Float>()
+            .unwrap();
+        let new_chemical = chemical + value::Float::new(60.0);
+        patch
+            .borrow_mut()
+            .set_custom(PATCH_CHEMICAL, PolyValue::from(new_chemical));
+
+        // uphill-nest-scent
+        uphill_patch_variable(context, PATCH_NEST_SCENT);
+    }
 }
 
 fn wiggle<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
@@ -358,7 +448,7 @@ fn direct_run_ants() {
     setup(&mut context);
 
     // TODO repeatedly run the `go` function
-    for _ in 0..10 {
+    for _ in 0..1000 {
         go(&mut context);
     }
 }

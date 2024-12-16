@@ -1,4 +1,7 @@
-use std::{ops::{Add, AddAssign}, sync::OnceLock};
+use std::{
+    ops::{Add, AddAssign},
+    sync::OnceLock,
+};
 
 use crate::{sim::value::Float, util::rng::NextInt};
 
@@ -56,7 +59,7 @@ impl Add<Float> for Color {
 
 impl AddAssign<Float> for Color {
     fn add_assign(&mut self, rhs: Float) {
-        self.0 = (self.0 + rhs.get()) % COLOR_MAX;
+        *self = *self + rhs;
     }
 }
 

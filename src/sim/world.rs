@@ -83,6 +83,8 @@ impl World {
         let max_pycor = self.topology.max_pycor();
         let min_pxcor = self.topology.min_pxcor();
         let i = (max_pycor - point.y) * width + (point.x - min_pxcor);
-        PatchId { grid_index: i as usize }
+        PatchId {
+            grid_index: i as usize,
+        }
     }
 }
