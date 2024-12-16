@@ -273,9 +273,6 @@ fn go<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
 }
 
 fn look_for_food<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
-    // TODO everything below here is just to make the model work and not
-    // what the script would actually look like
-
     let Agent::Turtle(this_turtle) = context.executor else {
         panic!("agent should be a turtle");
     };
@@ -286,7 +283,22 @@ fn return_to_nest<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
 }
 
 fn wiggle<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
-    println!("TODO: turtle is wigglin");
+    let Agent::Turtle(this_turtle) = context.executor else {
+        panic!("agent should be a turtle");
+    };
+
+    // rt random 40
+    let rand_result = value::Float::from(s::random(context, 40));
+    s::turn(this_turtle, rand_result);
+
+    // lt random 40
+    let rand_result = value::Float::from(s::random(context, 40));
+    s::turn(this_turtle, -rand_result);
+
+    // if not can-move? 1 [ rt 180 ]
+    if !s::can_move(&context.world, this_turtle, value::Float::new(1.0)).0 {
+        s::turn(this_turtle, value::Float::new(180.0));
+    }
 }
 
 // define the Ants model. this is a direct translation of this code

@@ -7,11 +7,11 @@ use rand::{rngs::StdRng, Rng as _, SeedableRng as _};
 
 pub trait NextInt: Debug {
     /// Returns a random integer between 0 (inclusive) and `max` (exclusive).
-    fn next_int(&mut self, max: i32) -> i32;
+    fn next_int(&mut self, max: i64) -> i64;
 }
 
 impl<N: NextInt + ?Sized> NextInt for Rc<RefCell<N>> {
-    fn next_int(&mut self, max: i32) -> i32 {
+    fn next_int(&mut self, max: i64) -> i64 {
         self.borrow_mut().next_int(max)
     }
 }
@@ -31,7 +31,7 @@ impl RandIntGenerator {
 }
 
 impl NextInt for RandIntGenerator {
-    fn next_int(&mut self, max: i32) -> i32 {
+    fn next_int(&mut self, max: i64) -> i64 {
         self.rng.gen_range(0..max)
     }
 }

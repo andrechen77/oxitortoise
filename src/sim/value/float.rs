@@ -1,5 +1,5 @@
 use derive_more::derive::{
-    Add, AddAssign, Display, Div, DivAssign, From, Mul, MulAssign, Sub, SubAssign,
+    Add, AddAssign, Display, Div, DivAssign, From, Mul, MulAssign, Neg, Sub, SubAssign,
 };
 
 use crate::sim::{color::Color, topology::CoordInt, turtle::TurtleWho};
@@ -7,7 +7,7 @@ use crate::sim::{color::Color, topology::CoordInt, turtle::TurtleWho};
 /// A double-precision floating-point number which is guaranteed to be finite
 /// (not Infinity or NaN).
 #[derive(Debug, Display, Clone, Copy, From, PartialEq, PartialOrd)] // TODO also ord and eq
-#[derive(Add, AddAssign, Sub, SubAssign, Mul, MulAssign, Div, DivAssign)] // TODO how to keep guaranteeing that the result is finite?
+#[derive(Neg, Add, AddAssign, Sub, SubAssign, Mul, MulAssign, Div, DivAssign)] // TODO how to keep guaranteeing that the result is finite?
 #[mul(forward)]
 #[div(forward)]
 #[repr(transparent)]

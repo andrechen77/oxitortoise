@@ -35,7 +35,7 @@ where
             return None;
         }
 
-        let next = self.rng.next_int(remaining.len() as i32) as usize;
+        let next = self.rng.next_int(remaining.len() as i64) as usize;
         remaining.swap(0, next);
 
         let (head, tail) = remaining.split_first_mut().expect("should not be empty");
@@ -72,7 +72,7 @@ where
             return None;
         }
 
-        let next = self.rng.next_int(self.remaining.len() as i32) as usize;
+        let next = self.rng.next_int(self.remaining.len() as i64) as usize;
         self.remaining.swap(0, next);
 
         self.remaining.pop_front()
@@ -86,11 +86,11 @@ mod tests {
     /// Utility class to simulate an RNG for testing purposes
     #[derive(Debug)]
     struct R {
-        remaining: VecDeque<i32>,
+        remaining: VecDeque<i64>,
     }
 
     impl NextInt for R {
-        fn next_int(&mut self, max: i32) -> i32 {
+        fn next_int(&mut self, max: i64) -> i64 {
             let next = self.remaining.pop_front().unwrap();
             assert!(0 <= next && next < max);
             next
@@ -115,17 +115,6 @@ mod tests {
 
     #[test]
     fn test_shuffle_borrowed_iterator() {
-        #[derive(Debug)]
-        struct R {
-            remaining: VecDeque<i32>,
-        }
-        impl NextInt for R {
-            fn next_int(&mut self, max: i32) -> i32 {
-                let next = self.remaining.pop_front().unwrap();
-                assert!(0 <= next && next < max);
-                next
-            }
-        }
         let rng = R {
             remaining: vec![5, 2, 2, 2, 0, 0].into(),
         };

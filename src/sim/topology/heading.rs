@@ -1,4 +1,9 @@
-use crate::{sim::value::Float, util::rng::NextInt};
+use std::ops::AddAssign;
+
+use crate::{
+    sim::value::{self, Float},
+    util::rng::NextInt,
+};
 
 use super::CoordFloat;
 
@@ -37,6 +42,13 @@ impl Heading {
 
     pub fn to_float(self) -> Float {
         Float::new(self.0)
+    }
+}
+
+impl AddAssign<value::Float> for Heading {
+    fn add_assign(&mut self, rhs: value::Float) {
+        self.0 += rhs.get();
+        self.0 %= HEADING_MAX;
     }
 }
 

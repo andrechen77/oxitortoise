@@ -43,7 +43,7 @@ impl From<Float> for Color {
 }
 
 pub fn random_color(next_int: &mut dyn NextInt) -> Color {
-    Color(next_int.next_int(base_colors().len() as i32).into())
+    Color(next_int.next_int(base_colors().len() as i64) as f64)
 }
 
 const COLOR_MAX: f64 = 140.0;

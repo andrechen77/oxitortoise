@@ -7,7 +7,7 @@ mod heading;
 pub use heading::Heading;
 
 /// The type used to refer to integer patch coordinates.
-pub type CoordInt = i32;
+pub type CoordInt = i64;
 
 /// The type used to refer to floating-point patch coordinates.
 pub type CoordFloat = f64;
@@ -173,10 +173,22 @@ impl Topology {
         Some(point)
     }
 
-    pub fn offset_by_heading(&self, point: Point, heading: Heading) -> Option<Point> {
+    pub fn offset_one_by_heading(&self, point: Point, heading: Heading) -> Option<Point> {
         let (dx, dy) = heading.dx_and_dy();
         let new_x = point.x + dx;
         let new_y = point.y + dy;
+        self.wrap_point(Point { x: new_x, y: new_y })
+    }
+
+    pub fn offset_distance_by_heading(
+        &self,
+        point: Point,
+        heading: Heading,
+        distance: value::Float,
+    ) -> Option<Point> {
+        let (dx, dy) = heading.dx_and_dy();
+        let new_x = point.x + dx * distance.get();
+        let new_y = point.y + dy * distance.get();
         self.wrap_point(Point { x: new_x, y: new_y })
     }
 }
