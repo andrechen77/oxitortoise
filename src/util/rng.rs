@@ -36,6 +36,12 @@ impl NextInt for RandIntGenerator {
     }
 }
 
+impl Default for RandIntGenerator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 // The canonical RNG to use for this engine. This is aliased here to make it
 // easier to change the RNG used in the future, and really only exists for
 // debugging purposes. Feel free to remove.

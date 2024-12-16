@@ -39,7 +39,7 @@ slotmap::new_key_type! {
 impl AgentIndexIntoWorld for TurtleId {
     type Output<'w> = &'w RefCell<Turtle>;
 
-    fn index_into_world<'w>(self, world: &'w World) -> Option<Self::Output<'w>> {
+    fn index_into_world(self, world: &World) -> Option<Self::Output<'_>> {
         world.turtles.get_turtle(self)
     }
 }

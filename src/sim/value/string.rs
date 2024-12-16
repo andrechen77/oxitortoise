@@ -14,3 +14,9 @@ impl From<&str> for String {
         todo!()
     }
 }
+
+impl Default for String {
+    fn default() -> Self {
+        Self::new()
+    }
+}

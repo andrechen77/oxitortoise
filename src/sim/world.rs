@@ -35,16 +35,14 @@ pub struct World {
 
 impl World {
     pub fn new(topology_spec: TopologySpec) -> Rc<RefCell<Self>> {
-        let world = Rc::new(RefCell::new(Self {
+        Rc::new(RefCell::new(Self {
             workspace: Weak::new(),
             observer: RefCell::new(Observer::default()),
             turtles: Turtles::new(iter::empty()),
             patches: Patches::new(&topology_spec),
             topology: Topology::new(topology_spec),
             tick_counter: Tick::default(),
-        }));
-
-        world
+        }))
     }
 
     /// Sets the backreferences of this structure and all structures owned by it

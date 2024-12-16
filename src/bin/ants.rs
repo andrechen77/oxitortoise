@@ -8,7 +8,6 @@ use oxitortoise::{
     sim::{
         agent_variables::VarIndex,
         color::{self, Color},
-        patch::Patch,
         topology::TopologySpec,
         turtle::BREED_NAME_TURTLES,
         value::{self, PolyValue},
@@ -59,7 +58,7 @@ fn create_workspace() -> Rc<RefCell<Workspace>> {
     w
 }
 
-fn setup<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
+fn setup<U: Update>(context: &mut ExecutionContext<'_, U>) {
     // clear-all
     s::clear_all(context);
 
@@ -87,40 +86,41 @@ fn setup<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
         let Agent::Patch(this_patch) = context.executor else {
             panic!("must be executed by a patch");
         };
-        let mut this_patch = this_patch.borrow_mut();
 
         // set nest? (distancexy 0 0) < 5
         {
             let distance = s::distancexy_euclidean(
-                &*this_patch,
+                &*this_patch.borrow(),
                 value::Float::new(0.0),
                 value::Float::new(0.0),
             );
             let condition: value::Boolean = (distance < value::Float::new(5.0)).into();
             let condition = PolyValue::from(condition);
-            Patch::set_custom(&mut *this_patch, PATCH_NEST, condition);
+            this_patch.borrow_mut().set_custom(PATCH_NEST, condition);
         }
 
         // set nest-scent 200 - distancexy 0 0
         {
-            let distance = s::distancexy_euclidean(&*this_patch, 0.0.into(), 0.0.into());
+            let distance = s::distancexy_euclidean(&*this_patch.borrow(), 0.0.into(), 0.0.into());
             let nest_scent = value::Float::new(200.0) - distance;
-            Patch::set_custom(&mut *this_patch, PATCH_NEST_SCENT, nest_scent.into());
+            this_patch
+                .borrow_mut()
+                .set_custom(PATCH_NEST_SCENT, nest_scent.into());
         }
 
         // setup-food
         {
-            let max_pxcor: value::Float = value::Float::from(s::max_pxcor(context.world));
-            let max_pycor = value::Float::from(s::max_pycor(context.world));
+            let max_pxcor = s::max_pxcor(context.world);
+            let max_pycor = s::max_pycor(context.world);
 
             // if (distancexy (0.6 * max-pxcor) 0) < 5 [ set food-source-number 1 ]
             {
                 let x = value::Float::new(0.6) * max_pxcor;
                 let y = value::Float::new(0.0);
-                let distance = s::distancexy_euclidean(&mut *this_patch, x, y);
+                let distance = s::distancexy_euclidean(&*this_patch.borrow(), x, y);
                 let condition = distance < value::Float::new(5.0);
                 if condition {
-                    this_patch.set_custom(
+                    this_patch.borrow_mut().set_custom(
                         PATCH_FOOD_SOURCE_NUMBER,
                         PolyValue::from(value::Float::new(1.0)),
                     );
@@ -131,10 +131,10 @@ fn setup<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
             {
                 let x = value::Float::new(-0.6) * max_pxcor;
                 let y = value::Float::new(-0.6) * max_pycor;
-                let distance = s::distancexy_euclidean(&mut *this_patch, x, y);
+                let distance = s::distancexy_euclidean(&*this_patch.borrow(), x, y);
                 let condition = distance < value::Float::new(5.0);
                 if condition {
-                    this_patch.set_custom(
+                    this_patch.borrow_mut().set_custom(
                         PATCH_FOOD_SOURCE_NUMBER,
                         PolyValue::from(value::Float::new(2.0)),
                     );
@@ -145,10 +145,10 @@ fn setup<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
             {
                 let x = value::Float::new(-0.8) * max_pxcor;
                 let y = value::Float::new(0.8) * max_pycor;
-                let distance = s::distancexy_euclidean(&mut *this_patch, x, y);
+                let distance = s::distancexy_euclidean(&*this_patch.borrow(), x, y);
                 let condition = distance < value::Float::new(5.0);
                 if condition {
-                    this_patch.set_custom(
+                    this_patch.borrow_mut().set_custom(
                         PATCH_FOOD_SOURCE_NUMBER,
                         PolyValue::from(value::Float::new(3.0)),
                     );
@@ -160,18 +160,21 @@ fn setup<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
 
             // if food-source-number > 0 [ set food one-of [1 2] ]
             {
-                let food_source_number = this_patch
+                let food_source_number = *this_patch
+                    .borrow()
                     .get_custom(PATCH_FOOD_SOURCE_NUMBER)
                     .get::<value::Float>()
                     .unwrap();
-                if *food_source_number > value::Float::new(0.0) {
+                if food_source_number > value::Float::new(0.0) {
                     let rand_index = context.next_int.borrow_mut().next_int(2);
                     let food_value = match rand_index {
                         0 => value::Float::new(1.0),
                         1 => value::Float::new(2.0),
                         _ => unreachable!("rand_index should be 0 or 1"),
                     };
-                    this_patch.set_custom(PATCH_FOOD, PolyValue::from(food_value));
+                    this_patch
+                        .borrow_mut()
+                        .set_custom(PATCH_FOOD, PolyValue::from(food_value));
                 }
             }
         }
@@ -179,39 +182,43 @@ fn setup<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
         // recolor-patch
         {
             // ifelse nest?
-            let condition = this_patch
+            let condition = *this_patch
+                .borrow()
                 .get_custom(PATCH_NEST)
                 .get::<value::Boolean>()
                 .unwrap();
             if condition.0 {
                 // set pcolor violet
-                this_patch.set_pcolor(Color::VIOLET);
+                this_patch.borrow_mut().set_pcolor(Color::VIOLET);
             } else {
                 // ifelse food > 0
-                let food = this_patch
+                let food = *this_patch
+                    .borrow()
                     .get_custom(PATCH_FOOD)
                     .get::<value::Float>()
                     .unwrap();
-                if *food > value::Float::new(0.0) {
+                if food > value::Float::new(0.0) {
                     // if food-source-number = 1 [ set pcolor cyan ]
                     //   if food-source-number = 2 [ set pcolor sky  ]
                     //   if food-source-number = 3 [ set pcolor blue ]
-                    let &food_source_number = this_patch
+                    let food_source_number = *this_patch
+                        .borrow()
                         .get_custom(PATCH_FOOD_SOURCE_NUMBER)
                         .get::<value::Float>()
                         .unwrap();
                     if food_source_number == value::Float::new(1.0) {
-                        this_patch.set_pcolor(Color::CYAN);
+                        this_patch.borrow_mut().set_pcolor(Color::CYAN);
                     }
                     if food_source_number == value::Float::new(2.0) {
-                        this_patch.set_pcolor(Color::SKY);
+                        this_patch.borrow_mut().set_pcolor(Color::SKY);
                     }
                     if food_source_number == value::Float::new(3.0) {
-                        this_patch.set_pcolor(Color::BLUE);
+                        this_patch.borrow_mut().set_pcolor(Color::BLUE);
                     }
                 } else {
                     // set pcolor scale-color green chemical 0.1 5
                     let &chemical = this_patch
+                        .borrow()
                         .get_custom(PATCH_CHEMICAL)
                         .get::<value::Float>()
                         .unwrap();
@@ -221,21 +228,21 @@ fn setup<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
                         value::Float::new(0.1),
                         value::Float::new(5.0),
                     );
-                    this_patch.set_pcolor(scaled_color);
+                    this_patch.borrow_mut().set_pcolor(scaled_color);
                 }
             }
         }
 
         context
             .updater
-            .update_patch(&*this_patch, PatchProperty::Pcolor.into());
+            .update_patch(&this_patch.borrow(), PatchProperty::Pcolor.into());
     });
 
     // reset-ticks
     s::reset_ticks(context.world);
 }
 
-fn go<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
+fn go<U: Update>(context: &mut ExecutionContext<'_, U>) {
     // TODO everything below here is just to make the model work and not
     // what the script would actually look like
 
@@ -272,19 +279,19 @@ fn go<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
 
         context
             .updater
-            .update_turtle(&*this_turtle.borrow(), TurtleProperty::Position.into());
+            .update_turtle(&this_turtle.borrow(), TurtleProperty::Position.into());
     });
 
     s::advance_tick(context.world);
 }
 
-fn look_for_food<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
+fn look_for_food<U: Update>(context: &mut ExecutionContext<'_, U>) {
     let Agent::Turtle(this_turtle) = context.executor else {
         panic!("agent should be a turtle");
     };
 
-    let patch_here_id = s::patch_here(&context.world, this_turtle);
-    let patch_here = s::look_up_patch(&context.world, patch_here_id);
+    let patch_here_id = s::patch_here(context.world, this_turtle);
+    let patch_here = s::look_up_patch(context.world, patch_here_id);
 
     // if food > 0
     let food = *patch_here
@@ -322,8 +329,8 @@ fn look_for_food<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
     }
 }
 
-fn uphill_patch_variable<'w, U: Update>(
-    context: &mut ExecutionContext<'w, U>,
+fn uphill_patch_variable<U: Update>(
+    context: &mut ExecutionContext<'_, U>,
     patch_variable: VarIndex,
 ) {
     let Agent::Turtle(this_turtle) = context.executor else {
@@ -350,17 +357,17 @@ fn uphill_patch_variable<'w, U: Update>(
     }
 }
 
-fn patch_variable_at_angle<'w, U: Update>(
-    context: &mut ExecutionContext<'w, U>,
+fn patch_variable_at_angle<U: Update>(
+    context: &mut ExecutionContext<'_, U>,
     angle: value::Float,
     patch_variable: VarIndex,
 ) -> value::Float {
     let Agent::Turtle(this_turtle) = context.executor else {
         panic!("agent should be a turtle");
     };
-    let patch_ahead = s::patch_at_angle(&context.world, this_turtle, angle, value::Float::new(1.0));
+    let patch_ahead = s::patch_at_angle(context.world, this_turtle, angle, value::Float::new(1.0));
     if let Some(patch_ahead) = patch_ahead {
-        let patch_ahead = s::look_up_patch(&context.world, patch_ahead);
+        let patch_ahead = s::look_up_patch(context.world, patch_ahead);
         *patch_ahead
             .borrow()
             .get_custom(patch_variable)
@@ -371,14 +378,14 @@ fn patch_variable_at_angle<'w, U: Update>(
     }
 }
 
-fn return_to_nest<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
+fn return_to_nest<U: Update>(context: &mut ExecutionContext<'_, U>) {
     let Agent::Turtle(this_turtle) = context.executor else {
         panic!("agent should be a turtle");
     };
 
     // ifelse nest?
-    let patch_id = s::patch_here(&context.world, this_turtle);
-    let patch = s::look_up_patch(&context.world, patch_id);
+    let patch_id = s::patch_here(context.world, this_turtle);
+    let patch = s::look_up_patch(context.world, patch_id);
     let nest = *patch
         .borrow()
         .get_custom(PATCH_NEST)
@@ -407,7 +414,7 @@ fn return_to_nest<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
     }
 }
 
-fn wiggle<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
+fn wiggle<U: Update>(context: &mut ExecutionContext<'_, U>) {
     let Agent::Turtle(this_turtle) = context.executor else {
         panic!("agent should be a turtle");
     };
@@ -421,7 +428,7 @@ fn wiggle<'w, U: Update>(context: &mut ExecutionContext<'w, U>) {
     s::turn(this_turtle, -rand_result);
 
     // if not can-move? 1 [ rt 180 ]
-    if !s::can_move(&context.world, this_turtle, value::Float::new(1.0)).0 {
+    if !s::can_move(context.world, this_turtle, value::Float::new(1.0)).0 {
         s::turn(this_turtle, value::Float::new(180.0));
     }
 }
@@ -437,10 +444,10 @@ fn direct_run_ants() {
     let workspace = w.borrow_mut();
     let world = workspace.world.borrow_mut();
     let mut context = ExecutionContext {
-        world: &*world,
+        world: &world,
         executor: Agent::Observer(&world.observer),
         asker: Agent::Observer(&world.observer),
-        updater: updater,
+        updater,
         next_int: Rc::new(RefCell::new(oxitortoise::util::rng::CanonRng::new())),
     };
 

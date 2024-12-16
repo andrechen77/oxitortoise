@@ -32,7 +32,7 @@ pub enum Agent<'a> {
 pub trait AgentIndexIntoWorld {
     type Output<'w>: Into<Agent<'w>>;
 
-    fn index_into_world<'w>(self, world: &'w World) -> Option<Self::Output<'w>>;
+    fn index_into_world(self, world: &World) -> Option<Self::Output<'_>>;
 }
 
 // A trait for getting the position of an agent in the world.

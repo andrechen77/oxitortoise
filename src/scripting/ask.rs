@@ -12,7 +12,7 @@ pub fn ask<'w, A: IterateAgentset, U: Update>(
 ) {
     let asker = mem::replace(&mut context.asker, context.executor);
     for agent_id in agentset.iter(context.world, context.next_int.clone()) {
-        let Some(agent) = agent_id.index_into_world(&context.world) else {
+        let Some(agent) = agent_id.index_into_world(context.world) else {
             continue;
         };
         context.executor = agent.into();

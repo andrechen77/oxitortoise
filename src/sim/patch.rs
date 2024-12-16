@@ -27,7 +27,7 @@ pub struct PatchId {
 impl AgentIndexIntoWorld for PatchId {
     type Output<'w> = &'w RefCell<Patch>;
 
-    fn index_into_world<'w>(self, world: &'w World) -> Option<Self::Output<'w>> {
+    fn index_into_world(self, world: &World) -> Option<Self::Output<'_>> {
         Some(&world.patches[self])
     }
 }
@@ -63,6 +63,7 @@ impl Patches {
         }
 
         let mut variable_mapper = VariableMapper::new();
+        #[allow(clippy::type_complexity)]
         let built_in_variables: &[(Rc<str>, fn(&Patch) -> PolyValue)] = &[
             (Rc::from("pxcor"), |patch| {
                 value::Float::from(patch.position_int().x).into()

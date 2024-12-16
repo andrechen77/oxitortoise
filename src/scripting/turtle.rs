@@ -26,12 +26,12 @@ pub fn turn(turtle: &RefCell<Turtle>, angle: value::Float) {
     turtle.heading += angle;
 }
 
-pub fn patch_here<'w>(world: &'w World, turtle: &RefCell<Turtle>) -> PatchId {
+pub fn patch_here(world: &World, turtle: &RefCell<Turtle>) -> PatchId {
     world.patch_at(turtle.borrow().position.round_to_int())
 }
 
-pub fn patch_at_angle<'w>(
-    world: &'w World,
+pub fn patch_at_angle(
+    world: &World,
     turtle: &RefCell<Turtle>,
     angle: value::Float,
     distance: value::Float,
