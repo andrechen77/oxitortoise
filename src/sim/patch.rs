@@ -58,7 +58,7 @@ impl Patches {
             for i in 0..*patches_width {
                 let x = min_pxcor + i as CoordInt;
                 let y = max_pycor - j as CoordInt;
-                patches.push(Patch::at(PointInt { x, y }));
+                patches.push(Patch::at(PatchId { grid_index: patches.len() }, PointInt { x, y }));
             }
         }
 
@@ -136,6 +136,7 @@ impl IndexMut<PatchId> for Patches {
 
 #[derive(Debug)]
 pub struct Patch {
+    id: PatchId,
     position: PointInt,
     pub data: RefCell<PatchData>,
 }
@@ -150,11 +151,16 @@ pub struct PatchData {
 }
 
 impl Patch {
-    pub fn at(position: PointInt) -> Self {
+    pub fn at(id: PatchId, position: PointInt) -> Self {
         Self {
+            id,
             position,
             data: Default::default(),
         }
+    }
+
+    pub fn id(&self) -> PatchId {
+        self.id
     }
 
     pub fn position_int(&self) -> PointInt {

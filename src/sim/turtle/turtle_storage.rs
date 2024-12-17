@@ -65,11 +65,13 @@ impl TurtleStorage {
 
         let who = turtle_storage.take_next_who();
         let turtle = Box::new(Turtle {
+            id: Default::default(), // placeholder to soon be replaced
             who,
             data: RefCell::new(data),
         });
         let turtle = NonNull::new(Box::into_raw(turtle)).expect("should not be null");
         let turtle_id = turtle_storage.owning_ptrs.insert(turtle);
+        unsafe { &mut *turtle.as_ptr() }.id = turtle_id;
         turtle_storage.who_map.insert(who, turtle_id);
         turtle_id
     }

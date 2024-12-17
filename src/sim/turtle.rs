@@ -186,11 +186,16 @@ impl Turtles {
 
 #[derive(Debug)]
 pub struct Turtle {
+    id: TurtleId,
     who: TurtleWho,
     pub data: RefCell<TurtleData>,
 }
 
 impl Turtle {
+    pub fn id(&self) -> TurtleId {
+        self.id
+    }
+
     pub fn who(&self) -> TurtleWho {
         self.who
     }
