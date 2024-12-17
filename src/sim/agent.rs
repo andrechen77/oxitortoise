@@ -24,7 +24,7 @@ pub enum AgentId {
 #[derive(Debug, Clone, Copy, From, TryInto)]
 pub enum Agent<'a> {
     Observer(&'a RefCell<Observer>),
-    Turtle(&'a RefCell<Turtle>),
+    Turtle(&'a Turtle),
     Patch(&'a RefCell<Patch>),
     Link(Infallible /* TODO */),
 }

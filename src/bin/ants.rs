@@ -1,5 +1,5 @@
+use std::cell::RefCell;
 use std::rc::Rc;
-use std::{cell::RefCell, ops::DerefMut};
 
 use oxitortoise::sim::agent::Agent;
 use oxitortoise::util::rng::NextInt as _;
@@ -71,13 +71,11 @@ fn setup<U: Update>(context: &mut ExecutionContext<'_, U>) {
             let Agent::Turtle(this_turtle) = context.executor else {
                 panic!("must be executed by a turtle");
             };
-            let mut this_turtle = this_turtle.borrow_mut();
-            this_turtle.size = value::Float::new(2.0);
-            this_turtle.color = Color::RED;
-            context.updater.update_turtle(
-                this_turtle.deref_mut(),
-                TurtleProperty::Size | TurtleProperty::Color,
-            );
+            this_turtle.data.borrow_mut().size = value::Float::new(2.0);
+            this_turtle.data.borrow_mut().color = Color::RED;
+            context
+                .updater
+                .update_turtle(this_turtle, TurtleProperty::Size | TurtleProperty::Color);
         },
     );
 
@@ -254,7 +252,7 @@ fn go<U: Update>(context: &mut ExecutionContext<'_, U>) {
         };
 
         // if who >= ticks [ stop ]
-        let who: value::Float = this_turtle.borrow().who().into();
+        let who: value::Float = this_turtle.who().into();
         let Some(ticks) = context.world.tick_counter.get() else {
             panic!("ticks have not started yet");
         };
@@ -263,7 +261,7 @@ fn go<U: Update>(context: &mut ExecutionContext<'_, U>) {
         }
 
         // ifelse color = red
-        if this_turtle.borrow().color == Color::RED {
+        if this_turtle.data.borrow().color == Color::RED {
             // look-for-food
             look_for_food(context);
         } else {
@@ -279,7 +277,7 @@ fn go<U: Update>(context: &mut ExecutionContext<'_, U>) {
 
         context
             .updater
-            .update_turtle(&this_turtle.borrow(), TurtleProperty::Position.into());
+            .update_turtle(this_turtle, TurtleProperty::Position.into());
     });
 
     s::advance_tick(context.world);
@@ -302,7 +300,7 @@ fn look_for_food<U: Update>(context: &mut ExecutionContext<'_, U>) {
     if food > value::Float::new(0.0) {
         // set color orange + 1
         let new_color = Color::ORANGE + value::Float::new(1.0);
-        this_turtle.borrow_mut().color = new_color;
+        this_turtle.data.borrow_mut().color = new_color;
 
         // set food food - 1
         let new_food = food - value::Float::new(1.0);
@@ -393,7 +391,7 @@ fn return_to_nest<U: Update>(context: &mut ExecutionContext<'_, U>) {
         .unwrap();
     if nest.0 {
         // set color red
-        this_turtle.borrow_mut().color = Color::RED;
+        this_turtle.data.borrow_mut().color = Color::RED;
 
         // rt 180
         s::turn(this_turtle, value::Float::new(180.0));

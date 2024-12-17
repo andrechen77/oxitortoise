@@ -37,7 +37,7 @@ slotmap::new_key_type! {
 }
 
 impl AgentIndexIntoWorld for TurtleId {
-    type Output<'w> = &'w RefCell<Turtle>;
+    type Output<'w> = &'w Turtle;
 
     fn index_into_world(self, world: &World) -> Option<Self::Output<'_>> {
         world.turtles.get_turtle(self)
@@ -90,7 +90,7 @@ impl Turtles {
         self.breeds.get(breed_name).cloned()
     }
 
-    pub fn get_turtle(&self, turtle_id: TurtleId) -> Option<&RefCell<Turtle>> {
+    pub fn get_turtle(&self, turtle_id: TurtleId) -> Option<&Turtle> {
         self.turtle_storage.get_turtle(turtle_id)
     }
 
@@ -126,8 +126,12 @@ impl Turtles {
         // make sure all turtles have the correct mappings in their custom
         // variables
         for turtle in self.turtle_storage.iter_mut() {
-            if let Some(new_to_old_idxs) = new_mappings.get(&Rc::as_ptr(&turtle.breed)) {
+            if let Some(new_to_old_idxs) =
+                new_mappings.get(&Rc::as_ptr(&turtle.data.get_mut().breed))
+            {
                 turtle
+                    .data
+                    .get_mut()
                     .custom_variables
                     .set_variable_mapping(new_to_old_idxs);
             }
@@ -147,7 +151,6 @@ impl Turtles {
         for _ in 0..count {
             let color = Color::random(next_int);
             let heading = Heading::random(next_int);
-            let who = self.turtle_storage.take_next_who();
             let shape = breed.borrow().shape.clone().unwrap_or_else(|| {
                 self.breeds
                     .get(BREED_NAME_TURTLES)
@@ -158,8 +161,7 @@ impl Turtles {
                     .expect("default turtle breed should have a shape")
                     .clone()
             });
-            let turtle = Turtle {
-                who,
+            let turtle_data = TurtleData {
                 breed: breed.clone(),
                 color,
                 heading,
@@ -172,7 +174,7 @@ impl Turtles {
                 custom_variables: CustomAgentVariables::new(),
             };
 
-            let turtle_id = self.turtle_storage.add_turtle(turtle);
+            let turtle_id = self.turtle_storage.add_turtle(turtle_data);
             on_create(turtle_id);
         }
     }
@@ -185,6 +187,17 @@ impl Turtles {
 #[derive(Debug)]
 pub struct Turtle {
     who: TurtleWho,
+    pub data: RefCell<TurtleData>,
+}
+
+impl Turtle {
+    pub fn who(&self) -> TurtleWho {
+        self.who
+    }
+}
+
+#[derive(Debug)]
+pub struct TurtleData {
     pub breed: Rc<RefCell<Breed>>,
     /// The shape of this turtle due to its breed. This may or may not be the
     /// default shape of the turtle's breed.
@@ -201,11 +214,7 @@ pub struct Turtle {
     custom_variables: CustomAgentVariables,
 }
 
-impl Turtle {
-    pub fn who(&self) -> TurtleWho {
-        self.who
-    }
-
+impl TurtleData {
     pub fn get_custom(&self, index: VarIndex) -> &value::PolyValue {
         &self.custom_variables[index]
     }
@@ -217,7 +226,7 @@ impl Turtle {
 
 impl AgentPosition for Turtle {
     fn position(&self) -> Point {
-        self.position
+        self.data.borrow().position
     }
 }
 

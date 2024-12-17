@@ -8,7 +8,7 @@ use slotmap::SlotMap;
 
 use crate::sim::turtle::Turtle;
 
-use super::{TurtleId, TurtleWho};
+use super::{TurtleData, TurtleId, TurtleWho};
 
 #[derive(Debug, Default)]
 pub(super) struct TurtleStorage {
@@ -28,28 +28,19 @@ struct Inner {
     /// taken not to invalidate these references, such as by dropping the data.
     /// Therefore, removed turtles will still show up here until they are
     /// deallocated manually.
-    owning_ptrs: SlotMap<TurtleId, NonNull<RefCell<Turtle>>>,
+    owning_ptrs: SlotMap<TurtleId, NonNull<Turtle>>,
     /// A queue of turtle ids for turtles that have been removed but not yet
     /// deallocated.
     removed_queue: VecDeque<TurtleId>,
 }
 
 impl TurtleStorage {
-    /// Returns the next who number to be given to a turtle, and increments it
-    /// again.
-    pub(super) fn take_next_who(&self) -> TurtleWho {
-        let mut turtle_storage = self.inner.borrow_mut();
-        let who = turtle_storage.next_who;
-        turtle_storage.next_who.0 += 1;
-        who
-    }
-
     pub(super) fn translate_who(&self, who: TurtleWho) -> Option<TurtleId> {
         let turtle_storage = self.inner.borrow();
         turtle_storage.who_map.get(&who).copied()
     }
 
-    pub(super) fn get_turtle(&self, turtle_id: TurtleId) -> Option<&RefCell<Turtle>> {
+    pub(super) fn get_turtle(&self, turtle_id: TurtleId) -> Option<&Turtle> {
         let turtle_storage = self.inner.borrow();
         let &turtle_ptr = turtle_storage.owning_ptrs.get(turtle_id)?;
         // SAFETY: the turtle pointer is guaranteed to be valid for as long as
@@ -69,14 +60,14 @@ impl TurtleStorage {
         t.owning_ptrs.keys().collect()
     }
 
-    pub(super) fn add_turtle(&self, turtle: Turtle) -> TurtleId {
+    pub(super) fn add_turtle(&self, data: TurtleData) -> TurtleId {
         let mut turtle_storage = self.inner.borrow_mut();
 
-        // TODO it feels a little janky to have to ask for the who number as in
-        // below when ultimately the TurtleStorage is the only assigning
-        // who numbers.
-        let who = turtle.who();
-        let turtle = Box::new(RefCell::new(turtle));
+        let who = turtle_storage.take_next_who();
+        let turtle = Box::new(Turtle {
+            who,
+            data: RefCell::new(data),
+        });
         let turtle = NonNull::new(Box::into_raw(turtle)).expect("should not be null");
         let turtle_id = turtle_storage.owning_ptrs.insert(turtle);
         turtle_storage.who_map.insert(who, turtle_id);
@@ -92,8 +83,7 @@ impl TurtleStorage {
     /// # Panics
     ///
     /// Panics if the given `TurtleId` does not refer to a turtle in this
-    /// struct. Panics if the turtle to be removed is also being mutably
-    /// borrowed.
+    /// struct.
     pub(super) fn remove_turtle(&self, turtle_id: TurtleId) {
         let mut t = self.inner.borrow_mut();
 
@@ -107,7 +97,7 @@ impl TurtleStorage {
         // the refcell containing this struct is share-borrowed, because no
         // operation on a &self invalidates it
         let turtle = unsafe { owning_ptr.as_ref() };
-        t.who_map.remove(&turtle.borrow().who());
+        t.who_map.remove(&turtle.who());
     }
 
     /// Deallocates the turtle data of all turtles that have been removed.
@@ -134,8 +124,7 @@ impl TurtleStorage {
             // guaranteed that there are no references to this turtle data;
             // `Self::get_turtle` only returns a reference that lives as long
             // as the shared borrow.
-            let turtle: &mut RefCell<Turtle> = unsafe { &mut *ptr.as_ptr() };
-            turtle.get_mut()
+            unsafe { &mut *ptr.as_ptr() }
         })
     }
 
@@ -149,5 +138,15 @@ impl TurtleStorage {
         }
 
         t.who_map.clear();
+    }
+}
+
+impl Inner {
+    /// Returns the next who number to be given to a turtle, and increments it
+    /// again.
+    fn take_next_who(&mut self) -> TurtleWho {
+        let who = self.next_who;
+        self.next_who.0 += 1;
+        who
     }
 }

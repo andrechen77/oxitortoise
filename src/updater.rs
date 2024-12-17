@@ -53,15 +53,17 @@ impl Update for PrintUpdate {
         let mut updated_properties = vec![];
         for property in properties_to_update {
             let value = match property {
-                TurtleProperty::Breed => format!("Breed: {:?}", turtle.breed),
-                TurtleProperty::Color => format!("Color: {:?}", turtle.color),
-                TurtleProperty::Heading => format!("Heading: {:?}", turtle.heading),
-                TurtleProperty::LabelColor => format!("LabelColor: {:?}", turtle.label_color),
-                TurtleProperty::Hidden => format!("Hidden: {:?}", turtle.hidden),
+                TurtleProperty::Breed => format!("Breed: {:?}", turtle.data.borrow().breed),
+                TurtleProperty::Color => format!("Color: {:?}", turtle.data.borrow().color),
+                TurtleProperty::Heading => format!("Heading: {:?}", turtle.data.borrow().heading),
+                TurtleProperty::LabelColor => {
+                    format!("LabelColor: {:?}", turtle.data.borrow().label_color)
+                }
+                TurtleProperty::Hidden => format!("Hidden: {:?}", turtle.data.borrow().hidden),
                 TurtleProperty::PenSize => todo!(),
                 TurtleProperty::PenMode => todo!(),
-                TurtleProperty::Shape => format!("Shape: {:?}", turtle.shape),
-                TurtleProperty::Size => format!("Size: {:?}", turtle.size),
+                TurtleProperty::Shape => format!("Shape: {:?}", turtle.data.borrow().shape),
+                TurtleProperty::Size => format!("Size: {:?}", turtle.data.borrow().size),
                 TurtleProperty::Position => format!("Position: {:?}", turtle.position()),
             };
             updated_properties.push(value);
