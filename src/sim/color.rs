@@ -9,7 +9,7 @@ use crate::{sim::value::Float, util::rng::NextInt};
 /// range 0.0..140.0. Values with more than one decimal place of precision are
 /// remembered with that much precision, even though it doesn't matter for
 /// rendering.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Color(f64);
 
 impl Color {

@@ -25,7 +25,7 @@ pub enum AgentId {
 pub enum Agent<'a> {
     Observer(&'a RefCell<Observer>),
     Turtle(&'a Turtle),
-    Patch(&'a RefCell<Patch>),
+    Patch(&'a Patch),
     Link(Infallible /* TODO */),
 }
 

@@ -25,7 +25,7 @@ pub struct PatchId {
 }
 
 impl AgentIndexIntoWorld for PatchId {
-    type Output<'w> = &'w RefCell<Patch>;
+    type Output<'w> = &'w Patch;
 
     fn index_into_world(self, world: &World) -> Option<Self::Output<'_>> {
         Some(&world.patches[self])
@@ -37,7 +37,7 @@ pub struct Patches {
     /// The patches in the world, stored in row-major order. The first row
     /// contains the patches with the highest `pycor`, and the first column
     /// contains the patches with the lowest `pxcor`.
-    patches: Vec<RefCell<Patch>>,
+    patches: Vec<Patch>,
     /// A mapping between variable names and variable descriptors for patches.
     variable_mapper: VariableMapper<Patch>,
 }
@@ -58,7 +58,7 @@ impl Patches {
             for i in 0..*patches_width {
                 let x = min_pxcor + i as CoordInt;
                 let y = max_pycor - j as CoordInt;
-                patches.push(RefCell::new(Patch::at(PointInt { x, y })));
+                patches.push(Patch::at(PointInt { x, y }));
             }
         }
 
@@ -90,6 +90,7 @@ impl Patches {
         // variables
         for patch in &mut self.patches {
             patch
+                .data
                 .get_mut()
                 .custom_variables
                 .set_variable_mapping(&new_to_old_custom_idxs);
@@ -100,7 +101,7 @@ impl Patches {
         self.variable_mapper.look_up_variable(name)
     }
 
-    pub fn patches_iter(&self) -> impl Iterator<Item = &RefCell<Patch>> {
+    pub fn patches_iter(&self) -> impl Iterator<Item = &Patch> {
         self.patches.iter()
     }
 
@@ -114,13 +115,13 @@ impl Patches {
     /// called.
     pub fn clear_all_patches(&self) {
         for patch in &self.patches {
-            patch.borrow_mut().custom_variables.reset_all();
+            patch.data.borrow_mut().custom_variables.reset_all();
         }
     }
 }
 
 impl Index<PatchId> for Patches {
-    type Output = RefCell<Patch>;
+    type Output = Patch;
 
     fn index(&self, index: PatchId) -> &Self::Output {
         &self.patches[index.grid_index]
@@ -136,9 +137,14 @@ impl IndexMut<PatchId> for Patches {
 #[derive(Debug)]
 pub struct Patch {
     position: PointInt,
-    pcolor: Color,
-    plabel: String, // TODO consider using the netlogo version of string for this
-    plabel_color: Color,
+    pub data: RefCell<PatchData>,
+}
+
+#[derive(Debug, Default)]
+pub struct PatchData {
+    pub pcolor: Color,
+    pub plabel: String, // TODO consider using the netlogo version of string for this
+    pub plabel_color: Color,
     custom_variables: CustomAgentVariables,
     // TODO some way of tracking what turtles are on this patch.
 }
@@ -147,41 +153,16 @@ impl Patch {
     pub fn at(position: PointInt) -> Self {
         Self {
             position,
-            pcolor: Color::BLACK,
-            plabel: String::new(),
-            plabel_color: Color::BLACK, // TODO use some default label color
-            custom_variables: CustomAgentVariables::new(),
+            data: Default::default(),
         }
     }
 
     pub fn position_int(&self) -> PointInt {
         self.position
     }
+}
 
-    pub fn get_pcolor(&self) -> Color {
-        self.pcolor
-    }
-
-    pub fn set_pcolor(&mut self, color: Color) {
-        self.pcolor = color;
-    }
-
-    pub fn get_plabel(&self) -> &str {
-        &self.plabel
-    }
-
-    pub fn set_plabel(&mut self, label: String) {
-        self.plabel = label;
-    }
-
-    pub fn get_plabel_color(&self) -> Color {
-        self.plabel_color
-    }
-
-    pub fn set_plabel_color(&mut self, color: Color) {
-        self.plabel_color = color;
-    }
-
+impl PatchData {
     pub fn get_custom(&self, var_idx: VarIndex) -> &PolyValue {
         &self.custom_variables[var_idx]
     }

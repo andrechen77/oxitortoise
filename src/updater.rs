@@ -79,9 +79,11 @@ impl Update for PrintUpdate {
         let mut updated_properties: Vec<String> = vec![];
         for property in properties_to_update {
             let value = match property {
-                PatchProperty::Pcolor => format!("Color: {:?}", patch.get_pcolor()),
-                PatchProperty::Plabel => format!("Label: {:?}", patch.get_plabel()),
-                PatchProperty::PlabelColor => format!("LabelColor: {:?}", patch.get_plabel_color()),
+                PatchProperty::Pcolor => format!("Color: {:?}", patch.data.borrow().pcolor),
+                PatchProperty::Plabel => format!("Label: {:?}", patch.data.borrow().plabel),
+                PatchProperty::PlabelColor => {
+                    format!("LabelColor: {:?}", patch.data.borrow().plabel_color)
+                }
             };
             updated_properties.push(value);
         }

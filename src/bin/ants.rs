@@ -87,21 +87,22 @@ fn setup<U: Update>(context: &mut ExecutionContext<'_, U>) {
 
         // set nest? (distancexy 0 0) < 5
         {
-            let distance = s::distancexy_euclidean(
-                &*this_patch.borrow(),
-                value::Float::new(0.0),
-                value::Float::new(0.0),
-            );
+            let distance =
+                s::distancexy_euclidean(this_patch, value::Float::new(0.0), value::Float::new(0.0));
             let condition: value::Boolean = (distance < value::Float::new(5.0)).into();
             let condition = PolyValue::from(condition);
-            this_patch.borrow_mut().set_custom(PATCH_NEST, condition);
+            this_patch
+                .data
+                .borrow_mut()
+                .set_custom(PATCH_NEST, condition);
         }
 
         // set nest-scent 200 - distancexy 0 0
         {
-            let distance = s::distancexy_euclidean(&*this_patch.borrow(), 0.0.into(), 0.0.into());
+            let distance = s::distancexy_euclidean(this_patch, 0.0.into(), 0.0.into());
             let nest_scent = value::Float::new(200.0) - distance;
             this_patch
+                .data
                 .borrow_mut()
                 .set_custom(PATCH_NEST_SCENT, nest_scent.into());
         }
@@ -115,10 +116,10 @@ fn setup<U: Update>(context: &mut ExecutionContext<'_, U>) {
             {
                 let x = value::Float::new(0.6) * max_pxcor;
                 let y = value::Float::new(0.0);
-                let distance = s::distancexy_euclidean(&*this_patch.borrow(), x, y);
+                let distance = s::distancexy_euclidean(this_patch, x, y);
                 let condition = distance < value::Float::new(5.0);
                 if condition {
-                    this_patch.borrow_mut().set_custom(
+                    this_patch.data.borrow_mut().set_custom(
                         PATCH_FOOD_SOURCE_NUMBER,
                         PolyValue::from(value::Float::new(1.0)),
                     );
@@ -129,10 +130,10 @@ fn setup<U: Update>(context: &mut ExecutionContext<'_, U>) {
             {
                 let x = value::Float::new(-0.6) * max_pxcor;
                 let y = value::Float::new(-0.6) * max_pycor;
-                let distance = s::distancexy_euclidean(&*this_patch.borrow(), x, y);
+                let distance = s::distancexy_euclidean(this_patch, x, y);
                 let condition = distance < value::Float::new(5.0);
                 if condition {
-                    this_patch.borrow_mut().set_custom(
+                    this_patch.data.borrow_mut().set_custom(
                         PATCH_FOOD_SOURCE_NUMBER,
                         PolyValue::from(value::Float::new(2.0)),
                     );
@@ -143,10 +144,10 @@ fn setup<U: Update>(context: &mut ExecutionContext<'_, U>) {
             {
                 let x = value::Float::new(-0.8) * max_pxcor;
                 let y = value::Float::new(0.8) * max_pycor;
-                let distance = s::distancexy_euclidean(&*this_patch.borrow(), x, y);
+                let distance = s::distancexy_euclidean(this_patch, x, y);
                 let condition = distance < value::Float::new(5.0);
                 if condition {
-                    this_patch.borrow_mut().set_custom(
+                    this_patch.data.borrow_mut().set_custom(
                         PATCH_FOOD_SOURCE_NUMBER,
                         PolyValue::from(value::Float::new(3.0)),
                     );
@@ -159,6 +160,7 @@ fn setup<U: Update>(context: &mut ExecutionContext<'_, U>) {
             // if food-source-number > 0 [ set food one-of [1 2] ]
             {
                 let food_source_number = *this_patch
+                    .data
                     .borrow()
                     .get_custom(PATCH_FOOD_SOURCE_NUMBER)
                     .get::<value::Float>()
@@ -171,6 +173,7 @@ fn setup<U: Update>(context: &mut ExecutionContext<'_, U>) {
                         _ => unreachable!("rand_index should be 0 or 1"),
                     };
                     this_patch
+                        .data
                         .borrow_mut()
                         .set_custom(PATCH_FOOD, PolyValue::from(food_value));
                 }
@@ -181,16 +184,18 @@ fn setup<U: Update>(context: &mut ExecutionContext<'_, U>) {
         {
             // ifelse nest?
             let condition = *this_patch
+                .data
                 .borrow()
                 .get_custom(PATCH_NEST)
                 .get::<value::Boolean>()
                 .unwrap();
             if condition.0 {
                 // set pcolor violet
-                this_patch.borrow_mut().set_pcolor(Color::VIOLET);
+                this_patch.data.borrow_mut().pcolor = Color::VIOLET;
             } else {
                 // ifelse food > 0
                 let food = *this_patch
+                    .data
                     .borrow()
                     .get_custom(PATCH_FOOD)
                     .get::<value::Float>()
@@ -200,22 +205,24 @@ fn setup<U: Update>(context: &mut ExecutionContext<'_, U>) {
                     //   if food-source-number = 2 [ set pcolor sky  ]
                     //   if food-source-number = 3 [ set pcolor blue ]
                     let food_source_number = *this_patch
+                        .data
                         .borrow()
                         .get_custom(PATCH_FOOD_SOURCE_NUMBER)
                         .get::<value::Float>()
                         .unwrap();
                     if food_source_number == value::Float::new(1.0) {
-                        this_patch.borrow_mut().set_pcolor(Color::CYAN);
+                        this_patch.data.borrow_mut().pcolor = Color::CYAN;
                     }
                     if food_source_number == value::Float::new(2.0) {
-                        this_patch.borrow_mut().set_pcolor(Color::SKY);
+                        this_patch.data.borrow_mut().pcolor = Color::SKY;
                     }
                     if food_source_number == value::Float::new(3.0) {
-                        this_patch.borrow_mut().set_pcolor(Color::BLUE);
+                        this_patch.data.borrow_mut().pcolor = Color::BLUE;
                     }
                 } else {
                     // set pcolor scale-color green chemical 0.1 5
                     let &chemical = this_patch
+                        .data
                         .borrow()
                         .get_custom(PATCH_CHEMICAL)
                         .get::<value::Float>()
@@ -226,14 +233,14 @@ fn setup<U: Update>(context: &mut ExecutionContext<'_, U>) {
                         value::Float::new(0.1),
                         value::Float::new(5.0),
                     );
-                    this_patch.borrow_mut().set_pcolor(scaled_color);
+                    this_patch.data.borrow_mut().pcolor = scaled_color;
                 }
             }
         }
 
         context
             .updater
-            .update_patch(&this_patch.borrow(), PatchProperty::Pcolor.into());
+            .update_patch(this_patch, PatchProperty::Pcolor.into());
     });
 
     // reset-ticks
@@ -293,6 +300,7 @@ fn look_for_food<U: Update>(context: &mut ExecutionContext<'_, U>) {
 
     // if food > 0
     let food = *patch_here
+        .data
         .borrow()
         .get_custom(PATCH_FOOD)
         .get::<value::Float>()
@@ -305,6 +313,7 @@ fn look_for_food<U: Update>(context: &mut ExecutionContext<'_, U>) {
         // set food food - 1
         let new_food = food - value::Float::new(1.0);
         patch_here
+            .data
             .borrow_mut()
             .set_custom(PATCH_FOOD, PolyValue::from(new_food));
 
@@ -317,6 +326,7 @@ fn look_for_food<U: Update>(context: &mut ExecutionContext<'_, U>) {
 
     // if (chemical >= 0.05) and (chemical < 2)
     let chemical = *patch_here
+        .data
         .borrow()
         .get_custom(PATCH_CHEMICAL)
         .get::<value::Float>()
@@ -367,6 +377,7 @@ fn patch_variable_at_angle<U: Update>(
     if let Some(patch_ahead) = patch_ahead {
         let patch_ahead = s::look_up_patch(context.world, patch_ahead);
         *patch_ahead
+            .data
             .borrow()
             .get_custom(patch_variable)
             .get::<value::Float>()
@@ -385,6 +396,7 @@ fn return_to_nest<U: Update>(context: &mut ExecutionContext<'_, U>) {
     let patch_id = s::patch_here(context.world, this_turtle);
     let patch = s::look_up_patch(context.world, patch_id);
     let nest = *patch
+        .data
         .borrow()
         .get_custom(PATCH_NEST)
         .get::<value::Boolean>()
@@ -398,12 +410,14 @@ fn return_to_nest<U: Update>(context: &mut ExecutionContext<'_, U>) {
     } else {
         // set chemical chemical + 60
         let chemical = *patch
+            .data
             .borrow()
             .get_custom(PATCH_CHEMICAL)
             .get::<value::Float>()
             .unwrap();
         let new_chemical = chemical + value::Float::new(60.0);
         patch
+            .data
             .borrow_mut()
             .set_custom(PATCH_CHEMICAL, PolyValue::from(new_chemical));
 
