@@ -101,6 +101,10 @@ impl Topology {
         }
     }
 
+    pub fn spec(&self) -> &TopologySpec {
+        &self.spec
+    }
+
     pub fn min_pxcor(&self) -> CoordInt {
         self.spec.min_pxcor
     }

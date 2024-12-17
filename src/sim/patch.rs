@@ -58,7 +58,12 @@ impl Patches {
             for i in 0..*patches_width {
                 let x = min_pxcor + i as CoordInt;
                 let y = max_pycor - j as CoordInt;
-                patches.push(Patch::at(PatchId { grid_index: patches.len() }, PointInt { x, y }));
+                patches.push(Patch::at(
+                    PatchId {
+                        grid_index: patches.len(),
+                    },
+                    PointInt { x, y },
+                ));
             }
         }
 

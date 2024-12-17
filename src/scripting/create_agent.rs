@@ -4,12 +4,12 @@ use crate::{
         turtle::TurtleId,
         value::{agentset::TurtleSet, Float},
     },
-    updater::Update,
+    updater::WriteUpdate,
 };
 
 use super::{Closure, ExecutionContext};
 
-pub fn create_turtles_with_cmd<'w, U: Update>(
+pub fn create_turtles_with_cmd<'w, U: WriteUpdate>(
     context: &mut ExecutionContext<'w, U>,
     count: Float,
     breed_name: &str,

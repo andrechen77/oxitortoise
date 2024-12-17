@@ -1,11 +1,11 @@
 use std::mem;
 
 use crate::sim::{agent::AgentIndexIntoWorld, value::agentset::IterateAgentset};
-use crate::updater::Update;
+use crate::updater::WriteUpdate;
 
 use super::{Closure, ExecutionContext};
 
-pub fn ask<'w, A: IterateAgentset, U: Update>(
+pub fn ask<'w, A: IterateAgentset, U: WriteUpdate>(
     context: &mut ExecutionContext<'w, U>,
     agentset: &mut A,
     operation: Closure<'w, U>,

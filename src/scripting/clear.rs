@@ -1,7 +1,7 @@
-use crate::updater::Update;
+use crate::updater::WriteUpdate;
 
 use super::ExecutionContext;
 
-pub fn clear_all<U: Update>(context: &mut ExecutionContext<'_, U>) {
+pub fn clear_all<U: WriteUpdate>(context: &mut ExecutionContext<'_, U>) {
     context.world.clear_all();
 }

@@ -237,9 +237,9 @@ impl AgentPosition for Turtle {
 
 #[derive(Debug)]
 pub struct Breed {
-    original_name: Rc<str>,
+    pub original_name: Rc<str>,
     #[allow(dead_code)]
-    original_name_singular: Rc<str>,
+    pub original_name_singular: Rc<str>,
     variable_mapper: VariableMapper<Turtle>,
     /// The default shape of this breed. `None` means that this breed should
     /// use the same shape as the default breed's shape. This must not be `None`
@@ -256,10 +256,11 @@ impl Breed {
 pub const BREED_NAME_TURTLES: &str = "TURTLES";
 pub const BREED_NAME_LINKS: &str = "LINKS";
 
-pub const TURTLE_DEFAULT_SHAPE: Shape = Shape {};
-pub const LINK_DEFAULT_SHAPE: Shape = Shape {};
+pub const TURTLE_DEFAULT_SHAPE: Shape = Shape { name: "default" };
+pub const LINK_DEFAULT_SHAPE: Shape = Shape { name: "default" };
 
 #[derive(Debug)]
 pub struct Shape {
-    // TODO
+    pub name: &'static str,
+    // TODO fill in fields
 }

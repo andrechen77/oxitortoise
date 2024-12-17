@@ -1,7 +1,9 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use flagset::FlagSet;
 use oxitortoise::sim::agent::Agent;
+use oxitortoise::updater::WorldProp;
 use oxitortoise::util::rng::NextInt as _;
 use oxitortoise::{
     scripting::{self as s, ExecutionContext},
@@ -12,7 +14,7 @@ use oxitortoise::{
         turtle::BREED_NAME_TURTLES,
         value::{self, PolyValue},
     },
-    updater::{PatchProperty, PrintUpdate, TurtleProperty, Update},
+    updater::{PatchProp, TurtleProp, UpdateAggregator, WriteUpdate},
     workspace::Workspace,
 };
 
@@ -58,7 +60,7 @@ fn create_workspace() -> Rc<RefCell<Workspace>> {
     w
 }
 
-fn setup<U: Update>(context: &mut ExecutionContext<'_, U>) {
+fn setup<U: WriteUpdate>(context: &mut ExecutionContext<'_, U>) {
     // clear-all
     s::clear_all(context);
 
@@ -75,7 +77,7 @@ fn setup<U: Update>(context: &mut ExecutionContext<'_, U>) {
             this_turtle.data.borrow_mut().color = Color::RED;
             context
                 .updater
-                .update_turtle(this_turtle, TurtleProperty::Size | TurtleProperty::Color);
+                .update_turtle(this_turtle.id(), FlagSet::full());
         },
     );
 
@@ -240,18 +242,19 @@ fn setup<U: Update>(context: &mut ExecutionContext<'_, U>) {
 
         context
             .updater
-            .update_patch(this_patch, PatchProperty::Pcolor.into());
+            .update_patch(this_patch.id(), PatchProp::Pcolor.into());
     });
 
     // reset-ticks
     s::reset_ticks(context.world);
+    context
+        .updater
+        .update_world_properties(WorldProp::Ticks.into());
 }
 
-fn go<U: Update>(context: &mut ExecutionContext<'_, U>) {
+fn go<U: WriteUpdate>(context: &mut ExecutionContext<'_, U>) {
     // TODO everything below here is just to make the model work and not
     // what the script would actually look like
-
-    println!("tick is {}", context.world.tick_counter.get().unwrap());
 
     s::ask(context, &mut value::agentset::AllTurtles, |context| {
         let Agent::Turtle(this_turtle) = context.executor else {
@@ -282,15 +285,19 @@ fn go<U: Update>(context: &mut ExecutionContext<'_, U>) {
         // fd 1
         s::fd_one(context.world, this_turtle);
 
-        context
-            .updater
-            .update_turtle(this_turtle, TurtleProperty::Position.into());
+        context.updater.update_turtle(
+            this_turtle.id(),
+            TurtleProp::Position | TurtleProp::Heading | TurtleProp::Color,
+        );
     });
 
     s::advance_tick(context.world);
+    context
+        .updater
+        .update_world_properties(WorldProp::Ticks.into());
 }
 
-fn look_for_food<U: Update>(context: &mut ExecutionContext<'_, U>) {
+fn look_for_food<U: WriteUpdate>(context: &mut ExecutionContext<'_, U>) {
     let Agent::Turtle(this_turtle) = context.executor else {
         panic!("agent should be a turtle");
     };
@@ -337,7 +344,7 @@ fn look_for_food<U: Update>(context: &mut ExecutionContext<'_, U>) {
     }
 }
 
-fn uphill_patch_variable<U: Update>(
+fn uphill_patch_variable<U: WriteUpdate>(
     context: &mut ExecutionContext<'_, U>,
     patch_variable: VarIndex,
 ) {
@@ -365,7 +372,7 @@ fn uphill_patch_variable<U: Update>(
     }
 }
 
-fn patch_variable_at_angle<U: Update>(
+fn patch_variable_at_angle<U: WriteUpdate>(
     context: &mut ExecutionContext<'_, U>,
     angle: value::Float,
     patch_variable: VarIndex,
@@ -387,7 +394,7 @@ fn patch_variable_at_angle<U: Update>(
     }
 }
 
-fn return_to_nest<U: Update>(context: &mut ExecutionContext<'_, U>) {
+fn return_to_nest<U: WriteUpdate>(context: &mut ExecutionContext<'_, U>) {
     let Agent::Turtle(this_turtle) = context.executor else {
         panic!("agent should be a turtle");
     };
@@ -426,7 +433,7 @@ fn return_to_nest<U: Update>(context: &mut ExecutionContext<'_, U>) {
     }
 }
 
-fn wiggle<U: Update>(context: &mut ExecutionContext<'_, U>) {
+fn wiggle<U: WriteUpdate>(context: &mut ExecutionContext<'_, U>) {
     let Agent::Turtle(this_turtle) = context.executor else {
         panic!("agent should be a turtle");
     };
@@ -449,7 +456,8 @@ fn wiggle<U: Update>(context: &mut ExecutionContext<'_, U>) {
 // https://github.com/NetLogo/Tortoise/blob/master/resources/test/dumps/Ants.js
 #[allow(unused_variables)]
 fn direct_run_ants() {
-    let updater = PrintUpdate;
+    let mut updater = UpdateAggregator::new();
+    updater.update_world_properties(FlagSet::full());
 
     let w = create_workspace();
 
@@ -465,10 +473,14 @@ fn direct_run_ants() {
 
     // run the `setup` function
     setup(&mut context);
+    let update = context.updater.get_update(&world);
+    println!("{:?}", update);
 
-    // TODO repeatedly run the `go` function
     for _ in 0..1000 {
         go(&mut context);
+
+        let update = context.updater.get_update(&world);
+        println!("{:?}", update);
     }
 }
 
