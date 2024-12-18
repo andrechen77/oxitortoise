@@ -2,13 +2,13 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     sim::{topology::TopologySpec, world::World},
-    util::rng::{NextInt, RandIntGenerator},
+    util::rng::CanonRng,
 };
 
 #[derive(Debug)]
 pub struct Workspace {
     pub world: Rc<RefCell<World>>,
-    pub rng: Rc<RefCell<dyn NextInt>>,
+    pub rng: Rc<RefCell<CanonRng>>,
     // TODO add other fields
     // plot manager
 }
@@ -16,7 +16,7 @@ pub struct Workspace {
 impl Workspace {
     pub fn new(topology: TopologySpec) -> Rc<RefCell<Self>> {
         // create the structure first without worrying about backreferences
-        let rng = Rc::new(RefCell::new(RandIntGenerator::new()));
+        let rng = Rc::new(RefCell::new(CanonRng::new(0))); // TODO use a better seed
         let workspace = Rc::new(RefCell::new(Self {
             world: World::new(topology),
             rng,

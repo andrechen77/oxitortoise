@@ -9,7 +9,7 @@ use crate::{
         value,
         world::World,
     },
-    util::rng::NextInt,
+    util::rng::Rng,
 };
 
 use super::agent::{AgentIndexIntoWorld, AgentPosition};
@@ -145,7 +145,7 @@ impl Turtles {
         breed_name: &str,
         spawn_point: Point,
         mut on_create: impl FnMut(TurtleId),
-        next_int: &mut dyn NextInt,
+        next_int: &mut dyn Rng,
     ) {
         let breed = self.breeds.get(breed_name).unwrap(); // TODO deal with unwrap
         for _ in 0..count {

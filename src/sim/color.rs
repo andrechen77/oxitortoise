@@ -3,7 +3,7 @@ use std::{
     sync::OnceLock,
 };
 
-use crate::{sim::value::Float, util::rng::NextInt};
+use crate::{sim::value::Float, util::rng::Rng};
 
 /// A NetLogo color. This is a floating point value guaranteed to be in the
 /// range 0.0..140.0. Values with more than one decimal place of precision are
@@ -30,7 +30,7 @@ impl Color {
     pub const MAGENTA: Color = Color(125.0);
     pub const PINK: Color = Color(135.0);
 
-    pub fn random(next_int: &mut dyn NextInt) -> Color {
+    pub fn random(next_int: &mut dyn Rng) -> Color {
         Color(next_int.next_int(base_colors().len() as i64) as f64)
     }
 

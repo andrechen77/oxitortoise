@@ -2,7 +2,7 @@ use std::ops::{Add, AddAssign};
 
 use crate::{
     sim::value::{self, Float},
-    util::rng::NextInt,
+    util::rng::Rng,
 };
 
 use super::CoordFloat;
@@ -36,7 +36,7 @@ impl Heading {
         self.0.to_radians().sin_cos()
     }
 
-    pub fn random<R: NextInt + ?Sized>(rng: &mut R) -> Self {
+    pub fn random<R: Rng + ?Sized>(rng: &mut R) -> Self {
         Heading(rng.next_int(360) as f64)
     }
 

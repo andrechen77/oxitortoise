@@ -4,7 +4,7 @@ use std::rc::Rc;
 use flagset::FlagSet;
 use oxitortoise::sim::agent::Agent;
 use oxitortoise::updater::WorldProp;
-use oxitortoise::util::rng::NextInt as _;
+use oxitortoise::util::rng::Rng as _;
 use oxitortoise::{
     scripting::{self as s, ExecutionContext},
     sim::{
@@ -468,7 +468,7 @@ fn direct_run_ants() {
         executor: Agent::Observer(&world.observer),
         asker: Agent::Observer(&world.observer),
         updater,
-        next_int: Rc::new(RefCell::new(oxitortoise::util::rng::CanonRng::new())),
+        next_int: workspace.rng.clone(),
     };
 
     // run the `setup` function

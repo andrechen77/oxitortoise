@@ -3,7 +3,7 @@
 
 use std::{collections::VecDeque, mem};
 
-use crate::util::rng::NextInt;
+use crate::util::rng::Rng;
 
 /// A borrowing iterator that shuffles a mutable slice. If [`Iterator::next`] is
 /// called `n` times, then the first `n` elements of the slice will contain the
@@ -25,7 +25,7 @@ impl<'a, T, R> ShuffledMut<'a, T, R> {
 
 impl<'a, T, R> Iterator for ShuffledMut<'a, T, R>
 where
-    R: NextInt,
+    R: Rng,
 {
     type Item = &'a mut T;
 
@@ -63,7 +63,7 @@ impl<T, R> ShuffledOwned<T, R> {
 
 impl<T, R> Iterator for ShuffledOwned<T, R>
 where
-    R: NextInt,
+    R: Rng,
 {
     type Item = T;
 
@@ -89,7 +89,7 @@ mod tests {
         remaining: VecDeque<i64>,
     }
 
-    impl NextInt for R {
+    impl Rng for R {
         fn next_int(&mut self, max: i64) -> i64 {
             let next = self.remaining.pop_front().unwrap();
             assert!(0 <= next && next < max);
