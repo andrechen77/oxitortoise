@@ -201,7 +201,7 @@ impl Turtle {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default, Clone)]
 pub struct TurtleData {
     pub breed: Rc<RefCell<Breed>>,
     /// The shape of this turtle due to its breed. This may or may not be the
@@ -235,12 +235,12 @@ impl AgentPosition for Turtle {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Breed {
     pub original_name: Rc<str>,
     #[allow(dead_code)]
     pub original_name_singular: Rc<str>,
-    variable_mapper: VariableMapper<Turtle>,
+    variable_mapper: VariableMapper,
     /// The default shape of this breed. `None` means that this breed should
     /// use the same shape as the default breed's shape. This must not be `None`
     /// if it is a default breed.
@@ -259,7 +259,7 @@ pub const BREED_NAME_LINKS: &str = "LINKS";
 pub const TURTLE_DEFAULT_SHAPE: Shape = Shape { name: "default" };
 pub const LINK_DEFAULT_SHAPE: Shape = Shape { name: "default" };
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Shape {
     pub name: &'static str,
     // TODO fill in fields

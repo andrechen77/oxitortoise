@@ -139,6 +139,7 @@ impl TurtleStorage {
             t.removed_queue.push_back(turtle_id);
         }
 
+        t.next_who = TurtleWho::default();
         t.who_map.clear();
     }
 }
@@ -150,5 +151,93 @@ impl Inner {
         let who = self.next_who;
         self.next_who.0 += 1;
         who
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_add_turtle() {
+        let storage = TurtleStorage::default();
+        let data = TurtleData::default();
+        let turtle_id = storage.add_turtle(data);
+
+        assert!(storage.get_turtle(turtle_id).is_some());
+    }
+
+    #[test]
+    fn test_remove_turtle() {
+        let mut storage = TurtleStorage::default();
+        let data = TurtleData::default();
+        let turtle_id = storage.add_turtle(data);
+        let who = storage.get_turtle(turtle_id).unwrap().who();
+
+        storage.remove_turtle(turtle_id);
+        assert!(storage.get_turtle(turtle_id).is_some());
+        assert!(storage.translate_who(who).is_none());
+
+        storage.deallocate_removed();
+        assert!(storage.get_turtle(turtle_id).is_none());
+    }
+
+    #[test]
+    fn test_translate_who() {
+        let storage = TurtleStorage::default();
+        let data = TurtleData::default();
+        let turtle_id = storage.add_turtle(data);
+        let turtle = storage.get_turtle(turtle_id).unwrap();
+
+        assert_eq!(storage.translate_who(turtle.who()), Some(turtle_id));
+    }
+
+    #[test]
+    fn test_turtle_ids() {
+        let storage = TurtleStorage::default();
+        let data1 = TurtleData::default();
+        let data2 = TurtleData::default();
+        let turtle_id1 = storage.add_turtle(data1);
+        let turtle_id2 = storage.add_turtle(data2);
+
+        let ids = storage.turtle_ids();
+        assert!(ids.contains(&turtle_id1));
+        assert!(ids.contains(&turtle_id2));
+    }
+
+    #[test]
+    fn test_clear_resets_who() {
+        let storage = TurtleStorage::default();
+        let data = TurtleData::default();
+
+        let id = storage.add_turtle(data.clone());
+        let who = storage.get_turtle(id).unwrap().who();
+        assert_eq!(who, TurtleWho(0));
+        let id = storage.add_turtle(data.clone());
+        let who = storage.get_turtle(id).unwrap().who();
+        assert_eq!(who, TurtleWho(1));
+
+        storage.clear();
+
+        let id = storage.add_turtle(data);
+        let who = storage.get_turtle(id).unwrap().who();
+        assert_eq!(who, TurtleWho(0));
+    }
+
+    #[test]
+    fn test_iter_mut() {
+        let mut storage = TurtleStorage::default();
+        let data1 = TurtleData::default();
+        let data2 = TurtleData::default();
+        storage.add_turtle(data1);
+        storage.add_turtle(data2);
+
+        for turtle in storage.iter_mut() {
+            turtle.data.borrow_mut().size = 42.into();
+        }
+
+        for turtle_id in storage.turtle_ids() {
+            let turtle = storage.get_turtle(turtle_id).unwrap();
+            assert_eq!(turtle.data.borrow().size, 42.into());
+        }
     }
 }

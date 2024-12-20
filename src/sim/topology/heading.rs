@@ -12,7 +12,7 @@ use super::CoordFloat;
 /// a heading of north, and the heading increases clockwise. This is different
 /// from the more popular convention of 0 meaning east, and angles increasing
 /// counterclockwise.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Heading(f64);
 
 impl Eq for Heading {}

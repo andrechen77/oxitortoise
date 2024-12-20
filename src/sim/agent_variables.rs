@@ -8,18 +8,13 @@ use std::{
 use crate::sim::value;
 
 /// Describes the location of a certain variable in an agent of type `A`.
-#[derive(Debug, PartialEq, Eq, Hash)] // TODO equality derives don't work
-pub enum VariableDescriptor<A> {
-    BuiltIn(fn(&A) -> value::PolyValue),
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)] // TODO equality derives don't work
+pub enum VariableDescriptor {
+    // TODO include some better way of referring to a built-in variable, such
+    // as via some byte offset or something
+    BuiltIn,
     Custom(VarIndex),
 }
-
-impl<A> Clone for VariableDescriptor<A> {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-impl<A> Copy for VariableDescriptor<A> {}
 
 /// Describes the location of a certain variable in the custom variables of
 /// an agent of type `A`.
@@ -36,16 +31,16 @@ impl VarIndex {
 /// allowing the engine to work directly with indices instead of strings. This
 /// struct should be associated with a subcategory of agent.
 #[derive(Debug, Default)]
-pub struct VariableMapper<A> {
+pub struct VariableMapper {
     /// Maps from a variable name to its ID.
-    name_to_descriptor: HashMap<Rc<str>, VariableDescriptor<A>>,
+    name_to_descriptor: HashMap<Rc<str>, VariableDescriptor>,
     /// Maps a custom variable's ID to its name in source code. The length of
     /// this vector is the variable ID that will be assigned to the next
     /// declared custom variable.
     custom_idx_to_name: Vec<Rc<str>>,
 }
 
-impl<A> VariableMapper<A> {
+impl VariableMapper {
     pub fn new() -> Self {
         Self {
             name_to_descriptor: HashMap::new(),
@@ -70,7 +65,7 @@ impl<A> VariableMapper<A> {
             let old_idx = match self.name_to_descriptor.get(name) {
                 None => None,
                 Some(VariableDescriptor::Custom(old_id)) => Some(*old_id),
-                Some(VariableDescriptor::BuiltIn(_)) => {
+                Some(VariableDescriptor::BuiltIn) => {
                     panic!("Attempted to set custom variable mapping with built-in variable name \"{}\"", name);
                 }
             };
@@ -107,7 +102,7 @@ impl<A> VariableMapper<A> {
     /// # Panics
     ///
     /// Panics if the variable name has already been used.
-    pub fn declare_built_in_variable(&mut self, name: Rc<str>, getter: fn(&A) -> value::PolyValue) {
+    pub fn declare_built_in_variable(&mut self, name: Rc<str>) {
         match self.name_to_descriptor.entry(name) {
             Entry::Occupied(e) => {
                 panic!(
@@ -116,12 +111,12 @@ impl<A> VariableMapper<A> {
                 );
             }
             Entry::Vacant(e) => {
-                e.insert(VariableDescriptor::BuiltIn(getter));
+                e.insert(VariableDescriptor::BuiltIn);
             }
         }
     }
 
-    pub fn look_up_variable(&self, name: &str) -> Option<VariableDescriptor<A>> {
+    pub fn look_up_variable(&self, name: &str) -> Option<VariableDescriptor> {
         self.name_to_descriptor.get(name).copied()
     }
 
@@ -133,7 +128,7 @@ impl<A> VariableMapper<A> {
 
 /// Holds the values of the non-built-in variables for an agent. An instance of
 /// this struct is associated with each agent.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct CustomAgentVariables {
     values: Vec<value::PolyValue>,
 }
@@ -145,7 +140,7 @@ impl CustomAgentVariables {
 
     pub fn reset_all(&mut self) {
         for value in &mut self.values {
-            value.reset();
+            *value = Default::default();
         }
     }
 
@@ -185,37 +180,21 @@ impl IndexMut<VarIndex> for CustomAgentVariables {
 mod test {
     use super::*;
 
-    #[derive(Debug)]
-    struct Agent {
-        built_in_var: f64,
-    }
-
-    impl Agent {
-        fn get_built_in_var(&self) -> value::PolyValue {
-            value::Float::new(self.built_in_var).into()
-        }
-    }
-
     #[test]
     fn test_variable_mapper() {
-        let mut mapper = VariableMapper::<Agent>::new();
+        let mut mapper = VariableMapper::new();
 
         // declare built-in variable
         let built_in_name: Rc<str> = Rc::from("builtin");
-        mapper.declare_built_in_variable(built_in_name.clone(), Agent::get_built_in_var);
+        mapper.declare_built_in_variable(built_in_name.clone());
 
         // declare custom variables
         let custom_names = vec![Rc::from("custom0"), Rc::from("custom1")];
         let custom_mapping = mapper.declare_custom_variables(custom_names.clone());
 
-        let agent = Agent { built_in_var: 42.0 };
-
         // check built-in variable
-        let Some(VariableDescriptor::BuiltIn(getter)) = mapper.look_up_variable(&built_in_name)
-        else {
-            panic!("Expected built-in variable descriptor");
-        };
-        assert_eq!(getter(&agent), value::Float::new(42.0).into());
+        let desc = mapper.look_up_variable(&built_in_name);
+        assert_eq!(desc, Some(VariableDescriptor::BuiltIn));
 
         // check custom variables
         for (i, name) in custom_names.iter().enumerate() {
@@ -231,11 +210,11 @@ mod test {
 
     #[test]
     fn test_change_custom_variable_mapping() {
-        let mut mapper = VariableMapper::<Agent>::new();
+        let mut mapper = VariableMapper::new();
 
         // declare built-in variable
         let built_in_name: Rc<str> = Rc::from("builtin");
-        mapper.declare_built_in_variable(built_in_name.clone(), Agent::get_built_in_var);
+        mapper.declare_built_in_variable(built_in_name.clone());
 
         // declare initial custom variables
         let initial_custom_names = vec![Rc::from("custom0"), Rc::from("custom1")];
@@ -257,12 +236,8 @@ mod test {
         assert_eq!(new_custom_mapping, vec![Some(VarIndex(1)), None, None]);
 
         // ensure built-in mappings are not affected
-        let Some(VariableDescriptor::BuiltIn(getter)) = mapper.look_up_variable(&built_in_name)
-        else {
-            panic!("expected built-in variable descriptor");
-        };
-        let agent = Agent { built_in_var: 42.0 };
-        assert_eq!(getter(&agent), value::Float::new(42.0).into());
+        let desc = mapper.look_up_variable(&built_in_name);
+        assert_eq!(desc, Some(VariableDescriptor::BuiltIn));
 
         // ensure old mappings that do not appear in new mappings are forgotten
         assert!(mapper.look_up_variable("custom0").is_none());
@@ -278,7 +253,7 @@ mod test {
 
     #[test]
     fn test_change_custom_variable_mapping_preserves_values() {
-        let mut mapper = VariableMapper::<Agent>::new();
+        let mut mapper = VariableMapper::new();
 
         // declare initial custom variables
         let initial_custom_names = vec![Rc::from("custom0"), Rc::from("custom1")];

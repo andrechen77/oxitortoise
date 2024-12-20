@@ -10,7 +10,7 @@ use crate::sim::{
     agent_variables::{CustomAgentVariables, VarIndex, VariableDescriptor, VariableMapper},
     color::Color,
     topology::{CoordInt, PointInt, TopologySpec},
-    value::{self, PolyValue},
+    value::PolyValue,
 };
 
 use crate::sim::agent::AgentIndexIntoWorld;
@@ -36,7 +36,7 @@ pub struct Patches {
     /// contains the patches with the lowest `pxcor`.
     patches: Vec<Patch>,
     /// A mapping between variable names and variable descriptors for patches.
-    variable_mapper: VariableMapper<Patch>,
+    variable_mapper: VariableMapper,
 }
 
 impl Patches {
@@ -61,17 +61,13 @@ impl Patches {
 
         let mut variable_mapper = VariableMapper::new();
         #[allow(clippy::type_complexity)]
-        let built_in_variables: &[(Rc<str>, fn(&Patch) -> PolyValue)] = &[
-            (Rc::from("pxcor"), |patch| {
-                value::Float::from(patch.position_int().x).into()
-            }),
-            (Rc::from("pycor"), |patch| {
-                value::Float::from(patch.position_int().y).into()
-            }),
+        let built_in_variables: &[Rc<str>] = &[
+            Rc::from("pxcor"),
+            Rc::from("pycor"),
             // TODO add other variables
         ];
-        for (name, getter) in built_in_variables {
-            variable_mapper.declare_built_in_variable(name.clone(), *getter);
+        for name in built_in_variables {
+            variable_mapper.declare_built_in_variable(name.clone());
         }
 
         Self {
@@ -94,7 +90,7 @@ impl Patches {
         }
     }
 
-    pub fn look_up_variable(&self, name: &str) -> Option<VariableDescriptor<Patch>> {
+    pub fn look_up_variable(&self, name: &str) -> Option<VariableDescriptor> {
         self.variable_mapper.look_up_variable(name)
     }
 

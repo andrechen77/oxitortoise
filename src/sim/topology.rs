@@ -25,7 +25,7 @@ impl fmt::Display for PointInt {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Point {
     pub x: CoordFloat,
     pub y: CoordFloat,
