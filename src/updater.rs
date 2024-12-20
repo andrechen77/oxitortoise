@@ -156,6 +156,12 @@ impl UpdateAggregator {
     }
 }
 
+impl Default for UpdateAggregator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl WriteUpdate for UpdateAggregator {
     fn update_world_properties(&mut self, properties_to_update: FlagSet<WorldProp>) {
         self.world |= properties_to_update;

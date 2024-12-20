@@ -61,7 +61,7 @@ fn create_prev_values_array_with_ghost_patches(world: &World, var: VarIndex) -> 
     let width = top.patches_width() as usize;
     let height = top.patches_height() as usize;
 
-    let mut values = Vec::with_capacity(((height + 2) * (width + 2)) as usize);
+    let mut values = Vec::with_capacity((height + 2) * (width + 2));
 
     // TODO all these shenanigans of if statements could be made more elegant by
     // creating the array assuming boundary behavior first, and then swapping

@@ -103,7 +103,7 @@ impl Patches {
     }
 
     pub fn patch_ids_iter(&self) -> impl Iterator<Item = PatchId> {
-        (0..self.patches.len()).map(|i| PatchId(i))
+        (0..self.patches.len()).map(PatchId)
     }
 
     /// # Safety
