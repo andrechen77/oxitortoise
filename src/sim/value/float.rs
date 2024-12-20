@@ -19,7 +19,7 @@ impl Float {
         Self(value)
     }
 
-    pub const fn get(&self) -> f64 {
+    pub const fn get(self) -> f64 {
         self.0
     }
 }

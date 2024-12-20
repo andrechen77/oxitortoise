@@ -78,6 +78,13 @@ pub struct TopologySpec {
     pub wrap_y: bool,
 }
 
+impl TopologySpec {
+    #[inline(always)]
+    pub fn num_patches(&self) -> usize {
+        self.patches_width as usize * self.patches_height as usize
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Topology {
     spec: TopologySpec,
@@ -102,62 +109,82 @@ impl Topology {
         }
     }
 
+    #[inline(always)]
     pub fn spec(&self) -> &TopologySpec {
         &self.spec
     }
 
+    #[inline(always)]
     pub fn min_pxcor(&self) -> CoordInt {
         self.spec.min_pxcor
     }
 
+    #[inline(always)]
     pub fn max_pxcor(&self) -> CoordInt {
         self.spec.min_pxcor + self.spec.patches_width - 1
     }
 
+    #[inline(always)]
     pub fn patches_width(&self) -> CoordInt {
         self.spec.patches_width
     }
 
+    #[inline(always)]
     pub fn min_pycor(&self) -> CoordInt {
         self.spec.max_pycor - self.spec.patches_height + 1
     }
 
+    #[inline(always)]
     pub fn max_pycor(&self) -> CoordInt {
         self.spec.max_pycor
     }
 
+    #[inline(always)]
     pub fn patches_height(&self) -> CoordInt {
         self.spec.patches_height
     }
 
+    #[inline(always)]
+    pub fn num_patches(&self) -> usize {
+        self.spec.num_patches()
+    }
+
+    #[inline(always)]
     pub fn wrap_x(&self) -> bool {
         self.spec.wrap_x
     }
 
+    #[inline(always)]
     pub fn wrap_y(&self) -> bool {
         self.spec.wrap_y
     }
 
+    #[inline(always)]
     pub fn min_x(&self) -> CoordFloat {
         self.min_x
     }
 
+    #[inline(always)]
     pub fn max_x(&self) -> CoordFloat {
         self.max_x
     }
 
+    #[inline(always)]
     pub fn world_width(&self) -> CoordFloat {
         self.world_width
     }
 
+    #[inline(always)]
     pub fn min_y(&self) -> CoordFloat {
         self.min_y
     }
 
+    #[inline(always)]
     pub fn max_y(&self) -> CoordFloat {
         self.max_y
     }
 
+    #[inline(always)]
     pub fn world_height(&self) -> CoordFloat {
         self.world_height
     }

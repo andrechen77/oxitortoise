@@ -3,7 +3,6 @@ use std::rc::Rc;
 
 use flagset::FlagSet;
 use oxitortoise::sim::agent::Agent;
-use oxitortoise::updater::WorldProp;
 use oxitortoise::util::rng::Rng as _;
 use oxitortoise::{
     scripting::{self as s, ExecutionContext},
@@ -77,7 +76,7 @@ fn setup<U: WriteUpdate>(context: &mut ExecutionContext<'_, U>) {
             this_turtle.data.borrow_mut().color = Color::RED;
             context
                 .updater
-                .update_turtle(this_turtle.id(), FlagSet::full());
+                .update_turtle(this_turtle, FlagSet::full());
         },
     );
 
@@ -190,7 +189,7 @@ fn setup<U: WriteUpdate>(context: &mut ExecutionContext<'_, U>) {
     s::reset_ticks(context.world);
     context
         .updater
-        .update_world_properties(WorldProp::Ticks.into());
+        .update_tick(context.world.tick_counter.clone());
 }
 
 fn recolor_patch<U: WriteUpdate>(context: &mut ExecutionContext<'_, U>) {
@@ -255,7 +254,7 @@ fn recolor_patch<U: WriteUpdate>(context: &mut ExecutionContext<'_, U>) {
 
     context
         .updater
-        .update_patch(this_patch.id(), PatchProp::Pcolor.into());
+        .update_patch(this_patch, PatchProp::Pcolor.into());
 }
 
 fn go<U: WriteUpdate>(context: &mut ExecutionContext<'_, U>) {
@@ -292,7 +291,7 @@ fn go<U: WriteUpdate>(context: &mut ExecutionContext<'_, U>) {
         s::fd_one(context.world, this_turtle);
 
         context.updater.update_turtle(
-            this_turtle.id(),
+            this_turtle,
             TurtleProp::Position | TurtleProp::Heading | TurtleProp::Color,
         );
     });
@@ -327,7 +326,7 @@ fn go<U: WriteUpdate>(context: &mut ExecutionContext<'_, U>) {
     s::advance_tick(context.world);
     context
         .updater
-        .update_world_properties(WorldProp::Ticks.into());
+        .update_tick(context.world.tick_counter.clone());
 }
 
 fn look_for_food<U: WriteUpdate>(context: &mut ExecutionContext<'_, U>) {
@@ -490,12 +489,13 @@ fn wiggle<U: WriteUpdate>(context: &mut ExecutionContext<'_, U>) {
 #[allow(unused_variables)]
 fn direct_run_ants() {
     let mut updater = UpdateAggregator::new();
-    updater.update_world_properties(FlagSet::full());
 
     let w = create_workspace();
-
     let workspace = w.borrow_mut();
     let world = workspace.world.borrow_mut();
+
+    updater.update_world_settings(&world, FlagSet::full());
+
     let mut context = ExecutionContext {
         world: &world,
         executor: Agent::Observer(&world.observer),
@@ -506,14 +506,9 @@ fn direct_run_ants() {
 
     // run the `setup` function
     setup(&mut context);
-    let update = context.updater.get_update(&world);
-    println!("{:?}", update);
 
-    for _ in 0..10 {
+    for _ in 0..100 {
         go(&mut context);
-
-        let update = context.updater.get_update(&world);
-        println!("{:?}", update);
     }
 }
 
