@@ -183,66 +183,7 @@ fn setup<U: WriteUpdate>(context: &mut ExecutionContext<'_, U>) {
         }
 
         // recolor-patch
-        {
-            // ifelse nest?
-            let condition = *this_patch
-                .data
-                .borrow()
-                .get_custom(PATCH_NEST)
-                .get::<value::Boolean>()
-                .unwrap();
-            if condition.0 {
-                // set pcolor violet
-                this_patch.data.borrow_mut().pcolor = Color::VIOLET;
-            } else {
-                // ifelse food > 0
-                let food = *this_patch
-                    .data
-                    .borrow()
-                    .get_custom(PATCH_FOOD)
-                    .get::<value::Float>()
-                    .unwrap();
-                if food > value::Float::new(0.0) {
-                    // if food-source-number = 1 [ set pcolor cyan ]
-                    //   if food-source-number = 2 [ set pcolor sky  ]
-                    //   if food-source-number = 3 [ set pcolor blue ]
-                    let food_source_number = *this_patch
-                        .data
-                        .borrow()
-                        .get_custom(PATCH_FOOD_SOURCE_NUMBER)
-                        .get::<value::Float>()
-                        .unwrap();
-                    if food_source_number == value::Float::new(1.0) {
-                        this_patch.data.borrow_mut().pcolor = Color::CYAN;
-                    }
-                    if food_source_number == value::Float::new(2.0) {
-                        this_patch.data.borrow_mut().pcolor = Color::SKY;
-                    }
-                    if food_source_number == value::Float::new(3.0) {
-                        this_patch.data.borrow_mut().pcolor = Color::BLUE;
-                    }
-                } else {
-                    // set pcolor scale-color green chemical 0.1 5
-                    let &chemical = this_patch
-                        .data
-                        .borrow()
-                        .get_custom(PATCH_CHEMICAL)
-                        .get::<value::Float>()
-                        .unwrap();
-                    let scaled_color = color::scale_color(
-                        Color::GREEN,
-                        chemical,
-                        value::Float::new(0.1),
-                        value::Float::new(5.0),
-                    );
-                    this_patch.data.borrow_mut().pcolor = scaled_color;
-                }
-            }
-        }
-
-        context
-            .updater
-            .update_patch(this_patch.id(), PatchProp::Pcolor.into());
+        recolor_patch(context);
     });
 
     // reset-ticks
@@ -250,6 +191,71 @@ fn setup<U: WriteUpdate>(context: &mut ExecutionContext<'_, U>) {
     context
         .updater
         .update_world_properties(WorldProp::Ticks.into());
+}
+
+fn recolor_patch<U: WriteUpdate>(context: &mut ExecutionContext<'_, U>) {
+    let Agent::Patch(this_patch) = context.executor else {
+        panic!("agent should be a patch");
+    };
+
+    // ifelse nest?
+    let condition = *this_patch
+        .data
+        .borrow()
+        .get_custom(PATCH_NEST)
+        .get::<value::Boolean>()
+        .unwrap();
+    if condition.0 {
+        // set pcolor violet
+        this_patch.data.borrow_mut().pcolor = Color::VIOLET;
+    } else {
+        // ifelse food > 0
+        let food = *this_patch
+            .data
+            .borrow()
+            .get_custom(PATCH_FOOD)
+            .get::<value::Float>()
+            .unwrap();
+        if food > value::Float::new(0.0) {
+            // if food-source-number = 1 [ set pcolor cyan ]
+            //   if food-source-number = 2 [ set pcolor sky  ]
+            //   if food-source-number = 3 [ set pcolor blue ]
+            let food_source_number = *this_patch
+                .data
+                .borrow()
+                .get_custom(PATCH_FOOD_SOURCE_NUMBER)
+                .get::<value::Float>()
+                .unwrap();
+            if food_source_number == value::Float::new(1.0) {
+                this_patch.data.borrow_mut().pcolor = Color::CYAN;
+            }
+            if food_source_number == value::Float::new(2.0) {
+                this_patch.data.borrow_mut().pcolor = Color::SKY;
+            }
+            if food_source_number == value::Float::new(3.0) {
+                this_patch.data.borrow_mut().pcolor = Color::BLUE;
+            }
+        } else {
+            // set pcolor scale-color green chemical 0.1 5
+            let &chemical = this_patch
+                .data
+                .borrow()
+                .get_custom(PATCH_CHEMICAL)
+                .get::<value::Float>()
+                .unwrap();
+            let scaled_color = color::scale_color(
+                Color::GREEN,
+                chemical,
+                value::Float::new(0.1),
+                value::Float::new(5.0),
+            );
+            this_patch.data.borrow_mut().pcolor = scaled_color;
+        }
+    }
+
+    context
+        .updater
+        .update_patch(this_patch.id(), PatchProp::Pcolor.into());
 }
 
 fn go<U: WriteUpdate>(context: &mut ExecutionContext<'_, U>) {
@@ -296,8 +302,27 @@ fn go<U: WriteUpdate>(context: &mut ExecutionContext<'_, U>) {
 
     // TODO finish script
     // ask patches
-    // set chemical chemical * (100 - evaporation-rate) / 100
-    // recolor-patch
+    s::ask(context, &mut value::agentset::AllPatches, |context| {
+        let Agent::Patch(this_patch) = context.executor else {
+            panic!("agent should be a patch");
+        };
+
+        // set chemical chemical * (100 - evaporation-rate) / 100
+        let chemical = *this_patch
+            .data
+            .borrow()
+            .get_custom(PATCH_CHEMICAL)
+            .get::<value::Float>()
+            .unwrap();
+        let new_chemical = chemical * value::Float::new(0.9);
+        this_patch
+            .data
+            .borrow_mut()
+            .set_custom(PATCH_CHEMICAL, PolyValue::from(new_chemical));
+
+        // recolor-patch
+        recolor_patch(context);
+    });
 
     s::advance_tick(context.world);
     context
@@ -484,7 +509,7 @@ fn direct_run_ants() {
     let update = context.updater.get_update(&world);
     println!("{:?}", update);
 
-    for _ in 0..1000 {
+    for _ in 0..10 {
         go(&mut context);
 
         let update = context.updater.get_update(&world);
