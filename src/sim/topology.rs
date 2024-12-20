@@ -1,7 +1,8 @@
 use std::fmt;
 
-use super::value;
+use super::{patch::PatchId, value};
 
+pub mod diffuse;
 mod heading;
 
 pub use heading::Heading;
@@ -159,6 +160,18 @@ impl Topology {
 
     pub fn world_height(&self) -> CoordFloat {
         self.world_height
+    }
+
+    /// Returns the `PatchId` of the patch at the given position. Assumes that
+    /// the position is inside the world boundaries without having to wrap,
+    /// otherwise the PatchId returned will be nonsense.
+    #[inline]
+    pub fn patch_at(&self, point: PointInt) -> PatchId {
+        let width = self.patches_width();
+        let max_pycor = self.max_pycor();
+        let min_pxcor = self.min_pxcor();
+        let i = (max_pycor - point.y) * width + (point.x - min_pxcor);
+        PatchId(i as usize)
     }
 
     /// Takes a point and returns its wrapped equivalent. If the point is

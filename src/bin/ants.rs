@@ -291,6 +291,14 @@ fn go<U: WriteUpdate>(context: &mut ExecutionContext<'_, U>) {
         );
     });
 
+    // diffuse chemical (diffusion-rate / 100)
+    s::diffuse_8(context.world, PATCH_CHEMICAL, value::Float::new(0.5));
+
+    // TODO finish script
+    // ask patches
+    // set chemical chemical * (100 - evaporation-rate) / 100
+    // recolor-patch
+
     s::advance_tick(context.world);
     context
         .updater

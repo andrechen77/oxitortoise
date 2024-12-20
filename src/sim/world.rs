@@ -15,8 +15,6 @@ use crate::{
     workspace::Workspace,
 };
 
-use super::{patch::PatchId, topology::PointInt};
-
 #[derive(Debug)]
 pub struct World {
     /// A back-reference to the workspace that includes this world.
@@ -71,18 +69,5 @@ impl World {
         )
         return
          */ // TODO
-    }
-
-    /// Returns the `PatchId` of the patch at the given position. Assumes that
-    /// the position is inside the world boundaries without having to wrap,
-    /// otherwise the PatchId returned will be nonsense.
-    pub fn patch_at(&self, point: PointInt) -> PatchId {
-        let width = self.topology.patches_width();
-        let max_pycor = self.topology.max_pycor();
-        let min_pxcor = self.topology.min_pxcor();
-        let i = (max_pycor - point.y) * width + (point.x - min_pxcor);
-        PatchId {
-            grid_index: i as usize,
-        }
     }
 }

@@ -24,7 +24,9 @@ pub fn turn(turtle: &Turtle, angle: value::Float) {
 }
 
 pub fn patch_here(world: &World, turtle: &Turtle) -> PatchId {
-    world.patch_at(turtle.data.borrow().position.round_to_int())
+    world
+        .topology
+        .patch_at(turtle.data.borrow().position.round_to_int())
 }
 
 pub fn patch_at_angle(
@@ -40,5 +42,5 @@ pub fn patch_at_angle(
         actual_heading,
         distance,
     )?;
-    Some(world.patch_at(new_point.round_to_int()))
+    Some(world.topology.patch_at(new_point.round_to_int()))
 }

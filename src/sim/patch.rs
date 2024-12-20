@@ -19,10 +19,7 @@ use super::{agent::AgentPosition, topology::Point, world::World};
 
 /// A reference to a patch.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, From)]
-pub struct PatchId {
-    // The index of the patch in the [`Patches`] struct.
-    pub grid_index: usize,
-}
+pub struct PatchId(pub usize);
 
 impl AgentIndexIntoWorld for PatchId {
     type Output<'w> = &'w Patch;
@@ -58,12 +55,7 @@ impl Patches {
             for i in 0..*patches_width {
                 let x = min_pxcor + i as CoordInt;
                 let y = max_pycor - j as CoordInt;
-                patches.push(Patch::at(
-                    PatchId {
-                        grid_index: patches.len(),
-                    },
-                    PointInt { x, y },
-                ));
+                patches.push(Patch::at(PatchId(patches.len()), PointInt { x, y }));
             }
         }
 
@@ -111,7 +103,7 @@ impl Patches {
     }
 
     pub fn patch_ids_iter(&self) -> impl Iterator<Item = PatchId> {
-        (0..self.patches.len()).map(|i| PatchId { grid_index: i })
+        (0..self.patches.len()).map(|i| PatchId(i))
     }
 
     /// # Safety
@@ -129,13 +121,13 @@ impl Index<PatchId> for Patches {
     type Output = Patch;
 
     fn index(&self, index: PatchId) -> &Self::Output {
-        &self.patches[index.grid_index]
+        &self.patches[index.0]
     }
 }
 
 impl IndexMut<PatchId> for Patches {
     fn index_mut(&mut self, index: PatchId) -> &mut Self::Output {
-        &mut self.patches[index.grid_index]
+        &mut self.patches[index.0]
     }
 }
 

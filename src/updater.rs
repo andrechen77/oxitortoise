@@ -162,11 +162,10 @@ impl WriteUpdate for UpdateAggregator {
     }
 
     fn update_patch(&mut self, patch: PatchId, properties_to_update: FlagSet<PatchProp>) {
-        if patch.grid_index >= self.patches.len() {
-            self.patches
-                .resize_with(patch.grid_index + 1, Default::default);
+        if patch.0 >= self.patches.len() {
+            self.patches.resize_with(patch.0 + 1, Default::default);
         }
-        self.patches[patch.grid_index] |= properties_to_update;
+        self.patches[patch.0] |= properties_to_update;
     }
 
     fn update_turtle(&mut self, turtle: TurtleId, properties_to_update: FlagSet<TurtleProp>) {
@@ -202,7 +201,7 @@ impl WriteUpdate for UpdateAggregator {
             .patches
             .iter_mut()
             .enumerate()
-            .map(|(grid_index, props)| (PatchId { grid_index }, props))
+            .map(|(grid_index, props)| (PatchId(grid_index), props))
         {
             if patch_props.is_empty() {
                 continue;
