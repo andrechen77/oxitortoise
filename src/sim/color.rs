@@ -87,10 +87,22 @@ pub fn scale_color(color: Color, number: Float, range_start: Float, range_end: F
     let range_start = range_start.get();
     let range_end = range_end.get();
     let number = number.get();
-    let min_range = range_start.min(range_end);
-    let max_range = range_start.max(range_end);
-    let number = number.min(max_range).max(min_range);
-    let proportion = (number - range_start) / (max_range - min_range);
-    let color_value = color.to_darkest_shade().0 + proportion * SHADE_RANGE;
+
+    // TODO handle NaN case
+
+    // determine where in the the range the number is
+    let proportion = (number - range_start) / (range_end - range_start);
+
+    // scale the proportion to the color range to determine the amount to add to
+    // the darkest shade of the color to get the desired color
+    let color_shade_offset = proportion * SHADE_RANGE;
+    // clamp the offset to be within [0, SHADE_RANGE). the value of 9.9999 was
+    // copied from the original Tortoise, but it must be some number less than
+    // SHADE_RANGE
+    // https://github.com/NetLogo/Tortoise/blob/master/engine/src/main/coffee/engine/core/colormodel.coffee#L267
+    let color_shade_offset = color_shade_offset.min(SHADE_RANGE - 0.0001).max(0.0);
+
+    // add the offset to the darkest shade of the color to get the correct shade
+    let color_value = color.to_darkest_shade().0 + color_shade_offset;
     Color(color_value)
 }
