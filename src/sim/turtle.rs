@@ -86,6 +86,10 @@ impl Turtles {
         }
     }
 
+    pub fn breeds(&self) -> impl Iterator<Item = &Rc<RefCell<Breed>>> {
+        self.breeds.values()
+    }
+
     pub fn get_breed(&self, breed_name: &str) -> Option<Rc<RefCell<Breed>>> {
         self.breeds.get(breed_name).cloned()
     }

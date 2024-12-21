@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{fmt::Write, rc::Rc};
 
 use flagset::{flags, FlagSet};
 use slotmap::SecondaryMap;
@@ -8,20 +8,19 @@ use crate::sim::{
     patch::{Patch, PatchId},
     tick::Tick,
     topology::{Heading, Point, TopologySpec},
-    turtle::{Turtle, TurtleId, TurtleWho},
+    turtle::{Turtle, TurtleId},
     value::Float,
     world::World,
 };
 
-// TODO is there a better way to send the updates without having to create
-// a reference to the agent being updated? for example, we could just save the
-// agent id and OR all the changed flags together to find all the properties
-// that were changed
-
 pub trait WriteUpdate {
     /// Records in the updater that the specified properities of the world have
     /// changed to their new values.
-    fn update_world_settings(&mut self, world: &World, properties_to_update: FlagSet<WorldSettingsProp>);
+    fn update_world_settings(
+        &mut self,
+        world: &World,
+        properties_to_update: FlagSet<WorldSettingsProp>,
+    );
 
     /// Records in the updater that the tick counter has been updated to the
     /// specified value.
@@ -87,6 +86,7 @@ flags! {
         Color,
         Heading,
         LabelColor,
+        Label,
         Hidden,
         PenSize,
         PenMode,
@@ -108,6 +108,8 @@ pub struct AliveTurtleUpdate {
     pub color: Option<Color>,
     pub heading: Option<Heading>,
     pub label_color: Option<Color>,
+    pub label: Option<String>,
+    pub pen_mode_and_size: Option<(bool, f64)>,
     pub hidden: Option<bool>,
     pub shape_name: Option<&'static str>,
     pub size: Option<Float>,
@@ -136,7 +138,7 @@ pub struct UpdateAggregator {
     // https://github.com/NetLogo/Tortoise/blob/8824b1da9db6f83d1a05d086928809efad6fc6b0/engine/src/main/coffee/engine/updater.coffee#L123
     turtles: SecondaryMap<TurtleId, TurtleUpdate>,
     /// Contains all turtles that have died in this upcoming update.
-    dead_turtles: Vec<TurtleWho>,
+    dead_turtles: Vec<TurtleId>,
     /// Maps a PatchId to the properties of that patch that have changed.
     /// This data structure should maintain the same capacity when updates are
     /// collected. It should resize as necessary to accomodate new patches, and
@@ -186,7 +188,7 @@ impl WriteUpdate for UpdateAggregator {
             });
         }
         if props.contains(WorldSettingsProp::PatchSize) {
-            world_update.patch_size = None; // TODO update the patch size
+            world_update.patch_size = Some(7.0); // TODO update the patch size
         }
     }
 
@@ -211,7 +213,7 @@ impl WriteUpdate for UpdateAggregator {
 
     fn update_turtle(&mut self, turtle: &Turtle, properties_to_update: FlagSet<TurtleProp>) {
         if properties_to_update.contains(TurtleProp::Death) {
-            self.dead_turtles.push(turtle.who());
+            self.dead_turtles.push(turtle.id());
             self.turtles.insert(turtle.id(), TurtleUpdate::Dead);
             return;
         }
@@ -231,7 +233,8 @@ impl WriteUpdate for UpdateAggregator {
                 // requested properties
                 if let TurtleUpdate::Alive(turtle_update) = e.into_mut() {
                     if properties_to_update.contains(TurtleProp::Breed) {
-                        turtle_update.breed_name = Some(turtle_data.breed.borrow().original_name.clone());
+                        turtle_update.breed_name =
+                            Some(turtle_data.breed.borrow().original_name.clone());
                     }
                     if properties_to_update.contains(TurtleProp::Color) {
                         turtle_update.color = Some(turtle_data.color);
@@ -244,6 +247,9 @@ impl WriteUpdate for UpdateAggregator {
                     }
                     if properties_to_update.contains(TurtleProp::Hidden) {
                         turtle_update.hidden = Some(turtle_data.hidden);
+                    }
+                    if properties_to_update.contains(TurtleProp::Label) {
+                        turtle_update.label = Some(turtle_data.label.clone());
                     }
                     // TODO add pensize and penmode
                     if properties_to_update.contains(TurtleProp::Shape) {
@@ -265,7 +271,9 @@ impl WriteUpdate for UpdateAggregator {
                     color: Some(turtle_data.color),
                     heading: Some(turtle_data.heading),
                     label_color: Some(turtle_data.label_color),
+                    label: Some(turtle_data.label.clone()),
                     hidden: Some(turtle_data.hidden),
+                    pen_mode_and_size: Some((false, 1.0)), // TODO add pensize and penmode
                     shape_name: Some(turtle_data.shape.name),
                     size: Some(turtle_data.size),
                     position: Some(turtle_data.position),
@@ -274,5 +282,163 @@ impl WriteUpdate for UpdateAggregator {
             }
         }
     }
+}
 
+impl UpdateAggregator {
+    /// Clears the contents of this aggregator after serializing them to a JS
+    /// notation that can be consumed. This takes a world argument to do some last-minute lookup of things that I thought should not have been included in the update aggregation, but that we needed in order to get the correct serialized output:
+    /// - the who numbers of turtles given their TurtleId
+    /// - the patch coordinates of patches given their PatchId
+    pub fn to_js(
+        &mut self,
+        mut w: impl Write,
+        world: &World,
+        first_time: bool,
+    ) -> Result<(), std::fmt::Error> {
+        // TODO actually dynamically calculate the update contents that are
+        // first_time (doesn't apply to patch coords)
+
+        write!(w, "{{ ")?;
+
+        write!(w, "world: {{ 0: {{ ")?;
+        write!(w, "WHO: 0, ")?;
+        if first_time {
+            write!(
+                w,
+                "patchesAllBlack: false, patchesWithLabels: 0, unbreededLinksAreDirected: false, "
+            )?;
+
+            // TODO what is up with the whole breeds thing? it's not listed
+            // as a thing in updater.coffee but I still have to include turtle
+            // and link breeds for them to work correctly.
+            write!(w, "turtleBreeds: [\"TURTLES\"], ")?;
+        }
+        if let Some(world_update) = self.world.take() {
+            if let Some(topology) = world_update.topology {
+                write!(
+                    w,
+                    "worldHeight: {}, worldWidth: {}, wrappingAllowedInX: {}, wrappingAllowedInY: {}, MINPXCOR: {}, MAXPXCOR: {}, MINPYCOR: {}, MAXPYCOR: {}, ",
+                    topology.patches_height, topology.patches_width, topology.wrap_x, topology.wrap_y, topology.min_pxcor, topology.max_pxcor(), topology.min_pycor(), topology.max_pycor,
+                )?;
+            }
+            if let Some(patch_size) = world_update.patch_size {
+                write!(w, "patchSize: {}, ", patch_size)?;
+            }
+        }
+        if let Some(tick) = self.tick.take() {
+            write!(w, "ticks: {}, ", tick.get().map(Float::get).unwrap_or(-1.0))?;
+        }
+        write!(w, "}} }}, ")?;
+
+        write!(w, "observer: {{ ")?;
+        if first_time {
+            write!(w, "perspective: 0, targetAgent: null, ")?;
+        }
+        write!(w, "}}, ")?;
+
+        write!(w, "drawingEvents: [],")?;
+
+        write!(w, "patches: {{ ")?;
+        for (patch_id, patch_update) in self
+            .patches
+            .iter_mut()
+            // clear the updates from the aggregator as we take them
+            .map(|p| p.take())
+            .enumerate()
+            // ignore patches without updates and convert index to PatchId
+            .filter_map(|(i, p)| Some((PatchId(i), p?)))
+        {
+            write!(w, "{}: {{ ", patch_id.0)?;
+            write!(w, "WHO: {}, ", patch_id.0)?;
+            if let Some(pcolor) = patch_update.pcolor {
+                write!(w, "PCOLOR: {}, ", pcolor.to_float().get())?;
+            }
+            if let Some(plabel) = patch_update.plabel {
+                write!(w, "PLABEL: \"{}\", ", plabel)?;
+            }
+            if let Some(plabel_color) = patch_update.plabel_color {
+                write!(w, "\"PLABEL-COLOR\": {}, ", plabel_color.to_float().get())?;
+            }
+            if first_time {
+                let pos = world.patches[patch_id].position_int();
+                write!(w, "PXCOR: {}, PYCOR: {}, ", pos.x, pos.y)?;
+            }
+            write!(w, "}}, ")?;
+        }
+        write!(w, "}}, ")?;
+
+        write!(w, "turtles: {{ ")?;
+        // TODO handle one turtle dying and then another turtle coming alive
+        // and taking its who number in the same update
+        self.dead_turtles.sort();
+        self.dead_turtles.dedup();
+        for turtle_id in self.dead_turtles.drain(..) {
+            // look up the who number of the turtle as a pure integer. the
+            // lookup should always succeed if we haven't missed any updates for
+            // the world that was passed in, but fallback to -1 in case of bugs
+            let who = world
+                .turtles
+                .get_turtle(turtle_id)
+                .map(|t| t.who().0 as i64)
+                .unwrap_or(-1);
+            write!(w, "{}: {{ WHO: -1 }}, ", who)?;
+        }
+        for (turtle_id, turtle_update) in self.turtles.drain() {
+            // only output alive turtle updates here; dead turtles were
+            // already serialized above.
+            if let TurtleUpdate::Alive(alive_update) = turtle_update {
+                // look up the who number of the turtle as a pure integer. the
+                // lookup should always succeed if we haven't missed any updates for
+                // the world that was passed in, but fallback to -1 in case of bugs
+                let who = world
+                    .turtles
+                    .get_turtle(turtle_id)
+                    .map(|t| t.who().0 as i64)
+                    .unwrap_or(-1);
+
+                write!(w, "{}: {{ ", who)?;
+                write!(w, "WHO: {}, ", who)?;
+                if let Some(breed_name) = alive_update.breed_name {
+                    write!(w, "BREED: \"{}\", ", breed_name)?;
+                }
+                if let Some(color) = alive_update.color {
+                    write!(w, "COLOR: {}, ", color.to_float().get())?;
+                }
+                if let Some(heading) = alive_update.heading {
+                    write!(w, "HEADING: {}, ", heading.to_float().get())?;
+                }
+                if let Some(label_color) = alive_update.label_color {
+                    write!(w, "\"LABEL-COLOR\": {}, ", label_color.to_float().get())?;
+                }
+                if let Some(hidden) = alive_update.hidden {
+                    write!(w, "\"HIDDEN?\": {}, ", hidden)?;
+                }
+                if let Some(label) = alive_update.label {
+                    write!(w, "LABEL: \"{}\", ", label)?;
+                }
+                if let Some((pen_mode, pen_size)) = alive_update.pen_mode_and_size {
+                    write!(
+                        w,
+                        "\"PEN-MODE\": \"{}\", \"PEN-SIZE\": {}, ",
+                        if pen_mode { "down" } else { "up " },
+                        pen_size
+                    )?;
+                }
+                if let Some(shape_name) = alive_update.shape_name {
+                    write!(w, "SHAPE: \"{}\", ", shape_name)?;
+                }
+                if let Some(size) = alive_update.size {
+                    write!(w, "SIZE: {}, ", size.get())?;
+                }
+                if let Some(position) = alive_update.position {
+                    write!(w, "XCOR: {}, YCOR: {}, ", position.x, position.y)?;
+                }
+                write!(w, "}}, ")?;
+            }
+        }
+        write!(w, "}} ")?;
+
+        write!(w, "}}")?;
+        Ok(())
+    }
 }

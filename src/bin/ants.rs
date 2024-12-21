@@ -25,10 +25,10 @@ const PATCH_FOOD_SOURCE_NUMBER: VarIndex = VarIndex::from_index(4);
 
 fn create_workspace() -> Rc<RefCell<Workspace>> {
     let w = Workspace::new(TopologySpec {
-        min_pxcor: -12,
-        max_pycor: 12,
-        patches_width: 25,
-        patches_height: 25,
+        min_pxcor: -35,
+        max_pycor: 35,
+        patches_width: 71,
+        patches_height: 71,
         wrap_x: false,
         wrap_y: false,
     });
@@ -76,7 +76,7 @@ fn setup<U: WriteUpdate>(context: &mut ExecutionContext<'_, U>) {
             this_turtle.data.borrow_mut().color = Color::RED;
             context
                 .updater
-                .update_turtle(this_turtle, FlagSet::full());
+                .update_turtle(this_turtle, TurtleProp::Size | TurtleProp::Color);
         },
     );
 
@@ -495,6 +495,10 @@ fn direct_run_ants() {
     let world = workspace.world.borrow_mut();
 
     updater.update_world_settings(&world, FlagSet::full());
+    updater.update_tick(world.tick_counter.clone());
+    let mut update_str = String::new();
+    updater.to_js(&mut update_str, &world, true).unwrap();
+    println!("{}", update_str);
 
     let mut context = ExecutionContext {
         world: &world,
@@ -506,9 +510,21 @@ fn direct_run_ants() {
 
     // run the `setup` function
     setup(&mut context);
+    let mut update_str = String::new();
+    context
+        .updater
+        .to_js(&mut update_str, &world, false)
+        .unwrap();
+    println!("{}", update_str);
 
-    for _ in 0..100 {
+    for _ in 0..1 {
         go(&mut context);
+        let mut update_str = String::new();
+        context
+            .updater
+            .to_js(&mut update_str, &world, false)
+            .unwrap();
+        println!("{}", update_str);
     }
 }
 

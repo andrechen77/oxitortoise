@@ -83,6 +83,16 @@ impl TopologySpec {
     pub fn num_patches(&self) -> usize {
         self.patches_width as usize * self.patches_height as usize
     }
+
+    #[inline(always)]
+    pub fn max_pxcor(&self) -> CoordInt {
+        self.min_pxcor + self.patches_width - 1
+    }
+
+    #[inline(always)]
+    pub fn min_pycor(&self) -> CoordInt {
+        self.max_pycor - self.patches_height + 1
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -121,7 +131,7 @@ impl Topology {
 
     #[inline(always)]
     pub fn max_pxcor(&self) -> CoordInt {
-        self.spec.min_pxcor + self.spec.patches_width - 1
+        self.spec.max_pxcor()
     }
 
     #[inline(always)]
@@ -131,7 +141,7 @@ impl Topology {
 
     #[inline(always)]
     pub fn min_pycor(&self) -> CoordInt {
-        self.spec.max_pycor - self.spec.patches_height + 1
+        self.spec.min_pycor()
     }
 
     #[inline(always)]
