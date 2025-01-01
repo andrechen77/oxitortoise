@@ -153,6 +153,19 @@ impl Inner {
         who
     }
 }
+
+impl Drop for Inner {
+    fn drop(&mut self) {
+        for owning_ptr in self.owning_ptrs.values() {
+            // SAFETY: since `Self` is exclusively borrowed, it is statically
+            // guaranteed that there are no references to this turtle data;
+            // `Self::get_turtle` only returns a reference that lives as long
+            // as the shared borrow.
+            drop(unsafe { Box::from_raw(owning_ptr.as_ptr()) });
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
