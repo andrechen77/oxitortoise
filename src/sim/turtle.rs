@@ -1,6 +1,7 @@
 use std::fmt::{self, Debug};
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{collections::HashMap, rc::Rc};
 
+use crate::util::cell::RefCell;
 use crate::{
     sim::{
         agent_variables::{CustomAgentVariables, VarIndex, VariableMapper},

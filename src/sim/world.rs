@@ -1,5 +1,4 @@
 use std::{
-    cell::RefCell,
     iter,
     rc::{Rc, Weak},
 };
@@ -11,8 +10,7 @@ use crate::{
         tick::Tick,
         topology::{Topology, TopologySpec},
         turtle::Turtles,
-    },
-    workspace::Workspace,
+    }, util::cell::RefCell, workspace::Workspace
 };
 
 #[derive(Debug)]

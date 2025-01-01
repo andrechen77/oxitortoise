@@ -1,8 +1,8 @@
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use flagset::FlagSet;
 use oxitortoise::sim::agent::Agent;
+use oxitortoise::util::cell::RefCell;
 use oxitortoise::util::rng::Rng as _;
 use oxitortoise::{
     scripting::{self as s, ExecutionContext},

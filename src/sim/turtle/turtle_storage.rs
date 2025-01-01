@@ -1,12 +1,11 @@
 use std::{
-    cell::RefCell,
     collections::{HashMap, VecDeque},
     ptr::NonNull,
 };
 
 use slotmap::SlotMap;
 
-use crate::sim::turtle::Turtle;
+use crate::{sim::turtle::Turtle, util::cell::RefCell};
 
 use super::{TurtleData, TurtleId, TurtleWho};
 

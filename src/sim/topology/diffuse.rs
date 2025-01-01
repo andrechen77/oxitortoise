@@ -205,9 +205,9 @@ fn idiosyncratic_sum_4(nums: [Float; 4]) -> Float {
 
 #[cfg(test)]
 mod test {
-    use std::{cell::RefCell, rc::Rc};
+    use std::rc::Rc;
 
-    use crate::sim::topology::TopologySpec;
+    use crate::{sim::topology::TopologySpec, util::cell::RefCell};
 
     use super::*;
 

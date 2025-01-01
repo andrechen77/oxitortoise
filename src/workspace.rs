@@ -1,8 +1,8 @@
-use std::{cell::RefCell, rc::Rc};
+use std::rc::Rc;
 
 use crate::{
     sim::{topology::TopologySpec, world::World},
-    util::rng::CanonRng,
+    util::{cell::RefCell, rng::CanonRng},
 };
 
 #[derive(Debug)]

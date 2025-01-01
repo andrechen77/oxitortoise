@@ -2,11 +2,11 @@
 //! Items in this module represent basic functionality to manipulate model
 //! state. JIT-compiled NetLogo code will call into these functions.
 
-use std::{cell::RefCell, rc::Rc};
+use std::rc::Rc;
 
 use crate::{
     sim::{agent::Agent, world::World},
-    util::rng::CanonRng,
+    util::{cell::RefCell, rng::CanonRng},
 };
 
 pub struct ExecutionContext<'world, U> {

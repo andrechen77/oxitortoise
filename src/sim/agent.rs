@@ -1,10 +1,13 @@
-use std::{cell::RefCell, convert::Infallible};
+use std::convert::Infallible;
 
 use derive_more::derive::{From, TryInto};
 
-use crate::sim::{
-    observer::Observer,
-    patch::{Patch, PatchId},
+use crate::{
+    sim::{
+        observer::Observer,
+        patch::{Patch, PatchId},
+    },
+    util::cell::RefCell,
 };
 
 use super::{

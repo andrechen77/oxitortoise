@@ -1,4 +1,6 @@
-use std::{cell::RefCell, fmt::Debug, rc::Rc};
+use std::{fmt::Debug, rc::Rc};
+
+use crate::util::cell::RefCell;
 
 mod mersenne_twister;
 

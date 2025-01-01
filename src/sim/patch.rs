@@ -1,17 +1,16 @@
 use std::{
-    cell::RefCell,
     ops::{Index, IndexMut},
     rc::Rc,
 };
 
 use derive_more::derive::From;
 
-use crate::sim::{
+use crate::{sim::{
     agent_variables::{CustomAgentVariables, VarIndex, VariableDescriptor, VariableMapper},
     color::Color,
     topology::{CoordInt, PointInt, TopologySpec},
     value::PolyValue,
-};
+}, util::cell::RefCell};
 
 use crate::sim::agent::AgentIndexIntoWorld;
 

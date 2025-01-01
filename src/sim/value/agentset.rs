@@ -1,12 +1,11 @@
 //! Eagerly evaluated agentsets.
 
-use std::{cell::RefCell, collections::VecDeque, rc::Rc};
+use std::{collections::VecDeque, rc::Rc};
 
 use crate::{
     sim::{agent::AgentIndexIntoWorld, patch::PatchId, turtle::TurtleId, world::World},
     util::{
-        rng::CanonRng,
-        shuffle_iterator::{ShuffledMut, ShuffledOwned},
+        cell::RefCell, rng::CanonRng, shuffle_iterator::{ShuffledMut, ShuffledOwned}
     },
 };
 
