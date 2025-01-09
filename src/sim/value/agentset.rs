@@ -1,11 +1,13 @@
 //! Eagerly evaluated agentsets.
 
-use std::{collections::VecDeque, rc::Rc};
+use std::collections::VecDeque;
 
 use crate::{
     sim::{agent::AgentIndexIntoWorld, patch::PatchId, turtle::TurtleId, world::World},
     util::{
-        cell::RefCell, rng::CanonRng, shuffle_iterator::{ShuffledMut, ShuffledOwned}
+        cell::RefCell,
+        rng::CanonRng,
+        shuffle_iterator::{ShuffledMut, ShuffledOwned},
     },
 };
 
@@ -21,19 +23,9 @@ pub enum Agentset {
 pub trait IterateAgentset {
     type Item: AgentIndexIntoWorld;
 
-    // TODO is it technically correct to use `+ 's` on the bound here?
-    // should `use<'s>` be used instead?
-    fn iter<'s>(
-        &'s mut self,
-        world: &World,
-        rng: Rc<RefCell<CanonRng>>,
-    ) -> impl Iterator<Item = Self::Item> + 's;
+    fn iter(&mut self, world: &World, rng: &RefCell<CanonRng>) -> impl Iterator<Item = Self::Item>;
 
-    fn into_iter(
-        self,
-        world: &World,
-        rng: Rc<RefCell<CanonRng>>,
-    ) -> impl Iterator<Item = Self::Item> + 'static;
+    fn into_iter(self, world: &World, rng: &RefCell<CanonRng>) -> impl Iterator<Item = Self::Item>;
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -42,19 +34,11 @@ pub struct AllPatches;
 impl IterateAgentset for AllPatches {
     type Item = PatchId;
 
-    fn iter<'s>(
-        &'s mut self,
-        world: &World,
-        rng: Rc<RefCell<CanonRng>>,
-    ) -> impl Iterator<Item = Self::Item> + 's {
+    fn iter(&mut self, world: &World, rng: &RefCell<CanonRng>) -> impl Iterator<Item = Self::Item> {
         Self.into_iter(world, rng)
     }
 
-    fn into_iter(
-        self,
-        world: &World,
-        rng: Rc<RefCell<CanonRng>>,
-    ) -> impl Iterator<Item = Self::Item> + 'static {
+    fn into_iter(self, world: &World, rng: &RefCell<CanonRng>) -> impl Iterator<Item = Self::Item> {
         let patch_ids: VecDeque<PatchId> = world.patches.patch_ids_iter().collect();
         ShuffledOwned::new(patch_ids, rng)
     }
@@ -66,19 +50,11 @@ pub struct AllTurtles;
 impl IterateAgentset for AllTurtles {
     type Item = TurtleId;
 
-    fn iter<'s>(
-        &'s mut self,
-        world: &World,
-        rng: Rc<RefCell<CanonRng>>,
-    ) -> impl Iterator<Item = Self::Item> + 's {
+    fn iter(&mut self, world: &World, rng: &RefCell<CanonRng>) -> impl Iterator<Item = Self::Item> {
         Self.into_iter(world, rng)
     }
 
-    fn into_iter(
-        self,
-        world: &World,
-        rng: Rc<RefCell<CanonRng>>,
-    ) -> impl Iterator<Item = Self::Item> + 'static {
+    fn into_iter(self, world: &World, rng: &RefCell<CanonRng>) -> impl Iterator<Item = Self::Item> {
         let turtle_ids: VecDeque<TurtleId> = world.turtles.turtle_ids().into();
         ShuffledOwned::new(turtle_ids, rng)
     }
@@ -101,16 +77,12 @@ impl IterateAgentset for TurtleSet {
     fn iter<'s>(
         &'s mut self,
         _: &World,
-        rng: Rc<RefCell<CanonRng>>,
-    ) -> impl Iterator<Item = Self::Item> + 's {
+        rng: &RefCell<CanonRng>,
+    ) -> impl Iterator<Item = Self::Item> {
         ShuffledMut::new(&mut self.turtles, rng).map(|id| *id)
     }
 
-    fn into_iter(
-        self,
-        _: &World,
-        rng: Rc<RefCell<CanonRng>>,
-    ) -> impl Iterator<Item = Self::Item> + 'static {
+    fn into_iter(self, _: &World, rng: &RefCell<CanonRng>) -> impl Iterator<Item = Self::Item> {
         ShuffledOwned::new(VecDeque::from(self.turtles), rng)
     }
 }

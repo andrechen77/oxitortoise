@@ -207,12 +207,12 @@ fn idiosyncratic_sum_4(nums: [Float; 4]) -> Float {
 mod test {
     use std::rc::Rc;
 
-    use crate::{sim::topology::TopologySpec, util::cell::RefCell};
+    use crate::sim::topology::TopologySpec;
 
     use super::*;
 
-    fn setup_world(width: usize, height: usize, wrap_x: bool, wrap_y: bool) -> Rc<RefCell<World>> {
-        let w = World::new(TopologySpec {
+    fn setup_world(width: usize, height: usize, wrap_x: bool, wrap_y: bool) -> World {
+        let mut world = World::new(TopologySpec {
             min_pxcor: 0,
             max_pycor: 0,
             patches_width: width as i64,
@@ -220,7 +220,6 @@ mod test {
             wrap_x,
             wrap_y,
         });
-        let mut world = w.borrow_mut();
 
         world
             .patches
@@ -237,8 +236,7 @@ mod test {
             }
         }
 
-        drop(world);
-        w
+        world
     }
 
     #[test]
@@ -249,7 +247,7 @@ mod test {
         let world = setup_world(width, height, false, false);
 
         let var_index = VarIndex::from_index(0);
-        let prev_values = create_prev_values_array_with_ghost_patches(&world.borrow(), var_index);
+        let prev_values = create_prev_values_array_with_ghost_patches(&world, var_index);
         #[rustfmt::skip]
         let expected_values: Vec<Float> = vec![
             0, 0, 1, 2, 2,
@@ -273,7 +271,7 @@ mod test {
         let world = setup_world(width, height, true, false);
 
         let var_index = VarIndex::from_index(0);
-        let prev_values = create_prev_values_array_with_ghost_patches(&world.borrow(), var_index);
+        let prev_values = create_prev_values_array_with_ghost_patches(&world, var_index);
         #[rustfmt::skip]
         let expected_values: Vec<Float> = vec![
             0, 0, 1, 2, 2,
@@ -297,7 +295,7 @@ mod test {
         let world = setup_world(width, height, false, true);
 
         let var_index = VarIndex::from_index(0);
-        let prev_values = create_prev_values_array_with_ghost_patches(&world.borrow(), var_index);
+        let prev_values = create_prev_values_array_with_ghost_patches(&world, var_index);
         #[rustfmt::skip]
         let expected_values: Vec<Float> = vec![
             0, 6, 7, 8, 2,
@@ -321,7 +319,7 @@ mod test {
         let world = setup_world(width, height, true, true);
 
         let var_index = VarIndex::from_index(0);
-        let prev_values = create_prev_values_array_with_ghost_patches(&world.borrow(), var_index);
+        let prev_values = create_prev_values_array_with_ghost_patches(&world, var_index);
         #[rustfmt::skip]
         let expected_values: Vec<Float> = vec![
             8, 6, 7, 8, 6,

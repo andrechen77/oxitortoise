@@ -2,10 +2,9 @@ use std::rc::Rc;
 
 use flagset::FlagSet;
 use oxitortoise::sim::agent::Agent;
-use oxitortoise::util::cell::RefCell;
 use oxitortoise::util::rng::Rng as _;
 use oxitortoise::{
-    scripting::{self as s, ExecutionContext},
+    scripting::{self as s, CanonExecutionContext},
     sim::{
         agent_variables::VarIndex,
         color::{self, Color},
@@ -23,8 +22,8 @@ const PATCH_NEST: VarIndex = VarIndex::from_index(2);
 const PATCH_NEST_SCENT: VarIndex = VarIndex::from_index(3);
 const PATCH_FOOD_SOURCE_NUMBER: VarIndex = VarIndex::from_index(4);
 
-fn create_workspace() -> Rc<RefCell<Workspace>> {
-    let w = Workspace::new(TopologySpec {
+fn create_workspace() -> Workspace {
+    let mut workspace = Workspace::new(TopologySpec {
         min_pxcor: -35,
         max_pycor: 35,
         patches_width: 71,
@@ -33,33 +32,30 @@ fn create_workspace() -> Rc<RefCell<Workspace>> {
         wrap_y: false,
     });
 
-    {
-        let workspace = w.borrow_mut();
-        let mut world = workspace.world.borrow_mut();
+    // declare widget variable
+    workspace
+        .world
+        .observer
+        .borrow_mut()
+        .create_widget_global(Rc::from("population"), value::Float::new(2.0).into());
 
-        // declare widget variable
-        world
-            .observer
-            .borrow_mut()
-            .create_widget_global(Rc::from("population"), value::Float::new(2.0).into());
+    // `patches-own [...]`
+    let patch_var_names = [
+        Rc::from("chemical"),
+        Rc::from("food"),
+        Rc::from("nest?"),
+        Rc::from("nest-scent"),
+        Rc::from("food-source-number"),
+    ];
+    workspace
+        .world
+        .patches
+        .declare_custom_variables(patch_var_names.to_vec());
 
-        // `patches-own [...]`
-        let patch_var_names = [
-            Rc::from("chemical"),
-            Rc::from("food"),
-            Rc::from("nest?"),
-            Rc::from("nest-scent"),
-            Rc::from("food-source-number"),
-        ];
-        world
-            .patches
-            .declare_custom_variables(patch_var_names.to_vec());
-    }
-
-    w
+    workspace
 }
 
-fn setup<U: WriteUpdate>(context: &mut ExecutionContext<'_, U>) {
+fn setup(context: &mut CanonExecutionContext) {
     // clear-all
     s::clear_all(context);
 
@@ -68,20 +64,22 @@ fn setup<U: WriteUpdate>(context: &mut ExecutionContext<'_, U>) {
         context,
         value::Float::new(2.0),
         BREED_NAME_TURTLES,
-        |context| {
-            let Agent::Turtle(this_turtle) = context.executor else {
-                panic!("must be executed by a turtle");
-            };
-            this_turtle.data.borrow_mut().size = value::Float::new(2.0);
-            this_turtle.data.borrow_mut().color = Color::RED;
-            context
-                .updater
-                .update_turtle(this_turtle, TurtleProp::Size | TurtleProp::Color);
-        },
+        body_0,
     );
+    extern "C" fn body_0(context: &mut CanonExecutionContext) {
+        let Agent::Turtle(this_turtle) = context.executor else {
+            panic!("must be executed by a turtle");
+        };
+        this_turtle.data.borrow_mut().size = value::Float::new(2.0);
+        this_turtle.data.borrow_mut().color = Color::RED;
+        context
+            .updater
+            .update_turtle(this_turtle, TurtleProp::Size | TurtleProp::Color);
+    }
 
     // setup-patches
-    s::ask(context, &mut value::agentset::AllPatches, |context| {
+    s::ask_all_patches(context, body_1);
+    extern "C" fn body_1(context: &mut CanonExecutionContext) {
         let Agent::Patch(this_patch) = context.executor else {
             panic!("must be executed by a patch");
         };
@@ -89,7 +87,7 @@ fn setup<U: WriteUpdate>(context: &mut ExecutionContext<'_, U>) {
         // set nest? (distancexy 0 0) < 5
         {
             let distance =
-                s::distancexy_euclidean(this_patch, value::Float::new(0.0), value::Float::new(0.0));
+                s::distancexy_euclidean_patch(this_patch, value::Float::new(0.0), value::Float::new(0.0));
             let condition: value::Boolean = (distance < value::Float::new(5.0)).into();
             let condition = PolyValue::from(condition);
             this_patch
@@ -100,7 +98,7 @@ fn setup<U: WriteUpdate>(context: &mut ExecutionContext<'_, U>) {
 
         // set nest-scent 200 - distancexy 0 0
         {
-            let distance = s::distancexy_euclidean(this_patch, 0.0.into(), 0.0.into());
+            let distance = s::distancexy_euclidean_patch(this_patch, 0.0.into(), 0.0.into());
             let nest_scent = value::Float::new(200.0) - distance;
             this_patch
                 .data
@@ -110,14 +108,14 @@ fn setup<U: WriteUpdate>(context: &mut ExecutionContext<'_, U>) {
 
         // setup-food
         {
-            let max_pxcor = s::max_pxcor(context.world);
-            let max_pycor = s::max_pycor(context.world);
+            let max_pxcor = s::max_pxcor(&context.workspace.world);
+            let max_pycor = s::max_pycor(&context.workspace.world);
 
             // if (distancexy (0.6 * max-pxcor) 0) < 5 [ set food-source-number 1 ]
             {
                 let x = value::Float::new(0.6) * max_pxcor;
                 let y = value::Float::new(0.0);
-                let distance = s::distancexy_euclidean(this_patch, x, y);
+                let distance = s::distancexy_euclidean_patch(this_patch, x, y);
                 let condition = distance < value::Float::new(5.0);
                 if condition {
                     this_patch.data.borrow_mut().set_custom(
@@ -131,7 +129,7 @@ fn setup<U: WriteUpdate>(context: &mut ExecutionContext<'_, U>) {
             {
                 let x = value::Float::new(-0.6) * max_pxcor;
                 let y = value::Float::new(-0.6) * max_pycor;
-                let distance = s::distancexy_euclidean(this_patch, x, y);
+                let distance = s::distancexy_euclidean_patch(this_patch, x, y);
                 let condition = distance < value::Float::new(5.0);
                 if condition {
                     this_patch.data.borrow_mut().set_custom(
@@ -145,7 +143,7 @@ fn setup<U: WriteUpdate>(context: &mut ExecutionContext<'_, U>) {
             {
                 let x = value::Float::new(-0.8) * max_pxcor;
                 let y = value::Float::new(0.8) * max_pycor;
-                let distance = s::distancexy_euclidean(this_patch, x, y);
+                let distance = s::distancexy_euclidean_patch(this_patch, x, y);
                 let condition = distance < value::Float::new(5.0);
                 if condition {
                     this_patch.data.borrow_mut().set_custom(
@@ -183,16 +181,16 @@ fn setup<U: WriteUpdate>(context: &mut ExecutionContext<'_, U>) {
 
         // recolor-patch
         recolor_patch(context);
-    });
+    }
 
     // reset-ticks
-    s::reset_ticks(context.world);
+    s::reset_ticks(&context.workspace.world);
     context
         .updater
-        .update_tick(context.world.tick_counter.clone());
+        .update_tick(context.workspace.world.tick_counter.clone());
 }
 
-fn recolor_patch<U: WriteUpdate>(context: &mut ExecutionContext<'_, U>) {
+fn recolor_patch(context: &mut CanonExecutionContext) {
     let Agent::Patch(this_patch) = context.executor else {
         panic!("agent should be a patch");
     };
@@ -257,18 +255,19 @@ fn recolor_patch<U: WriteUpdate>(context: &mut ExecutionContext<'_, U>) {
         .update_patch(this_patch, PatchProp::Pcolor.into());
 }
 
-fn go<U: WriteUpdate>(context: &mut ExecutionContext<'_, U>) {
+fn go(context: &mut CanonExecutionContext) {
     // TODO everything below here is just to make the model work and not
     // what the script would actually look like
 
-    s::ask(context, &mut value::agentset::AllTurtles, |context| {
+    s::ask_all_turtles(context, body_0);
+    extern "C" fn body_0(context: &mut CanonExecutionContext) {
         let Agent::Turtle(this_turtle) = context.executor else {
             panic!("agent should be a turtle");
         };
 
         // if who >= ticks [ stop ]
         let who: value::Float = this_turtle.who().into();
-        let Some(ticks) = context.world.tick_counter.get() else {
+        let Some(ticks) = context.workspace.world.tick_counter.get() else {
             panic!("ticks have not started yet");
         };
         if who >= ticks {
@@ -288,20 +287,25 @@ fn go<U: WriteUpdate>(context: &mut ExecutionContext<'_, U>) {
         wiggle(context);
 
         // fd 1
-        s::fd_one(context.world, this_turtle);
+        s::fd_one(&context.workspace.world, this_turtle);
 
         context.updater.update_turtle(
             this_turtle,
             TurtleProp::Position | TurtleProp::Heading | TurtleProp::Color,
         );
-    });
+    }
 
     // diffuse chemical (diffusion-rate / 100)
-    s::diffuse_8(context.world, PATCH_CHEMICAL, value::Float::new(0.5));
+    s::diffuse_8(
+        &context.workspace.world,
+        PATCH_CHEMICAL,
+        value::Float::new(0.5),
+    );
 
     // TODO finish script
     // ask patches
-    s::ask(context, &mut value::agentset::AllPatches, |context| {
+    s::ask_all_patches(context, body_1);
+    extern "C" fn body_1(context: &mut CanonExecutionContext) {
         let Agent::Patch(this_patch) = context.executor else {
             panic!("agent should be a patch");
         };
@@ -321,21 +325,21 @@ fn go<U: WriteUpdate>(context: &mut ExecutionContext<'_, U>) {
 
         // recolor-patch
         recolor_patch(context);
-    });
+    }
 
-    s::advance_tick(context.world);
+    s::advance_tick(&context.workspace.world);
     context
         .updater
-        .update_tick(context.world.tick_counter.clone());
+        .update_tick(context.workspace.world.tick_counter.clone());
 }
 
-fn look_for_food<U: WriteUpdate>(context: &mut ExecutionContext<'_, U>) {
+fn look_for_food(context: &mut CanonExecutionContext) {
     let Agent::Turtle(this_turtle) = context.executor else {
         panic!("agent should be a turtle");
     };
 
-    let patch_here_id = s::patch_here(context.world, this_turtle);
-    let patch_here = s::look_up_patch(context.world, patch_here_id);
+    let patch_here_id = s::patch_here(&context.workspace.world, this_turtle);
+    let patch_here = s::look_up_patch(&context.workspace.world, patch_here_id);
 
     // if food > 0
     let food = *patch_here
@@ -376,10 +380,7 @@ fn look_for_food<U: WriteUpdate>(context: &mut ExecutionContext<'_, U>) {
     }
 }
 
-fn uphill_patch_variable<U: WriteUpdate>(
-    context: &mut ExecutionContext<'_, U>,
-    patch_variable: VarIndex,
-) {
+fn uphill_patch_variable(context: &mut CanonExecutionContext, patch_variable: VarIndex) {
     let Agent::Turtle(this_turtle) = context.executor else {
         panic!("agent should be a turtle");
     };
@@ -404,17 +405,22 @@ fn uphill_patch_variable<U: WriteUpdate>(
     }
 }
 
-fn patch_variable_at_angle<U: WriteUpdate>(
-    context: &mut ExecutionContext<'_, U>,
+fn patch_variable_at_angle(
+    context: &mut CanonExecutionContext,
     angle: value::Float,
     patch_variable: VarIndex,
 ) -> value::Float {
     let Agent::Turtle(this_turtle) = context.executor else {
         panic!("agent should be a turtle");
     };
-    let patch_ahead = s::patch_at_angle(context.world, this_turtle, angle, value::Float::new(1.0));
+    let patch_ahead = s::patch_at_angle(
+        &context.workspace.world,
+        this_turtle,
+        angle,
+        value::Float::new(1.0),
+    );
     if let Some(patch_ahead) = patch_ahead {
-        let patch_ahead = s::look_up_patch(context.world, patch_ahead);
+        let patch_ahead = s::look_up_patch(&context.workspace.world, patch_ahead);
         *patch_ahead
             .data
             .borrow()
@@ -426,14 +432,14 @@ fn patch_variable_at_angle<U: WriteUpdate>(
     }
 }
 
-fn return_to_nest<U: WriteUpdate>(context: &mut ExecutionContext<'_, U>) {
+fn return_to_nest(context: &mut CanonExecutionContext) {
     let Agent::Turtle(this_turtle) = context.executor else {
         panic!("agent should be a turtle");
     };
 
     // ifelse nest?
-    let patch_id = s::patch_here(context.world, this_turtle);
-    let patch = s::look_up_patch(context.world, patch_id);
+    let patch_id = s::patch_here(&context.workspace.world, this_turtle);
+    let patch = s::look_up_patch(&context.workspace.world, patch_id);
     let nest = *patch
         .data
         .borrow()
@@ -465,7 +471,7 @@ fn return_to_nest<U: WriteUpdate>(context: &mut ExecutionContext<'_, U>) {
     }
 }
 
-fn wiggle<U: WriteUpdate>(context: &mut ExecutionContext<'_, U>) {
+fn wiggle(context: &mut CanonExecutionContext) {
     let Agent::Turtle(this_turtle) = context.executor else {
         panic!("agent should be a turtle");
     };
@@ -479,7 +485,13 @@ fn wiggle<U: WriteUpdate>(context: &mut ExecutionContext<'_, U>) {
     s::turn(this_turtle, -rand_result);
 
     // if not can-move? 1 [ rt 180 ]
-    if !s::can_move(context.world, this_turtle, value::Float::new(1.0)).0 {
+    if !s::can_move(
+        &context.workspace.world,
+        this_turtle,
+        value::Float::new(1.0),
+    )
+    .0
+    {
         s::turn(this_turtle, value::Float::new(180.0));
     }
 }
@@ -490,19 +502,17 @@ fn wiggle<U: WriteUpdate>(context: &mut ExecutionContext<'_, U>) {
 fn direct_run_ants() {
     let mut updater = UpdateAggregator::new();
 
-    let w = create_workspace();
-    let workspace = w.borrow_mut();
-    let world = workspace.world.borrow_mut();
+    let workspace = create_workspace();
 
-    updater.update_world_settings(&world, FlagSet::full());
-    updater.update_tick(world.tick_counter.clone());
+    updater.update_world_settings(&workspace.world, FlagSet::full());
+    updater.update_tick(workspace.world.tick_counter.clone());
 
-    let mut context = ExecutionContext {
-        world: &world,
-        executor: Agent::Observer(&world.observer),
-        asker: Agent::Observer(&world.observer),
+    let mut context = CanonExecutionContext {
+        workspace: &workspace,
+        executor: Agent::Observer(&workspace.world.observer),
+        asker: Agent::Observer(&workspace.world.observer),
         updater,
-        next_int: workspace.rng.clone(),
+        next_int: &workspace.rng,
     };
 
     // run the `setup` function

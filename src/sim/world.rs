@@ -1,7 +1,4 @@
-use std::{
-    iter,
-    rc::{Rc, Weak},
-};
+use std::iter;
 
 use crate::{
     sim::{
@@ -10,14 +7,12 @@ use crate::{
         tick::Tick,
         topology::{Topology, TopologySpec},
         turtle::Turtles,
-    }, util::cell::RefCell, workspace::Workspace
+    },
+    util::cell::RefCell,
 };
 
 #[derive(Debug)]
 pub struct World {
-    /// A back-reference to the workspace that includes this world.
-    pub workspace: Weak<RefCell<Workspace>>,
-
     pub observer: RefCell<Observer>,
     pub turtles: Turtles,
 
@@ -30,21 +25,14 @@ pub struct World {
 }
 
 impl World {
-    pub fn new(topology_spec: TopologySpec) -> Rc<RefCell<Self>> {
-        Rc::new(RefCell::new(Self {
-            workspace: Weak::new(),
+    pub fn new(topology_spec: TopologySpec) -> Self {
+        Self {
             observer: RefCell::new(Observer::default()),
             turtles: Turtles::new(iter::empty()),
             patches: Patches::new(&topology_spec),
             topology: Topology::new(topology_spec),
             tick_counter: Tick::default(),
-        }))
-    }
-
-    /// Sets the backreferences of this structure and all structures owned by it
-    /// to point to the specified workspace.
-    pub fn set_workspace(&mut self, workspace: Weak<RefCell<Workspace>>) {
-        self.workspace = workspace;
+        }
     }
 
     pub fn clear_all(&self) {

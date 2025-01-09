@@ -1,8 +1,7 @@
-use crate::updater::WriteUpdate;
+use super::CanonExecutionContext;
 
-use super::ExecutionContext;
-
+#[no_mangle]
 #[inline(never)]
-pub fn clear_all<U: WriteUpdate>(context: &mut ExecutionContext<'_, U>) {
-    context.world.clear_all();
+pub extern "C" fn clear_all(context: &mut CanonExecutionContext) {
+    context.workspace.world.clear_all();
 }

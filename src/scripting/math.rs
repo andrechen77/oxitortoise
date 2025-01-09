@@ -1,9 +1,10 @@
-use crate::{updater::WriteUpdate, util::rng::Rng};
+use crate::util::rng::Rng;
 
-use super::ExecutionContext;
+use super::CanonExecutionContext;
 
+#[no_mangle]
 #[inline(never)]
-pub fn random<U: WriteUpdate>(context: &mut ExecutionContext<'_, U>, range: i64) -> i64 {
+pub extern "C" fn random(context: &mut CanonExecutionContext, range: i64) -> i64 {
     let mut rng = context.next_int.borrow_mut();
     match range {
         0 => 0,

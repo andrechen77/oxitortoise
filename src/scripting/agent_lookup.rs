@@ -3,7 +3,8 @@ use crate::sim::{
     world::World,
 };
 
+#[no_mangle]
 #[inline(never)]
-pub fn look_up_patch(world: &World, patch_id: PatchId) -> &Patch {
+pub extern "C" fn look_up_patch(world: &World, patch_id: PatchId) -> &Patch {
     &world.patches[patch_id]
 }

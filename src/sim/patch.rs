@@ -5,12 +5,15 @@ use std::{
 
 use derive_more::derive::From;
 
-use crate::{sim::{
-    agent_variables::{CustomAgentVariables, VarIndex, VariableDescriptor, VariableMapper},
-    color::Color,
-    topology::{CoordInt, PointInt, TopologySpec},
-    value::PolyValue,
-}, util::cell::RefCell};
+use crate::{
+    sim::{
+        agent_variables::{CustomAgentVariables, VarIndex, VariableDescriptor, VariableMapper},
+        color::Color,
+        topology::{CoordInt, PointInt, TopologySpec},
+        value::PolyValue,
+    },
+    util::cell::RefCell,
+};
 
 use crate::sim::agent::AgentIndexIntoWorld;
 
@@ -18,6 +21,7 @@ use super::{agent::AgentPosition, topology::Point, world::World};
 
 /// A reference to a patch.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, From)]
+#[repr(transparent)]
 pub struct PatchId(pub usize);
 
 impl AgentIndexIntoWorld for PatchId {

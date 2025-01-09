@@ -2,31 +2,35 @@
 //! Items in this module represent basic functionality to manipulate model
 //! state. JIT-compiled NetLogo code will call into these functions.
 
-use std::rc::Rc;
-
 use crate::{
-    sim::{agent::Agent, world::World},
+    sim::agent::Agent,
+    updater::CanonUpdater,
     util::{cell::RefCell, rng::CanonRng},
+    workspace::Workspace,
 };
 
-pub struct ExecutionContext<'world, U> {
-    /// The world in which the execution is occurring.
-    pub world: &'world World,
+pub struct ExecutionContext<'w, 'rng, U, R> {
+    /// The workspace in which execution is occuring.
+    pub workspace: &'w Workspace,
     /// The agent that is executing the current command. The `self` reporter in
     /// NetLogo returns this value if it is not the observer.
-    pub executor: Agent<'world>,
+    pub executor: Agent<'w>,
     /// The agent that asked the executor to execute the current command. The
     /// `myself` reporter in NetLogo returns this value if it is not the
     /// observer.
-    pub asker: Agent<'world>,
+    pub asker: Agent<'w>,
     /// The output for all updates that occur during execution.
+    pub next_int: &'rng RefCell<R>,
     pub updater: U,
-    pub next_int: Rc<RefCell<CanonRng>>,
 }
 
 /// A simple function pointer type that primitives which execute other commands
 /// should accept.
-pub type Closure<'world, U> = fn(&mut ExecutionContext<'world, U>);
+pub type Closure<U, R> = extern "C" fn(&mut ExecutionContext<'_, '_, U, R>);
+
+pub type CanonExecutionContext<'w, 'rng> = ExecutionContext<'w, 'rng, CanonUpdater, CanonRng>;
+
+pub type CanonClosure = Closure<CanonUpdater, CanonRng>;
 
 pub mod agent_lookup;
 pub mod ask;

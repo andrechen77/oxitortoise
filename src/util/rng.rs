@@ -1,15 +1,19 @@
-use std::{fmt::Debug, rc::Rc};
+use std::ops::Deref;
 
 use crate::util::cell::RefCell;
 
 mod mersenne_twister;
 
-pub trait Rng: Debug {
+pub trait Rng {
     /// Returns a random integer between 0 (inclusive) and `max` (exclusive).
     fn next_int(&mut self, max: i64) -> i64;
 }
 
-impl<R: Rng + ?Sized> Rng for Rc<RefCell<R>> {
+impl<T, R> Rng for T
+where
+    R: Rng + ?Sized,
+    T: Deref<Target = RefCell<R>>,
+{
     fn next_int(&mut self, max: i64) -> i64 {
         self.borrow_mut().next_int(max)
     }

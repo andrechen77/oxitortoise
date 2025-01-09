@@ -442,3 +442,5 @@ impl UpdateAggregator {
         Ok(())
     }
 }
+
+pub type CanonUpdater = UpdateAggregator;

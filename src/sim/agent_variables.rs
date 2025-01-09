@@ -19,6 +19,7 @@ pub enum VariableDescriptor {
 /// Describes the location of a certain variable in the custom variables of
 /// an agent of type `A`.
 #[derive(Debug, PartialEq, Eq, Copy, Clone, Hash)]
+#[repr(transparent)]
 pub struct VarIndex(usize);
 
 impl VarIndex {
