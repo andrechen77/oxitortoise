@@ -100,7 +100,7 @@ pub fn scale_color(color: Color, number: Float, range_start: Float, range_end: F
     // copied from the original Tortoise, but it must be some number less than
     // SHADE_RANGE
     // https://github.com/NetLogo/Tortoise/blob/master/engine/src/main/coffee/engine/core/colormodel.coffee#L267
-    let color_shade_offset = color_shade_offset.min(SHADE_RANGE - 0.0001).max(0.0);
+    let color_shade_offset = color_shade_offset.clamp(0.0, SHADE_RANGE - 0.0001);
 
     // add the offset to the darkest shade of the color to get the correct shade
     let color_value = color.to_darkest_shade().0 + color_shade_offset;
