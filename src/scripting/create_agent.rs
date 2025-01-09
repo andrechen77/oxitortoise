@@ -9,6 +9,7 @@ use crate::{
 
 use super::{Closure, ExecutionContext};
 
+#[inline(never)]
 pub fn create_turtles_with_cmd<'w, U: WriteUpdate>(
     context: &mut ExecutionContext<'w, U>,
     count: Float,

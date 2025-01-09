@@ -3,6 +3,7 @@ use crate::sim::{
     world::World,
 };
 
+#[inline(never)]
 pub fn look_up_patch(world: &World, patch_id: PatchId) -> &Patch {
     &world.patches[patch_id]
 }

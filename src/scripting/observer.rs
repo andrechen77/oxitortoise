@@ -7,6 +7,7 @@ use crate::sim::{agent_variables::VarIndex, topology, value::Float, world::World
 // not a Float, it's a Color.
 /// Diffuse the specified patch variable to the neighboring eight patches. The
 /// specified patch variable must be numeric.
+#[inline(never)]
 pub fn diffuse_8(world: &World, patch_variable: VarIndex, fraction: Float) {
     topology::diffuse::diffuse_8(world, patch_variable, fraction);
 }

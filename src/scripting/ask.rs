@@ -5,6 +5,7 @@ use crate::updater::WriteUpdate;
 
 use super::{Closure, ExecutionContext};
 
+#[inline(never)]
 pub fn ask<'w, A: IterateAgentset, U: WriteUpdate>(
     context: &mut ExecutionContext<'w, U>,
     agentset: &mut A,

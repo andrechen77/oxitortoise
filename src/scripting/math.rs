@@ -2,6 +2,7 @@ use crate::{updater::WriteUpdate, util::rng::Rng};
 
 use super::ExecutionContext;
 
+#[inline(never)]
 pub fn random<U: WriteUpdate>(context: &mut ExecutionContext<'_, U>, range: i64) -> i64 {
     let mut rng = context.next_int.borrow_mut();
     match range {
