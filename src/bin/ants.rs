@@ -496,9 +496,6 @@ fn direct_run_ants() {
 
     updater.update_world_settings(&world, FlagSet::full());
     updater.update_tick(world.tick_counter.clone());
-    let mut update_str = String::new();
-    updater.to_js(&mut update_str, &world, true).unwrap();
-    println!("{}", update_str);
 
     let mut context = ExecutionContext {
         world: &world,
@@ -510,21 +507,9 @@ fn direct_run_ants() {
 
     // run the `setup` function
     setup(&mut context);
-    let mut update_str = String::new();
-    context
-        .updater
-        .to_js(&mut update_str, &world, false)
-        .unwrap();
-    println!("{}", update_str);
 
-    for _ in 0..1 {
+    for _ in 0..1000 {
         go(&mut context);
-        let mut update_str = String::new();
-        context
-            .updater
-            .to_js(&mut update_str, &world, false)
-            .unwrap();
-        println!("{}", update_str);
     }
 }
 
