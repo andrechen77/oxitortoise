@@ -2,6 +2,7 @@ use std::rc::Rc;
 
 use flagset::FlagSet;
 use oxitortoise::sim::agent::Agent;
+use oxitortoise::sim::patch::PatchId;
 use oxitortoise::util::rng::Rng as _;
 use oxitortoise::{
     scripting::{self as s, CanonExecutionContext},
@@ -433,16 +434,18 @@ fn patch_variable_at_angle(
         angle,
         value::Float::new(1.0),
     );
-    if let Some(patch_ahead) = patch_ahead {
-        let patch_ahead = s::look_up_patch(&context.workspace.world, patch_ahead);
-        *patch_ahead
-            .data
-            .borrow()
-            .get_custom(patch_variable)
-            .get::<value::Float>()
-            .unwrap()
-    } else {
-        value::Float::new(0.0)
+    match patch_ahead {
+        usize::MAX => value::Float::new(0.0),
+        patch_id => {
+            let patch_id = PatchId(patch_id);
+            let patch_ahead = s::look_up_patch(&context.workspace.world, patch_id);
+            *patch_ahead
+                .data
+                .borrow()
+                .get_custom(patch_variable)
+                .get::<value::Float>()
+                .unwrap()
+        }
     }
 }
 

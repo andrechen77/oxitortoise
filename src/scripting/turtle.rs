@@ -37,6 +37,14 @@ pub extern "C" fn patch_here(world: &World, turtle: &Turtle) -> PatchId {
         .patch_at(turtle.data.borrow().position.round_to_int())
 }
 
+/// # Return type
+///
+/// This function returns what is conceptually an `Option<PatchId>`. To make it
+/// compatible with the C ABI, this has been changed to actually return a
+/// `usize`. A value of `usize::MAX` is used to represent `None`, and any other
+/// value transparently represents some `PatchId`.
+// TODO find a way to better represent an Option, ideally with richer ABI if one
+// will ever exist in Rust.
 #[no_mangle]
 #[inline(never)]
 pub extern "C" fn patch_at_angle(
@@ -44,13 +52,15 @@ pub extern "C" fn patch_at_angle(
     turtle: &Turtle,
     angle: value::Float,
     distance: value::Float,
-) -> Option<PatchId> {
+) -> usize {
     let turtle_data = turtle.data.borrow();
     let actual_heading = turtle_data.heading + angle;
-    let new_point = world.topology.offset_distance_by_heading(
+    let Some(new_point) = world.topology.offset_distance_by_heading(
         turtle_data.position,
         actual_heading,
         distance,
-    )?;
-    Some(world.topology.patch_at(new_point.round_to_int()))
+    ) else {
+        return usize::MAX;
+    };
+    world.topology.patch_at(new_point.round_to_int()).0
 }
