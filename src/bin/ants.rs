@@ -22,6 +22,8 @@ const PATCH_NEST: VarIndex = VarIndex::from_index(2);
 const PATCH_NEST_SCENT: VarIndex = VarIndex::from_index(3);
 const PATCH_FOOD_SOURCE_NUMBER: VarIndex = VarIndex::from_index(4);
 
+#[no_mangle]
+#[inline(never)]
 fn create_workspace() -> Workspace {
     let mut workspace = Workspace::new(TopologySpec {
         min_pxcor: -35,
@@ -55,6 +57,8 @@ fn create_workspace() -> Workspace {
     workspace
 }
 
+#[no_mangle]
+#[inline(never)]
 fn setup(context: &mut CanonExecutionContext) {
     // clear-all
     s::clear_all(context);
@@ -190,6 +194,8 @@ fn setup(context: &mut CanonExecutionContext) {
         .update_tick(context.workspace.world.tick_counter.clone());
 }
 
+#[no_mangle]
+#[inline(never)]
 fn recolor_patch(context: &mut CanonExecutionContext) {
     let Agent::Patch(this_patch) = context.executor else {
         panic!("agent should be a patch");
@@ -255,6 +261,8 @@ fn recolor_patch(context: &mut CanonExecutionContext) {
         .update_patch(this_patch, PatchProp::Pcolor.into());
 }
 
+#[no_mangle]
+#[inline(never)]
 fn go(context: &mut CanonExecutionContext) {
     // TODO everything below here is just to make the model work and not
     // what the script would actually look like
@@ -333,6 +341,8 @@ fn go(context: &mut CanonExecutionContext) {
         .update_tick(context.workspace.world.tick_counter.clone());
 }
 
+#[no_mangle]
+#[inline(never)]
 fn look_for_food(context: &mut CanonExecutionContext) {
     let Agent::Turtle(this_turtle) = context.executor else {
         panic!("agent should be a turtle");
@@ -380,6 +390,8 @@ fn look_for_food(context: &mut CanonExecutionContext) {
     }
 }
 
+#[no_mangle]
+#[inline(never)]
 fn uphill_patch_variable(context: &mut CanonExecutionContext, patch_variable: VarIndex) {
     let Agent::Turtle(this_turtle) = context.executor else {
         panic!("agent should be a turtle");
@@ -405,6 +417,8 @@ fn uphill_patch_variable(context: &mut CanonExecutionContext, patch_variable: Va
     }
 }
 
+#[no_mangle]
+#[inline(never)]
 fn patch_variable_at_angle(
     context: &mut CanonExecutionContext,
     angle: value::Float,
@@ -432,6 +446,8 @@ fn patch_variable_at_angle(
     }
 }
 
+#[no_mangle]
+#[inline(never)]
 fn return_to_nest(context: &mut CanonExecutionContext) {
     let Agent::Turtle(this_turtle) = context.executor else {
         panic!("agent should be a turtle");
@@ -471,6 +487,8 @@ fn return_to_nest(context: &mut CanonExecutionContext) {
     }
 }
 
+#[no_mangle]
+#[inline(never)]
 fn wiggle(context: &mut CanonExecutionContext) {
     let Agent::Turtle(this_turtle) = context.executor else {
         panic!("agent should be a turtle");
