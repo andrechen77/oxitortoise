@@ -1,6 +1,6 @@
-use crate::sim::{agent_variables::VarIndex, patch::PatchId, value::Float, world::World};
+use crate::sim::{patch::{PatchId, PatchVarDescriptor}, value::Float, world::World};
 
-pub fn diffuse_8(world: &World, patch_variable: VarIndex, fraction: Float) {
+pub fn diffuse_8(world: &World, patch_variable: PatchVarDescriptor, fraction: Float) {
     // create a scratch array with all the current variable values
     let prev = create_prev_values_array_with_ghost_patches(world, patch_variable);
 
@@ -34,7 +34,9 @@ pub fn diffuse_8(world: &World, patch_variable: VarIndex, fraction: Float) {
             world.patches[id]
                 .data
                 .borrow_mut()
-                .set_custom(patch_variable, new_val.into());
+                .custom_variables
+                .get_mut
+                // .set_custom(patch_variable, new_val.into());
         }
     }
 }

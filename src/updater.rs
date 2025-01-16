@@ -4,13 +4,7 @@ use flagset::{flags, FlagSet};
 use slotmap::SecondaryMap;
 
 use crate::sim::{
-    color::Color,
-    patch::{Patch, PatchId},
-    tick::Tick,
-    topology::{Heading, Point, TopologySpec},
-    turtle::{Turtle, TurtleId},
-    value::Float,
-    world::World,
+    agent::AgentPosition as _, color::Color, patch::{Patch, PatchId}, tick::Tick, topology::{Heading, Point, TopologySpec}, turtle::{Turtle, TurtleId}, value::{Float, String}, world::World
 };
 
 pub trait WriteUpdate {
@@ -360,7 +354,7 @@ impl UpdateAggregator {
                 write!(w, "\"PLABEL-COLOR\": {}, ", plabel_color.to_float().get())?;
             }
             if first_time {
-                let pos = world.patches[patch_id].position_int();
+                let pos = world.patches[patch_id].position();
                 write!(w, "PXCOR: {}, PYCOR: {}, ", pos.x, pos.y)?;
             }
             write!(w, "}}, ")?;

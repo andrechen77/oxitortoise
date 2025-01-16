@@ -1,28 +1,30 @@
-use std::{
-    ops::{Index, IndexMut},
-    rc::Rc,
-};
+use core::panic;
+use std::ops::{Index, IndexMut};
 
-use derive_more::derive::From;
+use derive_more::derive::{From, TryFrom};
 
 use crate::{
     sim::{
-        agent_variables::{CustomAgentVariables, VarIndex, VariableDescriptor, VariableMapper},
         color::Color,
-        topology::{CoordInt, PointInt, TopologySpec},
-        value::PolyValue,
+        topology::{CoordInt, TopologySpec},
     },
     util::cell::RefCell,
 };
 
 use crate::sim::agent::AgentIndexIntoWorld;
 
-use super::{agent::AgentPosition, topology::Point, world::World};
+use super::{agent::AgentPosition, topology::Point, value::{Float, String, TryAsFloat}, variables::{DynTypedVec, InUntypedVal}, world::World};
 
 /// A reference to a patch.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, From)]
 #[repr(transparent)]
 pub struct PatchId(pub usize);
+
+impl TryAsFloat for PatchId {
+    fn try_as_float(&self) -> Option<Float> {
+        None
+    }
+}
 
 impl AgentIndexIntoWorld for PatchId {
     type Output<'w> = &'w Patch;
@@ -38,8 +40,9 @@ pub struct Patches {
     /// contains the patches with the highest `pycor`, and the first column
     /// contains the patches with the lowest `pxcor`.
     patches: Vec<Patch>,
-    /// A mapping between variable names and variable descriptors for patches.
-    variable_mapper: VariableMapper,
+    // /// A mapping between variable names and variable descriptors for patches.
+    // variable_mapper: VariableMapper,
+    // TODO add back variable mapper
 }
 
 impl Patches {
@@ -56,46 +59,47 @@ impl Patches {
         let mut patches = Vec::with_capacity((patches_width * patches_height) as usize);
         for j in 0..*patches_height {
             for i in 0..*patches_width {
-                let x = min_pxcor + i as CoordInt;
-                let y = max_pycor - j as CoordInt;
-                patches.push(Patch::at(PatchId(patches.len()), PointInt { x, y }));
+                let x = (min_pxcor + i as CoordInt).into();
+                let y = (max_pycor - j as CoordInt).into();
+                patches.push(Patch::at(PatchId(patches.len()), Point { x, y }));
             }
         }
 
-        let mut variable_mapper = VariableMapper::new();
-        #[allow(clippy::type_complexity)]
-        let built_in_variables: &[Rc<str>] = &[
-            Rc::from("pxcor"),
-            Rc::from("pycor"),
-            // TODO add other variables
-        ];
-        for name in built_in_variables {
-            variable_mapper.declare_built_in_variable(name.clone());
-        }
+        // let mut variable_mapper = VariableMapper::new();
+        // #[allow(clippy::type_complexity)]
+        // let built_in_variables: &[Rc<str>] = &[
+        //     Rc::from("pxcor"),
+        //     Rc::from("pycor"),
+        //     // TODO add other variables
+        // ];
+        // for name in built_in_variables {
+        //     variable_mapper.declare_built_in_variable(name.clone());
+        // }
 
         Self {
             patches,
-            variable_mapper,
+            // variable_mapper,
         }
     }
 
-    pub fn declare_custom_variables(&mut self, variables: Vec<Rc<str>>) {
-        let new_to_old_custom_idxs = self.variable_mapper.declare_custom_variables(variables);
+    // TODO reimplement functionality for declaring custom variables
+    // pub fn declare_custom_variables(&mut self, variables: Vec<Rc<str>>) {
+    //     let new_to_old_custom_idxs = self.variable_mapper.declare_custom_variables(variables);
 
-        // make sure all patches have the correct mappings in their custom
-        // variables
-        for patch in &mut self.patches {
-            patch
-                .data
-                .get_mut()
-                .custom_variables
-                .set_variable_mapping(&new_to_old_custom_idxs);
-        }
-    }
+    //     // make sure all patches have the correct mappings in their custom
+    //     // variables
+    //     for patch in &mut self.patches {
+    //         patch
+    //             .data
+    //             .get_mut()
+    //             .custom_variables
+    //             .set_variable_mapping(&new_to_old_custom_idxs);
+    //     }
+    // }
 
-    pub fn look_up_variable(&self, name: &str) -> Option<VariableDescriptor> {
-        self.variable_mapper.look_up_variable(name)
-    }
+    // pub fn look_up_variable(&self, name: &str) -> Option<VariableDescriptor> {
+    //     self.variable_mapper.look_up_variable(name)
+    // }
 
     pub fn patches_iter(&self) -> impl Iterator<Item = &Patch> {
         self.patches.iter()
@@ -111,7 +115,8 @@ impl Patches {
     /// called.
     pub fn clear_all_patches(&self) {
         for patch in &self.patches {
-            patch.data.borrow_mut().custom_variables.reset_all();
+            // TODO reset other patch variables
+            patch.data.borrow_mut().custom_variables.reset();
         }
     }
 }
@@ -133,21 +138,21 @@ impl IndexMut<PatchId> for Patches {
 #[derive(Debug)]
 pub struct Patch {
     id: PatchId,
-    position: PointInt,
+    position: Point,
     pub data: RefCell<PatchData>,
 }
 
 #[derive(Debug, Default)]
 pub struct PatchData {
     pub pcolor: Color,
-    pub plabel: String, // TODO consider using the netlogo version of string for this
+    pub plabel: String,
     pub plabel_color: Color,
-    custom_variables: CustomAgentVariables,
+    custom_variables: DynTypedVec<6>, // TODO pick a better number than 6
     // TODO some way of tracking what turtles are on this patch.
 }
 
 impl Patch {
-    pub fn at(id: PatchId, position: PointInt) -> Self {
+    pub fn at(id: PatchId, position: Point) -> Self {
         Self {
             id,
             position,
@@ -159,18 +164,66 @@ impl Patch {
         self.id
     }
 
-    pub fn position_int(&self) -> PointInt {
-        self.position
+    // TODO replace this with a proper Index impl
+    // TODO add an unsafe version that assumes that the value is a Float
+    pub fn get_numeric(&self, var: PatchVarDescriptor) -> Float {
+        let magic = var.0;
+        if magic < BUILTIN_RESERVED {
+            let data = &self.data.borrow().custom_variables[magic as usize];
+            if let Some(v) = data.try_as_float() {
+                v
+            } else {
+                todo!("not a numeric descriptor")
+            }
+        } else if let Ok(magic) = magic.try_into() {
+            match magic {
+                BuiltInDescMagicNumbers::Pxcor => self.position.x,
+                BuiltInDescMagicNumbers::Pycor => self.position.y,
+                BuiltInDescMagicNumbers::Pcolor => self.data.borrow().pcolor.to_float(),
+                BuiltInDescMagicNumbers::Plabel => todo!(),
+                BuiltInDescMagicNumbers::PlabelColor => self.data.borrow().plabel_color.to_float(),
+            }
+        } else {
+            todo!("not a valid descriptor")
+        }
     }
+
+    // TODO replace with a proper IndexMut impl
+    // pub fn set_numeric(&self, var: PatchVarDescriptor, value: Float) {
+    //     let magic = var.0;
+    //     if magic < BUILTIN_RESERVED {
+    //         let mut data = self.data.borrow_mut();
+    //         data.custom_variables[magic as usize] = value.into();
+    //     } else if let Ok(magic) = magic.try_into() {
+    //         match magic {
+    //             BuiltInDescMagicNumbers::Pxcor => self.position.x = value,
+    //             BuiltInDescMagicNumbers::Pycor => self.position.y = value,
+    //             BuiltInDescMagicNumbers::Pcolor => self.data.borrow_mut().pcolor = Color::from_float(value),
+    //             BuiltInDescMagicNumbers::Plabel => todo!(),
+    //             BuiltInDescMagicNumbers::PlabelColor => self.data.borrow_mut().plabel_color = Color::from_float(value),
+    //         }
+    //     } else {
+    //         todo!("not a valid descriptor")
+    //     }
+    // }
 }
 
 impl PatchData {
-    pub fn get_custom(&self, var_idx: VarIndex) -> &PolyValue {
-        &self.custom_variables[var_idx]
-    }
-
-    pub fn set_custom(&mut self, var_idx: VarIndex, value: PolyValue) {
-        self.custom_variables[var_idx] = value;
+    pub fn get_mut<T: InUntypedVal>(&mut self, var: PatchVarDescriptor) -> Option<&mut T> {
+        let magic = var.0;
+        if magic < BUILTIN_RESERVED {
+            self.custom_variables.get_mut(magic as usize)
+        } else if let Ok(magic) = magic.try_into() {
+            match magic {
+                BuiltInDescMagicNumbers::Pxcor => panic!("cannot mutate pxcor"),
+                BuiltInDescMagicNumbers::Pycor => panic!("cannot mutate pycor"),
+                BuiltInDescMagicNumbers::Pcolor => self.pcolor.try_as_float().map(|_| &mut self.pcolor),
+                BuiltInDescMagicNumbers::Plabel => todo!(),
+                BuiltInDescMagicNumbers::PlabelColor => todo!(),
+            }
+        } else {
+            todo!("not a valid descriptor")
+        }
     }
 }
 
@@ -178,4 +231,25 @@ impl AgentPosition for Patch {
     fn position(&self) -> Point {
         self.position.into()
     }
+}
+
+/// Describes the location of a certain variable in a patch.
+#[repr(transparent)]
+pub struct PatchVarDescriptor(u8);
+
+/// All magic numbers i below this value describe the custom variable at
+/// index i. Numbers at or above this value are reserved for built-in
+/// variables.
+const BUILTIN_RESERVED: u8 = 128;
+
+/// Magic numbers for [`PatchVarDescriptor`] describing built-in variables.
+#[derive(TryFrom)]
+#[try_from(repr)]
+#[repr(u8)]
+enum BuiltInDescMagicNumbers {
+    Pxcor = BUILTIN_RESERVED,
+    Pycor,
+    Pcolor,
+    Plabel,
+    PlabelColor,
 }

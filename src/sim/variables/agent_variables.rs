@@ -1,3 +1,7 @@
+// TODO add functionality like this for array
+// #[derive(Debug, Clone, From, TryInto, PartialEq)]
+// #[try_into(owned, ref, ref_mut)]
+
 use std::{
     collections::{hash_map::Entry, HashMap},
     mem,
@@ -130,7 +134,8 @@ impl VariableMapper {
 /// Holds the values of the non-built-in variables for an agent. An instance of
 /// this struct is associated with each agent.
 #[derive(Debug, Default, Clone)]
-pub struct CustomAgentVariables {
+pub struct CustomAgentVariables<const N: usize> {
+
     values: Vec<value::PolyValue>,
 }
 

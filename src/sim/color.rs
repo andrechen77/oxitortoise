@@ -5,6 +5,8 @@ use std::{
 
 use crate::{sim::value::Float, util::rng::Rng};
 
+use super::value::TryAsFloat;
+
 /// A NetLogo color. This is a floating point value guaranteed to be in the
 /// range 0.0..140.0. Values with more than one decimal place of precision are
 /// remembered with that much precision, even though it doesn't matter for
@@ -46,6 +48,12 @@ impl Color {
 impl From<Float> for Color {
     fn from(value: Float) -> Self {
         Color(value.get() % COLOR_MAX)
+    }
+}
+
+impl TryAsFloat for Color {
+    fn try_as_float(&self) -> Option<Float> {
+        Some(Float::new(self.0))
     }
 }
 

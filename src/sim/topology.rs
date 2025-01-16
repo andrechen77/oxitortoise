@@ -1,6 +1,6 @@
 use std::fmt;
 
-use super::{patch::PatchId, value};
+use super::{patch::PatchId, value::{self, Float}};
 
 pub mod diffuse;
 mod heading;
@@ -10,8 +10,9 @@ pub use heading::Heading;
 /// The type used to refer to integer patch coordinates.
 pub type CoordInt = i64;
 
+// TODO remove this alias, as it is useless
 /// The type used to refer to floating-point patch coordinates.
-pub type CoordFloat = f64;
+pub type CoordFloat = Float;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PointInt {
@@ -32,12 +33,12 @@ pub struct Point {
 }
 
 impl Point {
-    pub const ORIGIN: Point = Point { x: 0.0, y: 0.0 };
+    pub const ORIGIN: Point = Point { x: Float::new(0.0), y: Float::new(0.0) };
 
     pub fn round_to_int(self) -> PointInt {
         PointInt {
-            x: self.x.round() as CoordInt,
-            y: self.y.round() as CoordInt,
+            x: self.x.get().round() as CoordInt,
+            y: self.y.get().round() as CoordInt,
         }
     }
 }
@@ -51,8 +52,8 @@ impl fmt::Display for Point {
 impl From<PointInt> for Point {
     fn from(point: PointInt) -> Self {
         Point {
-            x: point.x as CoordFloat,
-            y: point.y as CoordFloat,
+            x: point.x.into(),
+            y: point.y.into(),
         }
     }
 }
@@ -110,12 +111,12 @@ impl Topology {
     pub fn new(spec: TopologySpec) -> Self {
         Self {
             spec,
-            min_x: spec.min_pxcor as CoordFloat - 0.5,
-            max_x: (spec.min_pxcor + spec.patches_width) as CoordFloat - 0.5,
-            world_width: (spec.patches_width + 1) as CoordFloat,
-            min_y: (spec.max_pycor - spec.patches_height) as CoordFloat + 0.5,
-            max_y: spec.max_pycor as CoordFloat + 0.5,
-            world_height: (spec.patches_height + 1) as CoordFloat,
+            min_x: Float::from(spec.min_pxcor) - Float::new(0.5),
+            max_x: Float::from(spec.min_pxcor + spec.patches_width) - Float::new(0.5),
+            world_width: Float::from(spec.patches_width + 1),
+            min_y: Float::from(spec.max_pycor - spec.patches_height) + Float::new(0.5),
+            max_y: Float::from(spec.max_pycor) + Float::new(0.5),
+            world_height: Float::from(spec.patches_height + 1),
         }
     }
 
@@ -238,11 +239,11 @@ impl Topology {
         &self,
         point: Point,
         heading: Heading,
-        distance: value::Float,
+        distance: Float,
     ) -> Option<Point> {
         let (dx, dy) = heading.dx_and_dy();
-        let new_x = point.x + dx * distance.get();
-        let new_y = point.y + dy * distance.get();
+        let new_x = point.x + dx * distance;
+        let new_y = point.y + dy * distance;
         self.wrap_point(Point { x: new_x, y: new_y })
     }
 }
@@ -251,7 +252,7 @@ fn wrap_coordinate(coord: CoordFloat, min: CoordFloat, len: CoordFloat) -> Coord
     // the remainder has an absolute value less than `len`, and is positive if
     // coord > min and negative if coord < min
     let remainder = (coord - min) % len;
-    let offset_from_min = if remainder < 0.0 {
+    let offset_from_min = if remainder < Float::new(0.0) {
         len + remainder
     } else {
         remainder
@@ -262,5 +263,5 @@ fn wrap_coordinate(coord: CoordFloat, min: CoordFloat, len: CoordFloat) -> Coord
 pub fn euclidean_distance_unwrapped(a: Point, b: Point) -> value::Float {
     let dx = a.x - b.x;
     let dy = a.y - b.y;
-    value::Float::new((dx * dx + dy * dy).sqrt())
+    Float::new((dx * dx + dy * dy).sqrt())
 }

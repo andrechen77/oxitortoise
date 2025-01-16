@@ -1,5 +1,5 @@
 pub mod agent;
-pub mod agent_variables;
+pub mod variables;
 pub mod color;
 pub mod observer;
 pub mod patch;

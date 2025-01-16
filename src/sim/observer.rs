@@ -2,7 +2,7 @@ use std::{collections::HashMap, rc::Rc};
 
 use crate::sim::value::PolyValue;
 
-// TOOD change observer to use the same variable system as the agents
+// TODO change observer to use the same variable system as the agents
 
 #[derive(Debug)]
 enum GlobalVariable {

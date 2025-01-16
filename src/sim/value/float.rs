@@ -1,5 +1,7 @@
+use std::ops::Deref;
+
 use derive_more::derive::{
-    Add, AddAssign, Display, Div, DivAssign, From, Mul, MulAssign, Neg, Sub, SubAssign,
+    Add, AddAssign, Display, Div, DivAssign, From, Mul, MulAssign, Neg, Rem, RemAssign, Sub, SubAssign
 };
 
 use crate::sim::{color::Color, topology::CoordInt, turtle::TurtleWho};
@@ -7,9 +9,10 @@ use crate::sim::{color::Color, topology::CoordInt, turtle::TurtleWho};
 /// A double-precision floating-point number which is guaranteed to be finite
 /// (not Infinity or NaN).
 #[derive(Debug, Display, Default, Clone, Copy, From, PartialEq, PartialOrd)] // TODO also ord and eq
-#[derive(Neg, Add, AddAssign, Sub, SubAssign, Mul, MulAssign, Div, DivAssign)] // TODO how to keep guaranteeing that the result is finite?
+#[derive(Neg, Add, AddAssign, Sub, SubAssign, Mul, MulAssign, Div, DivAssign, Rem, RemAssign)] // TODO how to keep guaranteeing that the result is finite?
 #[mul(forward)]
 #[div(forward)]
+#[rem(forward)]
 #[repr(transparent)]
 pub struct Float(f64);
 
@@ -39,6 +42,27 @@ impl From<Color> for Float {
 impl From<TurtleWho> for Float {
     fn from(value: TurtleWho) -> Self {
         Float(value.0 as f64)
+    }
+}
+
+impl Deref for Float {
+    type Target = f64;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+/// A trait for types that are assumed to be "numeric", in the sense seen by
+/// primitives such as `uphill`. For example, even though a boolean value can be
+/// converted to a float, it should not implement this trait.
+pub trait TryAsFloat {
+    fn try_as_float(&self) -> Option<Float>;
+}
+
+impl TryAsFloat for Float {
+    fn try_as_float(&self) -> Option<Float> {
+        Some(*self)
     }
 }
 

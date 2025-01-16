@@ -4,7 +4,6 @@ use std::{collections::HashMap, rc::Rc};
 use crate::util::cell::RefCell;
 use crate::{
     sim::{
-        agent_variables::{CustomAgentVariables, VarIndex, VariableMapper},
         color::Color,
         topology::Point,
         value,
@@ -15,6 +14,8 @@ use crate::{
 
 use super::agent::{AgentIndexIntoWorld, AgentPosition};
 use super::topology::Heading;
+use super::value::TryAsFloat;
+use super::variables::DynTypedVec;
 
 mod turtle_storage;
 
@@ -35,6 +36,12 @@ slotmap::new_key_type! {
     /// An invalidate-able reference to a turtle. This is implemented as a
     /// generational index into the [`Turtles`] data structure.
     pub struct TurtleId;
+}
+
+impl TryAsFloat for TurtleId {
+    fn try_as_float(&self) -> Option<value::Float> {
+        None
+    }
 }
 
 impl AgentIndexIntoWorld for TurtleId {
@@ -60,13 +67,11 @@ impl Turtles {
             original_name: Rc::from("turtles"),
             original_name_singular: Rc::from("turtle"),
             shape: Some(Rc::new(TURTLE_DEFAULT_SHAPE)),
-            variable_mapper: VariableMapper::new(),
         };
         let link_breed = Breed {
             original_name: Rc::from("links"),
             original_name_singular: Rc::from("link"),
             shape: Some(Rc::new(LINK_DEFAULT_SHAPE)),
-            variable_mapper: VariableMapper::new(),
         };
         let mut breeds: HashMap<_, _> = additional_breeds
             .into_iter()
@@ -107,41 +112,42 @@ impl Turtles {
         self.turtle_storage.translate_who(who)
     }
 
-    pub fn declare_custom_variables<'a>(
-        &mut self,
-        variables_by_breed: impl Iterator<Item = (&'a str, Vec<Rc<str>>)>,
-    ) {
-        // create a mapping from a changed breed to its new-to-old custom
-        // indexes. store the breeds by their address instead of their contents.
-        // this is not only faster, but ensures that in the degenerate case,
-        // breeds with the same contents are treated as distinct (however note
-        // that this case should never happen as long as breeds are stored by
-        // their names)
-        let mut new_mappings = HashMap::new();
+    // TODO reimplement functionality for declaring custom variables
+    // pub fn declare_custom_variables<'a>(
+    //     &mut self,
+    //     variables_by_breed: impl Iterator<Item = (&'a str, Vec<Rc<str>>)>,
+    // ) {
+    //     // create a mapping from a changed breed to its new-to-old custom
+    //     // indexes. store the breeds by their address instead of their contents.
+    //     // this is not only faster, but ensures that in the degenerate case,
+    //     // breeds with the same contents are treated as distinct (however note
+    //     // that this case should never happen as long as breeds are stored by
+    //     // their names)
+    //     let mut new_mappings = HashMap::new();
 
-        for (breed_name, new_custom_variables) in variables_by_breed {
-            let breed = self.breeds.get(breed_name).expect("breed should exist");
-            let new_to_old_custom_idxs = breed
-                .borrow_mut()
-                .variable_mapper
-                .declare_custom_variables(new_custom_variables);
-            new_mappings.insert(Rc::as_ptr(breed), new_to_old_custom_idxs);
-        }
+    //     for (breed_name, new_custom_variables) in variables_by_breed {
+    //         let breed = self.breeds.get(breed_name).expect("breed should exist");
+    //         let new_to_old_custom_idxs = breed
+    //             .borrow_mut()
+    //             .variable_mapper
+    //             .declare_custom_variables(new_custom_variables);
+    //         new_mappings.insert(Rc::as_ptr(breed), new_to_old_custom_idxs);
+    //     }
 
-        // make sure all turtles have the correct mappings in their custom
-        // variables
-        for turtle in self.turtle_storage.iter_mut() {
-            if let Some(new_to_old_idxs) =
-                new_mappings.get(&Rc::as_ptr(&turtle.data.get_mut().breed))
-            {
-                turtle
-                    .data
-                    .get_mut()
-                    .custom_variables
-                    .set_variable_mapping(new_to_old_idxs);
-            }
-        }
-    }
+    //     // make sure all turtles have the correct mappings in their custom
+    //     // variables
+    //     for turtle in self.turtle_storage.iter_mut() {
+    //         if let Some(new_to_old_idxs) =
+    //             new_mappings.get(&Rc::as_ptr(&turtle.data.get_mut().breed))
+    //         {
+    //             turtle
+    //                 .data
+    //                 .get_mut()
+    //                 .custom_variables
+    //                 .set_variable_mapping(new_to_old_idxs);
+    //         }
+    //     }
+    // }
 
     /// Creates the turtles and returns a list of their ids.
     pub fn create_turtles(
@@ -171,12 +177,12 @@ impl Turtles {
                 color,
                 heading,
                 position: spawn_point,
-                label: String::new(),
+                label: value::String::new(),
                 label_color: color, // TODO use a default label color
                 hidden: false,
                 size: value::Float::new(1.0),
                 shape,
-                custom_variables: CustomAgentVariables::new(),
+                custom_variables: DynTypedVec::new(),
             };
 
             let turtle_id = self.turtle_storage.add_turtle(turtle_data);
@@ -217,21 +223,11 @@ pub struct TurtleData {
     pub color: Color,
     pub heading: Heading,
     pub position: Point,
-    pub label: String, // TODO consider using the netlogo version of string for this
+    pub label: value::String,
     pub label_color: Color,
     pub hidden: bool,
     pub size: value::Float,
-    custom_variables: CustomAgentVariables,
-}
-
-impl TurtleData {
-    pub fn get_custom(&self, index: VarIndex) -> &value::PolyValue {
-        &self.custom_variables[index]
-    }
-
-    pub fn set_custom(&mut self, index: VarIndex, value: value::PolyValue) {
-        self.custom_variables[index] = value;
-    }
+    pub custom_variables: DynTypedVec<2>, // TODO pick a better number to store directly
 }
 
 impl AgentPosition for Turtle {
@@ -245,7 +241,7 @@ pub struct Breed {
     pub original_name: Rc<str>,
     #[allow(dead_code)]
     pub original_name_singular: Rc<str>,
-    variable_mapper: VariableMapper,
+    // variable_mapper: VariableMapper, // TODO add variable mappings back
     /// The default shape of this breed. `None` means that this breed should
     /// use the same shape as the default breed's shape. This must not be `None`
     /// if it is a default breed.
