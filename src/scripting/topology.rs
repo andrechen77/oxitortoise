@@ -1,5 +1,9 @@
 use crate::sim::{
-    agent::AgentPosition, patch::Patch, topology::{self, Point}, value, world::World
+    agent::AgentPosition,
+    patch::Patch,
+    topology::{self, Point},
+    value,
+    world::World,
 };
 
 #[no_mangle]

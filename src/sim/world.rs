@@ -1,5 +1,3 @@
-use std::iter;
-
 use crate::{
     sim::{
         observer::Observer,
@@ -11,6 +9,8 @@ use crate::{
     util::cell::RefCell,
 };
 
+use super::shapes::Shapes;
+
 #[derive(Debug)]
 pub struct World {
     pub observer: RefCell<Observer>,
@@ -21,6 +21,8 @@ pub struct World {
     pub topology: Topology,
 
     pub tick_counter: Tick,
+
+    pub shapes: Shapes,
     // TODO add other fields
 }
 
@@ -28,10 +30,11 @@ impl World {
     pub fn new(topology_spec: TopologySpec) -> Self {
         Self {
             observer: RefCell::new(Observer::default()),
-            turtles: Turtles::new(iter::empty()),
+            turtles: Turtles::new(),
             patches: Patches::new(&topology_spec),
             topology: Topology::new(topology_spec),
             tick_counter: Tick::default(),
+            shapes: Shapes::default(),
         }
     }
 

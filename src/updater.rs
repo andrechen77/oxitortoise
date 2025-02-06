@@ -111,7 +111,7 @@ pub struct AliveTurtleUpdate {
     pub label: Option<String>,
     pub pen_mode_and_size: Option<(bool, f64)>,
     pub hidden: Option<bool>,
-    pub shape_name: Option<&'static str>,
+    pub shape_name: Option<String>,
     pub size: Option<Float>,
     pub position: Option<Point>,
 }
@@ -253,7 +253,7 @@ impl WriteUpdate for UpdateAggregator {
                     }
                     // TODO add pensize and penmode
                     if properties_to_update.contains(TurtleProp::Shape) {
-                        turtle_update.shape_name = Some(turtle_data.shape.name);
+                        turtle_update.shape_name = Some(turtle_data.shape_name.to_string());
                     }
                     if properties_to_update.contains(TurtleProp::Size) {
                         turtle_update.size = Some(turtle_data.size);
@@ -274,7 +274,7 @@ impl WriteUpdate for UpdateAggregator {
                     label: Some(turtle_data.label.clone()),
                     hidden: Some(turtle_data.hidden),
                     pen_mode_and_size: Some((false, 1.0)), // TODO add pensize and penmode
-                    shape_name: Some(turtle_data.shape.name),
+                    shape_name: Some(turtle_data.shape_name.to_string()),
                     size: Some(turtle_data.size),
                     position: Some(turtle_data.position),
                 };

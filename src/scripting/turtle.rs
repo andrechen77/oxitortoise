@@ -14,7 +14,11 @@ pub extern "C" fn fd_one(world: &World, turtle: &Turtle) {
 
 #[no_mangle]
 #[inline(never)]
-pub extern "C" fn can_move(world: &World, turtle: &Turtle, distance: value::Float) -> value::Boolean {
+pub extern "C" fn can_move(
+    world: &World,
+    turtle: &Turtle,
+    distance: value::Float,
+) -> value::Boolean {
     let turtle_data = turtle.data.borrow();
     world
         .topology
@@ -55,11 +59,11 @@ pub extern "C" fn patch_at_angle(
 ) -> usize {
     let turtle_data = turtle.data.borrow();
     let actual_heading = turtle_data.heading + angle;
-    let Some(new_point) = world.topology.offset_distance_by_heading(
-        turtle_data.position,
-        actual_heading,
-        distance,
-    ) else {
+    let Some(new_point) =
+        world
+            .topology
+            .offset_distance_by_heading(turtle_data.position, actual_heading, distance)
+    else {
         return usize::MAX;
     };
     world.topology.patch_at(new_point.round_to_int()).0

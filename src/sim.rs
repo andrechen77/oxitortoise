@@ -3,6 +3,7 @@ pub mod agent_variables;
 pub mod color;
 pub mod observer;
 pub mod patch;
+pub mod shapes;
 pub mod tick;
 pub mod topology;
 pub mod turtle;

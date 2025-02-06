@@ -14,6 +14,7 @@ use crate::{
 };
 
 use super::agent::{AgentIndexIntoWorld, AgentPosition};
+use super::shapes::{ShapeId, Shapes};
 use super::topology::Heading;
 
 mod turtle_storage;
@@ -55,34 +56,9 @@ pub struct Turtles {
 }
 
 impl Turtles {
-    pub fn new(additional_breeds: impl IntoIterator<Item = Breed>) -> Self {
-        let turtle_breed = Breed {
-            original_name: Rc::from("turtles"),
-            original_name_singular: Rc::from("turtle"),
-            shape: Some(Rc::new(TURTLE_DEFAULT_SHAPE)),
-            variable_mapper: VariableMapper::new(),
-        };
-        let link_breed = Breed {
-            original_name: Rc::from("links"),
-            original_name_singular: Rc::from("link"),
-            shape: Some(Rc::new(LINK_DEFAULT_SHAPE)),
-            variable_mapper: VariableMapper::new(),
-        };
-        let mut breeds: HashMap<_, _> = additional_breeds
-            .into_iter()
-            .map(|breed| (breed.original_name.clone(), Rc::new(RefCell::new(breed))))
-            .collect();
-        breeds.insert(
-            Rc::from(BREED_NAME_TURTLES),
-            Rc::new(RefCell::new(turtle_breed)),
-        );
-        breeds.insert(
-            Rc::from(BREED_NAME_LINKS),
-            Rc::new(RefCell::new(link_breed)),
-        );
-
+    pub fn new() -> Self {
         Turtles {
-            breeds,
+            breeds: Default::default(),
             turtle_storage: TurtleStorage::default(),
         }
     }
@@ -151,6 +127,7 @@ impl Turtles {
         spawn_point: Point,
         mut on_create: impl FnMut(TurtleId),
         next_int: &mut dyn Rng,
+        shapes: &Shapes,
     ) {
         let breed = self.breeds.get(breed_name).unwrap(); // TODO deal with unwrap
         for _ in 0..count {
@@ -166,6 +143,11 @@ impl Turtles {
                     .expect("default turtle breed should have a shape")
                     .clone()
             });
+            let shape_name = shapes
+                .get_shape(shape)
+                .unwrap() // TODO deal with unwrap
+                .name
+                .clone();
             let turtle_data = TurtleData {
                 breed: breed.clone(),
                 color,
@@ -175,7 +157,7 @@ impl Turtles {
                 label_color: color, // TODO use a default label color
                 hidden: false,
                 size: value::Float::new(1.0),
-                shape,
+                shape_name,
                 custom_variables: CustomAgentVariables::new(),
             };
 
@@ -211,9 +193,7 @@ pub struct TurtleData {
     pub breed: Rc<RefCell<Breed>>,
     /// The shape of this turtle due to its breed. This may or may not be the
     /// default shape of the turtle's breed.
-    pub shape: Rc<Shape>,
-    // name
-    // linkmanager
+    pub shape_name: Rc<str>,
     pub color: Color,
     pub heading: Heading,
     pub position: Point,
@@ -249,23 +229,15 @@ pub struct Breed {
     /// The default shape of this breed. `None` means that this breed should
     /// use the same shape as the default breed's shape. This must not be `None`
     /// if it is a default breed.
-    shape: Option<Rc<Shape>>,
+    shape: Option<ShapeId>,
 }
 
 impl Breed {
-    pub fn set_default_shape(&mut self, shape: Rc<Shape>) {
+    pub fn set_default_shape(&mut self, shape: ShapeId) {
         self.shape = Some(shape);
     }
 }
 
 pub const BREED_NAME_TURTLES: &str = "TURTLES";
-pub const BREED_NAME_LINKS: &str = "LINKS";
 
-pub const TURTLE_DEFAULT_SHAPE: Shape = Shape { name: "default" };
-pub const LINK_DEFAULT_SHAPE: Shape = Shape { name: "default" };
-
-#[derive(Debug, Default)]
-pub struct Shape {
-    pub name: &'static str,
-    // TODO fill in fields
-}
+pub const TURTLE_DEFAULT_SHAPE: &str = "default";

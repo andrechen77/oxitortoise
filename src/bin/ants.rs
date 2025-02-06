@@ -65,12 +65,7 @@ fn setup(context: &mut CanonExecutionContext) {
     s::clear_all(context);
 
     // create-turtles
-    s::create_turtles_with_cmd(
-        context,
-        value::Float::new(2.0),
-        BREED_NAME_TURTLES,
-        body_0,
-    );
+    s::create_turtles_with_cmd(context, value::Float::new(2.0), BREED_NAME_TURTLES, body_0);
     extern "C" fn body_0(context: &mut CanonExecutionContext) {
         let Agent::Turtle(this_turtle) = context.executor else {
             panic!("must be executed by a turtle");
@@ -91,8 +86,11 @@ fn setup(context: &mut CanonExecutionContext) {
 
         // set nest? (distancexy 0 0) < 5
         {
-            let distance =
-                s::distancexy_euclidean_patch(this_patch, value::Float::new(0.0), value::Float::new(0.0));
+            let distance = s::distancexy_euclidean_patch(
+                this_patch,
+                value::Float::new(0.0),
+                value::Float::new(0.0),
+            );
             let condition: value::Boolean = (distance < value::Float::new(5.0)).into();
             let condition = PolyValue::from(condition);
             this_patch

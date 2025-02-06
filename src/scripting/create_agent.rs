@@ -22,6 +22,7 @@ pub extern "C" fn create_turtles_with_cmd(
         Point::ORIGIN,
         |turtle| new_turtles.push(turtle),
         &mut *context.next_int.borrow_mut(),
+        &context.workspace.world.shapes,
     );
     let mut new_turtle_set = TurtleSet::new(new_turtles);
     super::ask::ask(context, &mut new_turtle_set, initializer_operation);
