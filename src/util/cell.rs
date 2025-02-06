@@ -1,5 +1,10 @@
+#[cfg(not(feature = "runtime-unsafety"))]
+pub type RefCell<T> = std::cell::RefCell<T>;
+
+#[cfg(feature = "runtime-unsafety")]
 pub type RefCell<T> = unsafe_ref_cell::UnsafeRefCell<T>;
 
+#[cfg(feature = "runtime-unsafety")]
 mod unsafe_ref_cell {
     use std::cell::UnsafeCell;
 
