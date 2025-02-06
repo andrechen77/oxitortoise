@@ -1,10 +1,13 @@
-use crate::sim::{
-    topology::Point,
-    turtle::{BreedId, TurtleId},
-    value::{agentset::TurtleSet, Float},
+use crate::{
+    exec::CanonExecutionContext,
+    sim::{
+        topology::Point,
+        turtle::{BreedId, TurtleId},
+        value::{agentset::TurtleSet, Float},
+    },
 };
 
-use super::{CanonClosure, CanonExecutionContext};
+use super::CanonClosure;
 
 #[no_mangle]
 #[inline(never)]

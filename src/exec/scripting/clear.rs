@@ -1,4 +1,4 @@
-use super::CanonExecutionContext;
+use crate::exec::CanonExecutionContext;
 
 #[no_mangle]
 #[inline(never)]

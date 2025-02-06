@@ -1,12 +1,13 @@
 use std::rc::Rc;
 
 use flagset::FlagSet;
+use oxitortoise::exec::CanonExecutionContext;
 use oxitortoise::sim::agent::Agent;
 use oxitortoise::sim::patch::PatchId;
 use oxitortoise::sim::turtle::BreedId;
 use oxitortoise::util::rng::Rng as _;
 use oxitortoise::{
-    scripting::{self as s, CanonExecutionContext},
+    scripting_prelude as s,
     sim::{
         agent_variables::VarIndex,
         color::{self, Color},

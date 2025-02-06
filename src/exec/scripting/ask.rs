@@ -1,11 +1,14 @@
 use std::mem;
 
-use crate::sim::{
-    agent::AgentIndexIntoWorld,
-    value::agentset::{AllPatches, AllTurtles, IterateAgentset},
+use crate::{
+    exec::CanonExecutionContext,
+    sim::{
+        agent::AgentIndexIntoWorld,
+        value::agentset::{AllPatches, AllTurtles, IterateAgentset},
+    },
 };
 
-use super::{CanonClosure, CanonExecutionContext};
+use super::CanonClosure;
 
 #[no_mangle]
 #[inline(never)]

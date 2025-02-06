@@ -1,6 +1,4 @@
-use crate::util::rng::Rng;
-
-use super::CanonExecutionContext;
+use crate::{exec::CanonExecutionContext, util::rng::Rng as _};
 
 #[no_mangle]
 #[inline(never)]
