@@ -1,3 +1,8 @@
+//! Representation of turtles and breeds.
+//!
+//! From the perspective of this code, all turtles belong to a breed. Unbreeded
+//! turtles belong to a special breed that acts like the `turtles` agentset.
+
 use std::fmt::{self, Debug};
 use std::{collections::HashMap, rc::Rc};
 
@@ -46,26 +51,41 @@ impl AgentIndexIntoWorld for TurtleId {
     }
 }
 
-#[derive(Debug, Default)]
+/// An ID for a breed.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Default)]
+#[repr(transparent)]
+pub struct BreedId(usize);
+
+#[derive(Debug)]
 pub struct Turtles {
-    // TODO do we need to store the breeds in a refcell?
-    // TODO why store by name? what if we just passed around an index?
-    breeds: HashMap<Rc<str>, Rc<RefCell<Breed>>>,
+    breeds: Vec<Rc<RefCell<Breed>>>,
     /// Owns the data for the turtles.
     turtle_storage: TurtleStorage,
 }
 
 impl Turtles {
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            breeds: vec![Rc::new(RefCell::new(Breed {
+                original_name: Rc::from(BREED_NAME_TURTLES),
+                original_name_singular: Rc::from("turtle"),
+                variable_mapper: VariableMapper::new(),
+                shape: Some(ShapeId::default()),
+            }))],
+            turtle_storage: TurtleStorage::default(),
+        }
     }
 
-    pub fn breeds(&self) -> impl Iterator<Item = &Rc<RefCell<Breed>>> {
-        self.breeds.values()
+    pub fn get_breed(&self, breed_id: BreedId) -> Rc<RefCell<Breed>> {
+        self.breeds[breed_id.0].clone()
     }
 
-    pub fn get_breed(&self, breed_name: &str) -> Option<Rc<RefCell<Breed>>> {
-        self.breeds.get(breed_name).cloned()
+    pub fn get_breed_by_name(&self, breed_name: &str) -> Option<Rc<RefCell<Breed>>> {
+        // TODO linear search should be fine but consider others
+        self.breeds
+            .iter()
+            .find(|breed| breed.borrow().original_name.as_ref() == breed_name)
+            .cloned()
     }
 
     pub fn get_turtle(&self, turtle_id: TurtleId) -> Option<&Turtle> {
@@ -80,25 +100,23 @@ impl Turtles {
         self.turtle_storage.translate_who(who)
     }
 
-    pub fn declare_custom_variables<'a>(
+    pub fn declare_custom_variables(
         &mut self,
-        variables_by_breed: impl Iterator<Item = (&'a str, Vec<Rc<str>>)>,
+        variables_by_breed: impl Iterator<Item = (BreedId, Vec<Rc<str>>)>,
     ) {
         // create a mapping from a changed breed to its new-to-old custom
         // indexes. store the breeds by their address instead of their contents.
         // this is not only faster, but ensures that in the degenerate case,
-        // breeds with the same contents are treated as distinct (however note
-        // that this case should never happen as long as breeds are stored by
-        // their names)
+        // breeds with the same contents are treated as distinct
         let mut new_mappings = HashMap::new();
 
-        for (breed_name, new_custom_variables) in variables_by_breed {
-            let breed = self.breeds.get(breed_name).expect("breed should exist");
+        for (breed_id, new_custom_variables) in variables_by_breed {
+            let breed = self.get_breed(breed_id);
             let new_to_old_custom_idxs = breed
                 .borrow_mut()
                 .variable_mapper
                 .declare_custom_variables(new_custom_variables);
-            new_mappings.insert(Rc::as_ptr(breed), new_to_old_custom_idxs);
+            new_mappings.insert(Rc::as_ptr(&breed), new_to_old_custom_idxs);
         }
 
         // make sure all turtles have the correct mappings in their custom
@@ -120,21 +138,19 @@ impl Turtles {
     pub fn create_turtles(
         &self,
         count: u64,
-        breed_name: &str,
+        breed_id: BreedId,
         spawn_point: Point,
         mut on_create: impl FnMut(TurtleId),
         next_int: &mut dyn Rng,
         shapes: &Shapes,
     ) {
-        let breed = self.breeds.get(breed_name).unwrap(); // TODO deal with unwrap
+        let breed = self.get_breed(breed_id);
         for _ in 0..count {
             let color = Color::random(next_int);
             let heading = Heading::random(next_int);
             let shape = breed.borrow().shape.unwrap_or_else(|| {
                 *self
-                    .breeds
-                    .get(BREED_NAME_TURTLES)
-                    .expect("default turtle breed should exist")
+                    .get_breed(BreedId::default())
                     .borrow()
                     .shape
                     .as_ref()
@@ -168,6 +184,12 @@ impl Turtles {
     }
 }
 
+impl Default for Turtles {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Debug)]
 pub struct Turtle {
     id: TurtleId,
@@ -187,6 +209,7 @@ impl Turtle {
 
 #[derive(Debug, Default, Clone)]
 pub struct TurtleData {
+    // TODO need Rc<RefCell<>>? we could just keep a breedid
     pub breed: Rc<RefCell<Breed>>,
     /// The shape of this turtle due to its breed. This may or may not be the
     /// default shape of the turtle's breed.

@@ -3,6 +3,7 @@ use std::rc::Rc;
 use flagset::FlagSet;
 use oxitortoise::sim::agent::Agent;
 use oxitortoise::sim::patch::PatchId;
+use oxitortoise::sim::turtle::BreedId;
 use oxitortoise::util::rng::Rng as _;
 use oxitortoise::{
     scripting::{self as s, CanonExecutionContext},
@@ -10,7 +11,6 @@ use oxitortoise::{
         agent_variables::VarIndex,
         color::{self, Color},
         topology::TopologySpec,
-        turtle::BREED_NAME_TURTLES,
         value::{self, PolyValue},
     },
     updater::{PatchProp, TurtleProp, UpdateAggregator, WriteUpdate},
@@ -65,7 +65,7 @@ fn setup(context: &mut CanonExecutionContext) {
     s::clear_all(context);
 
     // create-turtles
-    s::create_turtles_with_cmd(context, value::Float::new(2.0), BREED_NAME_TURTLES, body_0);
+    s::create_turtles_with_cmd(context, value::Float::new(2.0), BreedId::default(), body_0);
     extern "C" fn body_0(context: &mut CanonExecutionContext) {
         let Agent::Turtle(this_turtle) = context.executor else {
             panic!("must be executed by a turtle");

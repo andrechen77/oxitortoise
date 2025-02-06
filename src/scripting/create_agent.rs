@@ -1,6 +1,6 @@
 use crate::sim::{
     topology::Point,
-    turtle::TurtleId,
+    turtle::{BreedId, TurtleId},
     value::{agentset::TurtleSet, Float},
 };
 
@@ -11,14 +11,14 @@ use super::{CanonClosure, CanonExecutionContext};
 pub extern "C" fn create_turtles_with_cmd(
     context: &mut CanonExecutionContext,
     count: Float,
-    breed_name: &str,
+    breed_id: BreedId,
     initializer_operation: CanonClosure,
 ) {
     let mut new_turtles: Vec<TurtleId> = Vec::new();
     let count = count.to_u64_round_to_zero();
     context.workspace.world.turtles.create_turtles(
         count,
-        breed_name,
+        breed_id,
         Point::ORIGIN,
         |turtle| new_turtles.push(turtle),
         &mut *context.next_int.borrow_mut(),
