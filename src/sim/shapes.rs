@@ -9,6 +9,7 @@ slotmap::new_key_type! {
 
 #[derive(Debug, Default)]
 pub struct Shapes {
+    #[allow(dead_code)] // TODO remove when used
     name_map: HashMap<Rc<str>, ShapeId>,
     shapes: SlotMap<ShapeId, Shape>,
 }

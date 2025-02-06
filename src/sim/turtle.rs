@@ -46,7 +46,7 @@ impl AgentIndexIntoWorld for TurtleId {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Turtles {
     // TODO do we need to store the breeds in a refcell?
     // TODO why store by name? what if we just passed around an index?
@@ -57,10 +57,7 @@ pub struct Turtles {
 
 impl Turtles {
     pub fn new() -> Self {
-        Turtles {
-            breeds: Default::default(),
-            turtle_storage: TurtleStorage::default(),
-        }
+        Self::default()
     }
 
     pub fn breeds(&self) -> impl Iterator<Item = &Rc<RefCell<Breed>>> {
@@ -133,15 +130,15 @@ impl Turtles {
         for _ in 0..count {
             let color = Color::random(next_int);
             let heading = Heading::random(next_int);
-            let shape = breed.borrow().shape.clone().unwrap_or_else(|| {
-                self.breeds
+            let shape = breed.borrow().shape.unwrap_or_else(|| {
+                *self
+                    .breeds
                     .get(BREED_NAME_TURTLES)
                     .expect("default turtle breed should exist")
                     .borrow()
                     .shape
                     .as_ref()
                     .expect("default turtle breed should have a shape")
-                    .clone()
             });
             let shape_name = shapes
                 .get_shape(shape)

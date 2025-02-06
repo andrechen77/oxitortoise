@@ -85,6 +85,7 @@ impl TurtleStorage {
     ///
     /// Panics if the given `TurtleId` does not refer to a turtle in this
     /// struct.
+    #[allow(dead_code)] // TODO remove when used
     pub(super) fn remove_turtle(&self, turtle_id: TurtleId) {
         let mut t = self.inner.borrow_mut();
 
@@ -102,6 +103,7 @@ impl TurtleStorage {
     }
 
     /// Deallocates the turtle data of all turtles that have been removed.
+    #[allow(dead_code)] // TODO remove when used
     pub(super) fn deallocate_removed(&mut self) {
         let mut t = self.inner.borrow_mut();
         let t = &mut *t; // convert to &mut because we need to access different parts concurrently
