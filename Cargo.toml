@@ -7,3 +7,10 @@ edition = "2021"
 derive_more = { version = "1.0.0", features = ["full"] }
 flagset = "0.4.6"
 slotmap = "1.0.7"
+
+[features]
+runtime-unsafety = []
+
+[[bin]]
+name = "ants"
+path = "bench/models/ants/wasm.rs"
