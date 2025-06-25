@@ -10,3 +10,7 @@ slotmap = "1.0.7"
 
 [features]
 runtime-unsafety = []
+
+[[bin]]
+name = "ants"
+path = "bench/models/ants/wasm.rs"
