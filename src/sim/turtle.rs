@@ -156,11 +156,13 @@ impl Turtles {
                     .as_ref()
                     .expect("default turtle breed should have a shape")
             });
+            // TODO: previously this was unwrap but it turned out to be None.
+            // This is a temp fix to get the code to run, but must be revisited
+            // so that we don't get None in the first place.
             let shape_name = shapes
                 .get_shape(shape)
-                .unwrap() // TODO deal with unwrap
-                .name
-                .clone();
+                .map(|s| s.name.clone())
+                .unwrap_or_else(|| Rc::from("somethingwentwrong"));
             let turtle_data = TurtleData {
                 breed: breed.clone(),
                 color,
