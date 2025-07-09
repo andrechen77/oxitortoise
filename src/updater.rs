@@ -3,14 +3,17 @@ use std::{fmt::Write, rc::Rc};
 use flagset::{flags, FlagSet};
 use slotmap::SecondaryMap;
 
-use crate::sim::{
-    color::Color,
-    patch::{Patch, PatchId},
-    tick::Tick,
-    topology::{Heading, Point, TopologySpec},
-    turtle::{Turtle, TurtleId},
-    value::Float,
-    world::World,
+use crate::{
+    sim::{
+        color::Color,
+        patch::{PatchBaseData, PatchId},
+        tick::Tick,
+        topology::{Heading, Point, TopologySpec},
+        turtle::{TurtleBaseData, TurtleId, TurtleWho},
+        value::Float,
+        world::World,
+    },
+    util::gen_slot_tracker::GenSlotMap,
 };
 
 pub trait WriteUpdate {
@@ -32,7 +35,15 @@ pub trait WriteUpdate {
     /// changed to their new values. If this is called on a turtle that the
     /// updater hasn't seen before, the updater also records that the turtle has
     /// been created.
-    fn update_turtle(&mut self, turtle: &Turtle, properties_to_update: FlagSet<TurtleProp>);
+    fn update_turtle(
+        &mut self,
+        world: &World,
+        turtle_id: TurtleId,
+        properties_to_update: FlagSet<TurtleProp>,
+    );
+
+    /// Records in the updater that the specified turtle has died.
+    fn update_turtle_death(&mut self, turtle_who: TurtleWho);
 
     /// Records in the updater that the specified properties of a patch have
     /// changed to their new values.
@@ -42,7 +53,12 @@ pub trait WriteUpdate {
     /// Panics if this updates a patch that this updater doesn't know about yet.
     /// Use [`WriteUpdate::update_world_settings`] to inform this updater about
     /// changes to the topology of the world that affect the number of patches.
-    fn update_patch(&mut self, patch: &Patch, properties_to_update: FlagSet<PatchProp>);
+    fn update_patch(
+        &mut self,
+        world: &World,
+        patch_id: PatchId,
+        properties_to_update: FlagSet<PatchProp>,
+    );
 }
 
 flags! {
@@ -80,8 +96,6 @@ pub struct PatchUpdate {
 
 flags! {
     pub enum TurtleProp: u16 {
-        /// The presence of this flag means that the turtle has died.
-        Death,
         Breed,
         Color,
         Heading,
@@ -136,9 +150,9 @@ pub struct UpdateAggregator {
     // concern here because TurtleIds are not reused even when who numbering
     // resets.
     // https://github.com/NetLogo/Tortoise/blob/8824b1da9db6f83d1a05d086928809efad6fc6b0/engine/src/main/coffee/engine/updater.coffee#L123
-    turtles: SecondaryMap<TurtleId, TurtleUpdate>,
-    /// Contains all turtles that have died in this upcoming update.
-    dead_turtles: Vec<TurtleId>,
+    turtles: GenSlotMap<TurtleId, TurtleUpdate>,
+    /// Contains the who numbers of all the turtles that have died in the upcoming update.
+    dead_turtles: Vec<TurtleWho>,
     /// Maps a PatchId to the properties of that patch that have changed.
     /// This data structure should maintain the same capacity when updates are
     /// collected. It should resize as necessary to accomodate new patches, and
@@ -151,7 +165,7 @@ impl UpdateAggregator {
         Self {
             world: None,
             tick: None,
-            turtles: SecondaryMap::new(),
+            turtles: GenSlotMap::new(),
             dead_turtles: Vec::new(),
             patches: Vec::new(),
         }
@@ -174,18 +188,20 @@ impl WriteUpdate for UpdateAggregator {
             world_update.topology = Some(new_topology);
 
             // include slots for all the new patches to put their updates
-            let mut next_patch_id = self.patches.len();
-            self.patches.resize_with(new_topology.num_patches(), || {
-                // record all the properties of new patch since this is its
-                // first update
-                let patch_data = world.patches[PatchId(next_patch_id)].data.borrow();
-                next_patch_id += 1;
-                Some(PatchUpdate {
-                    pcolor: Some(patch_data.pcolor),
-                    plabel: Some(patch_data.plabel.clone()),
-                    plabel_color: Some(patch_data.plabel_color),
-                })
-            });
+            let mut next_patch_id = self.patches.len() as u32;
+            self.patches
+                .resize_with(new_topology.num_patches() as usize, || {
+                    // record all the properties of new patch since this is its
+                    // first update
+                    let patch_id = PatchId(next_patch_id);
+                    next_patch_id += 1;
+                    let patch_base_data = world.patches.get_patch_base_data(patch_id).unwrap();
+                    Some(PatchUpdate {
+                        pcolor: Some(*world.patches.get_patch_pcolor(patch_id).unwrap()),
+                        plabel: Some(patch_base_data.plabel.clone()),
+                        plabel_color: Some(patch_base_data.plabel_color),
+                    })
+                });
         }
         if props.contains(WorldSettingsProp::PatchSize) {
             world_update.patch_size = Some(7.0); // TODO update the patch size
@@ -196,91 +212,105 @@ impl WriteUpdate for UpdateAggregator {
         self.tick = Some(tick);
     }
 
-    fn update_patch(&mut self, patch: &Patch, properties_to_update: FlagSet<PatchProp>) {
-        let patch_data = patch.data.borrow();
-        let patch_update = self.patches[patch.id().0].get_or_insert_with(Default::default);
+    fn update_patch(
+        &mut self,
+        world: &World,
+        patch_id: PatchId,
+        properties_to_update: FlagSet<PatchProp>,
+    ) {
+        let patch_update = self.patches[patch_id.0 as usize].get_or_insert_with(Default::default);
 
         if properties_to_update.contains(PatchProp::Pcolor) {
-            patch_update.pcolor = Some(patch_data.pcolor);
+            patch_update.pcolor = Some(*world.patches.get_patch_pcolor(patch_id).unwrap());
         }
         if properties_to_update.contains(PatchProp::Plabel) {
-            patch_update.plabel = Some(patch_data.plabel.clone());
+            patch_update.plabel = Some(
+                world
+                    .patches
+                    .get_patch_base_data(patch_id)
+                    .unwrap()
+                    .plabel
+                    .clone(),
+            );
         }
         if properties_to_update.contains(PatchProp::PlabelColor) {
-            patch_update.plabel_color = Some(patch_data.plabel_color);
+            patch_update.plabel_color = Some(
+                world
+                    .patches
+                    .get_patch_base_data(patch_id)
+                    .unwrap()
+                    .plabel_color,
+            );
         }
     }
 
-    fn update_turtle(&mut self, turtle: &Turtle, properties_to_update: FlagSet<TurtleProp>) {
-        if properties_to_update.contains(TurtleProp::Death) {
-            self.dead_turtles.push(turtle.id());
-            self.turtles.insert(turtle.id(), TurtleUpdate::Dead);
-            return;
-        }
+    fn update_turtle_death(&mut self, turtle_who: TurtleWho) {
+        self.dead_turtles.push(turtle_who);
+    }
 
-        let Some(turtle_update_entry) = self.turtles.entry(turtle.id()) else {
-            // we are receiving updates for a turtle whose spot has been taken
-            // by a later update, so our turtle must be dead, so just ignore the
-            // update.
-            return;
-        };
-        let turtle_data = turtle.data.borrow();
-
-        use slotmap::secondary::Entry;
-        match turtle_update_entry {
-            Entry::Occupied(e) => {
+    fn update_turtle(
+        &mut self,
+        world: &World,
+        turtle_id: TurtleId,
+        properties_to_update: FlagSet<TurtleProp>,
+    ) {
+        let turtle_base = world.turtles.get_turtle_base_data(turtle_id).unwrap();
+        let &turtle_heading = world.turtles.get_turtle_heading(turtle_id).unwrap();
+        let &turtle_position = world.turtles.get_turtle_position(turtle_id).unwrap();
+        let breed_name = &world.turtles.get_breed(turtle_base.breed).name;
+        let _ = self.turtles.mutate_or_insert(
+            turtle_id,
+            |turtle_update| {
                 // we have seen this turtle before, so only include the
                 // requested properties
-                if let TurtleUpdate::Alive(turtle_update) = e.into_mut() {
+                if let TurtleUpdate::Alive(turtle_update) = turtle_update {
                     if properties_to_update.contains(TurtleProp::Breed) {
-                        turtle_update.breed_name =
-                            Some(turtle_data.breed.borrow().original_name.clone());
+                        turtle_update.breed_name = Some(breed_name.clone());
                     }
                     if properties_to_update.contains(TurtleProp::Color) {
-                        turtle_update.color = Some(turtle_data.color);
+                        turtle_update.color = Some(turtle_base.color);
                     }
                     if properties_to_update.contains(TurtleProp::Heading) {
-                        turtle_update.heading = Some(turtle_data.heading);
+                        turtle_update.heading = Some(turtle_heading);
                     }
                     if properties_to_update.contains(TurtleProp::LabelColor) {
-                        turtle_update.label_color = Some(turtle_data.label_color);
+                        turtle_update.label_color = Some(turtle_base.label_color);
                     }
                     if properties_to_update.contains(TurtleProp::Hidden) {
-                        turtle_update.hidden = Some(turtle_data.hidden);
+                        turtle_update.hidden = Some(turtle_base.hidden);
                     }
                     if properties_to_update.contains(TurtleProp::Label) {
-                        turtle_update.label = Some(turtle_data.label.clone());
+                        turtle_update.label = Some(turtle_base.label.clone());
                     }
                     // TODO add pensize and penmode
                     if properties_to_update.contains(TurtleProp::Shape) {
-                        turtle_update.shape_name = Some(turtle_data.shape_name.to_string());
+                        turtle_update.shape_name = Some(turtle_base.shape_name.to_string());
                     }
                     if properties_to_update.contains(TurtleProp::Size) {
-                        turtle_update.size = Some(turtle_data.size);
+                        turtle_update.size = Some(turtle_base.size);
                     }
                     if properties_to_update.contains(TurtleProp::Position) {
-                        turtle_update.position = Some(turtle_data.position);
+                        turtle_update.position = Some(turtle_position);
                     }
                 }
-            }
-            Entry::Vacant(e) => {
+            },
+            || {
                 // this is the first time we're seeing this turtle, so include
                 // all properties that should be updated on turtle creation
-                let turtle_update = AliveTurtleUpdate {
-                    breed_name: Some(turtle_data.breed.borrow().original_name.clone()),
-                    color: Some(turtle_data.color),
-                    heading: Some(turtle_data.heading),
-                    label_color: Some(turtle_data.label_color),
-                    label: Some(turtle_data.label.clone()),
-                    hidden: Some(turtle_data.hidden),
+                TurtleUpdate::Alive(AliveTurtleUpdate {
+                    breed_name: Some(breed_name.clone()),
+                    color: Some(turtle_base.color),
+                    heading: Some(turtle_heading),
+                    label_color: Some(turtle_base.label_color),
+                    label: Some(turtle_base.label.clone()),
+                    hidden: Some(turtle_base.hidden),
                     pen_mode_and_size: Some((false, 1.0)), // TODO add pensize and penmode
-                    shape_name: Some(turtle_data.shape_name.to_string()),
-                    size: Some(turtle_data.size),
-                    position: Some(turtle_data.position),
-                };
-                e.insert(TurtleUpdate::Alive(turtle_update));
-            }
-        }
+                    shape_name: Some(turtle_base.shape_name.to_string()),
+                    size: Some(turtle_base.size),
+                    position: Some(turtle_position),
+                })
+            },
+        );
     }
 }
 
@@ -346,7 +376,7 @@ impl UpdateAggregator {
             .map(|p| p.take())
             .enumerate()
             // ignore patches without updates and convert index to PatchId
-            .filter_map(|(i, p)| Some((PatchId(i), p?)))
+            .filter_map(|(i, p)| Some((PatchId(i as u32), p?)))
         {
             write!(w, "{}: {{ ", patch_id.0)?;
             write!(w, "WHO: {}, ", patch_id.0)?;
@@ -360,7 +390,11 @@ impl UpdateAggregator {
                 write!(w, "\"PLABEL-COLOR\": {}, ", plabel_color.to_float().get())?;
             }
             if first_time {
-                let pos = world.patches[patch_id].position_int();
+                let pos = world
+                    .patches
+                    .get_patch_base_data(patch_id)
+                    .unwrap()
+                    .position;
                 write!(w, "PXCOR: {}, PYCOR: {}, ", pos.x, pos.y)?;
             }
             write!(w, "}}, ")?;
@@ -372,31 +406,16 @@ impl UpdateAggregator {
         // and taking its who number in the same update
         self.dead_turtles.sort();
         self.dead_turtles.dedup();
-        for turtle_id in self.dead_turtles.drain(..) {
-            // look up the who number of the turtle as a pure integer. the
-            // lookup should always succeed if we haven't missed any updates for
-            // the world that was passed in, but fallback to -1 in case of bugs
-            let who = world
-                .turtles
-                .get_turtle(turtle_id)
-                .map(|t| t.who().0 as i64)
-                .unwrap_or(-1);
-            write!(w, "{}: {{ WHO: -1 }}, ", who)?;
+        for turtle_who in self.dead_turtles.drain(..) {
+            write!(w, "{}: {{ WHO: -1 }}, ", turtle_who.0)?;
         }
         for (turtle_id, turtle_update) in self.turtles.drain() {
             // only output alive turtle updates here; dead turtles were
             // already serialized above.
             if let TurtleUpdate::Alive(alive_update) = turtle_update {
-                // look up the who number of the turtle as a pure integer. the
-                // lookup should always succeed if we haven't missed any updates for
-                // the world that was passed in, but fallback to -1 in case of bugs
-                let who = world
-                    .turtles
-                    .get_turtle(turtle_id)
-                    .map(|t| t.who().0 as i64)
-                    .unwrap_or(-1);
+                let who = world.turtles.get_turtle_base_data(turtle_id).unwrap().who;
 
-                write!(w, "{}: {{ ", who)?;
+                write!(w, "{}: {{ ", who.0)?;
                 write!(w, "WHO: {}, ", who)?;
                 if let Some(breed_name) = alive_update.breed_name {
                     write!(w, "BREED: \"{}\", ", breed_name)?;

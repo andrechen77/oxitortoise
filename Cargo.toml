@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 derive_more = { version = "1.0.0", features = ["full"] }
+either = "1.15.0"
 flagset = "0.4.6"
 slotmap = "1.0.7"
 

@@ -3,33 +3,39 @@
 //! From the perspective of this code, all turtles belong to a breed. Unbreeded
 //! turtles belong to a special breed that acts like the `turtles` agentset.
 
+use std::collections::HashMap;
 use std::fmt::{self, Debug};
-use std::{collections::HashMap, rc::Rc};
+use std::rc::Rc;
 
-use crate::util::cell::RefCell;
+use derive_more::derive::{From, Into};
+use either::Either;
+use slotmap::SlotMap;
+
+use crate::sim::agent_schema::{AgentFieldDescriptor, AgentSchemaField, TurtleSchema};
+use crate::sim::value::agentset::TurtleSet;
+use crate::sim::value::DynBox;
+use crate::util::gen_slot_tracker::{GenIndex, GenSlotTracker};
+use crate::util::row_buffer::RowBuffer;
 use crate::{
-    sim::{
-        agent_variables::{CustomAgentVariables, VarIndex, VariableMapper},
-        color::Color,
-        topology::Point,
-        value,
-        world::World,
-    },
+    sim::{color::Color, topology::Point, value},
     util::rng::Rng,
 };
 
-use super::agent::{AgentIndexIntoWorld, AgentPosition};
-use super::shapes::{ShapeId, Shapes};
-use super::topology::Heading;
-
-mod turtle_storage;
-
-use turtle_storage::TurtleStorage;
+use crate::sim::shapes::{ShapeId, Shapes};
+use crate::sim::topology::Heading;
 
 /// The who number of a turtle.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Default, PartialOrd, Ord)]
 #[repr(transparent)]
 pub struct TurtleWho(pub u64);
+
+impl TurtleWho {
+    fn take_next(&mut self) -> Self {
+        let who = *self;
+        self.0 += 1;
+        who
+    }
+}
 
 impl fmt::Display for TurtleWho {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -37,229 +43,232 @@ impl fmt::Display for TurtleWho {
     }
 }
 
-slotmap::new_key_type! {
-    /// An invalidate-able reference to a turtle. This is implemented as a
-    /// generational index into the [`Turtles`] data structure.
-    pub struct TurtleId;
-}
-
-impl AgentIndexIntoWorld for TurtleId {
-    type Output<'w> = &'w Turtle;
-
-    fn index_into_world(self, world: &World) -> Option<Self::Output<'_>> {
-        world.turtles.get_turtle(self)
-    }
-}
-
-/// An ID for a breed.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Default)]
-#[repr(transparent)]
-pub struct BreedId(usize);
+/// An ID for a turtle.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, From, Into)]
+pub struct TurtleId(pub GenIndex);
 
 #[derive(Debug)]
 pub struct Turtles {
-    breeds: Vec<Rc<RefCell<Breed>>>,
-    /// Owns the data for the turtles.
-    turtle_storage: TurtleStorage,
+    /// The who number to be given to the next turtle; also how many turtles
+    /// have been created since the last `clear-turtles`.
+    next_who: TurtleWho,
+    /// Tracks which slots of the row buffers are occupied by turtles.
+    slot_tracker: GenSlotTracker,
+    /// The buffers that store the data for the turtle. Each turtle is
+    /// represented by a row in all buffers. There are multiple buffers to
+    /// allow for SoA-style data locality of certain fields.
+    data: Vec<RowBuffer>,
+    /// Fallback storage for custom fields whose type doesn't match the
+    /// compile-time type.
+    fallback_custom_fields: HashMap<(TurtleId, AgentFieldDescriptor), DynBox>,
+    /// The fields of a turtle.
+    turtle_schema: TurtleSchema,
+    /// The number of turtles in the world.
+    num_turtles: u64,
+    /// The breeds of turtles.
+    breeds: SlotMap<BreedId, Breed>,
 }
 
 impl Turtles {
-    pub fn new() -> Self {
+    pub fn new(turtle_schema: TurtleSchema, breeds: SlotMap<BreedId, Breed>) -> Self {
         Self {
-            breeds: vec![Rc::new(RefCell::new(Breed {
-                original_name: Rc::from(BREED_NAME_TURTLES),
-                original_name_singular: Rc::from("turtle"),
-                variable_mapper: VariableMapper::new(),
-                shape: Some(ShapeId::default()),
-            }))],
-            turtle_storage: TurtleStorage::default(),
+            next_who: TurtleWho::default(),
+            slot_tracker: GenSlotTracker::new(),
+            data: turtle_schema.make_row_buffers(),
+            fallback_custom_fields: HashMap::new(),
+            turtle_schema,
+            num_turtles: 0,
+            breeds,
         }
     }
 
-    pub fn get_breed(&self, breed_id: BreedId) -> Rc<RefCell<Breed>> {
-        self.breeds[breed_id.0].clone()
-    }
-
-    pub fn get_breed_by_name(&self, breed_name: &str) -> Option<Rc<RefCell<Breed>>> {
-        // TODO linear search should be fine but consider others
-        self.breeds
-            .iter()
-            .find(|breed| breed.borrow().original_name.as_ref() == breed_name)
-            .cloned()
-    }
-
-    pub fn get_turtle(&self, turtle_id: TurtleId) -> Option<&Turtle> {
-        self.turtle_storage.get_turtle(turtle_id)
-    }
-
-    pub fn turtle_ids(&self) -> Vec<TurtleId> {
-        self.turtle_storage.turtle_ids()
+    pub fn get_breed(&self, id: BreedId) -> &Breed {
+        &self.breeds[id]
     }
 
     pub fn translate_who(&self, who: TurtleWho) -> Option<TurtleId> {
-        self.turtle_storage.translate_who(who)
+        todo!()
     }
 
-    pub fn declare_custom_variables(
-        &mut self,
-        variables_by_breed: impl Iterator<Item = (BreedId, Vec<Rc<str>>)>,
-    ) {
-        // create a mapping from a changed breed to its new-to-old custom
-        // indexes. store the breeds by their address instead of their contents.
-        // this is not only faster, but ensures that in the degenerate case,
-        // breeds with the same contents are treated as distinct
-        let mut new_mappings = HashMap::new();
-
-        for (breed_id, new_custom_variables) in variables_by_breed {
-            let breed = self.get_breed(breed_id);
-            let new_to_old_custom_idxs = breed
-                .borrow_mut()
-                .variable_mapper
-                .declare_custom_variables(new_custom_variables);
-            new_mappings.insert(Rc::as_ptr(&breed), new_to_old_custom_idxs);
-        }
-
-        // make sure all turtles have the correct mappings in their custom
-        // variables
-        for turtle in self.turtle_storage.iter_mut() {
-            if let Some(new_to_old_idxs) =
-                new_mappings.get(&Rc::as_ptr(&turtle.data.get_mut().breed))
-            {
-                turtle
-                    .data
-                    .get_mut()
-                    .custom_variables
-                    .set_variable_mapping(new_to_old_idxs);
-            }
-        }
-    }
-
-    /// Creates the turtles and returns a list of their ids.
     pub fn create_turtles(
-        &self,
+        &mut self,
+        breed: BreedId,
         count: u64,
-        breed_id: BreedId,
         spawn_point: Point,
-        mut on_create: impl FnMut(TurtleId),
         next_int: &mut dyn Rng,
-        shapes: &Shapes,
-    ) {
-        let breed = self.get_breed(breed_id);
+    ) -> TurtleSet {
+        for buffer in &mut self.data {
+            buffer.ensure_capacity((self.num_turtles + count) as usize);
+        }
+
+        let mut new_turtles: Vec<TurtleId> = Vec::new();
         for _ in 0..count {
+            let idx = self.slot_tracker.allocate();
+            let id = TurtleId(idx);
+            let who = self.next_who.take_next();
             let color = Color::random(next_int);
             let heading = Heading::random(next_int);
-            let shape = breed.borrow().shape.unwrap_or_else(|| {
-                *self
-                    .get_breed(BreedId::default())
-                    .borrow()
-                    .shape
-                    .as_ref()
-                    .expect("default turtle breed should have a shape")
-            });
-            // TODO: previously this was unwrap but it turned out to be None.
-            // This is a temp fix to get the code to run, but must be revisited
-            // so that we don't get None in the first place.
-            let shape_name = shapes
-                .get_shape(shape)
-                .map(|s| s.name.clone())
-                .unwrap_or_else(|| Rc::from("somethingwentwrong"));
-            let turtle_data = TurtleData {
-                breed: breed.clone(),
+            let shape_name = "default".to_owned(); // TODO use the breed's default shape
+
+            // initialize base data
+            let base_data = TurtleBaseData {
+                who,
+                breed,
                 color,
-                heading,
-                position: spawn_point,
                 label: String::new(),
                 label_color: color, // TODO use a default label color
                 hidden: false,
                 size: value::Float::new(1.0),
                 shape_name,
-                custom_variables: CustomAgentVariables::new(),
             };
+            self.data[0]
+                .row_mut(id.0.index as usize)
+                .insert(0, base_data);
 
-            let turtle_id = self.turtle_storage.add_turtle(turtle_data);
-            on_create(turtle_id);
+            // set builtin variables that aren't in the base data
+            let heading_desc = self.turtle_schema.heading();
+            self.data[heading_desc.buffer_idx as usize]
+                .row_mut(id.0.index as usize)
+                .insert(heading_desc.field_idx as usize, heading);
+            let position_desc = self.turtle_schema.position();
+            self.data[position_desc.buffer_idx as usize]
+                .row_mut(id.0.index as usize)
+                .insert(position_desc.field_idx as usize, spawn_point);
+
+            // put in the default value for custom fields
+            let custom_fields = &self.breeds[breed].active_custom_fields;
+            for &field in custom_fields {
+                let AgentSchemaField::Other(r#type) = &self.turtle_schema[field] else {
+                    panic!("field at index {:?} should be a custom field", field);
+                };
+                if r#type.is_numeric_zeroable() {
+                    self.data[field.buffer_idx as usize]
+                        .row_mut(idx.index as usize)
+                        .insert_zeroable(field.field_idx as usize);
+                } else {
+                    self.fallback_custom_fields
+                        .insert((id, field), DynBox::ZERO);
+                }
+            }
+
+            new_turtles.push(id);
+        }
+        self.num_turtles += count;
+        TurtleSet::new(new_turtles)
+    }
+
+    pub fn turtle_ids(&self) -> impl Iterator<Item = TurtleId> + '_ {
+        self.slot_tracker.iter().map(|id| TurtleId(id))
+    }
+
+    /// Get a reference to a field of a turtle. Returns `None` if the
+    /// turtle does not exist.
+    pub fn get_turtle_field<T: 'static>(
+        &self,
+        id: TurtleId,
+        field: AgentFieldDescriptor,
+    ) -> Option<Either<&T, &DynBox>> {
+        if !self.slot_tracker.has_key(id.0) {
+            return None;
+        }
+        if let Some(field) = self.data[field.buffer_idx as usize]
+            .row(id.0.index as usize)
+            .get(field.field_idx as usize)
+        {
+            Some(Either::Left(field))
+        } else {
+            let fallback = self.fallback_custom_fields.get(&(id, field));
+            Some(Either::Right(fallback.unwrap())) // TODO handle unwrap
         }
     }
 
-    pub fn clear(&self) {
-        self.turtle_storage.clear();
+    pub fn get_turtle_base_data(&self, id: TurtleId) -> Option<&TurtleBaseData> {
+        self.get_turtle_field(id, AgentFieldDescriptor::BASE_DATA)
+            .map(|either| either.expect_left("base data should always exist in the row buffer"))
     }
-}
 
-impl Default for Turtles {
-    fn default() -> Self {
-        Self::new()
+    pub fn get_turtle_heading(&self, id: TurtleId) -> Option<&Heading> {
+        self.get_turtle_field(id, self.turtle_schema.heading())
+            .map(|either| either.expect_left("heading should always exist in the row buffer"))
+    }
+
+    pub fn get_turtle_position(&self, id: TurtleId) -> Option<&Point> {
+        self.get_turtle_field(id, self.turtle_schema.position())
+            .map(|either| either.expect_left("position should always exist in the row buffer"))
+    }
+
+    /// Get a mutable reference to a field of a turtle. Returns `None` if the
+    /// turtle does not exist.
+    pub fn get_turtle_field_mut<T: 'static>(
+        &mut self,
+        id: TurtleId,
+        field: AgentFieldDescriptor,
+    ) -> Option<Either<&mut T, &mut DynBox>> {
+        if !self.slot_tracker.has_key(id.0) {
+            return None;
+        }
+        if let Some(field) = self.data[field.buffer_idx as usize]
+            .row_mut(id.0.index as usize)
+            .get_mut(field.field_idx as usize)
+        {
+            Some(Either::Left(field))
+        } else {
+            let fallback = self.fallback_custom_fields.get_mut(&(id, field));
+            Some(Either::Right(fallback.unwrap())) // TODO handle unwrap
+        }
+    }
+
+    pub fn get_turtle_base_data_mut(&mut self, id: TurtleId) -> Option<&mut TurtleBaseData> {
+        self.get_turtle_field_mut(id, AgentFieldDescriptor::BASE_DATA)
+            .map(|either| either.expect_left("base data should always exist in the row buffer"))
+    }
+
+    pub fn get_turtle_heading_mut(&mut self, id: TurtleId) -> Option<&mut Heading> {
+        self.get_turtle_field_mut(id, self.turtle_schema.heading())
+            .map(|either| either.expect_left("heading should always exist in the row buffer"))
+    }
+
+    pub fn get_turtle_position_mut(&mut self, id: TurtleId) -> Option<&mut Point> {
+        self.get_turtle_field_mut(id, self.turtle_schema.position())
+            .map(|either| either.expect_left("position should always exist in the row buffer"))
+    }
+
+    pub fn clear(&mut self) {
+        self.slot_tracker.clear();
+        self.next_who = TurtleWho::default();
+        self.fallback_custom_fields.clear();
+        for buffer in self.data.iter_mut() {
+            buffer.clear();
+        }
     }
 }
 
 #[derive(Debug)]
-pub struct Turtle {
-    id: TurtleId,
-    who: TurtleWho,
-    pub data: RefCell<TurtleData>,
-}
-
-impl Turtle {
-    pub fn id(&self) -> TurtleId {
-        self.id
-    }
-
-    pub fn who(&self) -> TurtleWho {
-        self.who
-    }
-}
-
-#[derive(Debug, Default, Clone)]
-pub struct TurtleData {
-    // TODO need Rc<RefCell<>>? we could just keep a breedid
-    pub breed: Rc<RefCell<Breed>>,
+#[repr(C)]
+pub struct TurtleBaseData {
+    pub who: TurtleWho,
+    pub breed: BreedId,
     /// The shape of this turtle due to its breed. This may or may not be the
     /// default shape of the turtle's breed.
-    pub shape_name: Rc<str>,
+    pub shape_name: String, // TODO consider using the netlogo version of string for this
     pub color: Color,
-    pub heading: Heading,
-    pub position: Point,
     pub label: String, // TODO consider using the netlogo version of string for this
     pub label_color: Color,
     pub hidden: bool,
     pub size: value::Float,
-    custom_variables: CustomAgentVariables,
 }
 
-impl TurtleData {
-    pub fn get_custom(&self, index: VarIndex) -> &value::PolyValue {
-        &self.custom_variables[index]
-    }
-
-    pub fn set_custom(&mut self, index: VarIndex, value: value::PolyValue) {
-        self.custom_variables[index] = value;
-    }
+slotmap::new_key_type! {
+    /// An ID for a breed.
+    pub struct BreedId;
 }
 
-impl AgentPosition for Turtle {
-    fn position(&self) -> Point {
-        self.data.borrow().position
-    }
-}
-
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Breed {
-    pub original_name: Rc<str>,
-    #[allow(dead_code)]
-    pub original_name_singular: Rc<str>,
-    variable_mapper: VariableMapper,
-    /// The default shape of this breed. `None` means that this breed should
-    /// use the same shape as the default breed's shape. This must not be `None`
-    /// if it is a default breed.
-    shape: Option<ShapeId>,
+    pub name: Rc<str>,
+    pub singular_name: Rc<str>,
+    /// Which fields of the turtle record are active for this breed.
+    pub active_custom_fields: Vec<AgentFieldDescriptor>,
 }
 
-impl Breed {
-    pub fn set_default_shape(&mut self, shape: ShapeId) {
-        self.shape = Some(shape);
-    }
-}
-
-pub const BREED_NAME_TURTLES: &str = "TURTLES";
-
-pub const TURTLE_DEFAULT_SHAPE: &str = "default";
+// TODO write tests for turtle initialization and access

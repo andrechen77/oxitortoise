@@ -8,12 +8,13 @@ mod heading;
 pub use heading::Heading;
 
 /// The type used to refer to integer patch coordinates.
-pub type CoordInt = i64;
+pub type CoordInt = i32;
 
 /// The type used to refer to floating-point patch coordinates.
 pub type CoordFloat = f64;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(C)]
 pub struct PointInt {
     pub x: CoordInt,
     pub y: CoordInt,
@@ -26,6 +27,7 @@ impl fmt::Display for PointInt {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[repr(C)]
 pub struct Point {
     pub x: CoordFloat,
     pub y: CoordFloat,
@@ -80,8 +82,8 @@ pub struct TopologySpec {
 
 impl TopologySpec {
     #[inline(always)]
-    pub fn num_patches(&self) -> usize {
-        self.patches_width as usize * self.patches_height as usize
+    pub fn num_patches(&self) -> u32 {
+        self.patches_width as u32 * self.patches_height as u32
     }
 
     #[inline(always)]
@@ -92,6 +94,15 @@ impl TopologySpec {
     #[inline(always)]
     pub fn min_pycor(&self) -> CoordInt {
         self.max_pycor - self.patches_height + 1
+    }
+
+    #[inline(always)]
+    pub fn patch_at(&self, point: PointInt) -> PatchId {
+        let width = self.patches_width;
+        let max_pycor = self.max_pycor;
+        let min_pxcor = self.min_pxcor;
+        let i = (max_pycor - point.y) * width + (point.x - min_pxcor);
+        PatchId(i as u32)
     }
 }
 
@@ -155,7 +166,7 @@ impl Topology {
     }
 
     #[inline(always)]
-    pub fn num_patches(&self) -> usize {
+    pub fn num_patches(&self) -> u32 {
         self.spec.num_patches()
     }
 
@@ -204,11 +215,7 @@ impl Topology {
     /// otherwise the PatchId returned will be nonsense.
     #[inline]
     pub fn patch_at(&self, point: PointInt) -> PatchId {
-        let width = self.patches_width();
-        let max_pycor = self.max_pycor();
-        let min_pxcor = self.min_pxcor();
-        let i = (max_pycor - point.y) * width + (point.x - min_pxcor);
-        PatchId(i as usize)
+        self.spec.patch_at(point)
     }
 
     /// Takes a point and returns its wrapped equivalent. If the point is
@@ -259,7 +266,7 @@ fn wrap_coordinate(coord: CoordFloat, min: CoordFloat, len: CoordFloat) -> Coord
     min + offset_from_min
 }
 
-pub fn euclidean_distance_unwrapped(a: Point, b: Point) -> value::Float {
+pub fn euclidean_distance_no_wrap(a: Point, b: Point) -> value::Float {
     let dx = a.x - b.x;
     let dy = a.y - b.y;
     value::Float::new((dx * dx + dy * dy).sqrt())

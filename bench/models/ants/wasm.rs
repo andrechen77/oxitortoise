@@ -1,60 +1,101 @@
 use std::rc::Rc;
+use std::sync::OnceLock;
 
 use flagset::FlagSet;
 use oxitortoise::exec::CanonExecutionContext;
-use oxitortoise::sim::agent::Agent;
-use oxitortoise::sim::patch::PatchId;
-use oxitortoise::sim::turtle::BreedId;
-use oxitortoise::util::rng::Rng as _;
+use oxitortoise::sim::agent_schema::{AgentFieldDescriptor, PatchSchema, TurtleSchema};
+use oxitortoise::sim::patch::{PatchId, Patches};
+use oxitortoise::sim::shapes::Shapes;
+use oxitortoise::sim::tick::Tick;
+use oxitortoise::sim::topology::{Heading, Point, Topology};
+use oxitortoise::sim::turtle::{Breed, BreedId, Turtles};
+use oxitortoise::sim::value::agentset::{AllPatches, AllTurtles, IterateAgentset as _};
+use oxitortoise::sim::value::{Boolean, Float, NetlogoInternalType};
+use oxitortoise::sim::world::World;
+use oxitortoise::util::cell::RefCell;
+use oxitortoise::util::rng::{CanonRng, Rng as _};
 use oxitortoise::{
-    scripting_prelude as s,
+    exec::scripting::prelude as s,
     sim::{
-        agent_variables::VarIndex,
         color::{self, Color},
         topology::TopologySpec,
-        value::{self, PolyValue},
     },
     updater::{PatchProp, TurtleProp, UpdateAggregator, WriteUpdate},
     workspace::Workspace,
 };
+use slotmap::SlotMap;
 
-const PATCH_CHEMICAL: VarIndex = VarIndex::from_index(0);
-const PATCH_FOOD: VarIndex = VarIndex::from_index(1);
-const PATCH_NEST: VarIndex = VarIndex::from_index(2);
-const PATCH_NEST_SCENT: VarIndex = VarIndex::from_index(3);
-const PATCH_FOOD_SOURCE_NUMBER: VarIndex = VarIndex::from_index(4);
+const PATCH_CHEMICAL: AgentFieldDescriptor = AgentFieldDescriptor {
+    buffer_idx: 2,
+    field_idx: 0,
+};
+const PATCH_FOOD: AgentFieldDescriptor = AgentFieldDescriptor {
+    buffer_idx: 0,
+    field_idx: 1,
+};
+const PATCH_NEST: AgentFieldDescriptor = AgentFieldDescriptor {
+    buffer_idx: 0,
+    field_idx: 2,
+};
+const PATCH_NEST_SCENT: AgentFieldDescriptor = AgentFieldDescriptor {
+    buffer_idx: 0,
+    field_idx: 3,
+};
+const PATCH_FOOD_SOURCE_NUMBER: AgentFieldDescriptor = AgentFieldDescriptor {
+    buffer_idx: 0,
+    field_idx: 4,
+};
+static DEFAULT_TURTLE_BREED: OnceLock<BreedId> = OnceLock::new();
 
 #[no_mangle]
 #[inline(never)]
 fn create_workspace() -> Workspace {
-    let mut workspace = Workspace::new(TopologySpec {
+    let topology_spec = TopologySpec {
         min_pxcor: -35,
         max_pycor: 35,
         patches_width: 71,
         patches_height: 71,
         wrap_x: false,
         wrap_y: false,
-    });
+    };
+    let patch_schema = PatchSchema::new(
+        1,
+        &[
+            (NetlogoInternalType::FLOAT, 2),   // chemical
+            (NetlogoInternalType::FLOAT, 0),   // food
+            (NetlogoInternalType::BOOLEAN, 0), // nest?
+            (NetlogoInternalType::FLOAT, 0),   // nest-scent
+            (NetlogoInternalType::FLOAT, 0),   // food-source-number
+        ],
+        &[1, 2],
+    );
+    let turtle_schema = TurtleSchema::default();
+    let patches = Patches::new(patch_schema, &topology_spec);
+    let turtle_breeds = {
+        let mut breeds = SlotMap::with_key();
+        let key = breeds.insert(Breed {
+            name: Rc::from("turtles"),
+            singular_name: Rc::from("turtle"),
+            active_custom_fields: vec![],
+        });
+        DEFAULT_TURTLE_BREED.set(key).unwrap();
+        breeds
+    };
+    let turtles = Turtles::new(turtle_schema, turtle_breeds);
+    let topology = Topology::new(topology_spec);
+    let tick_counter = Tick::default();
+    let shapes = Shapes::default();
+    let world = World {
+        turtles,
+        patches,
+        topology,
+        tick_counter,
+        shapes,
+    };
+    let rng = Rc::new(RefCell::new(CanonRng::new(0)));
+    let workspace = Workspace { world, rng };
 
-    // declare widget variable
-    workspace
-        .world
-        .observer
-        .borrow_mut()
-        .create_widget_global(Rc::from("population"), value::Float::new(2.0).into());
-
-    // `patches-own [...]`
-    let patch_var_names = [
-        Rc::from("chemical"),
-        Rc::from("food"),
-        Rc::from("nest?"),
-        Rc::from("nest-scent"),
-        Rc::from("food-source-number"),
-    ];
-    workspace
-        .world
-        .patches
-        .declare_custom_variables(patch_var_names.to_vec());
+    // TODO declare the population widget variable
 
     workspace
 }
@@ -66,48 +107,66 @@ fn setup(context: &mut CanonExecutionContext) {
     s::clear_all(context);
 
     // create-turtles
-    s::create_turtles_with_cmd(context, value::Float::new(2.0), BreedId::default(), body_0);
-    extern "C" fn body_0(context: &mut CanonExecutionContext) {
-        let Agent::Turtle(this_turtle) = context.executor else {
-            panic!("must be executed by a turtle");
-        };
-        this_turtle.data.borrow_mut().size = value::Float::new(2.0);
-        this_turtle.data.borrow_mut().color = Color::RED;
-        context
-            .updater
-            .update_turtle(this_turtle, TurtleProp::Size | TurtleProp::Color);
+    let new_turtles = s::create_turtles(
+        context,
+        *DEFAULT_TURTLE_BREED.get().unwrap(),
+        125,
+        Point::ORIGIN,
+    );
+    for turtle_id in new_turtles.into_iter(&context.workspace.world, context.next_int.clone()) {
+        let base_data = context
+            .workspace
+            .world
+            .turtles
+            .get_turtle_base_data_mut(turtle_id)
+            .unwrap();
+        base_data.size = Float::new(2.0);
+        base_data.color = Color::RED;
+        context.updater.update_turtle(
+            &context.workspace.world,
+            turtle_id,
+            TurtleProp::Size | TurtleProp::Color,
+        );
     }
 
     // setup-patches
-    s::ask_all_patches(context, body_1);
-    extern "C" fn body_1(context: &mut CanonExecutionContext) {
-        let Agent::Patch(this_patch) = context.executor else {
-            panic!("must be executed by a patch");
+    for patch_id in AllPatches.into_iter(&context.workspace.world, context.next_int.clone()) {
+        // calculate distancexy 0 0
+        let this_patch = context
+            .workspace
+            .world
+            .patches
+            .get_patch_base_data(patch_id)
+            .unwrap();
+        let pxcor = this_patch.position.x;
+        let pycor = this_patch.position.y;
+        let this_patch_point = Point {
+            x: pxcor as f64,
+            y: pycor as f64,
         };
+        let distance_origin = s::distance_euclidean_no_wrap(this_patch_point, Point::ORIGIN);
 
         // set nest? (distancexy 0 0) < 5
         {
-            let distance = s::distancexy_euclidean_patch(
-                this_patch,
-                value::Float::new(0.0),
-                value::Float::new(0.0),
-            );
-            let condition: value::Boolean = (distance < value::Float::new(5.0)).into();
-            let condition = PolyValue::from(condition);
-            this_patch
-                .data
-                .borrow_mut()
-                .set_custom(PATCH_NEST, condition);
+            let condition = Boolean(distance_origin < Float::new(5.0));
+            context
+                .workspace
+                .world
+                .patches
+                .set_patch_field(patch_id, PATCH_NEST, condition);
         }
 
         // set nest-scent 200 - distancexy 0 0
         {
-            let distance = s::distancexy_euclidean_patch(this_patch, 0.0.into(), 0.0.into());
-            let nest_scent = value::Float::new(200.0) - distance;
-            this_patch
-                .data
-                .borrow_mut()
-                .set_custom(PATCH_NEST_SCENT, nest_scent.into());
+            let nest_scent = Float::new(200.0) - distance_origin;
+            let field: &mut Float = context
+                .workspace
+                .world
+                .patches
+                .get_patch_field_mut(patch_id, PATCH_NEST_SCENT)
+                .unwrap()
+                .unwrap_left();
+            *field = nest_scent;
         }
 
         // setup-food
@@ -117,74 +176,85 @@ fn setup(context: &mut CanonExecutionContext) {
 
             // if (distancexy (0.6 * max-pxcor) 0) < 5 [ set food-source-number 1 ]
             {
-                let x = value::Float::new(0.6) * max_pxcor;
-                let y = value::Float::new(0.0);
-                let distance = s::distancexy_euclidean_patch(this_patch, x, y);
-                let condition = distance < value::Float::new(5.0);
-                if condition {
-                    this_patch.data.borrow_mut().set_custom(
-                        PATCH_FOOD_SOURCE_NUMBER,
-                        PolyValue::from(value::Float::new(1.0)),
-                    );
+                let x = 0.6 * max_pxcor.get();
+                let y = 0.0;
+                let distance = s::distance_euclidean_no_wrap(this_patch_point, Point { x, y });
+                if distance < Float::new(5.0) {
+                    let field: &mut Float = context
+                        .workspace
+                        .world
+                        .patches
+                        .get_patch_field_mut(patch_id, PATCH_FOOD_SOURCE_NUMBER)
+                        .unwrap()
+                        .unwrap_left();
+                    *field = Float::new(1.0);
                 }
             }
 
             // if (distancexy (-0.6 * max-pxcor) (-0.6 * max-pycor)) < 5 [ set food-source-number 2 ]
             {
-                let x = value::Float::new(-0.6) * max_pxcor;
-                let y = value::Float::new(-0.6) * max_pycor;
-                let distance = s::distancexy_euclidean_patch(this_patch, x, y);
-                let condition = distance < value::Float::new(5.0);
-                if condition {
-                    this_patch.data.borrow_mut().set_custom(
-                        PATCH_FOOD_SOURCE_NUMBER,
-                        PolyValue::from(value::Float::new(2.0)),
-                    );
+                let x = -0.6 * max_pxcor.get();
+                let y = -0.6 * max_pycor.get();
+                let distance = s::distance_euclidean_no_wrap(this_patch_point, Point { x, y });
+                if distance < Float::new(5.0) {
+                    let field: &mut Float = context
+                        .workspace
+                        .world
+                        .patches
+                        .get_patch_field_mut(patch_id, PATCH_FOOD_SOURCE_NUMBER)
+                        .unwrap()
+                        .unwrap_left();
+                    *field = Float::new(2.0);
                 }
             }
 
             // if (distancexy (-0.8 * max-pxcor) (0.8 * max-pycor)) < 5 [ set food-source-number 3 ]
             {
-                let x = value::Float::new(-0.8) * max_pxcor;
-                let y = value::Float::new(0.8) * max_pycor;
-                let distance = s::distancexy_euclidean_patch(this_patch, x, y);
-                let condition = distance < value::Float::new(5.0);
-                if condition {
-                    this_patch.data.borrow_mut().set_custom(
-                        PATCH_FOOD_SOURCE_NUMBER,
-                        PolyValue::from(value::Float::new(3.0)),
-                    );
+                let x = -0.8 * max_pxcor.get();
+                let y = 0.8 * max_pycor.get();
+                let distance = s::distance_euclidean_no_wrap(this_patch_point, Point { x, y });
+                if distance < Float::new(5.0) {
+                    let field: &mut Float = context
+                        .workspace
+                        .world
+                        .patches
+                        .get_patch_field_mut(patch_id, PATCH_FOOD_SOURCE_NUMBER)
+                        .unwrap()
+                        .unwrap_left();
+                    *field = Float::new(3.0);
                 }
             }
-
-            // TODO everything below here is just to make the model work and not
-            // what the script would actually look like
 
             // if food-source-number > 0 [ set food one-of [1 2] ]
             {
-                let food_source_number = *this_patch
-                    .data
-                    .borrow()
-                    .get_custom(PATCH_FOOD_SOURCE_NUMBER)
-                    .get::<value::Float>()
-                    .unwrap();
-                if food_source_number > value::Float::new(0.0) {
+                let food_source_number: Float = *context
+                    .workspace
+                    .world
+                    .patches
+                    .get_patch_field(patch_id, PATCH_FOOD_SOURCE_NUMBER)
+                    .unwrap()
+                    .unwrap_left();
+                if food_source_number > Float::new(0.0) {
                     let rand_index = context.next_int.borrow_mut().next_int(2);
                     let food_value = match rand_index {
-                        0 => value::Float::new(1.0),
-                        1 => value::Float::new(2.0),
+                        0 => Float::new(1.0),
+                        1 => Float::new(2.0),
                         _ => unreachable!("rand_index should be 0 or 1"),
                     };
-                    this_patch
-                        .data
-                        .borrow_mut()
-                        .set_custom(PATCH_FOOD, PolyValue::from(food_value));
+                    let field: &mut Float = context
+                        .workspace
+                        .world
+                        .patches
+                        .get_patch_field_mut(patch_id, PATCH_FOOD)
+                        .unwrap()
+                        .unwrap_left();
+                    *field = food_value;
                 }
             }
-        }
 
-        // recolor-patch
-        recolor_patch(context);
+            // recolor-patch
+            recolor_patch(context, patch_id);
+        }
     }
 
     // reset-ticks
@@ -196,85 +266,97 @@ fn setup(context: &mut CanonExecutionContext) {
 
 #[no_mangle]
 #[inline(never)]
-fn recolor_patch(context: &mut CanonExecutionContext) {
-    let Agent::Patch(this_patch) = context.executor else {
-        panic!("agent should be a patch");
-    };
-
+fn recolor_patch(context: &mut CanonExecutionContext, executor: PatchId) {
     // ifelse nest?
-    let condition = *this_patch
-        .data
-        .borrow()
-        .get_custom(PATCH_NEST)
-        .get::<value::Boolean>()
-        .unwrap();
+    let condition: Boolean = *context
+        .workspace
+        .world
+        .patches
+        .get_patch_field(executor, PATCH_NEST)
+        .unwrap()
+        .unwrap_left();
     if condition.0 {
         // set pcolor violet
-        this_patch.data.borrow_mut().pcolor = Color::VIOLET;
+        let field: &mut Color = context
+            .workspace
+            .world
+            .patches
+            .get_patch_pcolor_mut(executor)
+            .unwrap();
+        *field = Color::VIOLET;
     } else {
         // ifelse food > 0
-        let food = *this_patch
-            .data
-            .borrow()
-            .get_custom(PATCH_FOOD)
-            .get::<value::Float>()
-            .unwrap();
-        if food > value::Float::new(0.0) {
+        let food: Float = *context
+            .workspace
+            .world
+            .patches
+            .get_patch_field(executor, PATCH_FOOD)
+            .unwrap()
+            .unwrap_left();
+        if food > Float::new(0.0) {
             // if food-source-number = 1 [ set pcolor cyan ]
             //   if food-source-number = 2 [ set pcolor sky  ]
             //   if food-source-number = 3 [ set pcolor blue ]
-            let food_source_number = *this_patch
-                .data
-                .borrow()
-                .get_custom(PATCH_FOOD_SOURCE_NUMBER)
-                .get::<value::Float>()
+            let food_source_number: Float = *context
+                .workspace
+                .world
+                .patches
+                .get_patch_field(executor, PATCH_FOOD_SOURCE_NUMBER)
+                .unwrap()
+                .unwrap_left();
+            let field: &mut Color = context
+                .workspace
+                .world
+                .patches
+                .get_patch_pcolor_mut(executor)
                 .unwrap();
-            if food_source_number == value::Float::new(1.0) {
-                this_patch.data.borrow_mut().pcolor = Color::CYAN;
+            if food_source_number == Float::new(1.0) {
+                *field = Color::CYAN;
             }
-            if food_source_number == value::Float::new(2.0) {
-                this_patch.data.borrow_mut().pcolor = Color::SKY;
+            if food_source_number == Float::new(2.0) {
+                *field = Color::SKY;
             }
-            if food_source_number == value::Float::new(3.0) {
-                this_patch.data.borrow_mut().pcolor = Color::BLUE;
+            if food_source_number == Float::new(3.0) {
+                *field = Color::BLUE;
             }
         } else {
             // set pcolor scale-color green chemical 0.1 5
-            let &chemical = this_patch
-                .data
-                .borrow()
-                .get_custom(PATCH_CHEMICAL)
-                .get::<value::Float>()
+            let chemical = *context
+                .workspace
+                .world
+                .patches
+                .get_patch_field(executor, PATCH_CHEMICAL)
+                .unwrap()
+                .unwrap_left();
+            let scaled_color =
+                color::scale_color(Color::GREEN, chemical, Float::new(0.1), Float::new(5.0));
+            let field: &mut Color = context
+                .workspace
+                .world
+                .patches
+                .get_patch_pcolor_mut(executor)
                 .unwrap();
-            let scaled_color = color::scale_color(
-                Color::GREEN,
-                chemical,
-                value::Float::new(0.1),
-                value::Float::new(5.0),
-            );
-            this_patch.data.borrow_mut().pcolor = scaled_color;
+            *field = scaled_color;
         }
     }
 
     context
         .updater
-        .update_patch(this_patch, PatchProp::Pcolor.into());
+        .update_patch(&context.workspace.world, executor, PatchProp::Pcolor.into());
 }
 
 #[no_mangle]
 #[inline(never)]
 fn go(context: &mut CanonExecutionContext) {
-    // TODO everything below here is just to make the model work and not
-    // what the script would actually look like
-
-    s::ask_all_turtles(context, body_0);
-    extern "C" fn body_0(context: &mut CanonExecutionContext) {
-        let Agent::Turtle(this_turtle) = context.executor else {
-            panic!("agent should be a turtle");
-        };
-
+    for turtle_id in AllTurtles.into_iter(&context.workspace.world, context.next_int.clone()) {
         // if who >= ticks [ stop ]
-        let who: value::Float = this_turtle.who().into();
+        let base_data = context
+            .workspace
+            .world
+            .turtles
+            .get_turtle_base_data(turtle_id)
+            .unwrap();
+        let who: Float = base_data.who.into();
         let Some(ticks) = context.workspace.world.tick_counter.get() else {
             panic!("ticks have not started yet");
         };
@@ -282,57 +364,199 @@ fn go(context: &mut CanonExecutionContext) {
             return;
         }
 
+        let mut position = *context
+            .workspace
+            .world
+            .turtles
+            .get_turtle_position(turtle_id)
+            .unwrap();
+        let mut heading = *context
+            .workspace
+            .world
+            .turtles
+            .get_turtle_heading(turtle_id)
+            .unwrap();
+
         // ifelse color = red
-        if this_turtle.data.borrow().color == Color::RED {
+        if base_data.color == Color::RED {
             // look-for-food
-            look_for_food(context);
+            {
+                let patch_here_id = s::patch_at(&context.workspace.world, position.round_to_int());
+
+                // if food > 0
+                let food: Float = *context
+                    .workspace
+                    .world
+                    .patches
+                    .get_patch_field(patch_here_id, PATCH_FOOD)
+                    .unwrap()
+                    .unwrap_left();
+                if food > Float::new(0.0) {
+                    // set color orange + 1
+                    let new_color = Color::ORANGE + Float::new(1.0);
+                    let base_data = context
+                        .workspace
+                        .world
+                        .turtles
+                        .get_turtle_base_data_mut(turtle_id)
+                        .unwrap();
+                    base_data.color = new_color;
+
+                    // set food food - 1
+                    let new_food = food - Float::new(1.0);
+                    let field: &mut Float = context
+                        .workspace
+                        .world
+                        .patches
+                        .get_patch_field_mut(patch_here_id, PATCH_FOOD)
+                        .unwrap()
+                        .unwrap_left();
+                    *field = new_food;
+
+                    // rt 180
+                    heading += Float::new(180.0);
+                    *context
+                        .workspace
+                        .world
+                        .turtles
+                        .get_turtle_heading_mut(turtle_id)
+                        .unwrap() = heading;
+
+                    // stop
+                    return;
+                }
+
+                // if (chemical >= 0.05) and (chemical < 2)
+                let chemical: Float = *context
+                    .workspace
+                    .world
+                    .patches
+                    .get_patch_field(patch_here_id, PATCH_CHEMICAL)
+                    .unwrap()
+                    .unwrap_left();
+                if (chemical >= Float::new(0.05)) && (chemical < Float::new(2.0)) {
+                    // uphill-chemical
+                    uphill_patch_variable(context, position, &mut heading, PATCH_CHEMICAL);
+                }
+            }
         } else {
             // return-to-nest
-            return_to_nest(context);
+            {
+                let patch_here_id = s::patch_at(&context.workspace.world, position.round_to_int());
+
+                // ifelse nest?
+                let nest: Boolean = *context
+                    .workspace
+                    .world
+                    .patches
+                    .get_patch_field(patch_here_id, PATCH_NEST)
+                    .unwrap()
+                    .unwrap_left();
+                if nest.0 {
+                    // set color red
+                    let base_data = context
+                        .workspace
+                        .world
+                        .turtles
+                        .get_turtle_base_data_mut(turtle_id)
+                        .unwrap();
+                    base_data.color = Color::RED;
+
+                    // rt 180
+                    heading += Float::new(180.0);
+                    *context
+                        .workspace
+                        .world
+                        .turtles
+                        .get_turtle_heading_mut(turtle_id)
+                        .unwrap() = heading;
+                } else {
+                    // set chemical chemical + 60
+                    let field: &mut Float = context
+                        .workspace
+                        .world
+                        .patches
+                        .get_patch_field_mut(patch_here_id, PATCH_CHEMICAL)
+                        .unwrap()
+                        .unwrap_left();
+                    *field += Float::new(60.0);
+
+                    // uphill-nest-scent
+                    uphill_patch_variable(context, position, &mut heading, PATCH_NEST_SCENT);
+                }
+            }
         }
 
         // wiggle
-        wiggle(context);
+        {
+            // rt random 40
+            let rand_result = Float::from(s::random(context, 40) as i32);
+            heading += rand_result;
+
+            // lt random 40
+            let rand_result = Float::from(s::random(context, 40) as i32);
+            heading += -rand_result;
+
+            // if not can-move? 1 [ rt 180 ]
+            let point_ahead = s::offset_distance_by_heading(
+                &context.workspace.world,
+                position,
+                heading,
+                Float::new(1.0),
+            );
+            if point_ahead.is_none() {
+                heading += Float::new(180.0);
+            }
+
+            // Update the turtle's heading
+            *context
+                .workspace
+                .world
+                .turtles
+                .get_turtle_heading_mut(turtle_id)
+                .unwrap() = heading;
+        }
 
         // fd 1
-        s::fd_one(&context.workspace.world, this_turtle);
+        let new_position = s::offset_one_by_heading(&context.workspace.world, position, heading);
+        if let Some(new_position) = new_position {
+            position = new_position;
+            *context
+                .workspace
+                .world
+                .turtles
+                .get_turtle_position_mut(turtle_id)
+                .unwrap() = position;
+        }
 
         context.updater.update_turtle(
-            this_turtle,
+            &context.workspace.world,
+            turtle_id,
             TurtleProp::Position | TurtleProp::Heading | TurtleProp::Color,
         );
     }
 
     // diffuse chemical (diffusion-rate / 100)
     s::diffuse_8(
-        &context.workspace.world,
+        &mut context.workspace.world,
         PATCH_CHEMICAL,
-        value::Float::new(0.5),
+        Float::new(0.5),
     );
 
-    // TODO finish script
     // ask patches
-    s::ask_all_patches(context, body_1);
-    extern "C" fn body_1(context: &mut CanonExecutionContext) {
-        let Agent::Patch(this_patch) = context.executor else {
-            panic!("agent should be a patch");
-        };
-
+    for patch_id in AllPatches.into_iter(&context.workspace.world, context.next_int.clone()) {
         // set chemical chemical * (100 - evaporation-rate) / 100
-        let chemical = *this_patch
-            .data
-            .borrow()
-            .get_custom(PATCH_CHEMICAL)
-            .get::<value::Float>()
-            .unwrap();
-        let new_chemical = chemical * value::Float::new(0.9);
-        this_patch
-            .data
-            .borrow_mut()
-            .set_custom(PATCH_CHEMICAL, PolyValue::from(new_chemical));
+        let chemical: &mut Float = context
+            .workspace
+            .world
+            .patches
+            .get_patch_field_mut(patch_id, PATCH_CHEMICAL)
+            .unwrap()
+            .unwrap_left();
+        *chemical *= 0.9;
 
         // recolor-patch
-        recolor_patch(context);
+        recolor_patch(context, patch_id);
     }
 
     s::advance_tick(&context.workspace.world);
@@ -343,176 +567,80 @@ fn go(context: &mut CanonExecutionContext) {
 
 #[no_mangle]
 #[inline(never)]
-fn look_for_food(context: &mut CanonExecutionContext) {
-    let Agent::Turtle(this_turtle) = context.executor else {
-        panic!("agent should be a turtle");
-    };
-
-    let patch_here_id = s::patch_here(&context.workspace.world, this_turtle);
-    let patch_here = s::look_up_patch(&context.workspace.world, patch_here_id);
-
-    // if food > 0
-    let food = *patch_here
-        .data
-        .borrow()
-        .get_custom(PATCH_FOOD)
-        .get::<value::Float>()
-        .unwrap();
-    if food > value::Float::new(0.0) {
-        // set color orange + 1
-        let new_color = Color::ORANGE + value::Float::new(1.0);
-        this_turtle.data.borrow_mut().color = new_color;
-
-        // set food food - 1
-        let new_food = food - value::Float::new(1.0);
-        patch_here
-            .data
-            .borrow_mut()
-            .set_custom(PATCH_FOOD, PolyValue::from(new_food));
-
-        // rt 180
-        s::turn(this_turtle, value::Float::new(180.0));
-
-        // stop
-        return;
-    }
-
-    // if (chemical >= 0.05) and (chemical < 2)
-    let chemical = *patch_here
-        .data
-        .borrow()
-        .get_custom(PATCH_CHEMICAL)
-        .get::<value::Float>()
-        .unwrap();
-    if (chemical >= value::Float::new(0.05)) && (chemical < value::Float::new(2.0)) {
-        // uphill-chemical
-        uphill_patch_variable(context, PATCH_CHEMICAL);
+fn patch_variable_at_angle(
+    context: &CanonExecutionContext,
+    position: Point,
+    heading: Heading,
+    angle: Float,
+    patch_variable: AgentFieldDescriptor,
+) -> Float {
+    let real_heading = heading + angle;
+    let point_ahead = s::offset_distance_by_heading(
+        &context.workspace.world,
+        position,
+        real_heading,
+        Float::new(1.0),
+    );
+    let patch_ahead = point_ahead.map(|point| {
+        context
+            .workspace
+            .world
+            .topology
+            .patch_at(point.round_to_int())
+    });
+    match patch_ahead {
+        None => Float::new(0.0),
+        Some(patch_id) => {
+            let patch_ahead = context
+                .workspace
+                .world
+                .patches
+                .get_patch_field(patch_id, patch_variable)
+                .unwrap()
+                .unwrap_left();
+            *patch_ahead
+        }
     }
 }
 
 #[no_mangle]
 #[inline(never)]
-fn uphill_patch_variable(context: &mut CanonExecutionContext, patch_variable: VarIndex) {
-    let Agent::Turtle(this_turtle) = context.executor else {
-        panic!("agent should be a turtle");
-    };
-
+fn uphill_patch_variable(
+    context: &mut CanonExecutionContext,
+    position: Point,
+    heading: &mut Heading,
+    patch_variable: AgentFieldDescriptor,
+) {
     // let scent-ahead chemical-scent-at-angle 0
     // let scent-right nest-scent-at-angle  45
     // let scent-left  nest-scent-at-angle -45
-    let scent_ahead = patch_variable_at_angle(context, value::Float::new(0.0), patch_variable);
-    let scent_right = patch_variable_at_angle(context, value::Float::new(45.0), patch_variable);
-    let scent_left = patch_variable_at_angle(context, value::Float::new(-45.0), patch_variable);
+    let scent_ahead =
+        patch_variable_at_angle(context, position, *heading, Float::new(0.0), patch_variable);
+    let scent_right = patch_variable_at_angle(
+        context,
+        position,
+        *heading,
+        Float::new(45.0),
+        patch_variable,
+    );
+    let scent_left = patch_variable_at_angle(
+        context,
+        position,
+        *heading,
+        Float::new(-45.0),
+        patch_variable,
+    );
 
     // if (scent-right > scent-ahead) or (scent-left > scent-ahead)
     if (scent_right > scent_ahead) || (scent_left > scent_ahead) {
         // ifelse scent-right > scent-left
         if scent_right > scent_left {
             // rt 45
-            s::turn(this_turtle, value::Float::new(45.0));
+            *heading += Float::new(45.0);
         } else {
             // lt 45
-            s::turn(this_turtle, value::Float::new(-45.0));
+            *heading += Float::new(-45.0);
         }
-    }
-}
-
-#[no_mangle]
-#[inline(never)]
-fn patch_variable_at_angle(
-    context: &mut CanonExecutionContext,
-    angle: value::Float,
-    patch_variable: VarIndex,
-) -> value::Float {
-    let Agent::Turtle(this_turtle) = context.executor else {
-        panic!("agent should be a turtle");
-    };
-    let patch_ahead = s::patch_at_angle(
-        &context.workspace.world,
-        this_turtle,
-        angle,
-        value::Float::new(1.0),
-    );
-    match patch_ahead {
-        usize::MAX => value::Float::new(0.0),
-        patch_id => {
-            let patch_id = PatchId(patch_id);
-            let patch_ahead = s::look_up_patch(&context.workspace.world, patch_id);
-            *patch_ahead
-                .data
-                .borrow()
-                .get_custom(patch_variable)
-                .get::<value::Float>()
-                .unwrap()
-        }
-    }
-}
-
-#[no_mangle]
-#[inline(never)]
-fn return_to_nest(context: &mut CanonExecutionContext) {
-    let Agent::Turtle(this_turtle) = context.executor else {
-        panic!("agent should be a turtle");
-    };
-
-    // ifelse nest?
-    let patch_id = s::patch_here(&context.workspace.world, this_turtle);
-    let patch = s::look_up_patch(&context.workspace.world, patch_id);
-    let nest = *patch
-        .data
-        .borrow()
-        .get_custom(PATCH_NEST)
-        .get::<value::Boolean>()
-        .unwrap();
-    if nest.0 {
-        // set color red
-        this_turtle.data.borrow_mut().color = Color::RED;
-
-        // rt 180
-        s::turn(this_turtle, value::Float::new(180.0));
-    } else {
-        // set chemical chemical + 60
-        let chemical = *patch
-            .data
-            .borrow()
-            .get_custom(PATCH_CHEMICAL)
-            .get::<value::Float>()
-            .unwrap();
-        let new_chemical = chemical + value::Float::new(60.0);
-        patch
-            .data
-            .borrow_mut()
-            .set_custom(PATCH_CHEMICAL, PolyValue::from(new_chemical));
-
-        // uphill-nest-scent
-        uphill_patch_variable(context, PATCH_NEST_SCENT);
-    }
-}
-
-#[no_mangle]
-#[inline(never)]
-fn wiggle(context: &mut CanonExecutionContext) {
-    let Agent::Turtle(this_turtle) = context.executor else {
-        panic!("agent should be a turtle");
-    };
-
-    // rt random 40
-    let rand_result = value::Float::from(s::random(context, 40));
-    s::turn(this_turtle, rand_result);
-
-    // lt random 40
-    let rand_result = value::Float::from(s::random(context, 40));
-    s::turn(this_turtle, -rand_result);
-
-    // if not can-move? 1 [ rt 180 ]
-    if !s::can_move(
-        &context.workspace.world,
-        this_turtle,
-        value::Float::new(1.0),
-    )
-    .0
-    {
-        s::turn(this_turtle, value::Float::new(180.0));
     }
 }
 
@@ -522,17 +650,16 @@ fn wiggle(context: &mut CanonExecutionContext) {
 fn direct_run_ants() {
     let mut updater = UpdateAggregator::new();
 
-    let workspace = create_workspace();
+    let mut workspace = create_workspace();
 
     updater.update_world_settings(&workspace.world, FlagSet::full());
     updater.update_tick(workspace.world.tick_counter.clone());
 
+    let rng = workspace.rng.clone();
     let mut context = CanonExecutionContext {
-        workspace: &workspace,
-        executor: Agent::Observer(&workspace.world.observer),
-        asker: Agent::Observer(&workspace.world.observer),
+        workspace: &mut workspace,
         updater,
-        next_int: &workspace.rng,
+        next_int: rng,
     };
 
     // run the `setup` function

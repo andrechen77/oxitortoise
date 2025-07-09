@@ -2,10 +2,7 @@ use std::mem;
 
 use crate::{
     exec::CanonExecutionContext,
-    sim::{
-        agent::AgentIndexIntoWorld,
-        value::agentset::{AllPatches, AllTurtles, IterateAgentset},
-    },
+    sim::value::agentset::{AllPatches, AllTurtles, IterateAgentset},
 };
 
 use super::CanonClosure;

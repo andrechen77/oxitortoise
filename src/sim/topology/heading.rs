@@ -13,6 +13,7 @@ use super::CoordFloat;
 /// from the more popular convention of 0 meaning east, and angles increasing
 /// counterclockwise.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[repr(C)]
 pub struct Heading(f64);
 
 impl Eq for Heading {}

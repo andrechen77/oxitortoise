@@ -31,14 +31,3 @@ pub enum Agent<'a> {
     Patch(&'a Patch),
     Link(Infallible /* TODO */),
 }
-
-pub trait AgentIndexIntoWorld {
-    type Output<'w>: Into<Agent<'w>>;
-
-    fn index_into_world(self, world: &World) -> Option<Self::Output<'_>>;
-}
-
-// A trait for getting the position of an agent in the world.
-pub trait AgentPosition {
-    fn position(&self) -> Point;
-}

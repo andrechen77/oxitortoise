@@ -1,19 +1,19 @@
-use crate::{
-    sim::{
-        observer::Observer,
-        patch::Patches,
-        tick::Tick,
-        topology::{Topology, TopologySpec},
-        turtle::Turtles,
-    },
-    util::cell::RefCell,
+use slotmap::SlotMap;
+
+use crate::sim::{
+    agent_schema::{PatchSchema, TurtleSchema},
+    // observer::Observer,
+    patch::Patches,
+    tick::Tick,
+    topology::{Topology, TopologySpec},
+    turtle::{Breed, BreedId, Turtles},
 };
 
 use super::shapes::Shapes;
 
 #[derive(Debug)]
 pub struct World {
-    pub observer: RefCell<Observer>,
+    // pub observer: RefCell<Observer>,
     pub turtles: Turtles,
 
     pub patches: Patches,
@@ -27,20 +27,20 @@ pub struct World {
 }
 
 impl World {
-    pub fn new(topology_spec: TopologySpec) -> Self {
+    pub fn new(topology_spec: TopologySpec, turtle_breeds: SlotMap<BreedId, Breed>) -> Self {
         Self {
-            observer: RefCell::new(Observer::default()),
-            turtles: Turtles::new(),
-            patches: Patches::new(&topology_spec),
+            // observer: RefCell::new(Observer::default()),
+            turtles: Turtles::new(TurtleSchema::default(), turtle_breeds),
+            patches: Patches::new(PatchSchema::default(), &topology_spec),
             topology: Topology::new(topology_spec),
             tick_counter: Tick::default(),
             shapes: Shapes::default(),
         }
     }
 
-    pub fn clear_all(&self) {
-        self.observer.borrow_mut().clear_globals();
-        self.patches.clear_all_patches();
+    pub fn clear_all(&mut self) {
+        // self.observer.borrow_mut().clear_globals();
+        self.patches.clear_patch_variables();
         self.turtles.clear();
         /*
         @observer.resetPerspective()

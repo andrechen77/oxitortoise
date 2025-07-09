@@ -1,8 +1,8 @@
-use crate::sim::{patch::PatchId, turtle::Turtle, value, world::World};
+use crate::sim::{patch::PatchId, turtle::TurtleBaseData, value, world::World};
 
 #[no_mangle]
 #[inline(never)]
-pub extern "C" fn fd_one(world: &World, turtle: &Turtle) {
+pub extern "C" fn fd_one(world: &World, turtle: &TurtleBaseData) {
     let mut turtle_data = turtle.data.borrow_mut();
     if let Some(new_pos) = world
         .topology
@@ -16,7 +16,7 @@ pub extern "C" fn fd_one(world: &World, turtle: &Turtle) {
 #[inline(never)]
 pub extern "C" fn can_move(
     world: &World,
-    turtle: &Turtle,
+    turtle: &TurtleBaseData,
     distance: value::Float,
 ) -> value::Boolean {
     let turtle_data = turtle.data.borrow();
@@ -29,13 +29,13 @@ pub extern "C" fn can_move(
 
 #[no_mangle]
 #[inline(never)]
-pub extern "C" fn turn(turtle: &Turtle, angle: value::Float) {
+pub extern "C" fn turn(turtle: &TurtleBaseData, angle: value::Float) {
     turtle.data.borrow_mut().heading += angle;
 }
 
 #[no_mangle]
 #[inline(never)]
-pub extern "C" fn patch_here(world: &World, turtle: &Turtle) -> PatchId {
+pub extern "C" fn patch_here(world: &World, turtle: &TurtleBaseData) -> PatchId {
     world
         .topology
         .patch_at(turtle.data.borrow().position.round_to_int())
@@ -53,7 +53,7 @@ pub extern "C" fn patch_here(world: &World, turtle: &Turtle) -> PatchId {
 #[inline(never)]
 pub extern "C" fn patch_at_angle(
     world: &World,
-    turtle: &Turtle,
+    turtle: &TurtleBaseData,
     angle: value::Float,
     distance: value::Float,
 ) -> usize {

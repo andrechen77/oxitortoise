@@ -1,9 +1,9 @@
 //! Eagerly evaluated agentsets.
 
-use std::collections::VecDeque;
+use std::{collections::VecDeque, rc::Rc};
 
 use crate::{
-    sim::{agent::AgentIndexIntoWorld, patch::PatchId, turtle::TurtleId, world::World},
+    sim::{patch::PatchId, turtle::TurtleId, world::World},
     util::{
         cell::RefCell,
         rng::CanonRng,
@@ -21,25 +21,27 @@ pub enum Agentset {
 }
 
 pub trait IterateAgentset {
-    type Item: AgentIndexIntoWorld;
+    type AgentId;
 
-    fn iter(&mut self, world: &World, rng: &RefCell<CanonRng>) -> impl Iterator<Item = Self::Item>;
-
-    fn into_iter(self, world: &World, rng: &RefCell<CanonRng>) -> impl Iterator<Item = Self::Item>;
+    fn into_iter(
+        self,
+        world: &World,
+        rng: Rc<RefCell<CanonRng>>,
+    ) -> impl Iterator<Item = Self::AgentId> + 'static;
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct AllPatches;
 
 impl IterateAgentset for AllPatches {
-    type Item = PatchId;
+    type AgentId = PatchId;
 
-    fn iter(&mut self, world: &World, rng: &RefCell<CanonRng>) -> impl Iterator<Item = Self::Item> {
-        Self.into_iter(world, rng)
-    }
-
-    fn into_iter(self, world: &World, rng: &RefCell<CanonRng>) -> impl Iterator<Item = Self::Item> {
-        let patch_ids: VecDeque<PatchId> = world.patches.patch_ids_iter().collect();
+    fn into_iter(
+        self,
+        world: &World,
+        rng: Rc<RefCell<CanonRng>>,
+    ) -> impl Iterator<Item = Self::AgentId> + 'static {
+        let patch_ids: VecDeque<PatchId> = world.patches.patch_ids().collect();
         ShuffledOwned::new(patch_ids, rng)
     }
 }
@@ -48,14 +50,14 @@ impl IterateAgentset for AllPatches {
 pub struct AllTurtles;
 
 impl IterateAgentset for AllTurtles {
-    type Item = TurtleId;
+    type AgentId = TurtleId;
 
-    fn iter(&mut self, world: &World, rng: &RefCell<CanonRng>) -> impl Iterator<Item = Self::Item> {
-        Self.into_iter(world, rng)
-    }
-
-    fn into_iter(self, world: &World, rng: &RefCell<CanonRng>) -> impl Iterator<Item = Self::Item> {
-        let turtle_ids: VecDeque<TurtleId> = world.turtles.turtle_ids().into();
+    fn into_iter(
+        self,
+        world: &World,
+        rng: Rc<RefCell<CanonRng>>,
+    ) -> impl Iterator<Item = Self::AgentId> + 'static {
+        let turtle_ids: VecDeque<TurtleId> = world.turtles.turtle_ids().collect();
         ShuffledOwned::new(turtle_ids, rng)
     }
 }
@@ -72,17 +74,13 @@ impl TurtleSet {
 }
 
 impl IterateAgentset for TurtleSet {
-    type Item = TurtleId;
+    type AgentId = TurtleId;
 
-    fn iter<'s>(
-        &'s mut self,
+    fn into_iter(
+        self,
         _: &World,
-        rng: &RefCell<CanonRng>,
-    ) -> impl Iterator<Item = Self::Item> {
-        ShuffledMut::new(&mut self.turtles, rng).map(|id| *id)
-    }
-
-    fn into_iter(self, _: &World, rng: &RefCell<CanonRng>) -> impl Iterator<Item = Self::Item> {
+        rng: Rc<RefCell<CanonRng>>,
+    ) -> impl Iterator<Item = Self::AgentId> + 'static {
         ShuffledOwned::new(VecDeque::from(self.turtles), rng)
     }
 }

@@ -1,6 +1,5 @@
+/*
 use std::{collections::HashMap, rc::Rc};
-
-use crate::sim::value::PolyValue;
 
 // TOOD change observer to use the same variable system as the agents
 
@@ -35,11 +34,14 @@ impl Observer {
 
     pub fn create_widget_global(&mut self, name: Rc<str>, value: PolyValue) {
         self.variables
-            .insert(name, GlobalVariable::WidgetDefined(value));
-    }
-
-    pub fn clear_globals(&mut self) {
-        self.variables
-            .retain(|_, variable| !matches!(variable, GlobalVariable::CodeDefined(_)));
-    }
+        .insert(name, GlobalVariable::WidgetDefined(value));
 }
+
+pub fn clear_globals(&mut self) {
+    self.variables
+    .retain(|_, variable| !matches!(variable, GlobalVariable::CodeDefined(_)));
+}
+}
+*/
+
+// TODO implement the observer properly
