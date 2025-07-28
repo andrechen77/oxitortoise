@@ -20,18 +20,18 @@ use crate::{
 };
 
 #[no_mangle]
-pub extern "C" fn is_nan(value: f64) -> bool {
+pub extern "C" fn oxitortoise_is_nan(value: f64) -> bool {
     value.is_nan()
 }
 
 #[no_mangle]
-pub extern "C" fn round(value: Float) -> Float {
+pub extern "C" fn oxitortoise_round(value: Float) -> Float {
     // TODO is it possible for this to go from finite to non-finite?
     Float::new(value.get().round())
 }
 
 #[no_mangle]
-pub extern "C" fn update_turtle(
+pub extern "C" fn oxitortoise_update_turtle(
     updater: &mut CanonUpdater,
     world: &World,
     turtle_id: TurtleId,
@@ -41,7 +41,7 @@ pub extern "C" fn update_turtle(
 }
 
 #[no_mangle]
-pub extern "C" fn update_patch(
+pub extern "C" fn oxitortoise_update_patch(
     updater: &mut CanonUpdater,
     world: &World,
     patch_id: PatchId,
@@ -51,32 +51,32 @@ pub extern "C" fn update_patch(
 }
 
 #[no_mangle]
-pub extern "C" fn update_tick(updater: &mut CanonUpdater, tick: Tick) {
+pub extern "C" fn oxitortoise_update_tick(updater: &mut CanonUpdater, tick: Tick) {
     updater.update_tick(tick);
 }
 
 #[no_mangle]
-pub extern "C" fn clear_all(context: &mut CanonExecutionContext) {
+pub extern "C" fn oxitortoise_clear_all(context: &mut CanonExecutionContext) {
     context.workspace.world.clear_all();
 }
 
 #[no_mangle]
-pub extern "C" fn reset_ticks(world: &mut World) {
+pub extern "C" fn oxitortoise_reset_ticks(world: &mut World) {
     world.tick_counter.reset();
 }
 
 #[no_mangle]
-pub extern "C" fn get_ticks(world: &mut World) -> Float {
+pub extern "C" fn oxitortoise_get_ticks(world: &mut World) -> Float {
     world.tick_counter.get().unwrap() // TODO: handle error
 }
 
 #[no_mangle]
-pub extern "C" fn advance_tick(world: &mut World) {
+pub extern "C" fn oxitortoise_advance_tick(world: &mut World) {
     world.tick_counter.advance().unwrap(); // TODO: handle error
 }
 
 #[no_mangle]
-pub extern "C" fn create_turtles(
+pub extern "C" fn oxitortoise_create_turtles(
     context: &mut CanonExecutionContext,
     breed: u64,
     count: u64,
@@ -95,7 +95,7 @@ pub extern "C" fn create_turtles(
 }
 
 #[no_mangle]
-pub extern "C" fn make_all_turtles_iter(
+pub extern "C" fn oxitortoise_make_all_turtles_iter(
     context: &mut CanonExecutionContext,
 ) -> *mut TurtleIterator {
     Box::into_raw(Box::new(
@@ -104,7 +104,7 @@ pub extern "C" fn make_all_turtles_iter(
 }
 
 #[no_mangle]
-pub extern "C" fn next_turtle_from_iter(iter: &mut TurtleIterator) -> TurtleId {
+pub extern "C" fn oxitortoise_next_turtle_from_iter(iter: &mut TurtleIterator) -> TurtleId {
     iter.next().unwrap_or_default()
 }
 
@@ -113,19 +113,21 @@ pub extern "C" fn next_turtle_from_iter(iter: &mut TurtleIterator) -> TurtleId {
 /// The caller is responsible for ensuring that the pointer points to a valid
 /// iterator which can be dropped and is never used again.
 #[no_mangle]
-pub unsafe extern "C" fn drop_turtle_iter(iter: *mut TurtleIterator) {
+pub unsafe extern "C" fn oxitortoise_drop_turtle_iter(iter: *mut TurtleIterator) {
     drop(unsafe { Box::from_raw(iter) });
 }
 
 #[no_mangle]
-pub extern "C" fn make_all_patches_iter(context: &mut CanonExecutionContext) -> *mut PatchIterator {
+pub extern "C" fn oxitortoise_make_all_patches_iter(
+    context: &mut CanonExecutionContext,
+) -> *mut PatchIterator {
     Box::into_raw(Box::new(
         AllPatches.into_iter(&context.workspace.world, context.next_int.clone()),
     ))
 }
 
 #[no_mangle]
-pub extern "C" fn next_patch_from_iter(iter: &mut PatchIterator) -> PatchId {
+pub extern "C" fn oxitortoise_next_patch_from_iter(iter: &mut PatchIterator) -> PatchId {
     iter.next().unwrap_or_default()
 }
 
@@ -134,17 +136,17 @@ pub extern "C" fn next_patch_from_iter(iter: &mut PatchIterator) -> PatchId {
 /// The caller is responsible for ensuring that the pointer points to a valid
 /// iterator which can be dropped and is never used again.
 #[no_mangle]
-pub unsafe extern "C" fn drop_patch_iter(iter: *mut PatchIterator) {
+pub unsafe extern "C" fn oxitortoise_drop_patch_iter(iter: *mut PatchIterator) {
     drop(unsafe { Box::from_raw(iter) });
 }
 
 #[no_mangle]
-pub extern "C" fn distance_euclidean_no_wrap(a: Point, b: Point) -> Float {
+pub extern "C" fn oxitortoise_distance_euclidean_no_wrap(a: Point, b: Point) -> Float {
     crate::sim::topology::euclidean_distance_no_wrap(a, b).into()
 }
 
 #[no_mangle]
-pub extern "C" fn offset_distance_by_heading(
+pub extern "C" fn oxitortoise_offset_distance_by_heading(
     world: &World,
     point: Point,
     heading: Heading,
@@ -160,32 +162,41 @@ pub extern "C" fn offset_distance_by_heading(
 }
 
 #[no_mangle]
-pub extern "C" fn patch_at(world: &World, point: PointInt) -> PatchId {
+pub extern "C" fn oxitortoise_patch_at(world: &World, point: PointInt) -> PatchId {
     world.topology.patch_at(point)
 }
 
 #[no_mangle]
-pub extern "C" fn normalize_heading(heading: Float) -> Heading {
+pub extern "C" fn oxitortoise_normalize_heading(heading: Float) -> Heading {
     heading.into()
 }
 
 #[no_mangle]
-pub extern "C" fn diffuse_8(world: &mut World, field: AgentFieldDescriptor, diffusion_rate: Float) {
+pub extern "C" fn oxitortoise_diffuse_8(
+    world: &mut World,
+    field: AgentFieldDescriptor,
+    diffusion_rate: Float,
+) {
     crate::sim::topology::diffuse::diffuse_8_single_variable_buffer(world, field, diffusion_rate);
 }
 
 #[no_mangle]
-pub extern "C" fn scale_color(color: Float, value: Float, min: Float, max: Float) -> Float {
+pub extern "C" fn oxitortoise_scale_color(
+    color: Float,
+    value: Float,
+    min: Float,
+    max: Float,
+) -> Float {
     crate::sim::color::scale_color(color.into(), value, min, max).into()
 }
 
 #[no_mangle]
-pub extern "C" fn next_int(context: &mut CanonExecutionContext, max: u32) -> u32 {
+pub extern "C" fn oxitortoise_next_int(context: &mut CanonExecutionContext, max: u32) -> u32 {
     context.next_int.next_int(max as i64) as u32
 }
 
 #[no_mangle]
-pub extern "C" fn get_default_turtle_breed(context: &mut CanonExecutionContext) -> u64 {
+pub extern "C" fn oxitortoise_get_default_turtle_breed(context: &mut CanonExecutionContext) -> u64 {
     let breed_id = context
         .workspace
         .world

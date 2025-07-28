@@ -102,7 +102,11 @@ pub fn main() {
 
     // call the dynamically loaded functions
     setup_fn.call(&mut context, std::ptr::null_mut());
-    real_print(format!("Updater: {:?}", &context.updater));
+    real_print(format!("After setup: {:?}", &context.updater));
+    for _ in 0..125 {
+        go_fn.call(&mut context, std::ptr::null_mut());
+    }
+    real_print(format!("After go: {:?}", &context.updater));
 }
 
 fn create_workspace() -> Workspace {

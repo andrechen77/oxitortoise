@@ -108,44 +108,42 @@ static inline Float world_to_max_pycor(World *world) {
 	return *(Float *)((char *)world + OFFSET_WORLD_TO_TOPOLOGY + OFFSET_TOPOLOGY_TO_MAX_PYCOR);
 }
 
-void checkpoint(int checkpoint_val);
+void oxitortoise_update_turtle(Updater *updater, World *world, TurtleId turtle_id, uint16_t flags);
+void oxitortoise_update_patch(Updater *updater, World *world, PatchId patch_id, uint8_t flags);
+void oxitortoise_update_tick(Updater *updater, Float tick);
 
-void update_turtle(Updater *updater, World *world, TurtleId turtle_id, uint16_t flags);
-void update_patch(Updater *updater, World *world, PatchId patch_id, uint8_t flags);
-void update_tick(Updater *updater, Float tick);
+bool oxitortoise_is_nan(double value);
+Float oxitortoise_round(Float value);
 
-bool is_nan(double value);
-Float round(Float value);
+void oxitortoise_clear_all(Context *context);
+void oxitortoise_reset_ticks(World *world);
+Float oxitortoise_get_ticks(World *world);
+void oxitortoise_advance_tick(World *world);
 
-void clear_all(Context *context);
-void reset_ticks(World *world);
-Float get_ticks(World *world);
-void advance_tick(World *world);
+TurtleIterator *oxitortoise_create_turtles(Context *context, BreedId breed, uint64_t count, Point position);
 
-TurtleIterator *create_turtles(Context *context, BreedId breed, uint64_t count, Point position);
+TurtleIterator *oxitortoise_make_all_turtles_iter(Context *context);
 
-TurtleIterator *make_all_turtles_iter(Context *context);
+TurtleId oxitortoise_next_turtle_from_iter(TurtleIterator *iter);
+void oxitortoise_drop_turtle_iter(TurtleIterator *iter);
 
-TurtleId next_turtle_from_iter(TurtleIterator *iter);
-void drop_turtle_iter(TurtleIterator *iter);
+PatchIterator *oxitortoise_make_all_patches_iter(Context *context);
 
-PatchIterator *make_all_patches_iter(Context *context);
+PatchId oxitortoise_next_patch_from_iter(PatchIterator *iter);
+void oxitortoise_drop_patch_iter(PatchIterator *iter);
 
-PatchId next_patch_from_iter(PatchIterator *iter);
-void drop_patch_iter(PatchIterator *iter);
+Float oxitortoise_distance_euclidean_no_wrap(Point a, Point b);
+Point oxitortoise_offset_distance_by_heading(World *world, Point position, Float heading, Float distance);
+PatchId oxitortoise_patch_at(World *world, PointInt position);
+Float oxitortoise_normalize_heading(Float heading);
 
-Float distance_euclidean_no_wrap(Point a, Point b);
-Point offset_distance_by_heading(World *world, Point position, Float heading, Float distance);
-PatchId patch_at(World *world, PointInt position);
-Float normalize_heading(Float heading);
+void oxitortoise_diffuse_8(World *world, AgentFieldDescriptor field, Float diffusion_rate);
 
-void diffuse_8(World *world, AgentFieldDescriptor field, Float diffusion_rate);
+Float oxitortoise_scale_color(Float color, Float value, Float min, Float max);
 
-Float scale_color(Float color, Float value, Float min, Float max);
+uint32_t oxitortoise_next_int(Context *context, uint32_t max);
 
-uint32_t next_int(Context *context, uint32_t max);
-
-BreedId get_default_turtle_breed(Context *context);
+BreedId oxitortoise_get_default_turtle_breed(Context *context);
 
 typedef struct {
 	uint8_t occupancy_bitfield[1];
@@ -225,21 +223,21 @@ void recolor_patch(Context *context, PatchId patch_id) {
 		}
 	} else {
 		// scale-color green chemical 0.1 5
-		patch1->pcolor = scale_color(COLOR_GREEN, patch2->chemical, 0.1, 5.0);
+		patch1->pcolor = oxitortoise_scale_color(COLOR_GREEN, patch2->chemical, 0.1, 5.0);
 	}
-	update_patch(updater, world, patch_id, FLAG_PCOLOR);
+	oxitortoise_update_patch(updater, world, patch_id, FLAG_PCOLOR);
 }
 
 Float chemical_at_angle(World *world, Point position, Float heading, Float angle) {
-	Float real_heading = normalize_heading(heading + angle);
-	Point point_ahead = offset_distance_by_heading(world, position, real_heading, 1.0);
+	Float real_heading = oxitortoise_normalize_heading(heading + angle);
+	Point point_ahead = oxitortoise_offset_distance_by_heading(world, position, real_heading, 1.0);
 	// assume that None is represented by both coordinates being NaN
-	if (is_nan(point_ahead.x)) {
+	if (oxitortoise_is_nan(point_ahead.x)) {
 		return 0.0;
 	}
 
-	PointInt point_ahead_int = (PointInt){.x = (uint32_t)round(point_ahead.x), .y = (uint32_t)round(point_ahead.y)};
-	PatchId patch_id = patch_at(world, point_ahead_int);
+	PointInt point_ahead_int = (PointInt){.x = (uint32_t)oxitortoise_round(point_ahead.x), .y = (uint32_t)oxitortoise_round(point_ahead.y)};
+	PatchId patch_id = oxitortoise_patch_at(world, point_ahead_int);
 
 	PatchGroup2 *patch2 = (PatchGroup2 *)world_to_patch_data(world, 2) + patch_id;
 	return patch2->chemical;
@@ -251,25 +249,25 @@ void uphill_chemical(World *world, Point position, Float *heading) {
 	Float chemical_left = chemical_at_angle(world, position, *heading, -45.0);
 	if (chemical_right > chemical_ahead || chemical_left > chemical_ahead) {
 		if (chemical_right > chemical_left) {
-			Float new_heading = normalize_heading(*heading + 45.0);
+			Float new_heading = oxitortoise_normalize_heading(*heading + 45.0);
 			*heading = new_heading;
 		} else {
-			Float new_heading = normalize_heading(*heading - 45.0);
+			Float new_heading = oxitortoise_normalize_heading(*heading - 45.0);
 			*heading = new_heading;
 		}
 	}
 }
 
 Float nest_scent_at_angle(World *world, Point position, Float heading, Float angle) {
-	Float real_heading = normalize_heading(heading + angle);
-	Point point_ahead = offset_distance_by_heading(world, position, real_heading, 1.0);
+	Float real_heading = oxitortoise_normalize_heading(heading + angle);
+	Point point_ahead = oxitortoise_offset_distance_by_heading(world, position, real_heading, 1.0);
 	// assume that None is represented by both coordinates being NaN
-	if (is_nan(point_ahead.x)) {
+	if (oxitortoise_is_nan(point_ahead.x)) {
 		return 0.0;
 	}
 
-	PointInt point_ahead_int = (PointInt){.x = (uint32_t)round(point_ahead.x), .y = (uint32_t)round(point_ahead.y)};
-	PatchId patch_id = patch_at(world, point_ahead_int);
+	PointInt point_ahead_int = (PointInt){.x = (uint32_t)oxitortoise_round(point_ahead.x), .y = (uint32_t)oxitortoise_round(point_ahead.y)};
+	PatchId patch_id = oxitortoise_patch_at(world, point_ahead_int);
 
 	PatchGroup0 *patch0 = (PatchGroup0 *)world_to_patch_data(world, 0) + patch_id;
 	return patch0->nest_scent;
@@ -281,10 +279,10 @@ void uphill_nest_scent(World *world, Point position, Float *heading) {
 	Float scent_left = nest_scent_at_angle(world, position, *heading, -45.0);
 	if (scent_right > scent_ahead || scent_left > scent_ahead) {
 		if (scent_right > scent_left) {
-			Float new_heading = normalize_heading(*heading + 45.0);
+			Float new_heading = oxitortoise_normalize_heading(*heading + 45.0);
 			*heading = new_heading;
 		} else {
-			Float new_heading = normalize_heading(*heading - 45.0);
+			Float new_heading = oxitortoise_normalize_heading(*heading - 45.0);
 			*heading = new_heading;
 		}
 	}
@@ -295,18 +293,18 @@ void setup(Context *context) {
 	World *world = context_to_world(context);
 
 	// clear-all
-	clear_all(context);
+	oxitortoise_clear_all(context);
 
 	// create-turtles
 	{
-		TurtleIterator *iter = create_turtles(
+		TurtleIterator *iter = oxitortoise_create_turtles(
 			context,
-			get_default_turtle_breed(context),
+			oxitortoise_get_default_turtle_breed(context),
 			125,
 			POINT_ORIGIN
 		);
 		TurtleId next_turtle;
-		while ((next_turtle = next_turtle_from_iter(iter)).raw != 0) {
+		while ((next_turtle = oxitortoise_next_turtle_from_iter(iter)).raw != 0) {
 			// since the turtles were just created and we know they don't die,
 			// we don't need to check the generation
 			TurtleGroup0 *turtle_data = (TurtleGroup0 *)world_to_turtle_data(world, 0) + next_turtle.gen_index.index;
@@ -316,20 +314,20 @@ void setup(Context *context) {
 			base_data->color = 15.0;
 
 			// TODO send update to the updater
-			update_turtle(updater, world, next_turtle, FLAG_COLOR | FLAG_SIZE);
+			oxitortoise_update_turtle(updater, world, next_turtle, FLAG_COLOR | FLAG_SIZE);
 		}
-		drop_turtle_iter(iter);
+		oxitortoise_drop_turtle_iter(iter);
 	}
 
 	// setup-patches
 	{
-		PatchIterator *iter = make_all_patches_iter(context);
+		PatchIterator *iter = oxitortoise_make_all_patches_iter(context);
 		PatchId next_patch;
-		while ((next_patch = next_patch_from_iter(iter)) != (PatchId)(-1)) {
+		while ((next_patch = oxitortoise_next_patch_from_iter(iter)) != (PatchId)(-1)) {
 			// calculate distancexy 0 0
 			PatchGroup0 *patch = (PatchGroup0 *)world_to_patch_data(world, 0) + next_patch;
 			Point position = patch->base_data.position;
-			Float distance = distance_euclidean_no_wrap(position, POINT_ORIGIN);
+			Float distance = oxitortoise_distance_euclidean_no_wrap(position, POINT_ORIGIN);
 
 			// set nest? (distancexy 0 0) < 5
 			patch->nest = distance < 5.0;
@@ -344,7 +342,7 @@ void setup(Context *context) {
 
 				// if (distancexy (0.6 * max-pxcor) 0) < 5 [ set food-source-number 1 ]
 				{
-					Float distance = distance_euclidean_no_wrap(position, (Point){.x = 0.6 * max_pxcor, .y = 0.0});
+					Float distance = oxitortoise_distance_euclidean_no_wrap(position, (Point){.x = 0.6 * max_pxcor, .y = 0.0});
 					if (distance < 5.0) {
 						patch->food_source_number = 1.0;
 					}
@@ -352,7 +350,7 @@ void setup(Context *context) {
 
 				// if (distancexy (-0.6 * max-pxcor) (-0.6 * max-pycor)) < 5 [ set food-source-number 2 ]
 				{
-					Float distance = distance_euclidean_no_wrap(position, (Point){.x = -0.6 * max_pxcor, .y = -0.6 * max_pycor});
+					Float distance = oxitortoise_distance_euclidean_no_wrap(position, (Point){.x = -0.6 * max_pxcor, .y = -0.6 * max_pycor});
 					if (distance < 5.0) {
 						patch->food_source_number = 2.0;
 					}
@@ -360,7 +358,7 @@ void setup(Context *context) {
 
 				// if (distancexy (-0.8 * max-pxcor) (0.8 * max-pycor)) < 5 [ set food-source-number 3 ]
 				{
-					Float distance = distance_euclidean_no_wrap(position, (Point){.x = -0.8 * max_pxcor, .y = 0.8 * max_pycor});
+					Float distance = oxitortoise_distance_euclidean_no_wrap(position, (Point){.x = -0.8 * max_pxcor, .y = 0.8 * max_pycor});
 					if (distance < 5.0) {
 						patch->food_source_number = 3.0;
 					}
@@ -369,7 +367,7 @@ void setup(Context *context) {
 				// if food-source-number > 0 [ set food one-of [1 2] ]
 				{
 					if (patch->food_source_number > 0.0) {
-						uint32_t rand_index = next_int(context, 2);
+						uint32_t rand_index = oxitortoise_next_int(context, 2);
 						patch->food = rand_index == 0 ? 1.0 : 2.0;
 					}
 				}
@@ -378,12 +376,12 @@ void setup(Context *context) {
 				recolor_patch(context, next_patch);
 			}
 		}
-		drop_patch_iter(iter);
+		oxitortoise_drop_patch_iter(iter);
 	}
 
 	// reset-ticks
-	reset_ticks(world);
-	update_tick(updater, get_ticks(world));
+	oxitortoise_reset_ticks(world);
+	oxitortoise_update_tick(updater, oxitortoise_get_ticks(world));
 }
 
 void shim_setup(Context *context, void *args) {
@@ -395,12 +393,12 @@ void go(Context *context) {
 	World *world = context_to_world(context);
 
 	// ask turtles
-	TurtleIterator *iter = make_all_turtles_iter(context);
+	TurtleIterator *iter = oxitortoise_make_all_turtles_iter(context);
 	TurtleId next_turtle;
-	while ((next_turtle = next_turtle_from_iter(iter)).raw != 0) {
+	while ((next_turtle = oxitortoise_next_turtle_from_iter(iter)).raw != 0) {
 		// if who >= ticks [ stop ]
 		TurtleGroup0 *turtle0 = (TurtleGroup0 *)world_to_turtle_data(world, 0) + next_turtle.gen_index.index;
-		if (turtle0->base_data.who >= get_ticks(world)) {
+		if (turtle0->base_data.who >= oxitortoise_get_ticks(world)) {
 			continue;
 		}
 
@@ -412,7 +410,7 @@ void go(Context *context) {
 		if (turtle0->base_data.color == COLOR_RED) {
 			// look-for-food
 			{
-				PatchId patch_here_id = patch_at(world, (PointInt){.x = (uint32_t)round(position->x), .y = (uint32_t)round(position->y)});
+				PatchId patch_here_id = oxitortoise_patch_at(world, (PointInt){.x = (uint32_t)oxitortoise_round(position->x), .y = (uint32_t)oxitortoise_round(position->y)});
 				PatchGroup0 *patch_here = (PatchGroup0 *)world_to_patch_data(world, 0) + patch_here_id;
 
 				// if food > 0
@@ -424,10 +422,10 @@ void go(Context *context) {
 					patch_here->food -= 1.0;
 
 					// rt 180
-					*heading = normalize_heading(*heading + 180.0);
+					*heading = oxitortoise_normalize_heading(*heading + 180.0);
 
 					// stop
-					update_turtle(updater, world, next_turtle, FLAG_POSITION | FLAG_HEADING | FLAG_COLOR);
+					oxitortoise_update_turtle(updater, world, next_turtle, FLAG_POSITION | FLAG_HEADING | FLAG_COLOR);
 					continue;
 				}
 
@@ -442,7 +440,7 @@ void go(Context *context) {
 		} else {
 			// return-to-nest
 			{
-				PatchId patch_here_id = patch_at(world, (PointInt){.x = (uint32_t)round(position->x), .y = (uint32_t)round(position->y)});
+				PatchId patch_here_id = oxitortoise_patch_at(world, (PointInt){.x = (uint32_t)oxitortoise_round(position->x), .y = (uint32_t)oxitortoise_round(position->y)});
 				PatchGroup0 *patch_here = (PatchGroup0 *)world_to_patch_data(world, 0) + patch_here_id;
 
 				// ifelse nest?
@@ -451,7 +449,7 @@ void go(Context *context) {
 					turtle0->base_data.color = COLOR_RED;
 
 					// rt 180
-					*heading = normalize_heading(*heading + 180.0);
+					*heading = oxitortoise_normalize_heading(*heading + 180.0);
 				} else {
 					// set chemical chemical + 60
 					PatchGroup2 *patch2_here = (PatchGroup2 *)world_to_patch_data(world, 2) + patch_here_id;
@@ -466,37 +464,37 @@ void go(Context *context) {
 		// wiggle
 		{
 			// rt random 40
-			Float rand_result = (Float)next_int(context, 40);
-			*heading = normalize_heading(*heading + rand_result);
+			Float rand_result = (Float)oxitortoise_next_int(context, 40);
+			*heading = oxitortoise_normalize_heading(*heading + rand_result);
 
 			// lt random 40
-			rand_result = (Float)next_int(context, 40);
-			*heading = normalize_heading(*heading - rand_result);
+			rand_result = (Float)oxitortoise_next_int(context, 40);
+			*heading = oxitortoise_normalize_heading(*heading - rand_result);
 
 			// if not can-move? 1 [ rt 180 ]
-			Point point_ahead = offset_distance_by_heading(world, *position, *heading, 1.0);
-			if (is_nan(point_ahead.x)) {
-				*heading = normalize_heading(*heading + 180.0);
+			Point point_ahead = oxitortoise_offset_distance_by_heading(world, *position, *heading, 1.0);
+			if (oxitortoise_is_nan(point_ahead.x)) {
+				*heading = oxitortoise_normalize_heading(*heading + 180.0);
 			}
 		}
 
 		// fd 1
-		Point new_position = offset_distance_by_heading(world, *position, *heading, 1.0);
-		if (!is_nan(new_position.x)) {
+		Point new_position = oxitortoise_offset_distance_by_heading(world, *position, *heading, 1.0);
+		if (!oxitortoise_is_nan(new_position.x)) {
 			*position = new_position;
 		}
 
-		update_turtle(updater, world, next_turtle, FLAG_POSITION | FLAG_HEADING | FLAG_COLOR);
+		oxitortoise_update_turtle(updater, world, next_turtle, FLAG_POSITION | FLAG_HEADING | FLAG_COLOR);
 	}
-	drop_turtle_iter(iter);
+	oxitortoise_drop_turtle_iter(iter);
 
 	// diffuse chemical (diffusion-rate / 100)
-	diffuse_8(world, PATCH_CHEMICAL, 0.5);
+	oxitortoise_diffuse_8(world, PATCH_CHEMICAL, 0.5);
 
 	// ask patches
-	PatchIterator *patch_iter = make_all_patches_iter(context);
+	PatchIterator *patch_iter = oxitortoise_make_all_patches_iter(context);
 	PatchId next_patch;
-	while ((next_patch = next_patch_from_iter(patch_iter)) != (PatchId)(-1)) {
+	while ((next_patch = oxitortoise_next_patch_from_iter(patch_iter)) != (PatchId)(-1)) {
 		// set chemical chemical * (100 - evaporation-rate) / 100
 		PatchGroup2 *patch2 = (PatchGroup2 *)world_to_patch_data(world, 2) + next_patch;
 		patch2->chemical *= 0.9;
@@ -504,11 +502,11 @@ void go(Context *context) {
 		// recolor-patch
 		recolor_patch(context, next_patch);
 	}
-	drop_patch_iter(patch_iter);
+	oxitortoise_drop_patch_iter(patch_iter);
 
 	// advance-tick
-	advance_tick(world);
-	update_tick(updater, get_ticks(world));
+	oxitortoise_advance_tick(world);
+	oxitortoise_update_tick(updater, oxitortoise_get_ticks(world));
 }
 
 void shim_go(Context *context, void *args) {
