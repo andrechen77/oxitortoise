@@ -5,7 +5,10 @@ use slotmap::SlotMap;
 use walrus::Module;
 
 use oxitortoise::{
-    exec::{jit::FunctionInstaller, CanonExecutionContext},
+    exec::{
+        jit::{FunctionInstaller, JitFn},
+        CanonExecutionContext,
+    },
     sim::{
         agent_schema::{PatchSchema, TurtleSchema},
         patch::Patches,
@@ -61,6 +64,10 @@ fn write_model_code(buffer: *mut u8) {
     }
 }
 
+static mut CONTEXT: Option<CanonExecutionContext> = None;
+static mut SETUP_FN: Option<JitFn> = None;
+static mut GO_FN: Option<JitFn> = None;
+
 pub fn main() {
     real_print("Hello, world!");
 
@@ -78,35 +85,52 @@ pub fn main() {
         module.funcs.by_name("shim_go").unwrap(),
     ];
     let table_to_install = module.tables.main_function_table().unwrap().unwrap();
-    let new_functions = unsafe {
+    let mut new_functions = unsafe {
         function_installer
             .install_functions(module, functions_to_install, table_to_install)
             .unwrap()
     };
     real_print("installed new functions");
-    let setup_fn = &new_functions[0];
-    let go_fn = &new_functions[1];
+    // SAFETY: no one else has a reference to this variable since this is called
+    // in single-threaded contexts only and this function is the entry point.
+    unsafe {
+        GO_FN = Some(new_functions.remove(1));
+        SETUP_FN = Some(new_functions.remove(0));
+    }
 
     // create the workspace and execution context
-    let mut workspace = create_workspace();
+    let workspace = Box::leak(Box::new(create_workspace()));
     let mut updater = UpdateAggregator::new();
     updater.update_world_settings(&workspace.world, FlagSet::full());
     updater.update_tick(workspace.world.tick_counter.clone());
-    real_print(format!("Updater: {:?}", &updater));
+    // real_print(format!("Updater: {:?}", &updater));
     let rng = workspace.rng.clone();
-    let mut context = CanonExecutionContext {
-        workspace: &mut workspace,
+    let context = CanonExecutionContext {
+        workspace,
         updater,
         next_int: rng,
     };
-
-    // call the dynamically loaded functions
-    setup_fn.call(&mut context, std::ptr::null_mut());
-    real_print(format!("After setup: {:?}", &context.updater));
-    for _ in 0..125 {
-        go_fn.call(&mut context, std::ptr::null_mut());
+    // SAFETY: no one else has a reference to this variable since this is called
+    // in single-threaded contexts only and this function is the entry point.
+    unsafe {
+        CONTEXT = Some(context);
     }
-    real_print(format!("After go: {:?}", &context.updater));
+}
+
+#[no_mangle]
+pub fn run_setup_and_go() {
+    // SAFETY: no one else has a reference to this variable since this is called
+    // in single-threaded contexts only and this function is the entry point.
+    let context = unsafe { CONTEXT.as_mut().unwrap() };
+    let setup_fn = unsafe { SETUP_FN.as_ref().unwrap() };
+    let go_fn = unsafe { GO_FN.as_ref().unwrap() };
+    // call the dynamically loaded functions
+    setup_fn.call(context, std::ptr::null_mut());
+    // real_print(format!("After setup: {:?}", &context.updater));
+    for _ in 0..1000 {
+        go_fn.call(context, std::ptr::null_mut());
+    }
+    // real_print(format!("After go: {:?}", &context.updater));
 }
 
 fn create_workspace() -> Workspace {

@@ -10,6 +10,8 @@
 <body>
 	<input type="text" id="module_file_name" placeholder="Module File Name">
 	<button id="load">Load</button>
+	<button id="initialize">Initialize</button>
+	<button id="run_setup_and_go">Run Setup and Go</button>
 
 	<script>
 		async function instantiateMain(filename) {
@@ -122,8 +124,22 @@
 			}
 		}
 
+		function initialize() {
+			console.log("initializing");
+			globalWasm.instance.exports.main();
+		}
+
+		function run_setup_and_go() {
+			let timerName = "running setup and go";
+			console.time(timerName);
+			globalWasm.instance.exports.run_setup_and_go();
+			console.timeEnd(timerName);
+		}
+
 		document.addEventListener('DOMContentLoaded', function () {
 			document.getElementById('load').addEventListener('click', load);
+			document.getElementById('initialize').addEventListener('click', initialize);
+			document.getElementById('run_setup_and_go').addEventListener('click', run_setup_and_go);
 		});
 	</script>
 </body>
