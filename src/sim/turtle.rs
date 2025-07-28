@@ -5,6 +5,7 @@
 
 use std::collections::HashMap;
 use std::fmt::{self, Debug};
+use std::mem::offset_of;
 use std::rc::Rc;
 
 use derive_more::derive::{From, Into};
@@ -21,7 +22,6 @@ use crate::{
     util::rng::Rng,
 };
 
-use crate::sim::shapes::{ShapeId, Shapes};
 use crate::sim::topology::Heading;
 
 /// The who number of a turtle.
@@ -44,8 +44,12 @@ impl fmt::Display for TurtleWho {
 }
 
 /// An ID for a turtle.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, From, Into)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, From, Into, Default)]
+#[repr(transparent)]
 pub struct TurtleId(pub GenIndex);
+
+#[no_mangle]
+static OFFSET_TURTLES_TO_DATA: usize = offset_of!(Turtles, data);
 
 #[derive(Debug)]
 pub struct Turtles {
@@ -57,7 +61,7 @@ pub struct Turtles {
     /// The buffers that store the data for the turtle. Each turtle is
     /// represented by a row in all buffers. There are multiple buffers to
     /// allow for SoA-style data locality of certain fields.
-    data: Vec<RowBuffer>,
+    data: [Option<RowBuffer>; 4],
     /// Fallback storage for custom fields whose type doesn't match the
     /// compile-time type.
     fallback_custom_fields: HashMap<(TurtleId, AgentFieldDescriptor), DynBox>,
@@ -86,7 +90,11 @@ impl Turtles {
         &self.breeds[id]
     }
 
-    pub fn translate_who(&self, who: TurtleWho) -> Option<TurtleId> {
+    pub fn breeds(&self) -> &SlotMap<BreedId, Breed> {
+        &self.breeds
+    }
+
+    pub fn translate_who(&self, who: TurtleWho) -> TurtleId {
         todo!()
     }
 
@@ -97,7 +105,7 @@ impl Turtles {
         spawn_point: Point,
         next_int: &mut dyn Rng,
     ) -> TurtleSet {
-        for buffer in &mut self.data {
+        for buffer in self.data.iter_mut().filter_map(|b| b.as_mut()) {
             buffer.ensure_capacity((self.num_turtles + count) as usize);
         }
 
@@ -122,16 +130,22 @@ impl Turtles {
                 shape_name,
             };
             self.data[0]
+                .as_mut()
+                .unwrap()
                 .row_mut(id.0.index as usize)
                 .insert(0, base_data);
 
             // set builtin variables that aren't in the base data
             let heading_desc = self.turtle_schema.heading();
             self.data[heading_desc.buffer_idx as usize]
+                .as_mut()
+                .unwrap()
                 .row_mut(id.0.index as usize)
                 .insert(heading_desc.field_idx as usize, heading);
             let position_desc = self.turtle_schema.position();
             self.data[position_desc.buffer_idx as usize]
+                .as_mut()
+                .unwrap()
                 .row_mut(id.0.index as usize)
                 .insert(position_desc.field_idx as usize, spawn_point);
 
@@ -143,6 +157,8 @@ impl Turtles {
                 };
                 if r#type.is_numeric_zeroable() {
                     self.data[field.buffer_idx as usize]
+                        .as_mut()
+                        .unwrap()
                         .row_mut(idx.index as usize)
                         .insert_zeroable(field.field_idx as usize);
                 } else {
@@ -172,6 +188,8 @@ impl Turtles {
             return None;
         }
         if let Some(field) = self.data[field.buffer_idx as usize]
+            .as_ref()
+            .unwrap()
             .row(id.0.index as usize)
             .get(field.field_idx as usize)
         {
@@ -208,6 +226,8 @@ impl Turtles {
             return None;
         }
         if let Some(field) = self.data[field.buffer_idx as usize]
+            .as_mut()
+            .unwrap()
             .row_mut(id.0.index as usize)
             .get_mut(field.field_idx as usize)
         {
@@ -237,7 +257,7 @@ impl Turtles {
         self.slot_tracker.clear();
         self.next_who = TurtleWho::default();
         self.fallback_custom_fields.clear();
-        for buffer in self.data.iter_mut() {
+        for buffer in self.data.iter_mut().filter_map(|b| b.as_mut()) {
             buffer.clear();
         }
     }

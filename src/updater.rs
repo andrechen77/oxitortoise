@@ -1,15 +1,14 @@
 use std::{fmt::Write, rc::Rc};
 
 use flagset::{flags, FlagSet};
-use slotmap::SecondaryMap;
 
 use crate::{
     sim::{
         color::Color,
-        patch::{PatchBaseData, PatchId},
+        patch::PatchId,
         tick::Tick,
         topology::{Heading, Point, TopologySpec},
-        turtle::{TurtleBaseData, TurtleId, TurtleWho},
+        turtle::{TurtleId, TurtleWho},
         value::Float,
         world::World,
     },

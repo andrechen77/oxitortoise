@@ -1,10 +1,25 @@
 use std::{collections::VecDeque, marker::PhantomData};
 
+// TODO document how the generation number must always be odd for occupied slots
+// and now this naturally allows gen 0 index 0 to be a natural null value
+
 #[repr(C)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct GenIndex {
     pub index: u32,
     pub r#gen: u16,
+    // Exists so that all bits are well-defined and used.
+    _padding: u16,
+}
+
+impl GenIndex {
+    pub fn with_index_and_gen(index: u32, gen: u16) -> Self {
+        Self {
+            index,
+            r#gen: gen,
+            _padding: 0,
+        }
+    }
 }
 
 #[derive(Debug, Default)]
@@ -25,15 +40,12 @@ impl GenSlotTracker {
             // mark as occupied by setting lsb to 1
             let new_gen = self.generations[index as usize] | 1;
             self.generations[index as usize] = new_gen;
-            GenIndex {
-                index,
-                r#gen: new_gen,
-            }
+            GenIndex::with_index_and_gen(index, new_gen)
         } else {
             // add a new slot
             let index = self.generations.len() as u32;
             self.generations.push(1); // start with generation 1 (odd, occupied)
-            GenIndex { index, r#gen: 1 }
+            GenIndex::with_index_and_gen(index, 1)
         }
     }
 
@@ -62,7 +74,7 @@ impl GenSlotTracker {
         }
 
         let stored_gen = self.generations[gen_index.index as usize];
-        stored_gen == gen_index.r#gen
+        stored_gen == gen_index.r#gen && stored_gen & 1 == 1
     }
 
     pub fn len(&self) -> usize {
@@ -84,10 +96,7 @@ impl GenSlotTracker {
             let generation = self.generations[i];
             if generation & 1 == 1 {
                 // slot is occupied, so deallocate it
-                let _ = self.deallocate(GenIndex {
-                    index: i as u32,
-                    r#gen: generation,
-                });
+                let _ = self.deallocate(GenIndex::with_index_and_gen(i as u32, generation));
             }
         }
     }
@@ -99,10 +108,7 @@ impl GenSlotTracker {
             .enumerate()
             .filter_map(|(i, &r#gen)| {
                 if r#gen & 1 == 1 {
-                    Some(GenIndex {
-                        index: i as u32,
-                        r#gen: r#gen,
-                    })
+                    Some(GenIndex::with_index_and_gen(i as u32, r#gen))
                 } else {
                     None
                 }
@@ -201,10 +207,7 @@ where
         let entry = &mut self.entries[key.index as usize];
         if entry.generation != key.r#gen {
             let new_value = insert();
-            let old_key = GenIndex {
-                index: key.index,
-                r#gen: entry.generation,
-            };
+            let old_key = GenIndex::with_index_and_gen(key.index, entry.generation);
             let old_value = entry.value.replace(new_value);
             entry.generation = key.r#gen;
             old_value.map(|v| (old_key.into(), v))
@@ -235,11 +238,7 @@ where
 
         old_value.map(|v| {
             (
-                GenIndex {
-                    index: key.index,
-                    r#gen: old_generation,
-                }
-                .into(),
+                GenIndex::with_index_and_gen(key.index, old_generation).into(),
                 v,
             )
         })
@@ -285,11 +284,7 @@ where
         self.entries.drain(..).enumerate().filter_map(|(i, entry)| {
             entry.value.map(|v| {
                 (
-                    GenIndex {
-                        index: i as u32,
-                        r#gen: entry.generation,
-                    }
-                    .into(),
+                    GenIndex::with_index_and_gen(i as u32, entry.generation).into(),
                     v,
                 )
             })
@@ -351,17 +346,11 @@ mod tests {
         assert!(tracker.has_key(gen1));
 
         // wrong generation
-        let wrong_gen = GenIndex {
-            index: gen1.index,
-            r#gen: gen1.r#gen + 1,
-        };
+        let wrong_gen = GenIndex::with_index_and_gen(gen1.index, gen1.r#gen + 1);
         assert!(!tracker.has_key(wrong_gen));
 
         // wrong index
-        let wrong_index = GenIndex {
-            index: gen1.index + 1,
-            r#gen: gen1.r#gen,
-        };
+        let wrong_index = GenIndex::with_index_and_gen(gen1.index + 1, gen1.r#gen);
         assert!(!tracker.has_key(wrong_index));
     }
 
@@ -457,7 +446,7 @@ mod tests {
     }
     impl From<NothingKey> for GenIndex {
         fn from(_: NothingKey) -> Self {
-            GenIndex { index: 0, r#gen: 1 }
+            GenIndex::with_index_and_gen(0, 1)
         }
     }
 
@@ -473,7 +462,7 @@ mod tests {
     fn test_gen_slot_map_insert_new() {
         let mut map = GenSlotMap::new();
 
-        let gen_index = GenIndex { index: 0, r#gen: 1 };
+        let gen_index = GenIndex::with_index_and_gen(0, 1);
         let result = map.insert(gen_index, 42);
         assert_eq!(result, None); // no previous value
         assert_eq!(map.len(), 1);
@@ -486,22 +475,16 @@ mod tests {
     fn test_gen_slot_map_get() {
         let mut map = GenSlotMap::new();
 
-        let gen_index = GenIndex { index: 0, r#gen: 1 };
+        let gen_index = GenIndex::with_index_and_gen(0, 1);
         let _ = map.insert(gen_index, "hello");
         assert_eq!(map.get(gen_index), Some(&"hello"));
 
         // test with wrong generation
-        let wrong_gen = GenIndex {
-            index: gen_index.index,
-            r#gen: gen_index.r#gen + 2,
-        };
+        let wrong_gen = GenIndex::with_index_and_gen(gen_index.index, gen_index.r#gen + 2);
         assert_eq!(map.get(wrong_gen), None);
 
         // test with wrong index
-        let wrong_index = GenIndex {
-            index: gen_index.index + 1,
-            r#gen: gen_index.r#gen,
-        };
+        let wrong_index = GenIndex::with_index_and_gen(gen_index.index + 1, gen_index.r#gen);
         assert_eq!(map.get(wrong_index), None);
     }
 
@@ -509,7 +492,7 @@ mod tests {
     fn test_gen_slot_map_get_mut() {
         let mut map = GenSlotMap::new();
 
-        let gen_index = GenIndex { index: 0, r#gen: 1 };
+        let gen_index = GenIndex::with_index_and_gen(0, 1);
         let _ = map.insert(gen_index, String::from("hello"));
 
         // test mutable access
@@ -520,10 +503,7 @@ mod tests {
         assert_eq!(map.get(gen_index), Some(&String::from("hello world")));
 
         // test with wrong generation
-        let wrong_gen = GenIndex {
-            index: gen_index.index,
-            r#gen: gen_index.r#gen + 2,
-        };
+        let wrong_gen = GenIndex::with_index_and_gen(gen_index.index, gen_index.r#gen + 2);
         assert_eq!(map.get_mut(wrong_gen), None);
     }
 
@@ -531,17 +511,17 @@ mod tests {
     fn test_gen_slot_map_insert() {
         let mut map = GenSlotMap::new();
 
-        let gen_index = GenIndex { index: 0, r#gen: 1 };
+        let gen_index = GenIndex::with_index_and_gen(0, 1);
         let _ = map.insert(gen_index, 10);
 
         // insert a new value, should return the old one with old generation
         let old_value = map.insert(gen_index, 20);
-        assert_eq!(old_value, Some((GenIndex { index: 0, r#gen: 1 }, 10)));
+        assert_eq!(old_value, Some((GenIndex::with_index_and_gen(0, 1), 10)));
         assert_eq!(map.get(gen_index), Some(&20));
 
         // insert again, should return the current value with current generation
         let old_value = map.insert(gen_index, 30);
-        assert_eq!(old_value, Some((GenIndex { index: 0, r#gen: 1 }, 20)));
+        assert_eq!(old_value, Some((GenIndex::with_index_and_gen(0, 1), 20)));
         assert_eq!(map.get(gen_index), Some(&30));
     }
 
@@ -550,7 +530,7 @@ mod tests {
         let mut map = GenSlotMap::new();
 
         // try to insert with an index that doesn't exist yet
-        let invalid_index = GenIndex { index: 5, r#gen: 1 };
+        let invalid_index = GenIndex::with_index_and_gen(5, 1);
         let result = map.insert(invalid_index, 42);
         assert_eq!(result, None);
         assert_eq!(map.get(invalid_index), Some(&42)); // should work now since insert creates the slot
@@ -560,7 +540,7 @@ mod tests {
     fn test_gen_slot_map_remove() {
         let mut map = GenSlotMap::new();
 
-        let gen_index = GenIndex { index: 0, r#gen: 1 };
+        let gen_index = GenIndex::with_index_and_gen(0, 1);
         let _ = map.insert(gen_index, 42);
         assert_eq!(map.len(), 1);
 
@@ -579,7 +559,7 @@ mod tests {
         let mut map: GenSlotMap<NothingKey, i32> = GenSlotMap::new();
 
         // try to remove with an index that doesn't exist
-        let nonexistent_key = GenIndex { index: 5, r#gen: 1 }.into();
+        let nonexistent_key = GenIndex::with_index_and_gen(5, 1).into();
         let result = map.remove(nonexistent_key);
         assert_eq!(result, None);
     }
@@ -590,10 +570,7 @@ mod tests {
 
         // insert and remove multiple times
         for i in 0..5 {
-            let gen_index = GenIndex {
-                index: i as u32,
-                r#gen: 1,
-            };
+            let gen_index = GenIndex::with_index_and_gen(i as u32, 1);
             let _ = map.insert(gen_index, i);
             assert_eq!(map.get(gen_index), Some(&i));
 
@@ -602,10 +579,7 @@ mod tests {
         }
 
         // should be able to insert at any index
-        let new_gen_index = GenIndex {
-            index: 10,
-            r#gen: 1,
-        };
+        let new_gen_index = GenIndex::with_index_and_gen(10, 1);
         let _ = map.insert(new_gen_index, 100);
         assert_eq!(map.get(new_gen_index), Some(&100));
     }
@@ -614,9 +588,9 @@ mod tests {
     fn test_gen_slot_map_clear() {
         let mut map = GenSlotMap::new();
 
-        let gen1 = GenIndex { index: 0, r#gen: 1 };
-        let gen2 = GenIndex { index: 1, r#gen: 1 };
-        let gen3 = GenIndex { index: 2, r#gen: 1 };
+        let gen1 = GenIndex::with_index_and_gen(0, 1);
+        let gen2 = GenIndex::with_index_and_gen(1, 1);
+        let gen3 = GenIndex::with_index_and_gen(2, 1);
 
         let _ = map.insert(gen1, 1);
         let _ = map.insert(gen2, 2);
@@ -636,7 +610,7 @@ mod tests {
         assert!(map.get(gen3).is_none());
 
         // should be able to insert new values after clear
-        let new_gen = GenIndex { index: 0, r#gen: 1 };
+        let new_gen = GenIndex::with_index_and_gen(0, 1);
         let _ = map.insert(new_gen, 42);
         assert_eq!(map.get(new_gen), Some(&42));
     }
@@ -645,17 +619,17 @@ mod tests {
     fn test_gen_slot_map_multiple_types() {
         // test with different types
         let mut string_map = GenSlotMap::new();
-        let string_index = GenIndex { index: 0, r#gen: 1 };
+        let string_index = GenIndex::with_index_and_gen(0, 1);
         let _ = string_map.insert(string_index, String::from("test"));
         assert_eq!(string_map.get(string_index), Some(&String::from("test")));
 
         let mut vec_map: GenSlotMap<NothingKey, Vec<i32>> = GenSlotMap::new();
-        let vec_index = GenIndex { index: 0, r#gen: 1 }.into();
+        let vec_index = GenIndex::with_index_and_gen(0, 1).into();
         let _ = vec_map.insert(vec_index, vec![1, 2, 3]);
         assert_eq!(vec_map.get(vec_index), Some(&vec![1, 2, 3]));
 
         let mut option_map: GenSlotMap<NothingKey, Option<i32>> = GenSlotMap::new();
-        let option_index = GenIndex { index: 0, r#gen: 1 }.into();
+        let option_index = GenIndex::with_index_and_gen(0, 1).into();
         let _ = option_map.insert(option_index, Some(42));
         assert_eq!(option_map.get(option_index), Some(&Some(42)));
     }
@@ -664,14 +638,11 @@ mod tests {
     fn test_gen_slot_map_generation_mismatch() {
         let mut map = GenSlotMap::new();
 
-        let gen_index = GenIndex { index: 0, r#gen: 1 };
+        let gen_index = GenIndex::with_index_and_gen(0, 1);
         let _ = map.insert(gen_index, 42);
 
         // create a gen index with the same index but different generation
-        let wrong_gen = GenIndex {
-            index: gen_index.index,
-            r#gen: gen_index.r#gen + 2, // even number (unoccupied)
-        };
+        let wrong_gen = GenIndex::with_index_and_gen(gen_index.index, gen_index.r#gen + 2);
 
         // should not be able to access with wrong generation
         assert_eq!(map.get(wrong_gen), None);
@@ -680,7 +651,7 @@ mod tests {
         // inserting with wrong generation replaces the value
         assert_eq!(
             map.insert(wrong_gen, 100),
-            Some((GenIndex { index: 0, r#gen: 1 }, 42))
+            Some((GenIndex::with_index_and_gen(0, 1), 42))
         );
         assert_eq!(map.remove(wrong_gen), Some(100));
     }
@@ -690,15 +661,15 @@ mod tests {
         let mut map = GenSlotMap::new();
 
         // insert at index 0 with generation 1
-        let gen1 = GenIndex { index: 0, r#gen: 1 };
+        let gen1 = GenIndex::with_index_and_gen(0, 1);
         let result = map.insert(gen1, 42);
         assert_eq!(result, None); // no previous value
         assert_eq!(map.get(gen1), Some(&42));
 
         // insert at the same index with generation 3
-        let gen3 = GenIndex { index: 0, r#gen: 3 };
+        let gen3 = GenIndex::with_index_and_gen(0, 3);
         let result = map.insert(gen3, 100);
-        assert_eq!(result, Some((GenIndex { index: 0, r#gen: 1 }, 42))); // returns old gen and value
+        assert_eq!(result, Some((GenIndex::with_index_and_gen(0, 1), 42))); // returns old gen and value
         assert_eq!(map.get(gen3), Some(&100));
 
         // the old generation should no longer be accessible
@@ -714,7 +685,7 @@ mod tests {
     #[test]
     fn test_gen_slot_map_mutate_or_insert() {
         let mut map = GenSlotMap::new();
-        let gen_index = GenIndex { index: 0, r#gen: 1 };
+        let gen_index = GenIndex::with_index_and_gen(0, 1);
 
         // Insert a new value using mutate_or_insert (should call insert closure)
         let result =
@@ -732,7 +703,7 @@ mod tests {
         assert_eq!(map.get(gen_index), Some(&15));
 
         // Insert at the same index but with a different generation (should replace and return old value)
-        let new_gen_index = GenIndex { index: 0, r#gen: 3 };
+        let new_gen_index = GenIndex::with_index_and_gen(0, 3);
         let result = map.mutate_or_insert(
             new_gen_index,
             |_v| panic!("should not mutate on insert"),

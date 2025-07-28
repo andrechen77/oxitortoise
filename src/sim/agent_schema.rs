@@ -100,8 +100,8 @@ impl TurtleSchema {
         }
     }
 
-    pub fn make_row_buffers(&self) -> Vec<RowBuffer> {
-        make_row_buffers_impl::<TurtleBaseData>(&self.field_groups)
+    pub fn make_row_buffers<const N: usize>(&self) -> [Option<RowBuffer>; N] {
+        make_row_buffers_impl::<TurtleBaseData, N>(&self.field_groups)
     }
 
     pub fn heading(&self) -> AgentFieldDescriptor {
@@ -203,8 +203,8 @@ impl PatchSchema {
         }
     }
 
-    pub fn make_row_buffers(&self) -> Vec<RowBuffer> {
-        make_row_buffers_impl::<PatchBaseData>(&self.field_groups)
+    pub fn make_row_buffers<const N: usize>(&self) -> [Option<RowBuffer>; N] {
+        make_row_buffers_impl::<PatchBaseData, N>(&self.field_groups)
     }
 
     pub fn pcolor(&self) -> AgentFieldDescriptor {
@@ -267,13 +267,18 @@ impl AgentFieldDescriptor {
     };
 }
 
-fn make_row_buffers_impl<A: 'static>(field_groups: &[AgentSchemaFieldGroup]) -> Vec<RowBuffer> {
+fn make_row_buffers_impl<A: 'static, const N: usize>(
+    field_groups: &[AgentSchemaFieldGroup],
+) -> [Option<RowBuffer>; N] {
     let AgentSchemaField::BaseData = field_groups[0].fields[0] else {
         panic!("The first field in the first buffer must be the base data.");
     };
 
-    let mut row_buffers = Vec::new();
-    for (buffer_idx, buffer_fields) in field_groups.iter().enumerate() {
+    let row_buffers: [Option<RowBuffer>; N] = std::array::from_fn(|buffer_idx| {
+        let Some(buffer_fields) = field_groups.get(buffer_idx) else {
+            return None;
+        };
+
         // the types and sizes of the fields in this buffer
         let mut field_types = Vec::new();
         for (field_idx, buffer_field) in buffer_fields.fields.iter().enumerate() {
@@ -290,9 +295,11 @@ fn make_row_buffers_impl<A: 'static>(field_groups: &[AgentSchemaFieldGroup]) -> 
             field_types.push(type_id);
         }
 
-        let row_schema = RowSchema::new(&field_types, !buffer_fields.avoid_occupancy_bitfield);
+        Some(RowBuffer::new(RowSchema::new(
+            &field_types,
+            !buffer_fields.avoid_occupancy_bitfield,
+        )))
+    });
 
-        row_buffers.push(RowBuffer::new(row_schema));
-    }
     row_buffers
 }

@@ -10,6 +10,7 @@ use std::{
     any::TypeId,
     marker::PhantomData,
     ops::{Deref, DerefMut},
+    ptr::NonNull,
 };
 
 use crate::util::type_registry::get_type_info;
@@ -17,8 +18,9 @@ use crate::util::type_registry::get_type_info;
 // TODO consider using a custom allocator since we'll probably want to allocate
 // within Wasm memory at some point
 #[derive(Debug)]
+#[repr(C)]
 pub struct AlignedBytes {
-    data: *mut [u8],
+    data: NonNull<[u8]>,
     layout: Layout,
 }
 
@@ -31,8 +33,9 @@ impl AlignedBytes {
         if layout.size() == 0 {
             panic!("capacity must be greater than 0");
         }
-        let ptr = unsafe { alloc_zeroed(layout) };
-        let ptr = std::ptr::slice_from_raw_parts_mut(ptr, layout.size());
+        let ptr =
+            NonNull::new(unsafe { alloc_zeroed(layout) }).expect("allocation should not fail");
+        let ptr = NonNull::slice_from_raw_parts(ptr, layout.size());
         Self { data: ptr, layout }
     }
 
@@ -65,14 +68,14 @@ impl Deref for AlignedBytes {
 
     fn deref(&self) -> &Self::Target {
         // SAFETY: we own this data and know it exists
-        unsafe { &*self.data }
+        unsafe { self.data.as_ref() }
     }
 }
 
 impl DerefMut for AlignedBytes {
     fn deref_mut(&mut self) -> &mut Self::Target {
         // SAFETY: we own this data and know it exists
-        unsafe { &mut *self.data }
+        unsafe { self.data.as_mut() }
     }
 }
 
@@ -352,12 +355,16 @@ impl<'a, B: AsRef<[u8]> + AsMut<[u8]> + 'a> Row<'a, B> {
     }
 }
 
+#[no_mangle]
+static SIZE_OF_ROW_BUFFER: usize = size_of::<RowBuffer>();
+
 #[derive(Debug)]
+#[repr(C)]
 pub struct RowBuffer {
-    /// The structure of each row in the array.
-    schema: RowSchema,
     /// The bytes for the row data.
     bytes: AlignedBytes,
+    /// The structure of each row in the array.
+    schema: RowSchema,
 }
 
 impl RowBuffer {
@@ -559,16 +566,6 @@ pub struct Array<T: Copy> {
 }
 
 impl<T: Copy> Array<T> {
-    /// # Safety
-    ///
-    /// The bytes must be all valid T values.
-    unsafe fn new(bytes: AlignedBytes) -> Self {
-        Self {
-            bytes,
-            _phantom: PhantomData,
-        }
-    }
-
     pub fn len(&self) -> usize {
         self.bytes.len() / std::mem::size_of::<T>()
     }

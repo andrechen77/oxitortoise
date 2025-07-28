@@ -13,7 +13,6 @@
 
 	<input type="text" id="model_name" placeholder="Model Name">
 	<button id="test_js">Test JS</button>
-	<button id="test_wasm">Test Wasm</button>
 	<!-- <div id="view-container" style="height: 600px; width: 600px;"></div> -->
 
 	<script>
@@ -36,28 +35,10 @@
 			console.timeEnd(timerName);
 		}
 
-		var wasmResult = null
-		async function loadWasm(model_name) {
-			let obj = await WebAssembly.instantiateStreaming(fetch(`models/${model_name}/wasm.wasm`), {});
-			wasmResult = obj;
-		}
-		function runWasm(timerName) {
-			console.time(timerName);
-			wasmResult.instance.exports.main();
-			console.timeEnd(timerName);
-			wasmResult = null;
-		}
-
 		document.addEventListener('DOMContentLoaded', () => {
 			document.getElementById('test_js').addEventListener('click', async () => {
 				await loadJs(document.getElementById('model_name').value);
 				runJs('running JavaScript version');
-				console.log("done");
-			});
-
-			document.getElementById('test_wasm').addEventListener('click', async () => {
-				await loadWasm(document.getElementById('model_name').value);
-				runWasm('running Wasm version');
 				console.log("done");
 			});
 		});

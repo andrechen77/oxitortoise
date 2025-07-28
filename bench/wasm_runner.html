@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Wasm Debugger</title>
+</head>
+
+<body>
+	<input type="text" id="module_file_name" placeholder="Module File Name">
+	<button id="load">Load</button>
+
+	<script>
+		async function instantiateMain(filename) {
+			let wasmResult = null;
+			let modelCode = await fetch("/bench/models/ants/model_code.wasm")
+				.then(response => response.arrayBuffer())
+				.then(buffer => new Uint8Array(buffer));
+			let importObject = {
+				env: {
+					"write_to_console": (message, length) => {
+						let mem = wasmResult.instance.exports.memory.buffer;
+						let str = new TextDecoder().decode(new Uint8Array(mem, message, length));
+						console.log(str);
+					},
+					"get_model_code_size": () => {
+						return modelCode.length;
+					},
+					"write_model_code": (buffer) => {
+						let mem = wasmResult.instance.exports.memory.buffer;
+						let auxModuleBuffer = new Uint8Array(mem, buffer, modelCode.length);
+						auxModuleBuffer.set(modelCode);
+					},
+					"instantiate_module": (auxModuleBufStart, auxModuleBufLen) => {
+						try {
+							console.log("instantiating module", auxModuleBufStart, auxModuleBufLen);
+
+							let mainMemory = wasmResult.instance.exports["memory"];
+							let auxModuleBuffer = new Uint8Array(mainMemory.buffer, auxModuleBufStart, auxModuleBufLen);
+
+							// instantiate the auxiliary module
+							let auxModule = new WebAssembly.Module(auxModuleBuffer);
+							let auxInstance = new WebAssembly.Instance(auxModule, {
+								"env": {
+									...wasmResult.instance.exports
+								}
+							});
+
+							return true;
+						} catch (e) {
+							console.error(e);
+							return false;
+						}
+					},
+					"grow_function_table": (numSlots) => {
+						console.log("growing function table by ", numSlots);
+						let mainTable = wasmResult.instance.exports["__indirect_function_table"];
+						try {
+							let latest_index = mainTable.grow(numSlots);
+							return latest_index;
+						} catch (e) {
+							console.error(e);
+							return -1;
+						}
+					},
+				}
+			}
+			wasmResult = await WebAssembly.instantiateStreaming(fetch(filename), importObject);
+			return wasmResult;
+		}
+
+		// async function fakeJitCompile(i) {
+		// 	console.log(`fakeJitCompile ${i}`);
+		// 	let table = wasmResult.instance.exports["jit_function_table"];
+		// 	let latest_index = table.grow(1);
+		// 	let jit_mod = await WebAssembly.instantiateStreaming(fetch("jit.wasm"), {});
+		// 	table.set(latest_index, jit_mod.instance.exports["increment_one"]);
+		// 	return latest_index;
+		// }
+
+		// async function load() {
+		// 	let importObject = {
+		// 		env: {
+		// 			"fake_jit_compile": fakeJitCompile,
+		// 		}
+		// 	};
+		// 	let obj = await WebAssembly.instantiateStreaming(fetch("lib.wasm"), importObject);
+		// 	console.log("finished instantiation");
+		// 	wasmResult = obj;
+		// }
+
+		var globalWasm = null;
+
+		async function load() {
+			console.log("loading");
+			let filename = document.getElementById('module_file_name').value;
+			globalWasm = await instantiateMain(filename);
+			console.log("loaded; the module is available at `var globalWasm`");
+		}
+
+		function get_mem(addr, length = 4) {
+			return new Uint8Array(globalWasm.instance.exports.memory.buffer, addr, length);
+		}
+
+		function list_globals() {
+			console.log("Listing globals:");
+			for (let key in globalWasm.instance.exports) {
+				let expt = globalWasm.instance.exports[key];
+				if (expt instanceof WebAssembly.Global) {
+					let addr = expt.value;
+					let value = null;
+					let valueStr = null;
+					try {
+						value = get_mem(addr);
+						valueStr = Array.from(value).map(b => b.toString(16).padStart(2, '0')).join(' ');
+					} catch (e) {
+						console.error(e);
+					}
+					console.log(`${key}: addr=${addr}, value=${valueStr || value}`);
+				}
+			}
+		}
+
+		document.addEventListener('DOMContentLoaded', function () {
+			document.getElementById('load').addEventListener('click', load);
+		});
+	</script>
+</body>
+
+</html>

@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{fmt, mem::offset_of};
 
 use super::{patch::PatchId, value};
 
@@ -26,6 +26,10 @@ impl fmt::Display for PointInt {
     }
 }
 
+// TODO currently we use double-NaN to represent a point that does not exist.
+// (i.e. None). Consider if the codebase would benefit from non-nullable points
+// and if so, make Points non-nullable and use a different type OptionPoint
+// which allows NaN to be used for None.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 #[repr(C)]
 pub struct Point {
@@ -106,9 +110,19 @@ impl TopologySpec {
     }
 }
 
+#[no_mangle]
+pub static OFFSET_TOPOLOGY_TO_MAX_PXCOR: usize = offset_of!(Topology, max_x);
+
+#[no_mangle]
+static OFFSET_TOPOLOGY_TO_MAX_PYCOR: usize = offset_of!(Topology, max_y);
+
 #[derive(Debug, Clone)]
 pub struct Topology {
     spec: TopologySpec,
+    // TODO the max coordinates currently go all the way to the edge of the
+    // border patches (e.g. 16.5 instead of 16.0), but the max-pxcor and max-pycor
+    // reporters only report the center. See if this needs to be changed based
+    // on which version is used more often.
     min_x: CoordFloat,
     max_x: CoordFloat,
     world_width: CoordFloat,

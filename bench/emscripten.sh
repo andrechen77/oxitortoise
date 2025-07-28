@@ -1,0 +1,10 @@
+emcc "$1" -o "$2" \
+--no-entry \
+-O1 \
+-g \
+-s STANDALONE_WASM=1 \
+-s SIDE_MODULE=1 \
+-s ERROR_ON_UNDEFINED_SYMBOLS=0 \
+# -s EXPORTED_FUNCTIONS="$3"
+# -s INVOKE_RUN=0
+# -s EXIT_RUNTIME=0

@@ -1,8 +1,4 @@
-use std::{
-    collections::HashMap,
-    ops::{Index, IndexMut},
-    rc::Rc,
-};
+use std::{collections::HashMap, mem::offset_of};
 
 use derive_more::derive::From;
 use either::Either;
@@ -11,13 +7,13 @@ use crate::{
     sim::{
         agent_schema::{AgentFieldDescriptor, AgentSchemaField, PatchSchema},
         color::Color,
-        topology::{CoordInt, PointInt, TopologySpec},
+        topology::{CoordFloat, PointInt, TopologySpec},
         value::{DynBox, Float},
     },
     util::row_buffer::{self, RowBuffer},
 };
 
-use super::{topology::Point, world::World};
+use super::topology::Point;
 
 // TODO make documentation better
 /// The patches in the world are indexed in a row-major order, where the first
@@ -28,17 +24,27 @@ use super::{topology::Point, world::World};
 /// current breed, patches do not have the concept of breeds so all fields are
 /// always active.
 
+// TODO document that the Patch Id uses -1 as a sentinel value for nobody
 /// A reference to a patch.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, From)]
 #[repr(transparent)]
 pub struct PatchId(pub u32);
+
+impl Default for PatchId {
+    fn default() -> Self {
+        Self(u32::MAX)
+    }
+}
+
+#[no_mangle]
+static OFFSET_PATCHES_TO_DATA: usize = offset_of!(Patches, data);
 
 #[derive(Debug)]
 pub struct Patches {
     /// The buffers that store the data for the patches. Each patch is
     /// represented by a row in all buffers. There are multiple buffers to
     /// allow for SoA-style data locality of certain fields.
-    data: Vec<RowBuffer>,
+    data: [Option<RowBuffer>; 4],
     /// The fields of a patch.
     patch_schema: PatchSchema,
     /// The number of patches in the world.
@@ -58,7 +64,7 @@ impl Patches {
         };
 
         // populate the patches
-        for buffer in &mut patches.data {
+        for buffer in patches.data.iter_mut().filter_map(|b| b.as_mut()) {
             buffer.ensure_capacity(patches.num_patches as usize);
         }
         let TopologySpec {
@@ -70,14 +76,17 @@ impl Patches {
         } = topology_spec;
         for j in 0..*patches_height {
             for i in 0..*patches_width {
-                let x = min_pxcor + i as CoordInt;
-                let y = max_pycor - j as CoordInt;
-                let position = PointInt { x, y };
+                let x = min_pxcor + i;
+                let y = max_pycor - j;
+                let position = Point {
+                    x: x as CoordFloat,
+                    y: y as CoordFloat,
+                };
                 // topology_spec.patch_at(position) should just return an
                 // increasing index anyway but this is more robust (even though
                 // it's literally the same thing just requiring more
                 // optimization)
-                let id = topology_spec.patch_at(position);
+                let id = topology_spec.patch_at(PointInt { x, y });
 
                 // initialize base data
                 let base_data = PatchBaseData {
@@ -85,11 +94,17 @@ impl Patches {
                     plabel: String::new(),
                     plabel_color: Color::BLACK, // TODO use a more sensible default
                 };
-                patches.data[0].row_mut(id.0 as usize).insert(0, base_data);
+                patches.data[0]
+                    .as_mut()
+                    .unwrap()
+                    .row_mut(id.0 as usize)
+                    .insert(0, base_data);
 
                 // initialize other builtins
                 let pcolor_desc = patches.patch_schema.pcolor();
                 patches.data[pcolor_desc.buffer_idx as usize]
+                    .as_mut()
+                    .unwrap()
                     .row_mut(id.0 as usize)
                     .insert_zeroable(pcolor_desc.field_idx as usize);
 
@@ -100,6 +115,8 @@ impl Patches {
                     };
                     if r#type.is_numeric_zeroable() {
                         patches.data[field.buffer_idx as usize]
+                            .as_mut()
+                            .unwrap()
                             .row_mut(id.0 as usize)
                             .insert_zeroable(field.field_idx as usize);
                     } else {
@@ -133,6 +150,8 @@ impl Patches {
         }
 
         if let Some(field) = self.data[field.buffer_idx as usize]
+            .as_ref()
+            .unwrap()
             .row(id.0 as usize)
             .get(field.field_idx as usize)
         {
@@ -165,6 +184,8 @@ impl Patches {
         }
 
         if let Some(field) = self.data[field.buffer_idx as usize]
+            .as_mut()
+            .unwrap()
             .row_mut(id.0 as usize)
             .get_mut(field.field_idx as usize)
         {
@@ -195,6 +216,8 @@ impl Patches {
             panic!("patch does not exist");
         }
         self.data[field.buffer_idx as usize]
+            .as_mut()
+            .unwrap()
             .row_mut(id.0 as usize)
             .insert(field.field_idx as usize, value);
         if self.fallback_custom_fields.contains_key(&(id, field)) {
@@ -209,7 +232,10 @@ impl Patches {
     pub fn take_patch_values(&mut self, field: AgentFieldDescriptor) -> row_buffer::Array<Float> {
         // TODO make sure that patches don't have a fallback value for this
         // field
-        self.data[field.buffer_idx as usize].take_array()
+        self.data[field.buffer_idx as usize]
+            .as_mut()
+            .unwrap()
+            .take_array()
     }
 
     /// # Panics
@@ -221,7 +247,10 @@ impl Patches {
         &mut self,
         field: AgentFieldDescriptor,
     ) -> &mut [T] {
-        self.data[field.buffer_idx as usize].as_mut_array()
+        self.data[field.buffer_idx as usize]
+            .as_mut()
+            .unwrap()
+            .as_mut_array()
     }
 
     /// Resets all patch variables to their default values.
@@ -236,7 +265,7 @@ impl Patches {
 
 #[derive(Debug)]
 pub struct PatchBaseData {
-    pub position: PointInt,
+    pub position: Point,
     pub plabel: String, // TODO consider using the netlogo version of string for this
     pub plabel_color: Color,
     // TODO some way of tracking what turtles are on this patch.

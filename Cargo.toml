@@ -8,10 +8,14 @@ derive_more = { version = "1.0.0", features = ["full"] }
 either = "1.15.0"
 flagset = "0.4.6"
 slotmap = "1.0.7"
+walrus = "0.23.3"
 
 [features]
 runtime-unsafety = []
 
+[profile.dev]
+opt-level = 0
+debug = "full"
+
 [[bin]]
-name = "ants"
-path = "bench/models/ants/wasm.rs"
+name = "basic_test"

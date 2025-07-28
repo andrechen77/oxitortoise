@@ -7,6 +7,7 @@ const CLEAR_TICK: f64 = -1.0;
 
 /// The current tick number of an NetLogo simulation instance.
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
+#[repr(transparent)]
 pub struct Tick(Cell<f64>);
 
 impl Default for Tick {
@@ -26,21 +27,19 @@ impl Tick {
 
     /// Attempts to advance the tick counter by one. Returns `true` if successful, and
     /// false if the counter was cleared.
-    #[must_use]
-    pub fn advance(&self) -> bool {
+    pub fn advance(&self) -> Result<(), ()> {
         self.advance_by(1.0)
     }
 
     /// Attempts to advance the tick counter by the specified amount. Returns `true` if
     /// successful, and false if the counter was cleared.
-    #[must_use]
-    pub fn advance_by(&self, amount: f64) -> bool {
+    pub fn advance_by(&self, amount: f64) -> Result<(), ()> {
         if self.is_clear() {
-            return false;
+            return Err(());
         }
 
         self.0.set(self.0.get() + amount);
-        true
+        Ok(())
     }
 
     pub fn is_clear(&self) -> bool {
