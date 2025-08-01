@@ -187,7 +187,11 @@ impl<'a, B: AsRef<[u8]> + 'a> Row<'a, B> {
 
     pub fn get<T: 'static>(&self, field_idx: usize) -> Option<&'a T> {
         // verify that the type tag matches
-        assert_eq!(self.schema.fields[field_idx].r#type, TypeId::of::<T>());
+        assert_eq!(
+            self.schema.fields[field_idx].r#type,
+            TypeId::of::<T>(),
+            "type mismatch"
+        );
 
         let ptr = self.get_ptr(field_idx);
         // check if the field is actually present
@@ -227,7 +231,11 @@ impl<'a, B: AsRef<[u8]> + AsMut<[u8]> + 'a> Row<'a, B> {
 
     pub fn get_mut<T: 'static>(&mut self, field_idx: usize) -> Option<&'a mut T> {
         // same implementation as self.get
-        assert_eq!(self.schema.fields[field_idx].r#type, TypeId::of::<T>());
+        assert_eq!(
+            self.schema.fields[field_idx].r#type,
+            TypeId::of::<T>(),
+            "type mismatch"
+        );
 
         let ptr = self.get_ptr_mut(field_idx);
         if self.has_field(field_idx) {
@@ -239,9 +247,11 @@ impl<'a, B: AsRef<[u8]> + AsMut<[u8]> + 'a> Row<'a, B> {
     }
 
     pub fn insert<T: 'static>(&mut self, field_idx: usize, value: T) {
-        if self.schema.fields[field_idx].r#type != TypeId::of::<T>() {
-            panic!("type mismatch");
-        }
+        assert_eq!(
+            self.schema.fields[field_idx].r#type,
+            TypeId::of::<T>(),
+            "type mismatch"
+        );
 
         // if the field is already present, panic. we could technically just
         // drop the existing value, or return the new value to the caller, but
@@ -277,9 +287,11 @@ impl<'a, B: AsRef<[u8]> + AsMut<[u8]> + 'a> Row<'a, B> {
     }
 
     pub fn take<T: 'static>(&mut self, field_idx: usize) -> Option<T> {
-        if self.schema.fields[field_idx].r#type != TypeId::of::<T>() {
-            panic!("type mismatch");
-        }
+        assert_eq!(
+            self.schema.fields[field_idx].r#type,
+            TypeId::of::<T>(),
+            "type mismatch"
+        );
 
         if self.schema.occupancy_bitfield_len == 0 {
             panic!("cannot take a field if the occupancy bitfield is omitted");
