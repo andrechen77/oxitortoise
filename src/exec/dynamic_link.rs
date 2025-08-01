@@ -1,4 +1,3 @@
-use flagset::FlagSet;
 use slotmap::{Key as _, KeyData};
 
 use crate::{
@@ -6,7 +5,6 @@ use crate::{
     sim::{
         agent_schema::AgentFieldDescriptor,
         patch::PatchId,
-        tick::Tick,
         topology::{Heading, Point, PointInt},
         turtle::{BreedId, TurtleId},
         value::{
@@ -15,7 +13,6 @@ use crate::{
         },
         world::World,
     },
-    updater::{CanonUpdater, WriteUpdate as _},
     util::rng::Rng as _,
 };
 
@@ -28,31 +25,6 @@ pub extern "C" fn oxitortoise_is_nan(value: f64) -> bool {
 pub extern "C" fn oxitortoise_round(value: Float) -> Float {
     // TODO is it possible for this to go from finite to non-finite?
     Float::new(value.get().round())
-}
-
-#[no_mangle]
-pub extern "C" fn oxitortoise_update_turtle(
-    updater: &mut CanonUpdater,
-    world: &World,
-    turtle_id: TurtleId,
-    flags: u16,
-) {
-    updater.update_turtle(world, turtle_id, FlagSet::new(flags).unwrap()); // TODO once confident this should become unsafe
-}
-
-#[no_mangle]
-pub extern "C" fn oxitortoise_update_patch(
-    updater: &mut CanonUpdater,
-    world: &World,
-    patch_id: PatchId,
-    flags: u8,
-) {
-    updater.update_patch(world, patch_id, FlagSet::new(flags).unwrap()); // TODO once confident this should become unsafe
-}
-
-#[no_mangle]
-pub extern "C" fn oxitortoise_update_tick(updater: &mut CanonUpdater, tick: Tick) {
-    updater.update_tick(tick);
 }
 
 #[no_mangle]

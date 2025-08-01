@@ -54,37 +54,50 @@ typedef struct {
 	Float plabel_color;
 } PatchBaseData;
 
-typedef struct {} TurtleSet;
+typedef struct TurtleSet TurtleSet;
 
-typedef struct {} TurtleIterator;
+typedef struct TurtleIterator TurtleIterator;
 
-typedef struct {} PatchIterator;
+typedef struct PatchIterator PatchIterator;
 
 // relating to the execution context and workspace data structure
 
-typedef struct {} Context;
+typedef struct Context Context;
 
-typedef struct {} Updater;
+typedef union {
+	struct {
+		char _pad[0];
+		Float v;
+	} tick;
+	struct {
+		char _pad[0x2c];
+		uint16_t *v;
+	} turtle_flags;
+	struct {
+		char _pad[0x30];
+		uint8_t *v;
+	} patch_flags;
+} DirtyAggregator;
 
-typedef struct {} Workspace;
+typedef struct Workspace Workspace;
 
-typedef struct {} World;
+typedef struct World World;
 
 #define OFFSET_WORLD_TO_TURTLES         0x00000000
-#define OFFSET_WORLD_TO_PATCHES         0x00000148
-#define OFFSET_WORLD_TO_TOPOLOGY        0x00000228
-#define OFFSET_WORLD_TO_TICK_COUNTER    0x00000270
+#define OFFSET_WORLD_TO_PATCHES         0x00000138
+#define OFFSET_WORLD_TO_TOPOLOGY        0x00000208
+#define OFFSET_WORLD_TO_TICK_COUNTER    0x00000250
 #define OFFSET_PATCHES_TO_DATA          0x00000020
-#define SIZE_OF_ROW_BUFFER              0x00000028
+#define SIZE_OF_ROW_BUFFER              0x00000024
 #define OFFSET_TOPOLOGY_TO_MAX_PXCOR    0x00000008
 #define OFFSET_TOPOLOGY_TO_MAX_PYCOR    0x00000020
 #define OFFSET_TURTLES_TO_DATA          0x00000010
 #define OFFSET_CONTEXT_TO_WORKSPACE     0x00000000
-#define OFFSET_CONTEXT_TO_UPDATER       0x00000008
+#define OFFSET_CONTEXT_TO_DIRTY_AGGREGATOR       0x00000008
 #define OFFSET_WORKSPACE_TO_WORLD       0x00000000
 
-static inline Updater *context_to_updater(Context *context) {
-	return (Updater *)((char *)context + OFFSET_CONTEXT_TO_UPDATER);
+static inline DirtyAggregator *context_to_dirty_aggregator(Context *context) {
+	return (DirtyAggregator *)((char *)context + OFFSET_CONTEXT_TO_DIRTY_AGGREGATOR);
 }
 
 static inline World *context_to_world(Context *context) {
@@ -107,10 +120,6 @@ static inline Float world_to_max_pxcor(World *world) {
 static inline Float world_to_max_pycor(World *world) {
 	return *(Float *)((char *)world + OFFSET_WORLD_TO_TOPOLOGY + OFFSET_TOPOLOGY_TO_MAX_PYCOR);
 }
-
-void oxitortoise_update_turtle(Updater *updater, World *world, TurtleId turtle_id, uint16_t flags);
-void oxitortoise_update_patch(Updater *updater, World *world, PatchId patch_id, uint8_t flags);
-void oxitortoise_update_tick(Updater *updater, Float tick);
 
 bool oxitortoise_is_nan(double value);
 Float oxitortoise_round(Float value);
@@ -188,7 +197,7 @@ typedef struct {
 // --- Heading constants ---
 #define HEADING_MAX 360.0
 
-// --- Updater flags ---
+// --- Dirty flags ---
 #define FLAG_BREED 1 << 0
 #define FLAG_COLOR 1 << 1
 #define FLAG_HEADING 1 << 2
@@ -206,7 +215,7 @@ typedef struct {
 
 void recolor_patch(Context *context, PatchId patch_id) {
 	World *world = context_to_world(context);
-	Updater *updater = context_to_updater(context);
+	DirtyAggregator *dirty_aggregator = context_to_dirty_aggregator(context);
 
 	PatchGroup0 *patch0 = (PatchGroup0 *)world_to_patch_data(world, 0) + patch_id;
 	PatchGroup1 *patch1 = (PatchGroup1 *)world_to_patch_data(world, 1) + patch_id;
@@ -225,7 +234,7 @@ void recolor_patch(Context *context, PatchId patch_id) {
 		// scale-color green chemical 0.1 5
 		patch1->pcolor = oxitortoise_scale_color(COLOR_GREEN, patch2->chemical, 0.1, 5.0);
 	}
-	oxitortoise_update_patch(updater, world, patch_id, FLAG_PCOLOR);
+	dirty_aggregator->patch_flags.v[patch_id] |= FLAG_PCOLOR;
 }
 
 Float chemical_at_angle(World *world, Point position, Float heading, Float angle) {
@@ -289,7 +298,7 @@ void uphill_nest_scent(World *world, Point position, Float *heading) {
 }
 
 void setup(Context *context) {
-	Updater *updater = context_to_updater(context);
+	DirtyAggregator *dirty_aggregator = context_to_dirty_aggregator(context);
 	World *world = context_to_world(context);
 
 	// clear-all
@@ -313,8 +322,7 @@ void setup(Context *context) {
 			base_data->size = 2.0;
 			base_data->color = 15.0;
 
-			// TODO send update to the updater
-			oxitortoise_update_turtle(updater, world, next_turtle, FLAG_COLOR | FLAG_SIZE);
+			dirty_aggregator->turtle_flags.v[next_turtle.gen_index.index] |= FLAG_COLOR | FLAG_SIZE;
 		}
 		oxitortoise_drop_turtle_iter(iter);
 	}
@@ -381,7 +389,7 @@ void setup(Context *context) {
 
 	// reset-ticks
 	oxitortoise_reset_ticks(world);
-	oxitortoise_update_tick(updater, oxitortoise_get_ticks(world));
+	dirty_aggregator->tick.v = oxitortoise_get_ticks(world);
 }
 
 void shim_setup(Context *context, void *args) {
@@ -389,7 +397,7 @@ void shim_setup(Context *context, void *args) {
 }
 
 void go(Context *context) {
-	Updater *updater = context_to_updater(context);
+	DirtyAggregator *dirty_aggregator = context_to_dirty_aggregator(context);
 	World *world = context_to_world(context);
 
 	// ask turtles
@@ -425,7 +433,7 @@ void go(Context *context) {
 					*heading = oxitortoise_normalize_heading(*heading + 180.0);
 
 					// stop
-					oxitortoise_update_turtle(updater, world, next_turtle, FLAG_POSITION | FLAG_HEADING | FLAG_COLOR);
+					dirty_aggregator->turtle_flags.v[next_turtle.gen_index.index] |= FLAG_POSITION | FLAG_HEADING | FLAG_COLOR;
 					continue;
 				}
 
@@ -484,7 +492,7 @@ void go(Context *context) {
 			*position = new_position;
 		}
 
-		oxitortoise_update_turtle(updater, world, next_turtle, FLAG_POSITION | FLAG_HEADING | FLAG_COLOR);
+		dirty_aggregator->turtle_flags.v[next_turtle.gen_index.index] |= FLAG_POSITION | FLAG_HEADING | FLAG_COLOR;
 	}
 	oxitortoise_drop_turtle_iter(iter);
 
@@ -506,7 +514,7 @@ void go(Context *context) {
 
 	// advance-tick
 	oxitortoise_advance_tick(world);
-	oxitortoise_update_tick(updater, oxitortoise_get_ticks(world));
+	dirty_aggregator->tick.v = oxitortoise_get_ticks(world);
 }
 
 void shim_go(Context *context, void *args) {

@@ -19,7 +19,7 @@ use oxitortoise::{
         value::NetlogoInternalType,
         world::World,
     },
-    updater::{UpdateAggregator, WriteUpdate as _},
+    updater::DirtyAggregator,
     util::{cell::RefCell, rng::CanonRng},
     workspace::Workspace,
 };
@@ -100,14 +100,16 @@ pub fn main() {
 
     // create the workspace and execution context
     let workspace = Box::leak(Box::new(create_workspace()));
-    let mut updater = UpdateAggregator::new();
-    updater.update_world_settings(&workspace.world, FlagSet::full());
-    updater.update_tick(workspace.world.tick_counter.clone());
+    let mut dirty_aggregator = DirtyAggregator::new();
+    dirty_aggregator.world |= FlagSet::full();
+    dirty_aggregator.tick = workspace.world.tick_counter.clone();
+    dirty_aggregator.reserve_turtles(1000);
+    dirty_aggregator.reserve_patches(10000);
     // real_print(format!("Updater: {:?}", &updater));
     let rng = workspace.rng.clone();
     let context = CanonExecutionContext {
         workspace,
-        updater,
+        dirty_aggregator,
         next_int: rng,
     };
     // SAFETY: no one else has a reference to this variable since this is called
@@ -118,6 +120,7 @@ pub fn main() {
 }
 
 #[no_mangle]
+#[allow(static_mut_refs)]
 pub fn run_setup_and_go() {
     // SAFETY: no one else has a reference to this variable since this is called
     // in single-threaded contexts only and this function is the entry point.
