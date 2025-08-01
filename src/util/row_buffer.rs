@@ -20,7 +20,7 @@ use crate::util::type_registry::get_type_info;
 #[derive(Debug)]
 #[repr(C)]
 pub struct AlignedBytes {
-    data: NonNull<[u8]>,
+    data: NonNull<u8>,
     layout: Layout,
 }
 
@@ -35,14 +35,13 @@ impl AlignedBytes {
         }
         let ptr =
             NonNull::new(unsafe { alloc_zeroed(layout) }).expect("allocation should not fail");
-        let ptr = NonNull::slice_from_raw_parts(ptr, layout.size());
         Self { data: ptr, layout }
     }
 
     /// Increases the size of the buffer to be at least `new_size`. New bytes
     /// are initialized to zero. This function will not shrink the buffer.
     pub fn resize(&mut self, new_size: usize) {
-        if new_size <= self.data.len() {
+        if new_size <= self.layout.size() {
             return;
         }
 
@@ -53,7 +52,7 @@ impl AlignedBytes {
         // new memory, but we don't need to do that if we're just going to
         // copy from the old memory. maybe the compiler is smart enough to do
         // this automatically though.
-        new[..self.data.len()].copy_from_slice(&self[..]);
+        new[..self.layout.size()].copy_from_slice(&self[..]);
         *self = new;
         // the old memory is dropped here
     }
@@ -68,21 +67,21 @@ impl Deref for AlignedBytes {
 
     fn deref(&self) -> &Self::Target {
         // SAFETY: we own this data and know it exists
-        unsafe { self.data.as_ref() }
+        unsafe { NonNull::slice_from_raw_parts(self.data, self.layout.size()).as_ref() }
     }
 }
 
 impl DerefMut for AlignedBytes {
     fn deref_mut(&mut self) -> &mut Self::Target {
         // SAFETY: we own this data and know it exists
-        unsafe { self.data.as_mut() }
+        unsafe { NonNull::slice_from_raw_parts(self.data, self.layout.size()).as_mut() }
     }
 }
 
 impl Drop for AlignedBytes {
     fn drop(&mut self) {
         // SAFETY: we own this data and know it is currently allocated
-        unsafe { dealloc(self.data.as_mut_ptr(), self.layout) };
+        unsafe { dealloc(self.data.as_ptr(), self.layout) };
     }
 }
 
