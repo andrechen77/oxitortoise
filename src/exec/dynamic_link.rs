@@ -1,16 +1,13 @@
 use slotmap::{Key as _, KeyData};
 
 use crate::{
-    exec::CanonExecutionContext,
+    exec::{helpers, jit::JitCallback, CanonExecutionContext},
     sim::{
         agent_schema::AgentFieldDescriptor,
         patch::PatchId,
         topology::{Heading, Point, PointInt},
-        turtle::{BreedId, TurtleId},
-        value::{
-            agentset::{AllPatches, AllTurtles, PatchIterator, TurtleIterator},
-            Float,
-        },
+        turtle::BreedId,
+        value::Float,
         world::World,
     },
     util::rng::Rng as _,
@@ -53,63 +50,32 @@ pub extern "C" fn oxitortoise_create_turtles(
     breed: u64,
     count: u64,
     position: Point,
-) -> *mut TurtleIterator {
+    mut birth_command: JitCallback<u64, ()>,
+) {
     let breed: BreedId = KeyData::from_ffi(breed).into();
-    let created_turtles = context.workspace.world.turtles.create_turtles(
-        breed,
-        count,
-        position,
-        &mut context.next_int,
-    );
-    Box::into_raw(Box::new(
-        created_turtles.into_iter(context.next_int.clone()),
-    ))
+    helpers::create_turtles(context, breed, count, position, |context, turtle_id| {
+        birth_command.call_mut(context, turtle_id.to_ffi())
+    });
 }
 
 #[no_mangle]
-pub extern "C" fn oxitortoise_make_all_turtles_iter(
+pub extern "C" fn oxitortoise_for_all_turtles(
     context: &mut CanonExecutionContext,
-) -> *mut TurtleIterator {
-    Box::into_raw(Box::new(
-        AllTurtles.into_iter(&context.workspace.world, context.next_int.clone()),
-    ))
+    mut block: JitCallback<u64, ()>,
+) {
+    helpers::for_all_turtles(context, |context, turtle_id| {
+        block.call_mut(context, turtle_id.to_ffi())
+    });
 }
 
 #[no_mangle]
-pub extern "C" fn oxitortoise_next_turtle_from_iter(iter: &mut TurtleIterator) -> TurtleId {
-    iter.next().unwrap_or_default()
-}
-
-/// # Safety
-///
-/// The caller is responsible for ensuring that the pointer points to a valid
-/// iterator which can be dropped and is never used again.
-#[no_mangle]
-pub unsafe extern "C" fn oxitortoise_drop_turtle_iter(iter: *mut TurtleIterator) {
-    drop(unsafe { Box::from_raw(iter) });
-}
-
-#[no_mangle]
-pub extern "C" fn oxitortoise_make_all_patches_iter(
+pub extern "C" fn oxitortoise_for_all_patches(
     context: &mut CanonExecutionContext,
-) -> *mut PatchIterator {
-    Box::into_raw(Box::new(
-        AllPatches.into_iter(&context.workspace.world, context.next_int.clone()),
-    ))
-}
-
-#[no_mangle]
-pub extern "C" fn oxitortoise_next_patch_from_iter(iter: &mut PatchIterator) -> PatchId {
-    iter.next().unwrap_or_default()
-}
-
-/// # Safety
-///
-/// The caller is responsible for ensuring that the pointer points to a valid
-/// iterator which can be dropped and is never used again.
-#[no_mangle]
-pub unsafe extern "C" fn oxitortoise_drop_patch_iter(iter: *mut PatchIterator) {
-    drop(unsafe { Box::from_raw(iter) });
+    mut block: JitCallback<PatchId, ()>,
+) {
+    helpers::for_all_patches(context, |context, patch_id| {
+        block.call_mut(context, patch_id)
+    });
 }
 
 #[no_mangle]

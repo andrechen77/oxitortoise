@@ -152,6 +152,13 @@ impl DirtyAggregator {
         self.patches_ffi = self.patches.as_mut_ptr();
     }
 
+    pub fn get_turtles_mut(&mut self) -> &mut [FlagSet<TurtleProp>] {
+        &mut self.turtles
+    }
+    pub fn get_patches_mut(&mut self) -> &mut [FlagSet<PatchProp>] {
+        &mut self.patches
+    }
+
     // TODO accessors for non-public fields
 }
 

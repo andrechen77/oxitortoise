@@ -48,6 +48,20 @@ impl fmt::Display for TurtleWho {
 #[repr(transparent)]
 pub struct TurtleId(pub GenIndex);
 
+impl TurtleId {
+    pub const fn to_ffi(&self) -> u64 {
+        self.0.to_ffi()
+    }
+
+    pub const fn from_ffi(value: u64) -> Self {
+        Self(GenIndex::from_ffi(value))
+    }
+
+    pub const fn index(&self) -> usize {
+        self.0.index as usize
+    }
+}
+
 #[no_mangle]
 static OFFSET_TURTLES_TO_DATA: usize = offset_of!(Turtles, data);
 
@@ -171,6 +185,10 @@ impl Turtles {
         }
         self.num_turtles += count;
         TurtleSet::new(new_turtles)
+    }
+
+    pub fn num_turtles(&self) -> u64 {
+        self.num_turtles
     }
 
     pub fn turtle_ids(&self) -> impl Iterator<Item = TurtleId> + '_ {

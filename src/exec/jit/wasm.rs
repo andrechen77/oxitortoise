@@ -1,7 +1,9 @@
 use std::collections::BinaryHeap;
 
-use super::JitFn;
-use walrus::{ir::Value, ConstExpr, ElementItems, ElementKind, FunctionId, Module, TableId};
+use super::JitEntry;
+use walrus::{
+    ir::Value, ConstExpr, ElementItems, ElementKind, FunctionId, GlobalKind, Module, TableId,
+};
 
 unsafe extern "C" {
     // TODO talk about the limits of the memory and function table. should it
@@ -48,8 +50,11 @@ impl FunctionInstaller {
     }
 
     /// Installs the specified functions of the specified module into the
-    /// current instance's function table, and returns function pointers to
-    /// those functions in the same order.
+    /// current instance's function table. Entrypoints must be callable as
+    /// [`JitFn`]; this function returns function pointers to those functions in
+    /// the same order. Potential callbacks will find the global with a matching
+    /// name and set its value to the address of the potential callback in the
+    /// function table.
     ///
     /// # Safety
     ///
@@ -64,11 +69,12 @@ impl FunctionInstaller {
     pub unsafe fn install_functions(
         &mut self,
         mut module: Module,
-        functions_to_install: &[FunctionId],
+        entrypoints: &[FunctionId],
+        potential_callbacks: &[FunctionId],
         destination_table: TableId,
-    ) -> Result<Vec<JitFn>, ()> {
+    ) -> Result<Vec<JitEntry>, ()> {
         // find slots in the function table to put these functions
-        let num_required_slots = functions_to_install.len();
+        let num_required_slots = entrypoints.len() + potential_callbacks.len();
         if self.free_slots.len() < num_required_slots {
             // acquire enough additional slots
             let num_new_slots = num_required_slots - self.free_slots.len();
@@ -78,14 +84,14 @@ impl FunctionInstaller {
             }
         }
 
-        // install the functions into the current instance's function table
-        let mut slots = Vec::with_capacity(num_required_slots);
-        for &function_id in functions_to_install {
+        // install the entrypoints into the current instance's function table
+        let mut entrypoint_slots = Vec::with_capacity(entrypoints.len());
+        for &function_id in entrypoints {
             let slot = self
                 .free_slots
                 .pop()
                 .expect("ensured that there were enough slots");
-            slots.push(slot);
+            entrypoint_slots.push(slot);
             module.elements.add(
                 ElementKind::Active {
                     table: destination_table,
@@ -93,6 +99,33 @@ impl FunctionInstaller {
                 },
                 ElementItems::Functions(vec![function_id]),
             );
+        }
+
+        // install the potential callbacks
+        for &function_id in potential_callbacks {
+            let slot = self
+                .free_slots
+                .pop()
+                .expect("ensured that there were enough slots");
+            module.elements.add(
+                ElementKind::Active {
+                    table: destination_table,
+                    offset: ConstExpr::Value(Value::I32(slot as i32)),
+                },
+                ElementItems::Functions(vec![function_id]),
+            );
+
+            // if the function has a name that matches the name of a global, set
+            // the global to the address of the function in the function table
+            let function_name = module.funcs.get(function_id).name.as_deref().unwrap();
+            let matching_global_id = module
+                .globals
+                .iter()
+                .find(|global| global.name.as_deref() == Some(function_name))
+                .unwrap()
+                .id();
+            let global = module.globals.get_mut(matching_global_id);
+            global.kind = GlobalKind::Local(ConstExpr::Value(Value::I32(slot as i32)));
         }
 
         // instantiate the module
@@ -109,6 +142,6 @@ impl FunctionInstaller {
         // SAFETY: in the wasm32 target, a function pointer is represented by a
         // i32 indicating the slot in the function table, so they literally have
         // the same ABI
-        Ok(unsafe { std::mem::transmute::<Vec<u32>, Vec<JitFn>>(slots) })
+        Ok(unsafe { std::mem::transmute::<Vec<u32>, Vec<JitEntry>>(entrypoint_slots) })
     }
 }

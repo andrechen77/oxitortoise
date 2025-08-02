@@ -1,5 +1,11 @@
 // for the row buffer
-#![feature(slice_ptr_get, alloc_layout_extra, const_type_name)]
+#![feature(
+    slice_ptr_get,
+    alloc_layout_extra,
+    const_type_name,
+    fn_traits,
+    unboxed_closures
+)]
 
 // when compiling to wasm, you must pass -Zwasm-c-abi=spec to rustc for correct
 // compatibility with Emscripten-emitted Wasm. Add this to .cargo/config.toml or

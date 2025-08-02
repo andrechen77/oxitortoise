@@ -7,6 +7,7 @@ use crate::{
 };
 
 pub mod dynamic_link;
+mod helpers;
 pub mod interp;
 pub mod jit;
 
@@ -18,12 +19,12 @@ static OFFSET_CONTEXT_TO_DIRTY_AGGREGATOR: usize =
     offset_of!(CanonExecutionContext, dirty_aggregator);
 
 #[repr(C)]
-pub struct ExecutionContext<'w, R> {
+pub struct ExecutionContext<'w> {
     /// The workspace in which execution is occuring.
     pub workspace: &'w mut Workspace,
     /// The output for all updates that occur during execution.
-    pub next_int: Rc<RefCell<R>>,
+    pub next_int: Rc<RefCell<CanonRng>>,
     pub dirty_aggregator: DirtyAggregator,
 }
 
-pub type CanonExecutionContext<'w> = ExecutionContext<'w, CanonRng>;
+pub type CanonExecutionContext<'w> = ExecutionContext<'w>;

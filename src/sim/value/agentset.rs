@@ -4,40 +4,11 @@ use std::{collections::VecDeque, rc::Rc};
 
 use crate::{
     sim::{patch::PatchId, turtle::TurtleId, world::World},
-    util::{
-        cell::RefCell,
-        rng::{CanonRng, Rng},
-        shuffle_iterator::ShuffledOwned,
-    },
+    util::{cell::RefCell, rng::CanonRng, shuffle_iterator::ShuffledOwned},
 };
 
-/// # Note
-///
-/// The "set" in `AgentSet` is intentionally not capitalized, as the NetLogo
-/// language refers to the object as a single word: "agentset".
-#[derive(Debug)]
-pub enum Agentset {
-    Turtles(TurtleSet),
-}
-
-#[repr(transparent)]
-pub struct AgentsetIterator<T, R> {
-    iter: ShuffledOwned<T, R>,
-}
-
-impl<T, R> Iterator for AgentsetIterator<T, R>
-where
-    R: Rng,
-{
-    type Item = T;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.iter.next()
-    }
-}
-
-pub type TurtleIterator = AgentsetIterator<TurtleId, Rc<RefCell<CanonRng>>>;
-pub type PatchIterator = AgentsetIterator<PatchId, Rc<RefCell<CanonRng>>>;
+pub type TurtleIterator = ShuffledOwned<TurtleId, Rc<RefCell<CanonRng>>>;
+pub type PatchIterator = ShuffledOwned<PatchId, Rc<RefCell<CanonRng>>>;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct AllPatches;
@@ -45,9 +16,7 @@ pub struct AllPatches;
 impl AllPatches {
     pub fn into_iter(self, world: &World, rng: Rc<RefCell<CanonRng>>) -> PatchIterator {
         let patch_ids: VecDeque<PatchId> = world.patches.patch_ids().collect();
-        AgentsetIterator {
-            iter: ShuffledOwned::new(patch_ids, rng),
-        }
+        ShuffledOwned::new(patch_ids, rng)
     }
 }
 
@@ -57,9 +26,7 @@ pub struct AllTurtles;
 impl AllTurtles {
     pub fn into_iter(self, world: &World, rng: Rc<RefCell<CanonRng>>) -> TurtleIterator {
         let turtle_ids: VecDeque<TurtleId> = world.turtles.turtle_ids().collect();
-        AgentsetIterator {
-            iter: ShuffledOwned::new(turtle_ids, rng),
-        }
+        ShuffledOwned::new(turtle_ids, rng)
     }
 }
 
@@ -76,8 +43,6 @@ impl TurtleSet {
 
 impl TurtleSet {
     pub fn into_iter(self, rng: Rc<RefCell<CanonRng>>) -> TurtleIterator {
-        AgentsetIterator {
-            iter: ShuffledOwned::new(VecDeque::from(self.turtles), rng),
-        }
+        ShuffledOwned::new(VecDeque::from(self.turtles), rng)
     }
 }

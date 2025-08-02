@@ -13,11 +13,26 @@ pub struct GenIndex {
 }
 
 impl GenIndex {
-    pub fn with_index_and_gen(index: u32, gen: u16) -> Self {
+    pub const fn with_index_and_gen(index: u32, gen: u16) -> Self {
         Self {
             index,
             r#gen: gen,
             _padding: 0,
+        }
+    }
+
+    // TODO check that the to/from ffi functions are equivalent to transmutes.
+    // add tests for this as well.
+
+    pub const fn to_ffi(&self) -> u64 {
+        (self._padding as u64) << 48 | (self.r#gen as u64) << 32 | (self.index as u64)
+    }
+
+    pub const fn from_ffi(value: u64) -> Self {
+        Self {
+            index: (value & 0xffffffff) as u32,
+            r#gen: ((value >> 32) & 0xffff) as u16,
+            _padding: ((value >> 48) & 0xffff) as u16,
         }
     }
 }

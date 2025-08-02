@@ -6,7 +6,8 @@ use walrus::Module;
 
 use oxitortoise::{
     exec::{
-        jit::{FunctionInstaller, JitFn},
+        dynamic_link,
+        jit::{FunctionInstaller, JitCallback, JitEntry},
         CanonExecutionContext,
     },
     sim::{
@@ -14,12 +15,12 @@ use oxitortoise::{
         patch::Patches,
         shapes::Shapes,
         tick::Tick,
-        topology::{Topology, TopologySpec},
-        turtle::{Breed, Turtles},
-        value::NetlogoInternalType,
+        topology::{Point, Topology, TopologySpec},
+        turtle::{Breed, TurtleId, Turtles},
+        value::{Float, NetlogoInternalType},
         world::World,
     },
-    updater::DirtyAggregator,
+    updater::{DirtyAggregator, TurtleProp},
     util::{cell::RefCell, rng::CanonRng},
     workspace::Workspace,
 };
@@ -65,8 +66,8 @@ fn write_model_code(buffer: *mut u8) {
 }
 
 static mut CONTEXT: Option<CanonExecutionContext> = None;
-static mut SETUP_FN: Option<JitFn> = None;
-static mut GO_FN: Option<JitFn> = None;
+static mut SETUP_FN: Option<JitEntry> = None;
+static mut GO_FN: Option<JitEntry> = None;
 
 pub fn main() {
     real_print("Hello, world!");
@@ -80,14 +81,20 @@ pub fn main() {
     real_print("Loaded model code");
     let module = Module::from_buffer(&module_bytes).unwrap();
     let mut function_installer = unsafe { FunctionInstaller::new() };
-    let functions_to_install = &[
+    let entrypoints = &[
         module.funcs.by_name("shim_setup").unwrap(),
         module.funcs.by_name("shim_go").unwrap(),
+    ];
+    let potential_callbacks = &[
+        module.funcs.by_name("setup_body0").unwrap(),
+        module.funcs.by_name("setup_body1").unwrap(),
+        module.funcs.by_name("go_body0").unwrap(),
+        module.funcs.by_name("go_body1").unwrap(),
     ];
     let table_to_install = module.tables.main_function_table().unwrap().unwrap();
     let mut new_functions = unsafe {
         function_installer
-            .install_functions(module, functions_to_install, table_to_install)
+            .install_functions(module, entrypoints, potential_callbacks, table_to_install)
             .unwrap()
     };
     real_print("installed new functions");
@@ -134,6 +141,36 @@ pub fn run_setup_and_go() {
         go_fn.call(context, std::ptr::null_mut());
     }
     // real_print(format!("After go: {:?}", &context.updater));
+}
+
+#[no_mangle]
+#[allow(static_mut_refs)]
+pub fn run_diy() {
+    let context = unsafe { CONTEXT.as_mut().unwrap() };
+    dynamic_link::oxitortoise_clear_all(context);
+    extern "C" fn body0(_env: *mut u8, context: &mut CanonExecutionContext, turtle_id: u64) {
+        let turtle_id = TurtleId::from_ffi(turtle_id);
+        let turtle_data = context
+            .workspace
+            .world
+            .turtles
+            .get_turtle_base_data_mut(turtle_id)
+            .unwrap();
+        turtle_data.color = Float::new(15.0).into();
+        turtle_data.size = Float::new(2.0);
+        context.dirty_aggregator.get_turtles_mut()[turtle_id.index()] |= TurtleProp::Color;
+    }
+    let breed = dynamic_link::oxitortoise_get_default_turtle_breed(context);
+    dynamic_link::oxitortoise_create_turtles(
+        context,
+        breed,
+        125,
+        Point { x: 0.0, y: 0.0 },
+        JitCallback {
+            fn_ptr: body0,
+            env: std::ptr::null_mut(),
+        },
+    )
 }
 
 fn create_workspace() -> Workspace {
