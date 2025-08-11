@@ -1,31 +1,21 @@
 use std::ops::{Index, IndexMut, Range};
 
-/// A sequence of instructions with linear control flow where each instruction
-/// leads into the next one (or diverges).
-pub trait InsnSequence {
+use smallvec::SmallVec;
+
+pub trait InsnUniverse {
     type Pc: Copy + PartialEq + PartialOrd;
 
-    /// Returns true if the specified instruction is part of this sequence. This
-    /// is false for instructions that are only included transitively by
-    /// compound instructions in the sequence.
-    fn shallow_includes(&self, insn: Self::Pc) -> bool;
-
-    /// An iterator over all instructions shallowly included in the sequence.
-    fn instructions(&self) -> impl ExactSizeIterator<Item = Self::Pc>;
-
-    /// An iterator over all instructions of a certain range shallowly included
-    /// in the sequence.
+    /// An iterator over all instructions of a certain range, without recursing
+    /// into compound instructions in the range.
     fn instructions_in_range(&self, range: Range<Self::Pc>) -> impl Iterator<Item = Self::Pc>;
 
     /// Returns the instruction that shallowly succeeds the specified
     /// instruction (compound instructions are considered one instruction).
     fn succ_of(&self, insn: Self::Pc) -> Self::Pc;
 
-    /// Which instructions are used by the specified instruction as input.
-    /// This should only be called on instructions for which [`Self::includes`]
-    /// returns true
-    fn inputs_of(&self, insn: Self::Pc) -> Vec<Self::Pc>;
-    // TODO consider using smallvec for this
+    /// Which instructions are used by the specified instruction as input,
+    /// given in the order they must be on the stack (bottom first).
+    fn inputs_of(&self, insn: Self::Pc) -> impl DoubleEndedIterator<Item = Self::Pc>;
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -44,17 +34,17 @@ pub enum OutputMode<Pc> {
     Capture { parent: Pc },
 }
 
-pub struct InsnSeqStackification<T, M>
+pub struct Stackification<T, M>
 where
-    T: InsnSequence,
+    T: InsnUniverse,
     M: IndexMut<T::Pc, Output = InsnTreeInfo<T::Pc>>,
 {
     forest: M,
     getters: Vec<Getter<T::Pc>>,
 }
 
-/// Information associated with an instruction in a sequence that helps
-/// determine its input/output relations with other instructions.
+/// Information associated with an instruction that helps determine its
+/// input/output relations with other instructions.
 #[derive(Debug, PartialEq, Eq)]
 pub struct InsnTreeInfo<Pc> {
     output_mode: OutputMode<Pc>,
@@ -112,7 +102,9 @@ fn insert_getters<Pc: Copy + PartialEq + PartialOrd>(
 }
 
 /// Calculates how the given instruction sequence with linear control flow can
-/// be made to execute correctly on a stack machine. Assume a stack machine
+/// be made to execute correctly on a stack machine. This function is only valid
+/// for sequences of instructions with linear control flow, meaning each
+/// instruction leads into the next one (or diverges). Assume a stack machine
 /// where each instruction, when executed, pops some number of values off the
 /// top of the operand stack and pushes the result onto the operand stack. This
 /// function calculates the correct points at which to insert operand stack
@@ -132,9 +124,10 @@ fn insert_getters<Pc: Copy + PartialEq + PartialOrd>(
 /// index `i` in the block, to get correct stack machine execution. This list
 /// will be sorted by `i`. There may be multiple local variable getters before
 /// the same index. In this case they should inserted in the order they appear.
-pub fn stackify<T: InsnSequence, M: IndexMut<T::Pc, Output = InsnTreeInfo<T::Pc>>>(
-    seq: &T,
-    stackification: &mut InsnSeqStackification<T, M>,
+pub fn stackify<T: InsnUniverse, M: IndexMut<T::Pc, Output = InsnTreeInfo<T::Pc>>>(
+    insns: &T,
+    seq: Range<T::Pc>,
+    stackification: &mut Stackification<T, M>,
 ) {
     /*
     Algorithm: All instructions start with an output mode of available. Iterate
@@ -177,7 +170,7 @@ pub fn stackify<T: InsnSequence, M: IndexMut<T::Pc, Output = InsnTreeInfo<T::Pc>
     operand stack when C executes.
     */
 
-    for current_insn in seq.instructions() {
+    for current_insn in insns.instructions_in_range(seq.clone()) {
         #[derive(Clone, Copy)]
         struct SubtreeSpan<Pc> {
             // this is the first input that was released.
@@ -191,11 +184,14 @@ pub fn stackify<T: InsnSequence, M: IndexMut<T::Pc, Output = InsnTreeInfo<T::Pc>
 
         let mut current_getters: Vec<Getter<T::Pc>> = vec![];
 
-        for input_insn in seq.inputs_of(current_insn) {
+        for input_insn in insns.inputs_of(current_insn) {
             // check if the input can be released
 
-            // the input must be inside the current block
-            if seq.shallow_includes(input_insn)
+            // the input must be inside the current block. assume that
+            // instructions only use inputs that are in scope (i.e. does not
+            // reach into compound instructions or use inputs from the future),
+            // which is required for well-formed instruction sequences.
+            if seq.contains(&input_insn)
                 // the input must be available
                 && stackification.forest[input_insn].output_mode == OutputMode::Available
                 // the input must not occur out of order. None compares less
@@ -207,11 +203,11 @@ pub fn stackify<T: InsnSequence, M: IndexMut<T::Pc, Output = InsnTreeInfo<T::Pc>
             {
                 // the input can be released
                 match &mut subtree_span {
-                    Some(s) => s.insertion_pc = seq.succ_of(input_insn),
+                    Some(s) => s.insertion_pc = insns.succ_of(input_insn),
                     None => {
                         subtree_span = Some(SubtreeSpan {
                             first_released: input_insn,
-                            insertion_pc: seq.succ_of(input_insn),
+                            insertion_pc: insns.succ_of(input_insn),
                         });
 
                         // since this is the first input to be released, we need
@@ -235,9 +231,7 @@ pub fn stackify<T: InsnSequence, M: IndexMut<T::Pc, Output = InsnTreeInfo<T::Pc>
                         // yet
                         let root_insn = find_root(&stackification.forest, input_insn, current_insn);
                         if root_insn != current_insn && root_insn > s.insertion_pc {
-                            // TODO algorithm didn't have a succ here but i
-                            // think that was wrong, so I added it; verify?
-                            s.insertion_pc = seq.succ_of(root_insn);
+                            s.insertion_pc = insns.succ_of(root_insn);
                         }
                         current_getters.push(Getter {
                             pc: s.insertion_pc,
@@ -266,7 +260,7 @@ pub fn stackify<T: InsnSequence, M: IndexMut<T::Pc, Output = InsnTreeInfo<T::Pc>
                 stackification.forest[first_released].subtree_start;
             // do not lock the current instruction, since its output type is
             // still undetermined
-            for to_be_locked in seq.instructions_in_range(first_released..current_insn) {
+            for to_be_locked in insns.instructions_in_range(first_released..current_insn) {
                 if stackification.forest[to_be_locked].output_mode == OutputMode::Available {
                     stackification.forest[to_be_locked].output_mode = OutputMode::Capture {
                         parent: current_insn,
@@ -283,20 +277,21 @@ pub fn stackify<T: InsnSequence, M: IndexMut<T::Pc, Output = InsnTreeInfo<T::Pc>
         // instruction.
         insert_getters(&mut stackification.getters, &current_getters);
     }
-    debug_assert!(verify_stackification(seq, &stackification).is_ok());
+    debug_assert!(verify_stackification(insns, seq, &stackification).is_ok());
 }
 
 /// Verifies if the given stackfication is correct with respect to the given
 /// instruction sequence. Returns an error with the instruction at which an
 /// error occurs.
-fn verify_stackification<T: InsnSequence, M: IndexMut<T::Pc, Output = InsnTreeInfo<T::Pc>>>(
-    seq: &T,
-    stackification: &InsnSeqStackification<T, M>,
+fn verify_stackification<T: InsnUniverse, M: IndexMut<T::Pc, Output = InsnTreeInfo<T::Pc>>>(
+    insns: &T,
+    seq: Range<T::Pc>,
+    stackification: &Stackification<T, M>,
 ) -> Result<(), T::Pc> {
     let mut op_stack: Vec<T::Pc> = vec![];
     let mut local_getters = stackification.getters.iter().copied().peekable();
 
-    for insn in seq.instructions() {
+    for insn in insns.instructions_in_range(seq) {
         // first, resolve all local getters before this instruction
         while let Some(getter) = local_getters.next_if(|g| g.pc <= insn) {
             // skip over getters that are meant for instructions inside compound
@@ -315,7 +310,7 @@ fn verify_stackification<T: InsnSequence, M: IndexMut<T::Pc, Output = InsnTreeIn
         }
 
         // take input operands off the operand stack
-        for input in seq.inputs_of(insn).into_iter().rev() {
+        for input in insns.inputs_of(insn).into_iter().rev() {
             if op_stack.pop() != Some(input) {
                 return Err(insn);
             }
@@ -335,69 +330,35 @@ fn verify_stackification<T: InsnSequence, M: IndexMut<T::Pc, Output = InsnTreeIn
 mod tests {
     use super::*;
 
-    #[derive(Clone, Copy, PartialEq, Eq, Debug, PartialOrd)]
-    struct TestInsnId(usize);
     #[derive(Clone, Debug)]
     struct TestInsn {
-        inputs: Vec<TestInsnId>,
+        inputs: Vec<usize>,
     }
-    #[derive(Debug)]
-    struct TestInsnBlock {
-        /// The number at which to start counting instructions in this block.
-        start: TestInsnId,
-        insns: Vec<TestInsn>,
-    }
-    impl TestInsnBlock {
-        fn new(start: TestInsnId, insns: Vec<TestInsn>) -> Self {
-            Self { start, insns }
-        }
-    }
-    impl InsnSequence for TestInsnBlock {
-        type Pc = TestInsnId;
-
-        fn shallow_includes(&self, insn: Self::Pc) -> bool {
-            insn.0 >= self.start.0 && insn.0 < self.start.0 + self.insns.len()
-        }
-
-        fn instructions(&self) -> impl ExactSizeIterator<Item = Self::Pc> {
-            (self.start.0..self.start.0 + self.insns.len()).map(TestInsnId)
-        }
+    type TestInsnUniverse = Vec<TestInsn>;
+    impl InsnUniverse for TestInsnUniverse {
+        type Pc = usize;
 
         fn instructions_in_range(&self, range: Range<Self::Pc>) -> impl Iterator<Item = Self::Pc> {
-            assert!(self.shallow_includes(range.start));
-            assert!(self.shallow_includes(range.end));
-            (range.start.0..range.end.0).map(TestInsnId)
+            range.start..range.end
         }
 
-        fn inputs_of(&self, insn: Self::Pc) -> Vec<Self::Pc> {
-            self.insns[insn.0 - self.start.0].inputs.clone()
+        fn inputs_of(&self, insn: Self::Pc) -> impl DoubleEndedIterator<Item = Self::Pc> {
+            self[insn].inputs.iter().copied()
         }
 
         fn succ_of(&self, insn: Self::Pc) -> Self::Pc {
-            TestInsnId(insn.0 + 1)
-        }
-    }
-    impl<T> Index<TestInsnId> for Vec<T> {
-        type Output = T;
-
-        fn index(&self, index: TestInsnId) -> &Self::Output {
-            &self[index.0]
-        }
-    }
-    impl<T> IndexMut<TestInsnId> for Vec<T> {
-        fn index_mut(&mut self, index: TestInsnId) -> &mut Self::Output {
-            &mut self[index.0]
+            insn + 1
         }
     }
 
     fn create_stackification(
-        seq: &TestInsnBlock,
-    ) -> InsnSeqStackification<TestInsnBlock, Vec<InsnTreeInfo<TestInsnId>>> {
-        InsnSeqStackification {
-            forest: (0..(seq.instructions().len() + seq.start.0))
+        insns: &TestInsnUniverse,
+    ) -> Stackification<TestInsnUniverse, Vec<InsnTreeInfo<usize>>> {
+        Stackification {
+            forest: (0..insns.len())
                 .map(|i| InsnTreeInfo {
                     output_mode: OutputMode::Available,
-                    subtree_start: TestInsnId(i),
+                    subtree_start: i,
                 })
                 .collect(),
             getters: vec![],
@@ -409,9 +370,7 @@ mod tests {
             vec![
                 $(
                     TestInsn {
-                        inputs: vec![$($input),* ].into_iter()
-                            .map(|i| TestInsnId(i))
-                            .collect()
+                        inputs: vec![$($input),* ]
                     },
                 )*
             ]
@@ -427,45 +386,39 @@ mod tests {
         ];
 
         assert_eq!(insns.len(), 3);
-        assert_eq!(insns[0].inputs, [TestInsnId(1), TestInsnId(2)]);
-        assert_eq!(
-            insns[1].inputs,
-            [TestInsnId(3), TestInsnId(4), TestInsnId(5)]
-        );
+        assert_eq!(insns[0].inputs, vec![1, 2]);
+        assert_eq!(insns[1].inputs, vec![3, 4, 5]);
         assert!(insns[2].inputs.is_empty());
     }
 
     #[test]
     fn ignore_all() {
-        let block = TestInsnBlock::new(
-            TestInsnId(0),
-            test_insns![
-                (0) [],
-                (1) [],
-                (2) [],
-                (3) [],
-            ],
-        );
+        let block = test_insns![
+            (0) [],
+            (1) [],
+            (2) [],
+            (3) [],
+        ];
         let mut stackification = create_stackification(&block);
-        stackify(&block, &mut stackification);
+        stackify(&block, 0..block.len(), &mut stackification);
         assert_eq!(
             stackification.forest,
             [
                 InsnTreeInfo {
                     output_mode: OutputMode::Available,
-                    subtree_start: TestInsnId(0),
+                    subtree_start: 0,
                 },
                 InsnTreeInfo {
                     output_mode: OutputMode::Available,
-                    subtree_start: TestInsnId(1),
+                    subtree_start: 1,
                 },
                 InsnTreeInfo {
                     output_mode: OutputMode::Available,
-                    subtree_start: TestInsnId(2),
+                    subtree_start: 2,
                 },
                 InsnTreeInfo {
                     output_mode: OutputMode::Available,
-                    subtree_start: TestInsnId(3),
+                    subtree_start: 3,
                 },
             ]
         );
@@ -474,48 +427,37 @@ mod tests {
 
     #[test]
     fn use_all_in_order() {
-        let block = TestInsnBlock::new(
-            TestInsnId(0),
-            test_insns![
-                (0) [],
-                (1) [],
-                (2) [],
-                (3) [],
-                (4) [0, 1, 2, 3],
-            ],
-        );
+        let block = test_insns![
+            (0) [],
+            (1) [],
+            (2) [],
+            (3) [],
+            (4) [0, 1, 2, 3],
+        ];
         let mut stackification = create_stackification(&block);
-        stackify(&block, &mut stackification);
+        stackify(&block, 0..block.len(), &mut stackification);
         assert_eq!(
             stackification.forest,
             [
                 InsnTreeInfo {
-                    output_mode: OutputMode::Release {
-                        parent: TestInsnId(4)
-                    },
-                    subtree_start: TestInsnId(0),
+                    output_mode: OutputMode::Release { parent: 4 },
+                    subtree_start: 0,
                 },
                 InsnTreeInfo {
-                    output_mode: OutputMode::Release {
-                        parent: TestInsnId(4)
-                    },
-                    subtree_start: TestInsnId(1),
+                    output_mode: OutputMode::Release { parent: 4 },
+                    subtree_start: 1,
                 },
                 InsnTreeInfo {
-                    output_mode: OutputMode::Release {
-                        parent: TestInsnId(4)
-                    },
-                    subtree_start: TestInsnId(2),
+                    output_mode: OutputMode::Release { parent: 4 },
+                    subtree_start: 2,
                 },
                 InsnTreeInfo {
-                    output_mode: OutputMode::Release {
-                        parent: TestInsnId(4)
-                    },
-                    subtree_start: TestInsnId(3),
+                    output_mode: OutputMode::Release { parent: 4 },
+                    subtree_start: 3,
                 },
                 InsnTreeInfo {
                     output_mode: OutputMode::Available,
-                    subtree_start: TestInsnId(0),
+                    subtree_start: 0,
                 },
             ]
         );
@@ -524,46 +466,37 @@ mod tests {
 
     #[test]
     fn use_skipping_in_order() {
-        let block = TestInsnBlock::new(
-            TestInsnId(0),
-            test_insns![
-                (0) [],
-                (1) [],
-                (2) [],
-                (3) [],
-                (4) [1, 3],
-            ],
-        );
+        let block = test_insns![
+            (0) [],
+            (1) [],
+            (2) [],
+            (3) [],
+            (4) [1, 3],
+        ];
         let mut stackification = create_stackification(&block);
-        stackify(&block, &mut stackification);
+        stackify(&block, 0..block.len(), &mut stackification);
         assert_eq!(
             stackification.forest,
             [
                 InsnTreeInfo {
                     output_mode: OutputMode::Available,
-                    subtree_start: TestInsnId(0),
+                    subtree_start: 0,
                 },
                 InsnTreeInfo {
-                    output_mode: OutputMode::Release {
-                        parent: TestInsnId(4)
-                    },
-                    subtree_start: TestInsnId(1),
+                    output_mode: OutputMode::Release { parent: 4 },
+                    subtree_start: 1,
                 },
                 InsnTreeInfo {
-                    output_mode: OutputMode::Capture {
-                        parent: TestInsnId(4)
-                    },
-                    subtree_start: TestInsnId(2),
+                    output_mode: OutputMode::Capture { parent: 4 },
+                    subtree_start: 2,
                 },
                 InsnTreeInfo {
-                    output_mode: OutputMode::Release {
-                        parent: TestInsnId(4)
-                    },
-                    subtree_start: TestInsnId(3),
+                    output_mode: OutputMode::Release { parent: 4 },
+                    subtree_start: 3,
                 },
                 InsnTreeInfo {
                     output_mode: OutputMode::Available,
-                    subtree_start: TestInsnId(1),
+                    subtree_start: 1,
                 },
             ]
         );
@@ -572,553 +505,405 @@ mod tests {
 
     #[test]
     fn use_out_of_order() {
-        let block = TestInsnBlock::new(
-            TestInsnId(0),
-            test_insns![
-                (0) [],
-                (1) [],
-                (2) [],
-                (3) [],
-                (4) [1, 3, 2, 0],
-            ],
-        );
+        let block = test_insns![
+            (0) [],
+            (1) [],
+            (2) [],
+            (3) [],
+            (4) [1, 3, 2, 0],
+        ];
         let mut stackification = create_stackification(&block);
-        stackify(&block, &mut stackification);
+        stackify(&block, 0..block.len(), &mut stackification);
         assert_eq!(
             stackification.forest,
             [
                 InsnTreeInfo {
                     output_mode: OutputMode::Available,
-                    subtree_start: TestInsnId(0),
+                    subtree_start: 0,
                 },
                 InsnTreeInfo {
-                    output_mode: OutputMode::Release {
-                        parent: TestInsnId(4)
-                    },
-                    subtree_start: TestInsnId(1),
+                    output_mode: OutputMode::Release { parent: 4 },
+                    subtree_start: 1,
                 },
                 InsnTreeInfo {
-                    output_mode: OutputMode::Capture {
-                        parent: TestInsnId(4)
-                    },
-                    subtree_start: TestInsnId(2),
+                    output_mode: OutputMode::Capture { parent: 4 },
+                    subtree_start: 2,
                 },
                 InsnTreeInfo {
-                    output_mode: OutputMode::Release {
-                        parent: TestInsnId(4)
-                    },
-                    subtree_start: TestInsnId(3),
+                    output_mode: OutputMode::Release { parent: 4 },
+                    subtree_start: 3,
                 },
                 InsnTreeInfo {
                     output_mode: OutputMode::Available,
-                    subtree_start: TestInsnId(1),
+                    subtree_start: 1,
                 },
             ]
         );
         assert_eq!(
             stackification.getters,
-            [
-                Getter {
-                    pc: TestInsnId(4),
-                    value: TestInsnId(2)
-                },
-                Getter {
-                    pc: TestInsnId(4),
-                    value: TestInsnId(0)
-                }
-            ]
+            [Getter { pc: 4, value: 2 }, Getter { pc: 4, value: 0 }]
         );
     }
 
     #[test]
     fn use_repeated() {
-        let block = TestInsnBlock::new(
-            TestInsnId(0),
-            test_insns![
-                (0) [],
-                (1) [],
-                (2) [0, 0, 1],
-            ],
-        );
+        let block = test_insns![
+            (0) [],
+            (1) [],
+            (2) [0, 0, 1],
+        ];
         let mut stackification = create_stackification(&block);
-        stackify(&block, &mut stackification);
+        stackify(&block, 0..block.len(), &mut stackification);
         assert_eq!(
             stackification.forest,
             [
                 InsnTreeInfo {
-                    output_mode: OutputMode::Release {
-                        parent: TestInsnId(2)
-                    },
-                    subtree_start: TestInsnId(0),
+                    output_mode: OutputMode::Release { parent: 2 },
+                    subtree_start: 0,
                 },
                 InsnTreeInfo {
-                    output_mode: OutputMode::Release {
-                        parent: TestInsnId(2)
-                    },
-                    subtree_start: TestInsnId(1),
+                    output_mode: OutputMode::Release { parent: 2 },
+                    subtree_start: 1,
                 },
                 InsnTreeInfo {
                     output_mode: OutputMode::Available,
-                    subtree_start: TestInsnId(0),
+                    subtree_start: 0,
                 },
             ]
         );
-        assert_eq!(
-            stackification.getters,
-            [Getter {
-                pc: TestInsnId(1),
-                value: TestInsnId(0)
-            }]
-        );
+        assert_eq!(stackification.getters, [Getter { pc: 1, value: 0 }]);
     }
 
     #[test]
     fn queueing_getters() {
-        let block = TestInsnBlock::new(
-            TestInsnId(0),
-            test_insns![
-                (0) [],
-                (1) [],
-                (2) [0, 1],
-                (3) [],
-                (4) [1, 0, 3],
-            ],
-        );
+        let block = test_insns![
+            (0) [],
+            (1) [],
+            (2) [0, 1],
+            (3) [],
+            (4) [1, 0, 3],
+        ];
         let mut stackification = create_stackification(&block);
-        stackify(&block, &mut stackification);
+        stackify(&block, 0..block.len(), &mut stackification);
         assert_eq!(
             stackification.forest,
             [
                 InsnTreeInfo {
-                    output_mode: OutputMode::Release {
-                        parent: TestInsnId(2)
-                    },
-                    subtree_start: TestInsnId(0),
+                    output_mode: OutputMode::Release { parent: 2 },
+                    subtree_start: 0,
                 },
                 InsnTreeInfo {
-                    output_mode: OutputMode::Release {
-                        parent: TestInsnId(2)
-                    },
-                    subtree_start: TestInsnId(1),
+                    output_mode: OutputMode::Release { parent: 2 },
+                    subtree_start: 1,
                 },
                 InsnTreeInfo {
                     output_mode: OutputMode::Available,
-                    subtree_start: TestInsnId(0),
+                    subtree_start: 0,
                 },
                 InsnTreeInfo {
-                    output_mode: OutputMode::Release {
-                        parent: TestInsnId(4)
-                    },
-                    subtree_start: TestInsnId(3),
+                    output_mode: OutputMode::Release { parent: 4 },
+                    subtree_start: 3,
                 },
                 InsnTreeInfo {
                     output_mode: OutputMode::Available,
-                    subtree_start: TestInsnId(3),
+                    subtree_start: 3,
                 },
             ]
         );
         assert_eq!(
             stackification.getters,
-            [
-                Getter {
-                    pc: TestInsnId(3),
-                    value: TestInsnId(1)
-                },
-                Getter {
-                    pc: TestInsnId(3),
-                    value: TestInsnId(0)
-                }
-            ]
+            [Getter { pc: 3, value: 1 }, Getter { pc: 3, value: 0 }]
         );
     }
 
     #[test]
     fn staircase() {
-        let block = TestInsnBlock::new(
-            TestInsnId(0),
-            test_insns![
-                (0) [],
-                (1) [0],
-                (2) [0, 1],
-                (3) [0, 1, 1, 2],
-            ],
-        );
+        let block = test_insns![
+            (0) [],
+            (1) [0],
+            (2) [0, 1],
+            (3) [0, 1, 1, 2],
+        ];
         let mut stackification = create_stackification(&block);
-        stackify(&block, &mut stackification);
+        stackify(&block, 0..block.len(), &mut stackification);
         assert_eq!(
             stackification.forest,
             [
                 InsnTreeInfo {
-                    output_mode: OutputMode::Release {
-                        parent: TestInsnId(1)
-                    },
-                    subtree_start: TestInsnId(0),
+                    output_mode: OutputMode::Release { parent: 1 },
+                    subtree_start: 0,
                 },
                 InsnTreeInfo {
                     output_mode: OutputMode::Available,
-                    subtree_start: TestInsnId(0),
+                    subtree_start: 0,
                 },
                 InsnTreeInfo {
-                    output_mode: OutputMode::Release {
-                        parent: TestInsnId(3)
-                    },
-                    subtree_start: TestInsnId(2),
+                    output_mode: OutputMode::Release { parent: 3 },
+                    subtree_start: 2,
                 },
                 InsnTreeInfo {
                     output_mode: OutputMode::Available,
-                    subtree_start: TestInsnId(2),
+                    subtree_start: 2,
                 },
             ]
         );
         assert_eq!(
             stackification.getters,
             [
-                Getter {
-                    pc: TestInsnId(2),
-                    value: TestInsnId(0)
-                },
-                Getter {
-                    pc: TestInsnId(2),
-                    value: TestInsnId(1)
-                },
-                Getter {
-                    pc: TestInsnId(2),
-                    value: TestInsnId(1)
-                },
-                Getter {
-                    pc: TestInsnId(2),
-                    value: TestInsnId(0)
-                },
-                Getter {
-                    pc: TestInsnId(2),
-                    value: TestInsnId(1)
-                },
+                Getter { pc: 2, value: 0 },
+                Getter { pc: 2, value: 1 },
+                Getter { pc: 2, value: 1 },
+                Getter { pc: 2, value: 0 },
+                Getter { pc: 2, value: 1 },
             ]
         );
     }
 
     #[test]
     fn nested_operators() {
-        let block = TestInsnBlock::new(
-            TestInsnId(0),
-            test_insns![
-                (0) [],
-                (1) [],
-                (2) [0, 1],
-                (3) [1],
-                (4) [],
-                (5) [4],
-                (6) [2, 5],
-                (7) [0, 6],
-            ],
-        );
+        let block = test_insns![
+            (0) [],
+            (1) [],
+            (2) [0, 1],
+            (3) [1],
+            (4) [],
+            (5) [4],
+            (6) [2, 5],
+            (7) [0, 6],
+        ];
         let mut stackification = create_stackification(&block);
-        stackify(&block, &mut stackification);
+        stackify(&block, 0..block.len(), &mut stackification);
         assert_eq!(
             stackification.forest,
             [
                 InsnTreeInfo {
-                    output_mode: OutputMode::Release {
-                        parent: TestInsnId(2)
-                    },
-                    subtree_start: TestInsnId(0),
+                    output_mode: OutputMode::Release { parent: 2 },
+                    subtree_start: 0,
                 },
                 InsnTreeInfo {
-                    output_mode: OutputMode::Release {
-                        parent: TestInsnId(2)
-                    },
-                    subtree_start: TestInsnId(1),
+                    output_mode: OutputMode::Release { parent: 2 },
+                    subtree_start: 1,
                 },
                 InsnTreeInfo {
-                    output_mode: OutputMode::Release {
-                        parent: TestInsnId(6)
-                    },
-                    subtree_start: TestInsnId(0),
+                    output_mode: OutputMode::Release { parent: 6 },
+                    subtree_start: 0,
                 },
                 InsnTreeInfo {
-                    output_mode: OutputMode::Capture {
-                        parent: TestInsnId(6)
-                    },
-                    subtree_start: TestInsnId(3),
+                    output_mode: OutputMode::Capture { parent: 6 },
+                    subtree_start: 3,
                 },
                 InsnTreeInfo {
-                    output_mode: OutputMode::Release {
-                        parent: TestInsnId(5)
-                    },
-                    subtree_start: TestInsnId(4),
+                    output_mode: OutputMode::Release { parent: 5 },
+                    subtree_start: 4,
                 },
                 InsnTreeInfo {
-                    output_mode: OutputMode::Release {
-                        parent: TestInsnId(6)
-                    },
-                    subtree_start: TestInsnId(4),
+                    output_mode: OutputMode::Release { parent: 6 },
+                    subtree_start: 4,
                 },
                 InsnTreeInfo {
                     output_mode: OutputMode::Available,
-                    subtree_start: TestInsnId(0),
+                    subtree_start: 0,
                 },
                 InsnTreeInfo {
                     output_mode: OutputMode::Available,
-                    subtree_start: TestInsnId(7),
+                    subtree_start: 7,
                 },
             ]
         );
         assert_eq!(
             stackification.getters,
             [
-                Getter {
-                    pc: TestInsnId(3),
-                    value: TestInsnId(1)
-                },
-                Getter {
-                    pc: TestInsnId(7),
-                    value: TestInsnId(0)
-                },
-                Getter {
-                    pc: TestInsnId(7),
-                    value: TestInsnId(6)
-                }
+                Getter { pc: 3, value: 1 },
+                Getter { pc: 7, value: 0 },
+                Getter { pc: 7, value: 6 }
             ]
         );
     }
 
     #[test]
     fn external_instructions() {
-        let block = TestInsnBlock::new(
-            TestInsnId(10),
-            test_insns![
-                (10) [9],
-                (11) [10],
-                (12) [11, 10],
-            ],
-        );
+        let block = test_insns![
+            (0) [],
+            (1) [],
+            (2) [],
+            (3) [],
+            (4) [],
+            (5) [],
+            (6) [],
+            (7) [],
+            (8) [],
+            (9) [],
+            (10) [9],
+            (11) [10],
+            (12) [11, 10],
+        ];
         let mut stackification = create_stackification(&block);
-        stackify(&block, &mut stackification);
+        stackify(&block, 10..block.len(), &mut stackification);
         assert_eq!(
             stackification.forest[10..],
             [
                 InsnTreeInfo {
-                    output_mode: OutputMode::Release {
-                        parent: TestInsnId(11)
-                    },
-                    subtree_start: TestInsnId(10),
+                    output_mode: OutputMode::Release { parent: 11 },
+                    subtree_start: 10,
                 },
                 InsnTreeInfo {
-                    output_mode: OutputMode::Release {
-                        parent: TestInsnId(12)
-                    },
-                    subtree_start: TestInsnId(10),
+                    output_mode: OutputMode::Release { parent: 12 },
+                    subtree_start: 10,
                 },
                 InsnTreeInfo {
                     output_mode: OutputMode::Available,
-                    subtree_start: TestInsnId(10),
+                    subtree_start: 10,
                 },
             ]
         );
         assert_eq!(
             stackification.getters,
-            [
-                Getter {
-                    pc: TestInsnId(10),
-                    value: TestInsnId(9)
-                },
-                Getter {
-                    pc: TestInsnId(12),
-                    value: TestInsnId(10)
-                }
-            ]
+            [Getter { pc: 10, value: 9 }, Getter { pc: 12, value: 10 }]
         );
     }
 
     #[test]
     fn conflicting_getter_locations() {
-        let block = TestInsnBlock::new(
-            TestInsnId(10),
-            test_insns![
-                (10) [],
-                (11) [],
-                (12) [10, 11],
-                (13) [10],
-                (14) [12, 11, 13],
-            ],
-        );
+        let block = test_insns![
+            (0) [],
+            (1) [],
+            (2) [],
+            (3) [],
+            (4) [],
+            (5) [],
+            (6) [],
+            (7) [],
+            (8) [],
+            (9) [],
+            (10) [],
+            (11) [],
+            (12) [10, 11],
+            (13) [10],
+            (14) [12, 11, 13],
+        ];
         let mut stackification = create_stackification(&block);
-        stackify(&block, &mut stackification);
+        stackify(&block, 10..block.len(), &mut stackification);
         assert_eq!(
             stackification.forest[10..],
             [
                 InsnTreeInfo {
-                    output_mode: OutputMode::Release {
-                        parent: TestInsnId(12)
-                    },
-                    subtree_start: TestInsnId(10),
+                    output_mode: OutputMode::Release { parent: 12 },
+                    subtree_start: 10,
                 },
                 InsnTreeInfo {
-                    output_mode: OutputMode::Release {
-                        parent: TestInsnId(12)
-                    },
-                    subtree_start: TestInsnId(11),
+                    output_mode: OutputMode::Release { parent: 12 },
+                    subtree_start: 11,
                 },
                 InsnTreeInfo {
-                    output_mode: OutputMode::Release {
-                        parent: TestInsnId(14)
-                    },
-                    subtree_start: TestInsnId(10),
+                    output_mode: OutputMode::Release { parent: 14 },
+                    subtree_start: 10,
                 },
                 InsnTreeInfo {
-                    output_mode: OutputMode::Release {
-                        parent: TestInsnId(14)
-                    },
-                    subtree_start: TestInsnId(13),
+                    output_mode: OutputMode::Release { parent: 14 },
+                    subtree_start: 13,
                 },
                 InsnTreeInfo {
                     output_mode: OutputMode::Available,
-                    subtree_start: TestInsnId(10),
+                    subtree_start: 10,
                 },
             ]
         );
         assert_eq!(
             stackification.getters,
-            [
-                Getter {
-                    pc: TestInsnId(13),
-                    value: TestInsnId(11)
-                },
-                Getter {
-                    pc: TestInsnId(13),
-                    value: TestInsnId(10)
-                }
-            ],
+            [Getter { pc: 13, value: 11 }, Getter { pc: 13, value: 10 }],
         );
     }
 
     #[test]
     fn getter_before_calculation_after_release() {
-        let block = TestInsnBlock::new(
-            TestInsnId(0),
-            test_insns![
-                (0) [],
-                (1) [],
-                (2) [],
-                (3) [1, 2],
-                (4) [3],
-                (5) [0, 3],
-            ],
-        );
+        let block = test_insns![
+            (0) [],
+            (1) [],
+            (2) [],
+            (3) [1, 2],
+            (4) [3],
+            (5) [0, 3],
+        ];
 
         let mut stackification = create_stackification(&block);
-        stackify(&block, &mut stackification);
+        stackify(&block, 0..block.len(), &mut stackification);
         assert_eq!(
             stackification.forest,
             [
                 InsnTreeInfo {
-                    output_mode: OutputMode::Release {
-                        parent: TestInsnId(5)
-                    },
-                    subtree_start: TestInsnId(0),
+                    output_mode: OutputMode::Release { parent: 5 },
+                    subtree_start: 0,
                 },
                 InsnTreeInfo {
-                    output_mode: OutputMode::Release {
-                        parent: TestInsnId(3)
-                    },
-                    subtree_start: TestInsnId(1),
+                    output_mode: OutputMode::Release { parent: 3 },
+                    subtree_start: 1,
                 },
                 InsnTreeInfo {
-                    output_mode: OutputMode::Release {
-                        parent: TestInsnId(3)
-                    },
-                    subtree_start: TestInsnId(2),
+                    output_mode: OutputMode::Release { parent: 3 },
+                    subtree_start: 2,
                 },
                 InsnTreeInfo {
-                    output_mode: OutputMode::Release {
-                        parent: TestInsnId(4)
-                    },
-                    subtree_start: TestInsnId(1),
+                    output_mode: OutputMode::Release { parent: 4 },
+                    subtree_start: 1,
                 },
                 InsnTreeInfo {
-                    output_mode: OutputMode::Capture {
-                        parent: TestInsnId(5)
-                    },
-                    subtree_start: TestInsnId(1),
+                    output_mode: OutputMode::Capture { parent: 5 },
+                    subtree_start: 1,
                 },
                 InsnTreeInfo {
                     output_mode: OutputMode::Available,
-                    subtree_start: TestInsnId(0),
+                    subtree_start: 0,
                 },
             ]
         );
-        assert_eq!(
-            stackification.getters,
-            [Getter {
-                pc: TestInsnId(5),
-                value: TestInsnId(3)
-            }]
-        );
+        assert_eq!(stackification.getters, [Getter { pc: 5, value: 3 }]);
     }
 
     #[test]
     fn getter_before_calculation_before_release() {
-        let block = TestInsnBlock::new(
-            TestInsnId(0),
-            test_insns![
-                (0) [],
-                (1) [],
-                (2) [],
-                (3) [1, 2],
-                (4) [3],
-                (5) [3, 0],
-            ],
-        );
+        let block = test_insns![
+            (0) [],
+            (1) [],
+            (2) [],
+            (3) [1, 2],
+            (4) [3],
+            (5) [3, 0],
+        ];
 
         let mut stackification = create_stackification(&block);
-        stackify(&block, &mut stackification);
+        stackify(&block, 0..block.len(), &mut stackification);
         assert_eq!(
             stackification.forest,
             [
                 InsnTreeInfo {
                     output_mode: OutputMode::Available,
-                    subtree_start: TestInsnId(0),
+                    subtree_start: 0,
                 },
                 InsnTreeInfo {
-                    output_mode: OutputMode::Release {
-                        parent: TestInsnId(3)
-                    },
-                    subtree_start: TestInsnId(1),
+                    output_mode: OutputMode::Release { parent: 3 },
+                    subtree_start: 1,
                 },
                 InsnTreeInfo {
-                    output_mode: OutputMode::Release {
-                        parent: TestInsnId(3)
-                    },
-                    subtree_start: TestInsnId(2),
+                    output_mode: OutputMode::Release { parent: 3 },
+                    subtree_start: 2,
                 },
                 InsnTreeInfo {
-                    output_mode: OutputMode::Release {
-                        parent: TestInsnId(4)
-                    },
-                    subtree_start: TestInsnId(1),
+                    output_mode: OutputMode::Release { parent: 4 },
+                    subtree_start: 1,
                 },
                 InsnTreeInfo {
                     output_mode: OutputMode::Available,
-                    subtree_start: TestInsnId(1),
+                    subtree_start: 1,
                 },
                 InsnTreeInfo {
                     output_mode: OutputMode::Available,
-                    subtree_start: TestInsnId(5),
+                    subtree_start: 5,
                 },
             ]
         );
         assert_eq!(
             stackification.getters,
-            [
-                Getter {
-                    pc: TestInsnId(5),
-                    value: TestInsnId(3)
-                },
-                Getter {
-                    pc: TestInsnId(5),
-                    value: TestInsnId(0)
-                }
-            ]
+            [Getter { pc: 5, value: 3 }, Getter { pc: 5, value: 0 }]
         );
     }
 }

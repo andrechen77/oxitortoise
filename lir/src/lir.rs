@@ -45,9 +45,11 @@
 
 // TODO decide on the names of the block, loop, and if-else instructiohns
 
-use std::ops::{Index, IndexMut};
+use std::ops::{Add, AddAssign, Range};
 
-use crate::stackify;
+use derive_more::Into;
+use smallvec::{SmallVec, ToSmallVec as _, smallvec};
+use typed_index_collections::TiVec;
 
 pub struct Program {
     pub entrypoints: Vec<FunctionId>,
@@ -57,13 +59,25 @@ pub struct Program {
 pub struct Function {
     pub parameter_types: Vec<ValType>,
     pub return_types: Vec<ValType>,
-    pub instructions: Vec<InsnKind>,
+    pub instructions: TiVec<InsnPc, InsnKind>,
 }
 
 pub struct FunctionId;
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub struct InsnRef(usize);
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Hash, Into)]
+pub struct InsnPc(usize);
+impl Add<usize> for InsnPc {
+    type Output = InsnPc;
+
+    fn add(self, rhs: usize) -> Self::Output {
+        InsnPc(self.0 + rhs)
+    }
+}
+impl AddAssign<usize> for InsnPc {
+    fn add_assign(&mut self, rhs: usize) {
+        self.0 += rhs;
+    }
+}
 
 pub struct ImportedFunctionId {
     name: &'static str,
@@ -95,21 +109,21 @@ pub enum InsnKind {
     /// Given the output of an instruction that takes multiple values, project
     /// a single value.
     Project {
-        multivalue: InsnRef,
+        multivalue: InsnPc,
         index: u32,
     },
     /// Add a compile-time offset to a pointer, producing a pointer to a
     /// subfield.
     DeriveField {
         offset: usize,
-        ptr: InsnRef,
+        ptr: InsnPc,
     },
     /// Add a dynamic offset to a pointer, producing a pointer to an element of
     /// an array.
     DeriveElement {
         element_size: usize,
-        ptr: InsnRef,
-        index: InsnRef,
+        ptr: InsnPc,
+        index: InsnPc,
     },
     /// Load a value from memory.
     ///
@@ -117,15 +131,15 @@ pub enum InsnKind {
     MemLoad {
         r#type: ValType,
         offset: usize,
-        ptr: InsnRef,
+        ptr: InsnPc,
     },
     /// Store a value into memory.
     ///
     /// For storing values onto the current function's stack frame, use [`InstructionKind::StackStore`]
     MemStore {
         offset: usize,
-        ptr: InsnRef,
-        value: InsnRef,
+        ptr: InsnPc,
+        value: InsnPc,
     },
     /// Load a value from the stack.
     StackLoad {
@@ -137,26 +151,26 @@ pub enum InsnKind {
     StackStore {
         /// The offset from the top of the stack at which to store the value.
         offset: usize,
-        value: InsnRef,
+        value: InsnPc,
     },
     CallImportedFunction {
         function: ImportedFunctionId,
-        args: Box<[InsnRef]>,
+        args: Box<[InsnPc]>,
     },
     CallUserFunction {
         function: FunctionId,
-        args: Box<[InsnRef]>,
+        args: Box<[InsnPc]>,
     },
     UnaryOp {
         op: UnaryOpcode,
-        operand: InsnRef,
+        operand: InsnPc,
     },
     BinaryOp {
         /// The operation to perform. This also determines the types of the
         /// inputs and outputs.
         op: BinaryOpcode,
-        lhs: InsnRef,
-        rhs: InsnRef,
+        lhs: InsnPc,
+        rhs: InsnPc,
     },
     /// Break out of some number of control flow constructs. A depth of 0 means
     /// breaking out of the current construct. A depth of 1 means breaking out
@@ -164,7 +178,7 @@ pub enum InsnKind {
     /// used to implement early returns.
     Break {
         depth: u16,
-        values: Vec<InsnRef>,
+        values: Vec<InsnPc>,
     },
     /// A breakable block.
     Block {
@@ -174,7 +188,7 @@ pub enum InsnKind {
     },
     /// An if-else statement.
     IfElse {
-        condition: InsnRef,
+        condition: InsnPc,
         /// The number of instructions in the then branch. The following
         /// `then_len` instructions are considered inside this instruction.
         then_len: usize,
@@ -202,30 +216,86 @@ pub enum BinaryOpcode {
     Eq,
 }
 
+impl InsnKind {
+    /// Returns all nested instruction sequences inside this instruction, as
+    /// well as the program counter of the instruction that follows.
+    pub fn extent(&self, my_pc: InsnPc) -> (SmallVec<[Range<InsnPc>; 2]>, InsnPc) {
+        match self {
+            InsnKind::Block { body_len } => {
+                let body_start = my_pc + 1;
+                let body_end = body_start + *body_len;
+                (smallvec![body_start..body_end], body_end)
+            }
+            InsnKind::Loop { body_len } => {
+                let body_start = my_pc + 1;
+                let body_end = body_start + *body_len;
+                (smallvec![body_start..body_end], body_end)
+            }
+            InsnKind::IfElse {
+                then_len, else_len, ..
+            } => {
+                let then_start = my_pc + 1;
+                let then_end = then_start + *then_len;
+                let else_end = then_end + *else_len;
+                (
+                    smallvec![then_start..then_end, then_end..else_end],
+                    else_end,
+                )
+            }
+            _ => (smallvec![], my_pc + 1),
+        }
+    }
+
+    pub fn inputs(&self) -> SmallVec<[InsnPc; 2]> {
+        match self {
+            InsnKind::Argument { .. } => smallvec![],
+            InsnKind::Const { .. } => smallvec![],
+            InsnKind::Project { multivalue, .. } => smallvec![*multivalue],
+            InsnKind::DeriveField { ptr, .. } => smallvec![*ptr],
+            InsnKind::DeriveElement { ptr, index, .. } => smallvec![*ptr, *index],
+            InsnKind::MemLoad { ptr, .. } => smallvec![*ptr],
+            InsnKind::MemStore { ptr, value, .. } => smallvec![*ptr, *value],
+            InsnKind::StackLoad { .. } => smallvec![],
+            InsnKind::StackStore { value, .. } => smallvec![*value],
+            InsnKind::CallImportedFunction { args, .. } => args.to_smallvec(),
+            InsnKind::CallUserFunction { args, .. } => args.to_smallvec(),
+            InsnKind::UnaryOp { operand, .. } => smallvec![*operand],
+            InsnKind::BinaryOp { lhs, rhs, .. } => smallvec![*lhs, *rhs],
+            InsnKind::Break { values, .. } => values.to_smallvec(),
+            InsnKind::Block { .. } => smallvec![],
+            InsnKind::IfElse { condition, .. } => smallvec![*condition],
+            InsnKind::Loop { .. } => smallvec![],
+        }
+    }
+}
+
 pub struct InsnRefIter<'a> {
-    next: InsnRef,
-    instructions: &'a [InsnKind],
+    remaining: Range<InsnPc>,
+    instructions: &'a TiVec<InsnPc, InsnKind>,
+}
+
+impl<'a> InsnRefIter<'a> {
+    pub fn new(instructions: &'a TiVec<InsnPc, InsnKind>, seq: Range<InsnPc>) -> Self {
+        Self {
+            remaining: seq,
+            instructions,
+        }
+    }
 }
 
 impl<'a> Iterator for InsnRefIter<'a> {
-    type Item = InsnRef;
+    type Item = (SmallVec<[Range<InsnPc>; 2]>, InsnPc);
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.next.0 >= self.instructions.len() {
+        if self.remaining.is_empty() {
             return None;
         }
 
-        let return_value = self.next;
+        let next_pc = self.remaining.start;
         // calculate the next instruction to visit based on what the returned
         // instruction was
-        self.next.0 += match self.instructions[self.next.0] {
-            InsnKind::Block { body_len } => 1 + body_len,
-            InsnKind::IfElse {
-                then_len, else_len, ..
-            } => 1 + then_len + else_len,
-            InsnKind::Loop { body_len } => 1 + body_len,
-            _ => 1,
-        };
-        Some(return_value)
+        let (inner_seqs, succ) = self.instructions[next_pc].extent(next_pc);
+        self.remaining.start = succ;
+        Some((inner_seqs, next_pc))
     }
 }

@@ -1,3 +1,4 @@
+#![feature(gen_blocks)]
 pub mod lir;
-pub mod stackify;
+mod stackify;
 pub mod wasm;
