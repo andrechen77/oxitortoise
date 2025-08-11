@@ -3,6 +3,7 @@ use crate::exec::CanonExecutionContext;
 #[cfg(target_arch = "wasm32")]
 mod wasm;
 
+// TODO remove this once all JIT code goes through the LIR
 #[cfg(target_arch = "wasm32")]
 pub use wasm::*;
 

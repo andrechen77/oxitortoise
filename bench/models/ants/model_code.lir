@@ -1,0 +1,72 @@
+fn setup(ptr<&Context> $context) {
+	ptr<&Workspace> $workspace = mem_load<Context~workspace>($context);
+	ptr<&World> $world = derive_field<Workspace~world>($workspace);
+
+	call_env<oxitortoise_clear_all>([$context]);
+
+	i64 $default_turtle_breed = call_env<oxitortoise_get_default_turtle_breed>([$context]);
+
+	// at stack offset 0, create a point (0, 0)
+	Point %origin;
+	stack_store<%origin~x>(const<0.0>());
+	stack_store<%origin~y>(const<0.0>());
+
+	// create a closure
+	Closure %closure_body_0;
+	stack_store<%closure_body_0~fn_ptr>(const<setup_body_0>());
+	stack_store<%closure_body_0~env>(const<null>());
+
+	call_env<oxitortoise_create_turtles>([$context, $default_turtle_breed, const<125>(), stack_addr<%origin>, stack_addr<%closure_body_0>]);
+
+	// similar thing for setup-patches; skip for brevity
+
+	call_env<oxitortoise_reset_ticks>([$world]);
+
+	f64 $ticks = call_env<oxitortoise_get_ticks>([$world]);
+	mem_store<Context~dirty_agg~ticks>($context, $ticks);
+}
+
+fn setup_body_0(ptr $env, ptr<&Context> $context, i64 $next_turtle) {
+	i32 $turtle_idx = i64toi32($next_turtle);
+
+	ptr<&Workspace> $workspace = mem_load<Context~workspace>($context);
+	ptr<&[TurtleGroup0]> $turtle_buffer = mem_load<Workspace~world~turtle_buffers~[0]~data>($workspace);
+	ptr<&TurtleGroup0> $turtle_data = derive_element<TurtleGroup0>($turtle_buffer, $turtle_idx)
+
+	ptr<&TurtleBaseData> $base_data = derive_field<TurtleGroup0~base_data>($turtle_data);
+
+	mem_store<TurtleBaseData~size>($base_data, const<2.0>());
+	mem_store<TurtleBaseData~color>($base_data, const<15.0>());
+
+	ptr<&[TurtleFlags]> $turtle_flags_buffer = mem_load<Context~dirty_agg~turtle_flags>($context);
+	ptr<&TurtleFlags> $turtle_flags = derive_element<TurtleFlags>($turtle_flags_buffer, $turtle_idx)
+	i16<TurtleFlags> $current_value = mem_load<TurtleFlags>($turtle_flags);
+	i16<TurtleFlags> $new_value = bitwise_or($current_value, const<FLAG_COLOR|FLAG_SIZE>());
+	mem_store<TurtleFlags>($turtle_flags, $new_value);
+}
+
+fn setup_food(ptr $env, ptr<&Context> $context, i32 $patch_id) {
+	ptr<&Workspace> $workspace = mem_load<Context~workspace>($context);
+	ptr<&[PatchGroup0]> $patch_buffer = mem_load<Workspace~world~patch_buffers~[0]~data>($workspace);
+	ptr<&PatchGroup0> $patch_data = derive_element<PatchGroup0>($patch_buffer, $patch_id);
+
+	ptr<&Point> $position = derive_field<PatchGroup0~base_data~position>($patch_data);
+	f64 $distance = call_env<oxitortoise_distance_euclidean_no_wrap>([$position, $origin]);
+
+	mem_store<PatchGroup0~nest>($patch_data, f64_lt($distance, const<5.0>()));
+	mem_store<PatchGroup0~nest_scent>($patch_data, f64_sub(const<200.0>(), $distance));
+
+	f64 $max_pxcor = mem_load<Workspace~world~topology~max_pxcor>($workspace);
+	f64 $max_pycor = mem_load<Workspace~world~topology~max_pycor>($workspace);
+
+	f64 $distance = call_env<oxitortoise_distance_euclidean_no_wrap>([$position, /* point here */]);
+	if_else(f64_lt($distance, const<5.0>())) {
+		mem_store<PatchGroup0~food_source_number>($patch_data, const<1.0>());
+	} {
+
+	}
+}
+
+
+
+
