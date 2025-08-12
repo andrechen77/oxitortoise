@@ -47,24 +47,31 @@
 
 use std::ops::{Add, AddAssign, Range};
 
-use derive_more::Into;
+use derive_more::{From, Into};
 use smallvec::{SmallVec, ToSmallVec as _, smallvec};
-use typed_index_collections::TiVec;
+use typed_index_collections::{TiSlice, TiVec};
 
+#[macro_use]
+mod macros;
+pub use macros::instructions;
+
+#[derive(Debug, PartialEq, Eq)]
 pub struct Program {
     pub entrypoints: Vec<FunctionId>,
     pub functions: Vec<Function>,
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub struct Function {
     pub parameter_types: Vec<ValType>,
     pub return_types: Vec<ValType>,
     pub instructions: TiVec<InsnPc, InsnKind>,
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub struct FunctionId;
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Hash, Into)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Into, From)]
 pub struct InsnPc(usize);
 impl Add<usize> for InsnPc {
     type Output = InsnPc;
@@ -79,13 +86,14 @@ impl AddAssign<usize> for InsnPc {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub struct ImportedFunctionId {
     name: &'static str,
 }
 
 /// A machine-level type. These are just numbers that have no higher-level
 /// semantic meaning.
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum ValType {
     I8,
     I16,
@@ -96,6 +104,7 @@ pub enum ValType {
     FnPtr,
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum InsnKind {
     Argument {
         r#type: ValType,
@@ -178,7 +187,14 @@ pub enum InsnKind {
     /// used to implement early returns.
     Break {
         depth: u16,
-        values: Vec<InsnPc>,
+        values: Box<[InsnPc]>,
+    },
+    /// Conditionally break out of some number of control flow constructs. See
+    /// [`InsnKind::Break`] for more information.
+    ConditionalBreak {
+        condition: InsnPc,
+        depth: u16,
+        values: Box<[InsnPc]>,
     },
     /// A breakable block.
     Block {
@@ -203,12 +219,20 @@ pub enum InsnKind {
         /// `body_len` instructions are considered inside this instruction.
         body_len: usize,
     },
+    /// An argument in a loop body
+    LoopArgument {
+        /// The initial value of the argument when the loop is entered.
+        /// This is not considered an input to this instruction.
+        initial_value: InsnPc,
+    },
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum UnaryOpcode {
     I64ToI32,
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum BinaryOpcode {
     Add,
     Sub,
@@ -262,24 +286,44 @@ impl InsnKind {
             InsnKind::UnaryOp { operand, .. } => smallvec![*operand],
             InsnKind::BinaryOp { lhs, rhs, .. } => smallvec![*lhs, *rhs],
             InsnKind::Break { values, .. } => values.to_smallvec(),
+            InsnKind::ConditionalBreak {
+                condition, values, ..
+            } => {
+                let mut inputs = values.to_smallvec();
+                inputs.push(*condition);
+                inputs
+            }
             InsnKind::Block { .. } => smallvec![],
             InsnKind::IfElse { condition, .. } => smallvec![*condition],
             InsnKind::Loop { .. } => smallvec![],
+            InsnKind::LoopArgument { initial_value: _ } => smallvec![],
         }
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub struct InsnRefIter<'a> {
     remaining: Range<InsnPc>,
-    instructions: &'a TiVec<InsnPc, InsnKind>,
+    instructions: &'a TiSlice<InsnPc, InsnKind>,
 }
 
 impl<'a> InsnRefIter<'a> {
-    pub fn new(instructions: &'a TiVec<InsnPc, InsnKind>, seq: Range<InsnPc>) -> Self {
+    // Take an iterator to the entire vector instead of just a slice, to enforce
+    // that we have all the instructions.
+    pub fn new_with_range(instructions: &'a TiVec<InsnPc, InsnKind>, range: Range<InsnPc>) -> Self {
         Self {
-            remaining: seq,
+            remaining: range,
             instructions,
         }
+    }
+
+    // Take an iterator to the entire vector instead of just a slice, to enforce
+    // that we have all the instructions.
+    pub fn new(instructions: &'a TiVec<InsnPc, InsnKind>) -> Self {
+        Self::new_with_range(
+            instructions,
+            InsnPc::from(0)..InsnPc::from(instructions.len()),
+        )
     }
 }
 

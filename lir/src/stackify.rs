@@ -1,9 +1,10 @@
-use std::ops::{Index, IndexMut, Range};
-
-use smallvec::SmallVec;
+use std::{
+    collections::{BTreeMap, VecDeque},
+    ops::{Index, IndexMut, Range},
+};
 
 pub trait InsnUniverse {
-    type Pc: Copy + PartialEq + PartialOrd;
+    type Pc: Copy + PartialEq + PartialOrd + Ord;
 
     /// An iterator over all instructions of a certain range, without recursing
     /// into compound instructions in the range.
@@ -34,22 +35,22 @@ pub enum OutputMode<Pc> {
     Capture { parent: Pc },
 }
 
-pub struct Stackification<T, M>
+#[derive(Debug, PartialEq, Eq)]
+pub struct Stackification<Pc, M>
 where
-    T: InsnUniverse,
-    M: IndexMut<T::Pc, Output = InsnTreeInfo<T::Pc>>,
+    M: IndexMut<Pc, Output = InsnTreeInfo<Pc>>,
 {
-    forest: M,
-    getters: Vec<Getter<T::Pc>>,
+    pub forest: M,
+    pub getters: BTreeMap<Pc, VecDeque<Pc>>,
 }
 
 /// Information associated with an instruction that helps determine its
 /// input/output relations with other instructions.
 #[derive(Debug, PartialEq, Eq)]
 pub struct InsnTreeInfo<Pc> {
-    output_mode: OutputMode<Pc>,
+    pub output_mode: OutputMode<Pc>,
     /// The start of the subtree rooted at this instruction.
-    subtree_start: Pc,
+    pub subtree_start: Pc,
 }
 
 /// Finds the root of the subtree that includes `start_insn`. If the next parent
@@ -73,37 +74,9 @@ where
     insn
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub struct Getter<Pc> {
-    /// The program counter at which to insert the getter.
-    pc: Pc,
-    /// The instruction whose value to get.
-    value: Pc,
-}
-
-/// Insert getters in `to_insert` into `dest`. Getters with the same pc will be
-/// inserted in the order they appear in `to_insert`, but they will be inserted
-/// before any other existing getters in `dest` with the same pc.
-fn insert_getters<Pc: Copy + PartialEq + PartialOrd>(
-    dest: &mut Vec<Getter<Pc>>,
-    to_insert: &[Getter<Pc>],
-) {
-    for chunk_of_getters in to_insert.chunk_by(|a, b| a.pc == b.pc) {
-        // find the correct index into `dest` at which to insert the getters
-        let getter_pc = chunk_of_getters[0].pc;
-        let l = dest
-            .iter()
-            .position(|&getter| getter.pc >= getter_pc)
-            .unwrap_or(dest.len());
-
-        // insert all getters destined for `getter_pc` at point `l`
-        dest.splice(l..l, chunk_of_getters.iter().copied());
-    }
-}
-
-/// Calculates how the given instruction sequence with linear control flow can
-/// be made to execute correctly on a stack machine. This function is only valid
-/// for sequences of instructions with linear control flow, meaning each
+/// Calculates how the given instruction sequence with sequential control flow
+/// can be made to execute correctly on a stack machine. This function is only
+/// valid for ranges of instructions with sequential control flow, meaning each
 /// instruction leads into the next one (or diverges). Assume a stack machine
 /// where each instruction, when executed, pops some number of values off the
 /// top of the operand stack and pushes the result onto the operand stack. This
@@ -124,10 +97,10 @@ fn insert_getters<Pc: Copy + PartialEq + PartialOrd>(
 /// index `i` in the block, to get correct stack machine execution. This list
 /// will be sorted by `i`. There may be multiple local variable getters before
 /// the same index. In this case they should inserted in the order they appear.
-pub fn stackify<T: InsnUniverse, M: IndexMut<T::Pc, Output = InsnTreeInfo<T::Pc>>>(
+pub fn stackify_sequential<T: InsnUniverse, M: IndexMut<T::Pc, Output = InsnTreeInfo<T::Pc>>>(
     insns: &T,
     seq: Range<T::Pc>,
-    stackification: &mut Stackification<T, M>,
+    stackification: &mut Stackification<T::Pc, M>,
 ) {
     /*
     Algorithm: All instructions start with an output mode of available. Iterate
@@ -182,7 +155,9 @@ pub fn stackify<T: InsnUniverse, M: IndexMut<T::Pc, Output = InsnTreeInfo<T::Pc>
         }
         let mut subtree_span: Option<SubtreeSpan<T::Pc>> = None;
 
-        let mut current_getters: Vec<Getter<T::Pc>> = vec![];
+        // vector of (insertion_pc, value) pairs indicating getters for `value`
+        // inserted at `insertion_pc`
+        let mut current_getters: Vec<(T::Pc, T::Pc)> = vec![];
 
         for input_insn in insns.inputs_of(current_insn) {
             // check if the input can be released
@@ -199,7 +174,7 @@ pub fn stackify<T: InsnUniverse, M: IndexMut<T::Pc, Output = InsnTreeInfo<T::Pc>
                 && Some(input_insn) >= subtree_span.map(|s| s.insertion_pc)
                 // the input must be calculated after all previous inputs that
                 // need a getter
-                && current_getters.iter().all(|&Getter { value, .. }| value < stackification.forest[input_insn].subtree_start)
+                && current_getters.iter().all(|&(_, value)| value < stackification.forest[input_insn].subtree_start)
             {
                 // the input can be released
                 match &mut subtree_span {
@@ -213,7 +188,7 @@ pub fn stackify<T: InsnUniverse, M: IndexMut<T::Pc, Output = InsnTreeInfo<T::Pc>
                         // since this is the first input to be released, we need
                         // to move the getters for all previous inputs to be
                         // before this input
-                        for Getter { pc, .. } in &mut current_getters {
+                        for (pc, _) in &mut current_getters {
                             *pc = stackification.forest[input_insn].subtree_start;
                         }
                     }
@@ -233,19 +208,13 @@ pub fn stackify<T: InsnUniverse, M: IndexMut<T::Pc, Output = InsnTreeInfo<T::Pc>
                         if root_insn != current_insn && root_insn > s.insertion_pc {
                             s.insertion_pc = insns.succ_of(root_insn);
                         }
-                        current_getters.push(Getter {
-                            pc: s.insertion_pc,
-                            value: input_insn,
-                        });
+                        current_getters.push((s.insertion_pc, input_insn));
                     }
                     None => {
                         // no inputs have been released yet. we don't know where
                         // to insert the getter, so insert it before the current
                         // instruction for now
-                        current_getters.push(Getter {
-                            pc: current_insn,
-                            value: input_insn,
-                        });
+                        current_getters.push((current_insn, input_insn));
                     }
                 }
             }
@@ -275,7 +244,13 @@ pub fn stackify<T: InsnUniverse, M: IndexMut<T::Pc, Output = InsnTreeInfo<T::Pc>
         // getters already inserted are meant to apply to the instruction
         // following them, which binds more tightly than the current
         // instruction.
-        insert_getters(&mut stackification.getters, &current_getters);
+        for (insertion_pc, value) in current_getters.into_iter().rev() {
+            stackification
+                .getters
+                .entry(insertion_pc)
+                .or_default()
+                .push_front(value);
+        }
     }
     debug_assert!(verify_stackification(insns, seq, &stackification).is_ok());
 }
@@ -286,27 +261,22 @@ pub fn stackify<T: InsnUniverse, M: IndexMut<T::Pc, Output = InsnTreeInfo<T::Pc>
 fn verify_stackification<T: InsnUniverse, M: IndexMut<T::Pc, Output = InsnTreeInfo<T::Pc>>>(
     insns: &T,
     seq: Range<T::Pc>,
-    stackification: &Stackification<T, M>,
+    stackification: &Stackification<T::Pc, M>,
 ) -> Result<(), T::Pc> {
     let mut op_stack: Vec<T::Pc> = vec![];
-    let mut local_getters = stackification.getters.iter().copied().peekable();
 
     for insn in insns.instructions_in_range(seq) {
         // first, resolve all local getters before this instruction
-        while let Some(getter) = local_getters.next_if(|g| g.pc <= insn) {
-            // skip over getters that are meant for instructions inside compound
-            // instructions (i.e. not shallowly included in `seq` )
-            if getter.pc != insn {
-                continue;
-            }
+        if let Some(values) = stackification.getters.get(&insn) {
+            for &value in values {
+                // verify that the instruction being gotten has actually been
+                // calculcated
+                if value >= insn {
+                    return Err(insn);
+                }
 
-            // verify that the instruction being gotten has actually been
-            // calculcated
-            if getter.value >= insn {
-                return Err(insn);
+                op_stack.push(value);
             }
-
-            op_stack.push(getter.value);
         }
 
         // take input operands off the operand stack
@@ -353,7 +323,7 @@ mod tests {
 
     fn create_stackification(
         insns: &TestInsnUniverse,
-    ) -> Stackification<TestInsnUniverse, Vec<InsnTreeInfo<usize>>> {
+    ) -> Stackification<usize, Vec<InsnTreeInfo<usize>>> {
         Stackification {
             forest: (0..insns.len())
                 .map(|i| InsnTreeInfo {
@@ -361,7 +331,7 @@ mod tests {
                     subtree_start: i,
                 })
                 .collect(),
-            getters: vec![],
+            getters: BTreeMap::new(),
         }
     }
 
@@ -400,7 +370,7 @@ mod tests {
             (3) [],
         ];
         let mut stackification = create_stackification(&block);
-        stackify(&block, 0..block.len(), &mut stackification);
+        stackify_sequential(&block, 0..block.len(), &mut stackification);
         assert_eq!(
             stackification.forest,
             [
@@ -422,7 +392,7 @@ mod tests {
                 },
             ]
         );
-        assert_eq!(stackification.getters, []);
+        assert_eq!(stackification.getters, BTreeMap::new());
     }
 
     #[test]
@@ -435,7 +405,7 @@ mod tests {
             (4) [0, 1, 2, 3],
         ];
         let mut stackification = create_stackification(&block);
-        stackify(&block, 0..block.len(), &mut stackification);
+        stackify_sequential(&block, 0..block.len(), &mut stackification);
         assert_eq!(
             stackification.forest,
             [
@@ -461,7 +431,7 @@ mod tests {
                 },
             ]
         );
-        assert_eq!(stackification.getters, []);
+        assert_eq!(stackification.getters, BTreeMap::new());
     }
 
     #[test]
@@ -474,7 +444,7 @@ mod tests {
             (4) [1, 3],
         ];
         let mut stackification = create_stackification(&block);
-        stackify(&block, 0..block.len(), &mut stackification);
+        stackify_sequential(&block, 0..block.len(), &mut stackification);
         assert_eq!(
             stackification.forest,
             [
@@ -500,7 +470,7 @@ mod tests {
                 },
             ]
         );
-        assert_eq!(stackification.getters, []);
+        assert_eq!(stackification.getters, BTreeMap::new());
     }
 
     #[test]
@@ -513,7 +483,7 @@ mod tests {
             (4) [1, 3, 2, 0],
         ];
         let mut stackification = create_stackification(&block);
-        stackify(&block, 0..block.len(), &mut stackification);
+        stackify_sequential(&block, 0..block.len(), &mut stackification);
         assert_eq!(
             stackification.forest,
             [
@@ -541,7 +511,7 @@ mod tests {
         );
         assert_eq!(
             stackification.getters,
-            [Getter { pc: 4, value: 2 }, Getter { pc: 4, value: 0 }]
+            BTreeMap::from([(4, VecDeque::from([2, 0]))]),
         );
     }
 
@@ -553,7 +523,7 @@ mod tests {
             (2) [0, 0, 1],
         ];
         let mut stackification = create_stackification(&block);
-        stackify(&block, 0..block.len(), &mut stackification);
+        stackify_sequential(&block, 0..block.len(), &mut stackification);
         assert_eq!(
             stackification.forest,
             [
@@ -571,7 +541,10 @@ mod tests {
                 },
             ]
         );
-        assert_eq!(stackification.getters, [Getter { pc: 1, value: 0 }]);
+        assert_eq!(
+            stackification.getters,
+            BTreeMap::from([(1, VecDeque::from([0]))])
+        );
     }
 
     #[test]
@@ -584,7 +557,7 @@ mod tests {
             (4) [1, 0, 3],
         ];
         let mut stackification = create_stackification(&block);
-        stackify(&block, 0..block.len(), &mut stackification);
+        stackify_sequential(&block, 0..block.len(), &mut stackification);
         assert_eq!(
             stackification.forest,
             [
@@ -612,7 +585,7 @@ mod tests {
         );
         assert_eq!(
             stackification.getters,
-            [Getter { pc: 3, value: 1 }, Getter { pc: 3, value: 0 }]
+            BTreeMap::from([(3, VecDeque::from([1, 0]))])
         );
     }
 
@@ -625,7 +598,7 @@ mod tests {
             (3) [0, 1, 1, 2],
         ];
         let mut stackification = create_stackification(&block);
-        stackify(&block, 0..block.len(), &mut stackification);
+        stackify_sequential(&block, 0..block.len(), &mut stackification);
         assert_eq!(
             stackification.forest,
             [
@@ -649,13 +622,7 @@ mod tests {
         );
         assert_eq!(
             stackification.getters,
-            [
-                Getter { pc: 2, value: 0 },
-                Getter { pc: 2, value: 1 },
-                Getter { pc: 2, value: 1 },
-                Getter { pc: 2, value: 0 },
-                Getter { pc: 2, value: 1 },
-            ]
+            BTreeMap::from([(2, VecDeque::from([0, 1, 1, 0, 1]))])
         );
     }
 
@@ -672,7 +639,7 @@ mod tests {
             (7) [0, 6],
         ];
         let mut stackification = create_stackification(&block);
-        stackify(&block, 0..block.len(), &mut stackification);
+        stackify_sequential(&block, 0..block.len(), &mut stackification);
         assert_eq!(
             stackification.forest,
             [
@@ -712,11 +679,7 @@ mod tests {
         );
         assert_eq!(
             stackification.getters,
-            [
-                Getter { pc: 3, value: 1 },
-                Getter { pc: 7, value: 0 },
-                Getter { pc: 7, value: 6 }
-            ]
+            BTreeMap::from([(3, VecDeque::from([1])), (7, VecDeque::from([0, 6]))])
         );
     }
 
@@ -738,7 +701,7 @@ mod tests {
             (12) [11, 10],
         ];
         let mut stackification = create_stackification(&block);
-        stackify(&block, 10..block.len(), &mut stackification);
+        stackify_sequential(&block, 10..block.len(), &mut stackification);
         assert_eq!(
             stackification.forest[10..],
             [
@@ -758,7 +721,7 @@ mod tests {
         );
         assert_eq!(
             stackification.getters,
-            [Getter { pc: 10, value: 9 }, Getter { pc: 12, value: 10 }]
+            BTreeMap::from([(10, VecDeque::from([9])), (12, VecDeque::from([10]))])
         );
     }
 
@@ -782,7 +745,7 @@ mod tests {
             (14) [12, 11, 13],
         ];
         let mut stackification = create_stackification(&block);
-        stackify(&block, 10..block.len(), &mut stackification);
+        stackify_sequential(&block, 10..block.len(), &mut stackification);
         assert_eq!(
             stackification.forest[10..],
             [
@@ -810,7 +773,7 @@ mod tests {
         );
         assert_eq!(
             stackification.getters,
-            [Getter { pc: 13, value: 11 }, Getter { pc: 13, value: 10 }],
+            BTreeMap::from([(13, VecDeque::from([11, 10]))])
         );
     }
 
@@ -826,7 +789,7 @@ mod tests {
         ];
 
         let mut stackification = create_stackification(&block);
-        stackify(&block, 0..block.len(), &mut stackification);
+        stackify_sequential(&block, 0..block.len(), &mut stackification);
         assert_eq!(
             stackification.forest,
             [
@@ -856,7 +819,10 @@ mod tests {
                 },
             ]
         );
-        assert_eq!(stackification.getters, [Getter { pc: 5, value: 3 }]);
+        assert_eq!(
+            stackification.getters,
+            BTreeMap::from([(5, VecDeque::from([3]))])
+        );
     }
 
     #[test]
@@ -871,7 +837,7 @@ mod tests {
         ];
 
         let mut stackification = create_stackification(&block);
-        stackify(&block, 0..block.len(), &mut stackification);
+        stackify_sequential(&block, 0..block.len(), &mut stackification);
         assert_eq!(
             stackification.forest,
             [
@@ -903,7 +869,7 @@ mod tests {
         );
         assert_eq!(
             stackification.getters,
-            [Getter { pc: 5, value: 3 }, Getter { pc: 5, value: 0 }]
+            BTreeMap::from([(5, VecDeque::from([3, 0]))])
         );
     }
 }
