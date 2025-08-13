@@ -72,7 +72,7 @@ pub struct Function {
 pub struct FunctionId;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Into, From)]
-pub struct InsnPc(usize);
+pub struct InsnPc(pub usize);
 impl Add<usize> for InsnPc {
     type Output = InsnPc;
 
@@ -181,19 +181,20 @@ pub enum InsnKind {
         lhs: InsnPc,
         rhs: InsnPc,
     },
-    /// Break out of some number of control flow constructs. A depth of 0 means
-    /// breaking out of the current construct. A depth of 1 means breaking out
-    /// of the current construct and the enclosing construct, etc. This is also
-    /// used to implement early returns.
+    /// Break out of some number of control flow constructs. The target
+    /// parameter is the location of the compound instruction that we are
+    /// breaking. **This is not the program counter we are jumping to.** Rather,
+    /// we jump to the label associated with that compound instruction. This is
+    /// also used to implement early returns.
     Break {
-        depth: u16,
+        target: InsnPc,
         values: Box<[InsnPc]>,
     },
-    /// Conditionally break out of some number of control flow constructs. See
+    /// Conditionally break out of control flow constructs. See
     /// [`InsnKind::Break`] for more information.
     ConditionalBreak {
+        target: InsnPc,
         condition: InsnPc,
-        depth: u16,
         values: Box<[InsnPc]>,
     },
     /// A breakable block.

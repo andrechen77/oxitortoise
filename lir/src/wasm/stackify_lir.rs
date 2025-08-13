@@ -224,11 +224,9 @@ fn print_with_stackification(insns: &TiVec<InsnPc, InsnKind>, stackification: &S
 
 #[cfg(test)]
 mod tests {
-    use typed_index_collections::ti_vec;
-
     use super::*;
     use crate::{
-        lir::{BinaryOpcode, InsnKind::*, ValType, instructions},
+        lir::{BinaryOpcode, ValType, instructions},
         stackification,
     };
 
@@ -265,11 +263,10 @@ mod tests {
                 c = [add(a, b)];
                 inner = [block {
                     d = [add(c, a)];
-                    break_2 = [break_(0)(d)];
+                    break_2 = [break_(inner)(d)];
                 }];
-                break_1 = [break_(0)(inner)];
+                break_1 = [break_(outer)(inner)];
             }];
-            break_0 = [break_(0)(outer)];
         }
 
         let stackification = stackify_lir(&insns);
@@ -277,18 +274,17 @@ mod tests {
         assert_eq!(stackification, stackification! {
             Stackification;
             InsnPc;
-            count 9;
+            count 8;
 
             [(a) =| outer]
             [(b) =| outer]
-            [(outer) =| break_0]
+            [(outer) ==]
             [(c) =| inner]
             [(inner) <~ a]
             [(inner) =| break_1]
             [(d) =| break_2]
             [(break_2) ==]
             [(break_1) ==]
-            [(break_0) ==]
         })
     }
 
@@ -301,12 +297,11 @@ mod tests {
             b = [constant(I32, 20)];
             branch = [if_else(arg) {
                 d_0 = [add(a, b)];
-                break_0 = [break_(0)(d_0)];
+                break_0 = [break_(branch)(d_0)];
             } {
                 d_1 = [sub(a, b)];
-                break_1 = [break_(0)(d_1)];
+                break_1 = [break_(branch)(d_1)];
             }];
-            break_2 = [break_(0)(branch)];
         }
 
         let stackification = stackify_lir(&insns);
@@ -314,19 +309,17 @@ mod tests {
         assert_eq!(stackification, stackification! {
             Stackification;
             InsnPc;
-            count 9;
+            count 8;
 
             [(arg) ==]
             [(a) =| branch]
             [(b) =| branch]
             [(branch) <~ arg]
-            [(branch) =| break_2]
+            [(branch) ==]
             [(d_0) =| break_0]
             [(break_0) ==]
             [(d_1) =| break_1]
             [(break_1) ==]
-            [(break_2) ==]
-
         })
     }
 }

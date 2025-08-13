@@ -103,7 +103,7 @@ macro_rules! push_node {
             args: args_vec.into_boxed_slice(),
         });
     };
-    ($insns:expr; $label:ident; [break_($depth:expr)($($values:tt),*)]) => {
+    ($insns:expr; $label:ident; [break_($target:expr)($($values:tt),*)]) => {
         let mut values_vec = Vec::new();
         $(
             $crate::push_node!($insns; value; $values);
@@ -111,11 +111,11 @@ macro_rules! push_node {
         )*
         let $label = InsnPc::from($insns.len());
         $insns.push(InsnKind::Break {
-            depth: $depth,
+            target: $target,
             values: values_vec.into_boxed_slice(),
         });
     };
-    ($insns:expr; $label:ident; [break_if($depth:expr)($condition:tt, $($values:tt),*)]) => {
+    ($insns:expr; $label:ident; [break_if($target:expr)($condition:tt, $($values:tt),*)]) => {
         $crate::push_node!($insns; condition; $condition);
         let mut values_vec = Vec::new();
         $(
@@ -125,7 +125,7 @@ macro_rules! push_node {
         let $label = InsnPc::from($insns.len());
         $insns.push(InsnKind::ConditionalBreak {
             condition,
-            depth: $depth,
+            target: $target,
             values: values_vec.into_boxed_slice(),
         });
     };
@@ -238,6 +238,9 @@ mod tests {
 
     #[test]
     fn test_nested_nodes() {
+        // some instructions here make no sense, such as the break instruction,
+        // but this is just to test the macro syntax
+
         instructions! {
             let insns;
             // Basic constants
@@ -283,13 +286,13 @@ mod tests {
             )];
 
             // Break with nested values
-            _break_instr = [break_(0)(
+            _break_instr = [break_(_func_call)(
                 [constant(I32, 0)],
                 [add([constant(I32, 1)], [constant(I32, 2)])]
             )];
 
             // Conditional break with nested condition
-            _cond_break = [break_if(1)(
+            _cond_break = [break_if(_func_call)(
                 [add([constant(I32, 5)], [constant(I32, 3)])],
                 [constant(I32, 42)]
             )];
@@ -343,12 +346,12 @@ mod tests {
                 /*36*/ Const { r#type: I32, value: 1 },
                 /*37*/ Const { r#type: I32, value: 2 },
                 /*38*/ BinaryOp { op: Add, lhs: InsnPc(36), rhs: InsnPc(37) },
-                /*39*/ Break { depth: 0, values: Box::new([InsnPc(35), InsnPc(38)]) },
+                /*39*/ Break { target: InsnPc(34), values: Box::new([InsnPc(35), InsnPc(38)]) },
                 /*40*/ Const { r#type: I32, value: 5 },
                 /*41*/ Const { r#type: I32, value: 3 },
                 /*42*/ BinaryOp { op: Add, lhs: InsnPc(40), rhs: InsnPc(41) },
                 /*43*/ Const { r#type: I32, value: 42 },
-                /*44*/ ConditionalBreak { condition: InsnPc(42), depth: 1, values: Box::new([InsnPc(43)]) },
+                /*44*/ ConditionalBreak { condition: InsnPc(42), target: InsnPc(34), values: Box::new([InsnPc(43)]) },
                 /*45*/ Const { r#type: I32, value: 1 },
                 /*46*/ Const { r#type: I32, value: 1 },
                 /*47*/ BinaryOp { op: Add, lhs: InsnPc(45), rhs: InsnPc(46) },
@@ -393,7 +396,7 @@ mod tests {
                 inner = [block {
                     d = [constant(I32, 40)];
                 }];
-                _0 = [break_(0)(inner)];
+                _0 = [break_(outer)(inner)];
             }];
             e = [add(outer, [constant(I32, 30)])];
         };
@@ -408,7 +411,7 @@ mod tests {
                 /*3*/ BinaryOp { op: Add, lhs: InsnPc(1), rhs: InsnPc(2) },
                 /*4*/ Block { body_len: 1 },
                 /*5*/ Const { r#type: I32, value: 40 },
-                /*6*/ Break { depth: 0, values: Box::new([InsnPc(4)]) },
+                /*6*/ Break { target: InsnPc(0), values: Box::new([InsnPc(4)]) },
                 /*7*/ Const { r#type: I32, value: 30 },
                 /*8*/ BinaryOp { op: Add, lhs: InsnPc(0), rhs: InsnPc(7) }
             ]
@@ -423,11 +426,11 @@ mod tests {
                 a = [constant(I32, 20)];
                 b = [add(a, a)];
                 c = [add(b, b)];
-                _0 = [break_(0)(c)];
+                _0 = [break_(if_else)(c)];
             } {
                 d = [constant(I32, 30)];
                 e = [add(d, d)];
-                _0 = [break_(0)(e)];
+                _0 = [break_(if_else)(e)];
             }];
             f = [add(if_else, [constant(I32, 40)])];
         };
@@ -441,10 +444,10 @@ mod tests {
                 /*2*/ Const { r#type: I32, value: 20 },
                 /*3*/ BinaryOp { op: Add, lhs: InsnPc(2), rhs: InsnPc(2) },
                 /*4*/ BinaryOp { op: Add, lhs: InsnPc(3), rhs: InsnPc(3) },
-                /*5*/ Break { depth: 0, values: Box::new([InsnPc(4)]) },
+                /*5*/ Break { target: InsnPc(1), values: Box::new([InsnPc(4)]) },
                 /*6*/ Const { r#type: I32, value: 30 },
                 /*7*/ BinaryOp { op: Add, lhs: InsnPc(6), rhs: InsnPc(6) },
-                /*8*/ Break { depth: 0, values: Box::new([InsnPc(7)]) },
+                /*8*/ Break { target: InsnPc(1), values: Box::new([InsnPc(7)]) },
                 /*9*/ Const { r#type: I32, value: 40 },
                 /*10*/ BinaryOp { op: Add, lhs: InsnPc(1), rhs: InsnPc(9) }
             ]
