@@ -1,4 +1,14 @@
-use crate::lir;
+use std::ops::Range;
+
+use typed_index_collections::TiVec;
+use walrus::ir as wir;
+
+use crate::{
+    lir,
+    wasm::stackify_lir::{Stackification, stackify_lir},
+};
+
+mod stackify_lir;
 
 pub fn lir_to_wasm(lir: &lir::Program) -> walrus::Module {
     let config = walrus::ModuleConfig::default();
@@ -11,18 +21,9 @@ pub fn lir_to_wasm(lir: &lir::Program) -> walrus::Module {
 }
 
 pub fn add_function(module: &mut walrus::Module, lir: &lir::Function) {
-    let parameter_types: Vec<_> = lir
-        .parameter_types
-        .iter()
-        .copied()
-        .map(translate_val_type)
-        .collect();
-    let return_types: Vec<_> = lir
-        .return_types
-        .iter()
-        .copied()
-        .map(translate_val_type)
-        .collect();
+    let parameter_types: Vec<_> =
+        lir.parameter_types.iter().copied().map(translate_val_type).collect();
+    let return_types: Vec<_> = lir.return_types.iter().copied().map(translate_val_type).collect();
     let mut function =
         walrus::FunctionBuilder::new(&mut module.types, &parameter_types, &return_types);
 }

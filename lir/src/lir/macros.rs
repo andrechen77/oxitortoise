@@ -216,14 +216,13 @@ macro_rules! instructions {
 
 #[cfg(test)]
 mod tests {
+    use BinaryOpcode::*;
+    use InsnKind::*;
+    use ValType::*;
     use typed_index_collections::ti_vec;
 
     use super::super::*;
     use super::*;
-
-    use BinaryOpcode::*;
-    use InsnKind::*;
-    use ValType::*;
 
     #[test]
     fn test_macro() {

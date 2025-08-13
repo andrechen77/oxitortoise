@@ -1,23 +1,20 @@
 use std::collections::BTreeMap;
 
-use crate::stackify::{InsnTreeInfo, OutputMode, Stackification};
-
 pub use crate::stackification;
+use crate::stackify::{InsnTreeInfo, OutputMode, Stackification};
 
 #[macro_export]
 macro_rules! stackification_line {
     ($stackification:expr; $pc_ty:ty; [($pc:expr) =| $released_to:expr]) => {
-        $stackification.forest[<$pc_ty>::from($pc)].output_mode = OutputMode::Release {
-            parent: <$pc_ty>::from($released_to),
-        };
+        $stackification.forest[<$pc_ty>::from($pc)].output_mode =
+            OutputMode::Release { parent: <$pc_ty>::from($released_to) };
         $stackification.forest[<$pc_ty>::from($released_to)].subtree_start =
             ($stackification.forest[<$pc_ty>::from($pc)].subtree_start)
                 .min($stackification.forest[<$pc_ty>::from($released_to)].subtree_start);
     };
     ($stackification:expr; $pc_ty:ty; [($pc:expr) =* $captured_by:expr]) => {
-        $stackification.forest[<$pc_ty>::from($pc)].output_mode = OutputMode::Capture {
-            parent: <$pc_ty>::from($captured_by),
-        };
+        $stackification.forest[<$pc_ty>::from($pc)].output_mode =
+            OutputMode::Capture { parent: <$pc_ty>::from($captured_by) };
     };
     ($stackification:expr; $pc_ty:ty; [($pc:expr) ==]) => {
         $stackification.forest[<$pc_ty>::from($pc)].output_mode = OutputMode::Available;
@@ -73,34 +70,13 @@ mod tests {
             [(4usize) ==]
         };
 
-        assert_eq!(
-            stackification.forest,
-            vec![
-                InsnTreeInfo {
-                    output_mode: OutputMode::Release { parent: 2 },
-                    subtree_start: 0,
-                },
-                InsnTreeInfo {
-                    output_mode: OutputMode::Release { parent: 2 },
-                    subtree_start: 1,
-                },
-                InsnTreeInfo {
-                    output_mode: OutputMode::Release { parent: 4 },
-                    subtree_start: 0,
-                },
-                InsnTreeInfo {
-                    output_mode: OutputMode::Capture { parent: 4 },
-                    subtree_start: 3,
-                },
-                InsnTreeInfo {
-                    output_mode: OutputMode::Available,
-                    subtree_start: 0,
-                },
-            ]
-        );
-        assert_eq!(
-            stackification.getters,
-            BTreeMap::from([(4, vec![1].into())])
-        );
+        assert_eq!(stackification.forest, vec![
+            InsnTreeInfo { output_mode: OutputMode::Release { parent: 2 }, subtree_start: 0 },
+            InsnTreeInfo { output_mode: OutputMode::Release { parent: 2 }, subtree_start: 1 },
+            InsnTreeInfo { output_mode: OutputMode::Release { parent: 4 }, subtree_start: 0 },
+            InsnTreeInfo { output_mode: OutputMode::Capture { parent: 4 }, subtree_start: 3 },
+            InsnTreeInfo { output_mode: OutputMode::Available, subtree_start: 0 },
+        ]);
+        assert_eq!(stackification.getters, BTreeMap::from([(4, vec![1].into())]));
     }
 }

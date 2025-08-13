@@ -49,7 +49,7 @@ use std::ops::{Add, AddAssign, Range};
 
 use derive_more::{From, Into};
 use smallvec::{SmallVec, ToSmallVec as _, smallvec};
-use typed_index_collections::{TiSlice, TiVec};
+use typed_index_collections::{TiSlice, TiVec, ti_vec};
 
 #[macro_use]
 mod macros;
@@ -113,7 +113,7 @@ pub enum InsnKind {
     Const {
         r#type: ValType,
         /// The bit pattern of the value to store.
-        value: i64,
+        value: u64,
     },
     /// Given the output of an instruction that takes multiple values, project
     /// a single value.
@@ -255,16 +255,11 @@ impl InsnKind {
                 let body_end = body_start + *body_len;
                 (smallvec![body_start..body_end], body_end)
             }
-            InsnKind::IfElse {
-                then_len, else_len, ..
-            } => {
+            InsnKind::IfElse { then_len, else_len, .. } => {
                 let then_start = my_pc + 1;
                 let then_end = then_start + *then_len;
                 let else_end = then_end + *else_len;
-                (
-                    smallvec![then_start..then_end, then_end..else_end],
-                    else_end,
-                )
+                (smallvec![then_start..then_end, then_end..else_end], else_end)
             }
             _ => (smallvec![], my_pc + 1),
         }
@@ -286,9 +281,7 @@ impl InsnKind {
             InsnKind::UnaryOp { operand, .. } => smallvec![*operand],
             InsnKind::BinaryOp { lhs, rhs, .. } => smallvec![*lhs, *rhs],
             InsnKind::Break { values, .. } => values.to_smallvec(),
-            InsnKind::ConditionalBreak {
-                condition, values, ..
-            } => {
+            InsnKind::ConditionalBreak { condition, values, .. } => {
                 let mut inputs = values.to_smallvec();
                 inputs.push(*condition);
                 inputs
@@ -311,19 +304,13 @@ impl<'a> InsnRefIter<'a> {
     // Take an iterator to the entire vector instead of just a slice, to enforce
     // that we have all the instructions.
     pub fn new_with_range(instructions: &'a TiVec<InsnPc, InsnKind>, range: Range<InsnPc>) -> Self {
-        Self {
-            remaining: range,
-            instructions,
-        }
+        Self { remaining: range, instructions }
     }
 
     // Take an iterator to the entire vector instead of just a slice, to enforce
     // that we have all the instructions.
     pub fn new(instructions: &'a TiVec<InsnPc, InsnKind>) -> Self {
-        Self::new_with_range(
-            instructions,
-            InsnPc::from(0)..InsnPc::from(instructions.len()),
-        )
+        Self::new_with_range(instructions, InsnPc::from(0)..InsnPc::from(instructions.len()))
     }
 }
 
@@ -342,4 +329,14 @@ impl<'a> Iterator for InsnRefIter<'a> {
         self.remaining.start = succ;
         Some((inner_seqs, next_pc))
     }
+}
+
+pub fn count_uses(instructions: &TiVec<InsnPc, InsnKind>) -> TiVec<InsnPc, usize> {
+    let mut uses = ti_vec![0; instructions.len()];
+    for (pc, insn) in instructions.iter_enumerated() {
+        for input in insn.inputs() {
+            uses[input] += 1;
+        }
+    }
+    uses
 }

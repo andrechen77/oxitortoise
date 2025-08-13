@@ -11,7 +11,7 @@ use crate::{
     stackify::{self, InsnTreeInfo, OutputMode},
 };
 
-type Stackification = stackify::Stackification<InsnPc, TiVec<InsnPc, InsnTreeInfo<InsnPc>>>;
+pub type Stackification = stackify::Stackification<InsnPc, TiVec<InsnPc, InsnTreeInfo<InsnPc>>>;
 
 struct InsnsWithCmpdInputs<'a> {
     insns: &'a TiVec<InsnPc, InsnKind>,
@@ -45,33 +45,24 @@ impl<'a> stackify::InsnUniverse for InsnsWithCmpdInputs<'a> {
             InsnKind::UnaryOp { operand, .. } => smallvec![*operand],
             InsnKind::BinaryOp { lhs, rhs, .. } => smallvec![*lhs, *rhs],
             InsnKind::Break { values, .. } => values.to_smallvec(),
-            InsnKind::ConditionalBreak {
-                condition, values, ..
-            } => {
+            InsnKind::ConditionalBreak { condition, values, .. } => {
                 let mut inputs: SmallVec<[InsnPc; 2]> = values.to_smallvec();
                 inputs.push(*condition);
                 inputs
             }
-            InsnKind::Block { .. } => self
-                .cmpd_inputs
-                .get(&insn)
-                .map(|v| v.to_smallvec())
-                .unwrap_or_default(),
+            InsnKind::Block { .. } => {
+                self.cmpd_inputs.get(&insn).map(|v| v.to_smallvec()).unwrap_or_default()
+            }
             InsnKind::IfElse { condition, .. } => {
-                let mut inputs = self
-                    .cmpd_inputs
-                    .get(&insn)
-                    .map(|v| v.to_smallvec())
-                    .unwrap_or_default();
+                let mut inputs =
+                    self.cmpd_inputs.get(&insn).map(|v| v.to_smallvec()).unwrap_or_default();
                 inputs.push(*condition);
                 println!("inputs of block are {:?}", inputs);
                 inputs
             }
-            InsnKind::Loop { .. } => self
-                .cmpd_inputs
-                .get(&insn)
-                .map(|v| v.to_smallvec())
-                .unwrap_or_default(),
+            InsnKind::Loop { .. } => {
+                self.cmpd_inputs.get(&insn).map(|v| v.to_smallvec()).unwrap_or_default()
+            }
             InsnKind::LoopArgument { initial_value: _ } => smallvec![],
         }
         .into_iter()
@@ -157,10 +148,7 @@ pub fn stackify_lir(insns: &TiVec<InsnPc, InsnKind>) -> Stackification {
                     // there is only one inner sequences, so we can "factor out"
                     // all parameters and use them as inputs to the compound
                     // instruction
-                    let params = stackification
-                        .getters
-                        .remove(&seq.start)
-                        .unwrap_or_default();
+                    let params = stackification.getters.remove(&seq.start).unwrap_or_default();
                     cmpd_inputs.entry(pc).or_default().extend(params);
                 }
                 [a, b] => 'factoring: {
@@ -239,7 +227,6 @@ mod tests {
     use typed_index_collections::ti_vec;
 
     use super::*;
-
     use crate::{
         lir::{BinaryOpcode, InsnKind::*, ValType, instructions},
         stackification,
@@ -255,18 +242,15 @@ mod tests {
         }
 
         let stackification = stackify_lir(&insns);
-        assert_eq!(
-            stackification,
-            stackification! {
-                Stackification;
-                InsnPc;
-                count 3;
+        assert_eq!(stackification, stackification! {
+            Stackification;
+            InsnPc;
+            count 3;
 
-                [(a) =| c]
-                [(b) =| c]
-                [(c) ==]
-            }
-        );
+            [(a) =| c]
+            [(b) =| c]
+            [(c) ==]
+        });
     }
 
     #[test]
@@ -290,25 +274,22 @@ mod tests {
 
         let stackification = stackify_lir(&insns);
 
-        assert_eq!(
-            stackification,
-            stackification! {
-                Stackification;
-                InsnPc;
-                count 9;
+        assert_eq!(stackification, stackification! {
+            Stackification;
+            InsnPc;
+            count 9;
 
-                [(a) =| outer]
-                [(b) =| outer]
-                [(outer) =| break_0]
-                [(c) =| inner]
-                [(inner) <~ a]
-                [(inner) =| break_1]
-                [(d) =| break_2]
-                [(break_2) ==]
-                [(break_1) ==]
-                [(break_0) ==]
-            }
-        )
+            [(a) =| outer]
+            [(b) =| outer]
+            [(outer) =| break_0]
+            [(c) =| inner]
+            [(inner) <~ a]
+            [(inner) =| break_1]
+            [(d) =| break_2]
+            [(break_2) ==]
+            [(break_1) ==]
+            [(break_0) ==]
+        })
     }
 
     #[test]
@@ -330,25 +311,22 @@ mod tests {
 
         let stackification = stackify_lir(&insns);
 
-        assert_eq!(
-            stackification,
-            stackification! {
-                Stackification;
-                InsnPc;
-                count 9;
+        assert_eq!(stackification, stackification! {
+            Stackification;
+            InsnPc;
+            count 9;
 
-                [(arg) ==]
-                [(a) =| branch]
-                [(b) =| branch]
-                [(branch) <~ arg]
-                [(branch) =| break_2]
-                [(d_0) =| break_0]
-                [(break_0) ==]
-                [(d_1) =| break_1]
-                [(break_1) ==]
-                [(break_2) ==]
+            [(arg) ==]
+            [(a) =| branch]
+            [(b) =| branch]
+            [(branch) <~ arg]
+            [(branch) =| break_2]
+            [(d_0) =| break_0]
+            [(break_0) ==]
+            [(d_1) =| break_1]
+            [(break_1) ==]
+            [(break_2) ==]
 
-            }
-        )
+        })
     }
 }

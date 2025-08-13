@@ -196,9 +196,8 @@ pub fn stackify_sequential<T: InsnUniverse, M: IndexMut<T::Pc, Output = InsnTree
                         }
                     }
                 }
-                stackification.forest[input_insn].output_mode = OutputMode::Release {
-                    parent: current_insn,
-                };
+                stackification.forest[input_insn].output_mode =
+                    OutputMode::Release { parent: current_insn };
             } else {
                 // the input cannot be released. insert a getter for it
                 match &mut subtree_span {
@@ -234,9 +233,8 @@ pub fn stackify_sequential<T: InsnUniverse, M: IndexMut<T::Pc, Output = InsnTree
             // still undetermined
             for to_be_locked in insns.instructions_in_range(first_released..current_insn) {
                 if stackification.forest[to_be_locked].output_mode == OutputMode::Available {
-                    stackification.forest[to_be_locked].output_mode = OutputMode::Capture {
-                        parent: current_insn,
-                    };
+                    stackification.forest[to_be_locked].output_mode =
+                        OutputMode::Capture { parent: current_insn };
                 }
             }
         }
@@ -248,11 +246,7 @@ pub fn stackify_sequential<T: InsnUniverse, M: IndexMut<T::Pc, Output = InsnTree
         // following them, which binds more tightly than the current
         // instruction.
         for (insertion_pc, value) in current_getters.into_iter().rev() {
-            stackification
-                .getters
-                .entry(insertion_pc)
-                .or_default()
-                .push_front(value);
+            stackification.getters.entry(insertion_pc).or_default().push_front(value);
         }
     }
     debug_assert!(verify_stackification(insns, seq, &stackification).is_ok());
@@ -329,10 +323,7 @@ mod tests {
     ) -> Stackification<usize, Vec<InsnTreeInfo<usize>>> {
         Stackification {
             forest: (0..insns.len())
-                .map(|i| InsnTreeInfo {
-                    output_mode: OutputMode::Available,
-                    subtree_start: i,
-                })
+                .map(|i| InsnTreeInfo { output_mode: OutputMode::Available, subtree_start: i })
                 .collect(),
             getters: BTreeMap::new(),
         }
@@ -374,27 +365,12 @@ mod tests {
         ];
         let mut stackification = create_stackification(&block);
         stackify_sequential(&block, 0..block.len(), &mut stackification);
-        assert_eq!(
-            stackification.forest,
-            [
-                InsnTreeInfo {
-                    output_mode: OutputMode::Available,
-                    subtree_start: 0,
-                },
-                InsnTreeInfo {
-                    output_mode: OutputMode::Available,
-                    subtree_start: 1,
-                },
-                InsnTreeInfo {
-                    output_mode: OutputMode::Available,
-                    subtree_start: 2,
-                },
-                InsnTreeInfo {
-                    output_mode: OutputMode::Available,
-                    subtree_start: 3,
-                },
-            ]
-        );
+        assert_eq!(stackification.forest, [
+            InsnTreeInfo { output_mode: OutputMode::Available, subtree_start: 0 },
+            InsnTreeInfo { output_mode: OutputMode::Available, subtree_start: 1 },
+            InsnTreeInfo { output_mode: OutputMode::Available, subtree_start: 2 },
+            InsnTreeInfo { output_mode: OutputMode::Available, subtree_start: 3 },
+        ]);
         assert_eq!(stackification.getters, BTreeMap::new());
     }
 
@@ -409,31 +385,13 @@ mod tests {
         ];
         let mut stackification = create_stackification(&block);
         stackify_sequential(&block, 0..block.len(), &mut stackification);
-        assert_eq!(
-            stackification.forest,
-            [
-                InsnTreeInfo {
-                    output_mode: OutputMode::Release { parent: 4 },
-                    subtree_start: 0,
-                },
-                InsnTreeInfo {
-                    output_mode: OutputMode::Release { parent: 4 },
-                    subtree_start: 1,
-                },
-                InsnTreeInfo {
-                    output_mode: OutputMode::Release { parent: 4 },
-                    subtree_start: 2,
-                },
-                InsnTreeInfo {
-                    output_mode: OutputMode::Release { parent: 4 },
-                    subtree_start: 3,
-                },
-                InsnTreeInfo {
-                    output_mode: OutputMode::Available,
-                    subtree_start: 0,
-                },
-            ]
-        );
+        assert_eq!(stackification.forest, [
+            InsnTreeInfo { output_mode: OutputMode::Release { parent: 4 }, subtree_start: 0 },
+            InsnTreeInfo { output_mode: OutputMode::Release { parent: 4 }, subtree_start: 1 },
+            InsnTreeInfo { output_mode: OutputMode::Release { parent: 4 }, subtree_start: 2 },
+            InsnTreeInfo { output_mode: OutputMode::Release { parent: 4 }, subtree_start: 3 },
+            InsnTreeInfo { output_mode: OutputMode::Available, subtree_start: 0 },
+        ]);
         assert_eq!(stackification.getters, BTreeMap::new());
     }
 
@@ -448,31 +406,13 @@ mod tests {
         ];
         let mut stackification = create_stackification(&block);
         stackify_sequential(&block, 0..block.len(), &mut stackification);
-        assert_eq!(
-            stackification.forest,
-            [
-                InsnTreeInfo {
-                    output_mode: OutputMode::Available,
-                    subtree_start: 0,
-                },
-                InsnTreeInfo {
-                    output_mode: OutputMode::Release { parent: 4 },
-                    subtree_start: 1,
-                },
-                InsnTreeInfo {
-                    output_mode: OutputMode::Capture { parent: 4 },
-                    subtree_start: 2,
-                },
-                InsnTreeInfo {
-                    output_mode: OutputMode::Release { parent: 4 },
-                    subtree_start: 3,
-                },
-                InsnTreeInfo {
-                    output_mode: OutputMode::Available,
-                    subtree_start: 1,
-                },
-            ]
-        );
+        assert_eq!(stackification.forest, [
+            InsnTreeInfo { output_mode: OutputMode::Available, subtree_start: 0 },
+            InsnTreeInfo { output_mode: OutputMode::Release { parent: 4 }, subtree_start: 1 },
+            InsnTreeInfo { output_mode: OutputMode::Capture { parent: 4 }, subtree_start: 2 },
+            InsnTreeInfo { output_mode: OutputMode::Release { parent: 4 }, subtree_start: 3 },
+            InsnTreeInfo { output_mode: OutputMode::Available, subtree_start: 1 },
+        ]);
         assert_eq!(stackification.getters, BTreeMap::new());
     }
 
@@ -487,35 +427,14 @@ mod tests {
         ];
         let mut stackification = create_stackification(&block);
         stackify_sequential(&block, 0..block.len(), &mut stackification);
-        assert_eq!(
-            stackification.forest,
-            [
-                InsnTreeInfo {
-                    output_mode: OutputMode::Available,
-                    subtree_start: 0,
-                },
-                InsnTreeInfo {
-                    output_mode: OutputMode::Release { parent: 4 },
-                    subtree_start: 1,
-                },
-                InsnTreeInfo {
-                    output_mode: OutputMode::Capture { parent: 4 },
-                    subtree_start: 2,
-                },
-                InsnTreeInfo {
-                    output_mode: OutputMode::Release { parent: 4 },
-                    subtree_start: 3,
-                },
-                InsnTreeInfo {
-                    output_mode: OutputMode::Available,
-                    subtree_start: 1,
-                },
-            ]
-        );
-        assert_eq!(
-            stackification.getters,
-            BTreeMap::from([(4, VecDeque::from([2, 0]))]),
-        );
+        assert_eq!(stackification.forest, [
+            InsnTreeInfo { output_mode: OutputMode::Available, subtree_start: 0 },
+            InsnTreeInfo { output_mode: OutputMode::Release { parent: 4 }, subtree_start: 1 },
+            InsnTreeInfo { output_mode: OutputMode::Capture { parent: 4 }, subtree_start: 2 },
+            InsnTreeInfo { output_mode: OutputMode::Release { parent: 4 }, subtree_start: 3 },
+            InsnTreeInfo { output_mode: OutputMode::Available, subtree_start: 1 },
+        ]);
+        assert_eq!(stackification.getters, BTreeMap::from([(4, VecDeque::from([2, 0]))]),);
     }
 
     #[test]
@@ -527,27 +446,12 @@ mod tests {
         ];
         let mut stackification = create_stackification(&block);
         stackify_sequential(&block, 0..block.len(), &mut stackification);
-        assert_eq!(
-            stackification.forest,
-            [
-                InsnTreeInfo {
-                    output_mode: OutputMode::Release { parent: 2 },
-                    subtree_start: 0,
-                },
-                InsnTreeInfo {
-                    output_mode: OutputMode::Release { parent: 2 },
-                    subtree_start: 1,
-                },
-                InsnTreeInfo {
-                    output_mode: OutputMode::Available,
-                    subtree_start: 0,
-                },
-            ]
-        );
-        assert_eq!(
-            stackification.getters,
-            BTreeMap::from([(1, VecDeque::from([0]))])
-        );
+        assert_eq!(stackification.forest, [
+            InsnTreeInfo { output_mode: OutputMode::Release { parent: 2 }, subtree_start: 0 },
+            InsnTreeInfo { output_mode: OutputMode::Release { parent: 2 }, subtree_start: 1 },
+            InsnTreeInfo { output_mode: OutputMode::Available, subtree_start: 0 },
+        ]);
+        assert_eq!(stackification.getters, BTreeMap::from([(1, VecDeque::from([0]))]));
     }
 
     #[test]
@@ -561,35 +465,14 @@ mod tests {
         ];
         let mut stackification = create_stackification(&block);
         stackify_sequential(&block, 0..block.len(), &mut stackification);
-        assert_eq!(
-            stackification.forest,
-            [
-                InsnTreeInfo {
-                    output_mode: OutputMode::Release { parent: 2 },
-                    subtree_start: 0,
-                },
-                InsnTreeInfo {
-                    output_mode: OutputMode::Release { parent: 2 },
-                    subtree_start: 1,
-                },
-                InsnTreeInfo {
-                    output_mode: OutputMode::Available,
-                    subtree_start: 0,
-                },
-                InsnTreeInfo {
-                    output_mode: OutputMode::Release { parent: 4 },
-                    subtree_start: 3,
-                },
-                InsnTreeInfo {
-                    output_mode: OutputMode::Available,
-                    subtree_start: 3,
-                },
-            ]
-        );
-        assert_eq!(
-            stackification.getters,
-            BTreeMap::from([(3, VecDeque::from([1, 0]))])
-        );
+        assert_eq!(stackification.forest, [
+            InsnTreeInfo { output_mode: OutputMode::Release { parent: 2 }, subtree_start: 0 },
+            InsnTreeInfo { output_mode: OutputMode::Release { parent: 2 }, subtree_start: 1 },
+            InsnTreeInfo { output_mode: OutputMode::Available, subtree_start: 0 },
+            InsnTreeInfo { output_mode: OutputMode::Release { parent: 4 }, subtree_start: 3 },
+            InsnTreeInfo { output_mode: OutputMode::Available, subtree_start: 3 },
+        ]);
+        assert_eq!(stackification.getters, BTreeMap::from([(3, VecDeque::from([1, 0]))]));
     }
 
     #[test]
@@ -602,31 +485,13 @@ mod tests {
         ];
         let mut stackification = create_stackification(&block);
         stackify_sequential(&block, 0..block.len(), &mut stackification);
-        assert_eq!(
-            stackification.forest,
-            [
-                InsnTreeInfo {
-                    output_mode: OutputMode::Release { parent: 1 },
-                    subtree_start: 0,
-                },
-                InsnTreeInfo {
-                    output_mode: OutputMode::Available,
-                    subtree_start: 0,
-                },
-                InsnTreeInfo {
-                    output_mode: OutputMode::Release { parent: 3 },
-                    subtree_start: 2,
-                },
-                InsnTreeInfo {
-                    output_mode: OutputMode::Available,
-                    subtree_start: 2,
-                },
-            ]
-        );
-        assert_eq!(
-            stackification.getters,
-            BTreeMap::from([(2, VecDeque::from([0, 1, 1, 0, 1]))])
-        );
+        assert_eq!(stackification.forest, [
+            InsnTreeInfo { output_mode: OutputMode::Release { parent: 1 }, subtree_start: 0 },
+            InsnTreeInfo { output_mode: OutputMode::Available, subtree_start: 0 },
+            InsnTreeInfo { output_mode: OutputMode::Release { parent: 3 }, subtree_start: 2 },
+            InsnTreeInfo { output_mode: OutputMode::Available, subtree_start: 2 },
+        ]);
+        assert_eq!(stackification.getters, BTreeMap::from([(2, VecDeque::from([0, 1, 1, 0, 1]))]));
     }
 
     #[test]
@@ -643,43 +508,16 @@ mod tests {
         ];
         let mut stackification = create_stackification(&block);
         stackify_sequential(&block, 0..block.len(), &mut stackification);
-        assert_eq!(
-            stackification.forest,
-            [
-                InsnTreeInfo {
-                    output_mode: OutputMode::Release { parent: 2 },
-                    subtree_start: 0,
-                },
-                InsnTreeInfo {
-                    output_mode: OutputMode::Release { parent: 2 },
-                    subtree_start: 1,
-                },
-                InsnTreeInfo {
-                    output_mode: OutputMode::Release { parent: 6 },
-                    subtree_start: 0,
-                },
-                InsnTreeInfo {
-                    output_mode: OutputMode::Capture { parent: 6 },
-                    subtree_start: 3,
-                },
-                InsnTreeInfo {
-                    output_mode: OutputMode::Release { parent: 5 },
-                    subtree_start: 4,
-                },
-                InsnTreeInfo {
-                    output_mode: OutputMode::Release { parent: 6 },
-                    subtree_start: 4,
-                },
-                InsnTreeInfo {
-                    output_mode: OutputMode::Available,
-                    subtree_start: 0,
-                },
-                InsnTreeInfo {
-                    output_mode: OutputMode::Available,
-                    subtree_start: 7,
-                },
-            ]
-        );
+        assert_eq!(stackification.forest, [
+            InsnTreeInfo { output_mode: OutputMode::Release { parent: 2 }, subtree_start: 0 },
+            InsnTreeInfo { output_mode: OutputMode::Release { parent: 2 }, subtree_start: 1 },
+            InsnTreeInfo { output_mode: OutputMode::Release { parent: 6 }, subtree_start: 0 },
+            InsnTreeInfo { output_mode: OutputMode::Capture { parent: 6 }, subtree_start: 3 },
+            InsnTreeInfo { output_mode: OutputMode::Release { parent: 5 }, subtree_start: 4 },
+            InsnTreeInfo { output_mode: OutputMode::Release { parent: 6 }, subtree_start: 4 },
+            InsnTreeInfo { output_mode: OutputMode::Available, subtree_start: 0 },
+            InsnTreeInfo { output_mode: OutputMode::Available, subtree_start: 7 },
+        ]);
         assert_eq!(
             stackification.getters,
             BTreeMap::from([(3, VecDeque::from([1])), (7, VecDeque::from([0, 6]))])
@@ -705,23 +543,11 @@ mod tests {
         ];
         let mut stackification = create_stackification(&block);
         stackify_sequential(&block, 10..block.len(), &mut stackification);
-        assert_eq!(
-            stackification.forest[10..],
-            [
-                InsnTreeInfo {
-                    output_mode: OutputMode::Release { parent: 11 },
-                    subtree_start: 10,
-                },
-                InsnTreeInfo {
-                    output_mode: OutputMode::Release { parent: 12 },
-                    subtree_start: 10,
-                },
-                InsnTreeInfo {
-                    output_mode: OutputMode::Available,
-                    subtree_start: 10,
-                },
-            ]
-        );
+        assert_eq!(stackification.forest[10..], [
+            InsnTreeInfo { output_mode: OutputMode::Release { parent: 11 }, subtree_start: 10 },
+            InsnTreeInfo { output_mode: OutputMode::Release { parent: 12 }, subtree_start: 10 },
+            InsnTreeInfo { output_mode: OutputMode::Available, subtree_start: 10 },
+        ]);
         assert_eq!(
             stackification.getters,
             BTreeMap::from([(10, VecDeque::from([9])), (12, VecDeque::from([10]))])
@@ -749,35 +575,14 @@ mod tests {
         ];
         let mut stackification = create_stackification(&block);
         stackify_sequential(&block, 10..block.len(), &mut stackification);
-        assert_eq!(
-            stackification.forest[10..],
-            [
-                InsnTreeInfo {
-                    output_mode: OutputMode::Release { parent: 12 },
-                    subtree_start: 10,
-                },
-                InsnTreeInfo {
-                    output_mode: OutputMode::Release { parent: 12 },
-                    subtree_start: 11,
-                },
-                InsnTreeInfo {
-                    output_mode: OutputMode::Release { parent: 14 },
-                    subtree_start: 10,
-                },
-                InsnTreeInfo {
-                    output_mode: OutputMode::Release { parent: 14 },
-                    subtree_start: 13,
-                },
-                InsnTreeInfo {
-                    output_mode: OutputMode::Available,
-                    subtree_start: 10,
-                },
-            ]
-        );
-        assert_eq!(
-            stackification.getters,
-            BTreeMap::from([(13, VecDeque::from([11, 10]))])
-        );
+        assert_eq!(stackification.forest[10..], [
+            InsnTreeInfo { output_mode: OutputMode::Release { parent: 12 }, subtree_start: 10 },
+            InsnTreeInfo { output_mode: OutputMode::Release { parent: 12 }, subtree_start: 11 },
+            InsnTreeInfo { output_mode: OutputMode::Release { parent: 14 }, subtree_start: 10 },
+            InsnTreeInfo { output_mode: OutputMode::Release { parent: 14 }, subtree_start: 13 },
+            InsnTreeInfo { output_mode: OutputMode::Available, subtree_start: 10 },
+        ]);
+        assert_eq!(stackification.getters, BTreeMap::from([(13, VecDeque::from([11, 10]))]));
     }
 
     #[test]
@@ -793,39 +598,15 @@ mod tests {
 
         let mut stackification = create_stackification(&block);
         stackify_sequential(&block, 0..block.len(), &mut stackification);
-        assert_eq!(
-            stackification.forest,
-            [
-                InsnTreeInfo {
-                    output_mode: OutputMode::Release { parent: 5 },
-                    subtree_start: 0,
-                },
-                InsnTreeInfo {
-                    output_mode: OutputMode::Release { parent: 3 },
-                    subtree_start: 1,
-                },
-                InsnTreeInfo {
-                    output_mode: OutputMode::Release { parent: 3 },
-                    subtree_start: 2,
-                },
-                InsnTreeInfo {
-                    output_mode: OutputMode::Release { parent: 4 },
-                    subtree_start: 1,
-                },
-                InsnTreeInfo {
-                    output_mode: OutputMode::Capture { parent: 5 },
-                    subtree_start: 1,
-                },
-                InsnTreeInfo {
-                    output_mode: OutputMode::Available,
-                    subtree_start: 0,
-                },
-            ]
-        );
-        assert_eq!(
-            stackification.getters,
-            BTreeMap::from([(5, VecDeque::from([3]))])
-        );
+        assert_eq!(stackification.forest, [
+            InsnTreeInfo { output_mode: OutputMode::Release { parent: 5 }, subtree_start: 0 },
+            InsnTreeInfo { output_mode: OutputMode::Release { parent: 3 }, subtree_start: 1 },
+            InsnTreeInfo { output_mode: OutputMode::Release { parent: 3 }, subtree_start: 2 },
+            InsnTreeInfo { output_mode: OutputMode::Release { parent: 4 }, subtree_start: 1 },
+            InsnTreeInfo { output_mode: OutputMode::Capture { parent: 5 }, subtree_start: 1 },
+            InsnTreeInfo { output_mode: OutputMode::Available, subtree_start: 0 },
+        ]);
+        assert_eq!(stackification.getters, BTreeMap::from([(5, VecDeque::from([3]))]));
     }
 
     #[test]
@@ -841,38 +622,14 @@ mod tests {
 
         let mut stackification = create_stackification(&block);
         stackify_sequential(&block, 0..block.len(), &mut stackification);
-        assert_eq!(
-            stackification.forest,
-            [
-                InsnTreeInfo {
-                    output_mode: OutputMode::Available,
-                    subtree_start: 0,
-                },
-                InsnTreeInfo {
-                    output_mode: OutputMode::Release { parent: 3 },
-                    subtree_start: 1,
-                },
-                InsnTreeInfo {
-                    output_mode: OutputMode::Release { parent: 3 },
-                    subtree_start: 2,
-                },
-                InsnTreeInfo {
-                    output_mode: OutputMode::Release { parent: 4 },
-                    subtree_start: 1,
-                },
-                InsnTreeInfo {
-                    output_mode: OutputMode::Available,
-                    subtree_start: 1,
-                },
-                InsnTreeInfo {
-                    output_mode: OutputMode::Available,
-                    subtree_start: 5,
-                },
-            ]
-        );
-        assert_eq!(
-            stackification.getters,
-            BTreeMap::from([(5, VecDeque::from([3, 0]))])
-        );
+        assert_eq!(stackification.forest, [
+            InsnTreeInfo { output_mode: OutputMode::Available, subtree_start: 0 },
+            InsnTreeInfo { output_mode: OutputMode::Release { parent: 3 }, subtree_start: 1 },
+            InsnTreeInfo { output_mode: OutputMode::Release { parent: 3 }, subtree_start: 2 },
+            InsnTreeInfo { output_mode: OutputMode::Release { parent: 4 }, subtree_start: 1 },
+            InsnTreeInfo { output_mode: OutputMode::Available, subtree_start: 1 },
+            InsnTreeInfo { output_mode: OutputMode::Available, subtree_start: 5 },
+        ]);
+        assert_eq!(stackification.getters, BTreeMap::from([(5, VecDeque::from([3, 0]))]));
     }
 }
