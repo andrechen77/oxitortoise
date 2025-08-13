@@ -16,10 +16,7 @@ pub struct ShuffledMut<'a, T, R> {
 
 impl<'a, T, R> ShuffledMut<'a, T, R> {
     pub fn new(slice: &'a mut [T], rng: R) -> Self {
-        ShuffledMut {
-            remaining: slice,
-            rng,
-        }
+        ShuffledMut { remaining: slice, rng }
     }
 }
 
@@ -54,10 +51,7 @@ pub struct ShuffledOwned<T, R> {
 
 impl<T, R> ShuffledOwned<T, R> {
     pub fn new(items: VecDeque<T>, rng: R) -> Self {
-        ShuffledOwned {
-            remaining: items,
-            rng,
-        }
+        ShuffledOwned { remaining: items, rng }
     }
 }
 
@@ -99,9 +93,7 @@ mod tests {
 
     #[test]
     fn test_shuffle_owned_iterator() {
-        let rng = R {
-            remaining: vec![5, 2, 2, 2, 0, 0].into(),
-        };
+        let rng = R { remaining: vec![5, 2, 2, 2, 0, 0].into() };
         let items = vec![0, 1, 2, 3, 4, 5].into();
         let mut iter = ShuffledOwned::new(items, rng);
 
@@ -115,9 +107,7 @@ mod tests {
 
     #[test]
     fn test_shuffle_borrowed_iterator() {
-        let rng = R {
-            remaining: vec![5, 2, 2, 2, 0, 0].into(),
-        };
+        let rng = R { remaining: vec![5, 2, 2, 2, 0, 0].into() };
         let mut items = [0, 1, 2, 3, 4, 5];
         let mut iter = ShuffledMut::new(&mut items, rng);
 

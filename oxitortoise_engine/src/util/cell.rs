@@ -46,9 +46,7 @@ mod unsafe_ref_cell {
 
     impl<T> UnsafeRefCell<T> {
         pub fn new(value: T) -> Self {
-            Self {
-                value: UnsafeCell::new(value),
-            }
+            Self { value: UnsafeCell::new(value) }
         }
     }
 
@@ -58,9 +56,7 @@ mod unsafe_ref_cell {
             // when calling this function. This is actually an unsafe function
             // and correct usage should be checked by substituting the safe
             // version of RefCell
-            UnsafeRef {
-                value: unsafe { &*self.value.get() },
-            }
+            UnsafeRef { value: unsafe { &*self.value.get() } }
         }
 
         pub fn borrow_mut(&self) -> UnsafeRefMut<'_, T> {
@@ -68,9 +64,7 @@ mod unsafe_ref_cell {
             // when calling this function. This is actually an unsafe function
             // and correct usage should be checked by substituting the safe
             // version of RefCell
-            UnsafeRefMut {
-                value: unsafe { &mut *self.value.get() },
-            }
+            UnsafeRefMut { value: unsafe { &mut *self.value.get() } }
         }
 
         pub fn get_mut(&mut self) -> &mut T {

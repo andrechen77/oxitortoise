@@ -53,14 +53,10 @@ impl TurtleSchema {
         // add heading and position fields
         let heading_group = &mut field_groups[heading_buffer_idx as usize];
         let heading_field_idx = heading_group.fields.len() as u8;
-        heading_group
-            .fields
-            .push(AgentSchemaField::Other(NetlogoInternalType::HEADING));
+        heading_group.fields.push(AgentSchemaField::Other(NetlogoInternalType::HEADING));
         let position_group = &mut field_groups[position_buffer_idx as usize];
         let position_field_idx = position_group.fields.len() as u8;
-        position_group
-            .fields
-            .push(AgentSchemaField::Other(NetlogoInternalType::POINT));
+        position_group.fields.push(AgentSchemaField::Other(NetlogoInternalType::POINT));
 
         // add custom fields
         for (field_type, buffer_idx) in custom_fields {
@@ -80,11 +76,7 @@ impl TurtleSchema {
 
         // verify all field groups are non-empty
         for (i, group) in field_groups.iter().enumerate() {
-            assert!(
-                !group.fields.is_empty(),
-                "field group at index {} is empty",
-                i
-            );
+            assert!(!group.fields.is_empty(), "field group at index {} is empty", i);
         }
 
         Self {
@@ -169,10 +161,8 @@ impl PatchSchema {
             field_groups[*buffer_idx as usize]
                 .fields
                 .push(AgentSchemaField::Other(field_type.clone()));
-            custom_field_descriptors.push(AgentFieldDescriptor {
-                buffer_idx: *buffer_idx,
-                field_idx,
-            });
+            custom_field_descriptors
+                .push(AgentFieldDescriptor { buffer_idx: *buffer_idx, field_idx });
         }
 
         // set avoid_occupancy_bitfield flags
@@ -186,18 +176,11 @@ impl PatchSchema {
 
         // verify all field groups are non-empty
         for (i, group) in field_groups.iter().enumerate() {
-            assert!(
-                !group.fields.is_empty(),
-                "field group at index {} is empty",
-                i
-            );
+            assert!(!group.fields.is_empty(), "field group at index {} is empty", i);
         }
 
         Self {
-            pcolor: AgentFieldDescriptor {
-                buffer_idx: pcolor_buffer_idx,
-                field_idx: 0,
-            },
+            pcolor: AgentFieldDescriptor { buffer_idx: pcolor_buffer_idx, field_idx: 0 },
             field_groups,
             custom_fields: custom_field_descriptors,
         }
@@ -261,10 +244,7 @@ pub struct AgentFieldDescriptor {
 }
 
 impl AgentFieldDescriptor {
-    pub const BASE_DATA: Self = Self {
-        buffer_idx: 0,
-        field_idx: 0,
-    };
+    pub const BASE_DATA: Self = Self { buffer_idx: 0, field_idx: 0 };
 }
 
 fn make_row_buffers_impl<A: 'static, const N: usize>(
@@ -295,10 +275,7 @@ fn make_row_buffers_impl<A: 'static, const N: usize>(
             field_types.push(type_id);
         }
 
-        Some(RowBuffer::new(RowSchema::new(
-            &field_types,
-            !buffer_fields.avoid_occupancy_bitfield,
-        )))
+        Some(RowBuffer::new(RowSchema::new(&field_types, !buffer_fields.avoid_occupancy_bitfield)))
     });
 
     row_buffers

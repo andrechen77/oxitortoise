@@ -73,9 +73,7 @@ pub extern "C" fn oxitortoise_for_all_patches(
     context: &mut CanonExecutionContext,
     mut block: JitCallback<PatchId, ()>,
 ) {
-    helpers::for_all_patches(context, |context, patch_id| {
-        block.call_mut(context, patch_id)
-    });
+    helpers::for_all_patches(context, |context, patch_id| block.call_mut(context, patch_id));
 }
 
 #[no_mangle]
@@ -93,10 +91,7 @@ pub extern "C" fn oxitortoise_offset_distance_by_heading(
     world
         .topology
         .offset_distance_by_heading(point, heading, distance)
-        .unwrap_or_else(|| Point {
-            x: f64::NAN,
-            y: f64::NAN,
-        })
+        .unwrap_or_else(|| Point { x: f64::NAN, y: f64::NAN })
 }
 
 #[no_mangle]
@@ -135,13 +130,6 @@ pub extern "C" fn oxitortoise_next_int(context: &mut CanonExecutionContext, max:
 
 #[no_mangle]
 pub extern "C" fn oxitortoise_get_default_turtle_breed(context: &mut CanonExecutionContext) -> u64 {
-    let breed_id = context
-        .workspace
-        .world
-        .turtles
-        .breeds()
-        .keys()
-        .next()
-        .unwrap();
+    let breed_id = context.workspace.world.turtles.breeds().keys().next().unwrap();
     breed_id.data().as_ffi()
 }

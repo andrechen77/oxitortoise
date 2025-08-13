@@ -281,16 +281,8 @@ fn idiosyncratic_sum_8(nums: [Float; 8]) -> Float {
 /// https://github.com/NetLogo/Tortoise/blob/master/engine/src/main/coffee/engine/core/topology/diffuser.coffee#L253.
 /// I'm really not sure why it was done this way.
 fn idiosyncratic_sum_4(nums: [Float; 4]) -> Float {
-    let (low1, high1) = if nums[0] < nums[1] {
-        (nums[0], nums[1])
-    } else {
-        (nums[1], nums[0])
-    };
-    let (low2, high2) = if nums[2] < nums[3] {
-        (nums[2], nums[3])
-    } else {
-        (nums[3], nums[2])
-    };
+    let (low1, high1) = if nums[0] < nums[1] { (nums[0], nums[1]) } else { (nums[1], nums[0]) };
+    let (low2, high2) = if nums[2] < nums[3] { (nums[2], nums[3]) } else { (nums[3], nums[2]) };
     if low2 < high1 && low1 < high2 {
         (low1 + low2) + (high1 + high2)
     } else {
@@ -300,11 +292,10 @@ fn idiosyncratic_sum_4(nums: [Float; 4]) -> Float {
 
 #[cfg(test)]
 mod test {
+    use super::*;
     use crate::sim::{
         agent_schema::PatchSchema, topology::TopologySpec, value::NetlogoInternalType,
     };
-
-    use super::*;
 
     /* // Creates a world where the patches have a custom float variable named
     // `my_var`. The parameter`separate_buffer` determines whether this custom

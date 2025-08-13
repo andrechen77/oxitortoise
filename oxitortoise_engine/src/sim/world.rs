@@ -2,6 +2,7 @@ use std::mem::offset_of;
 
 use slotmap::SlotMap;
 
+use super::shapes::Shapes;
 use crate::sim::{
     agent_schema::{PatchSchema, TurtleSchema},
     // observer::Observer,
@@ -10,8 +11,6 @@ use crate::sim::{
     topology::{Topology, TopologySpec},
     turtle::{Breed, BreedId, Turtles},
 };
-
-use super::shapes::Shapes;
 
 #[no_mangle]
 static OFFSET_WORLD_TO_TURTLES: usize = offset_of!(World, turtles);

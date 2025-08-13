@@ -41,10 +41,7 @@ impl Point {
     pub const ORIGIN: Point = Point { x: 0.0, y: 0.0 };
 
     pub fn round_to_int(self) -> PointInt {
-        PointInt {
-            x: self.x.round() as CoordInt,
-            y: self.y.round() as CoordInt,
-        }
+        PointInt { x: self.x.round() as CoordInt, y: self.y.round() as CoordInt }
     }
 }
 
@@ -56,10 +53,7 @@ impl fmt::Display for Point {
 
 impl From<PointInt> for Point {
     fn from(point: PointInt) -> Self {
-        Point {
-            x: point.x as CoordFloat,
-            y: point.y as CoordFloat,
-        }
+        Point { x: point.x as CoordFloat, y: point.y as CoordFloat }
     }
 }
 
@@ -272,11 +266,7 @@ fn wrap_coordinate(coord: CoordFloat, min: CoordFloat, len: CoordFloat) -> Coord
     // the remainder has an absolute value less than `len`, and is positive if
     // coord > min and negative if coord < min
     let remainder = (coord - min) % len;
-    let offset_from_min = if remainder < 0.0 {
-        len + remainder
-    } else {
-        remainder
-    };
+    let offset_from_min = if remainder < 0.0 { len + remainder } else { remainder };
     min + offset_from_min
 }
 

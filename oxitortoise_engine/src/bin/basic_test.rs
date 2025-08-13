@@ -1,9 +1,6 @@
 use std::rc::Rc;
 
 use flagset::FlagSet;
-use slotmap::SlotMap;
-use walrus::Module;
-
 use oxitortoise::{
     exec::{
         dynamic_link,
@@ -24,6 +21,8 @@ use oxitortoise::{
     util::{cell::RefCell, rng::CanonRng},
     workspace::Workspace,
 };
+use slotmap::SlotMap;
+use walrus::Module;
 
 #[cfg(target_arch = "wasm32")]
 unsafe extern "C" {
@@ -81,10 +80,8 @@ pub fn main() {
     real_print("Loaded model code");
     let module = Module::from_buffer(&module_bytes).unwrap();
     let mut function_installer = unsafe { FunctionInstaller::new() };
-    let entrypoints = &[
-        module.funcs.by_name("shim_setup").unwrap(),
-        module.funcs.by_name("shim_go").unwrap(),
-    ];
+    let entrypoints =
+        &[module.funcs.by_name("shim_setup").unwrap(), module.funcs.by_name("shim_go").unwrap()];
     let potential_callbacks = &[
         module.funcs.by_name("setup_body0").unwrap(),
         module.funcs.by_name("setup_body1").unwrap(),
@@ -114,11 +111,7 @@ pub fn main() {
     dirty_aggregator.reserve_patches(10000);
     // real_print(format!("Updater: {:?}", &updater));
     let rng = workspace.rng.clone();
-    let context = CanonExecutionContext {
-        workspace,
-        dirty_aggregator,
-        next_int: rng,
-    };
+    let context = CanonExecutionContext { workspace, dirty_aggregator, next_int: rng };
     // SAFETY: no one else has a reference to this variable since this is called
     // in single-threaded contexts only and this function is the entry point.
     unsafe {
@@ -150,12 +143,8 @@ pub fn run_diy() {
     dynamic_link::oxitortoise_clear_all(context);
     extern "C" fn body0(_env: *mut u8, context: &mut CanonExecutionContext, turtle_id: u64) {
         let turtle_id = TurtleId::from_ffi(turtle_id);
-        let turtle_data = context
-            .workspace
-            .world
-            .turtles
-            .get_turtle_base_data_mut(turtle_id)
-            .unwrap();
+        let turtle_data =
+            context.workspace.world.turtles.get_turtle_base_data_mut(turtle_id).unwrap();
         turtle_data.color = Float::new(15.0).into();
         turtle_data.size = Float::new(2.0);
         context.dirty_aggregator.get_turtles_mut()[turtle_id.index()] |= TurtleProp::Color;
@@ -166,10 +155,7 @@ pub fn run_diy() {
         breed,
         125,
         Point { x: 0.0, y: 0.0 },
-        JitCallback {
-            fn_ptr: body0,
-            env: std::ptr::null_mut(),
-        },
+        JitCallback { fn_ptr: body0, env: std::ptr::null_mut() },
     )
 }
 
@@ -208,13 +194,7 @@ fn create_workspace() -> Workspace {
     let topology = Topology::new(topology_spec);
     let tick_counter = Tick::default();
     let shapes = Shapes::default();
-    let world = World {
-        turtles,
-        patches,
-        topology,
-        tick_counter,
-        shapes,
-    };
+    let world = World { turtles, patches, topology, tick_counter, shapes };
     let rng = Rc::new(RefCell::new(CanonRng::new(0)));
     let workspace = Workspace { world, rng };
 

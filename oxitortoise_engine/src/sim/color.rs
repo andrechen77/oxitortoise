@@ -69,9 +69,7 @@ const SHADE_RANGE: f64 = 10.0;
 pub fn base_colors() -> &'static [Color] {
     static BASE_COLORS: OnceLock<Vec<Color>> = OnceLock::new();
     BASE_COLORS.get_or_init(|| {
-        (0..((COLOR_MAX / 10.0) as i64))
-            .map(|n| Color((n * 10 + 5) as f64))
-            .collect()
+        (0..((COLOR_MAX / 10.0) as i64)).map(|n| Color((n * 10 + 5) as f64)).collect()
     })
 }
 

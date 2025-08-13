@@ -1,9 +1,10 @@
 use std::collections::BinaryHeap;
 
-use super::JitEntry;
 use walrus::{
     ir::Value, ConstExpr, ElementItems, ElementKind, FunctionId, GlobalKind, Module, TableId,
 };
+
+use super::JitEntry;
 
 unsafe extern "C" {
     // TODO talk about the limits of the memory and function table. should it
@@ -44,9 +45,7 @@ impl FunctionInstaller {
     /// might be attempting to make those interactions, including when other
     /// `FunctionInstaller`s exist.
     pub unsafe fn new() -> Self {
-        Self {
-            free_slots: BinaryHeap::new(),
-        }
+        Self { free_slots: BinaryHeap::new() }
     }
 
     /// Installs the specified functions of the specified module into the
@@ -87,10 +86,7 @@ impl FunctionInstaller {
         // install the entrypoints into the current instance's function table
         let mut entrypoint_slots = Vec::with_capacity(entrypoints.len());
         for &function_id in entrypoints {
-            let slot = self
-                .free_slots
-                .pop()
-                .expect("ensured that there were enough slots");
+            let slot = self.free_slots.pop().expect("ensured that there were enough slots");
             entrypoint_slots.push(slot);
             module.elements.add(
                 ElementKind::Active {
@@ -103,10 +99,7 @@ impl FunctionInstaller {
 
         // install the potential callbacks
         for &function_id in potential_callbacks {
-            let slot = self
-                .free_slots
-                .pop()
-                .expect("ensured that there were enough slots");
+            let slot = self.free_slots.pop().expect("ensured that there were enough slots");
             module.elements.add(
                 ElementKind::Active {
                     table: destination_table,

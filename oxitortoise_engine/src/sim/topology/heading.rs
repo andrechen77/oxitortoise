@@ -1,11 +1,10 @@
 use std::ops::{Add, AddAssign};
 
+use super::CoordFloat;
 use crate::{
     sim::value::{self, Float},
     util::rng::Rng,
 };
-
-use super::CoordFloat;
 
 /// A heading. This is a floating point value representing some 2D angle in
 /// degrees, and is guaranteed to be in the range of 0.0..360.0. 0 represents

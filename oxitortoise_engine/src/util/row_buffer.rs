@@ -110,11 +110,8 @@ impl RowSchema {
 
         // find the length of the bitfield to hold whether each column is
         // present
-        let occupancy_bitfield_len = if occupancy_bitfield {
-            (types_and_layouts.len() + 7) / 8
-        } else {
-            0
-        };
+        let occupancy_bitfield_len =
+            if occupancy_bitfield { (types_and_layouts.len() + 7) / 8 } else { 0 };
 
         // find the offsets of each field
         // https://doc.rust-lang.org/std/alloc/struct.Layout.html#method.extend
@@ -129,21 +126,13 @@ impl RowSchema {
             let (new_layout, offset) = overall_layout
                 .extend(field_layout)
                 .expect("records should not be so big as to overflow");
-            fields.push(RowSchemaField {
-                offset,
-                r#type: field_type,
-                size: field_layout.size(),
-            });
+            fields.push(RowSchemaField { offset, r#type: field_type, size: field_layout.size() });
             overall_layout = new_layout;
         }
         // add padding at the end to align with itself
         overall_layout = overall_layout.pad_to_align();
 
-        Self {
-            occupancy_bitfield_len,
-            fields,
-            layout: overall_layout,
-        }
+        Self { occupancy_bitfield_len, fields, layout: overall_layout }
     }
 
     pub fn can_reinterpret_as<T: 'static>(&self) -> bool {
@@ -186,11 +175,7 @@ impl<'a, B: AsRef<[u8]> + 'a> Row<'a, B> {
 
     pub fn get<T: 'static>(&self, field_idx: usize) -> Option<&'a T> {
         // verify that the type tag matches
-        assert_eq!(
-            self.schema.fields[field_idx].r#type,
-            TypeId::of::<T>(),
-            "type mismatch"
-        );
+        assert_eq!(self.schema.fields[field_idx].r#type, TypeId::of::<T>(), "type mismatch");
 
         let ptr = self.get_ptr(field_idx);
         // check if the field is actually present
@@ -230,11 +215,7 @@ impl<'a, B: AsRef<[u8]> + AsMut<[u8]> + 'a> Row<'a, B> {
 
     pub fn get_mut<T: 'static>(&mut self, field_idx: usize) -> Option<&'a mut T> {
         // same implementation as self.get
-        assert_eq!(
-            self.schema.fields[field_idx].r#type,
-            TypeId::of::<T>(),
-            "type mismatch"
-        );
+        assert_eq!(self.schema.fields[field_idx].r#type, TypeId::of::<T>(), "type mismatch");
 
         let ptr = self.get_ptr_mut(field_idx);
         if self.has_field(field_idx) {
@@ -246,11 +227,7 @@ impl<'a, B: AsRef<[u8]> + AsMut<[u8]> + 'a> Row<'a, B> {
     }
 
     pub fn insert<T: 'static>(&mut self, field_idx: usize, value: T) {
-        assert_eq!(
-            self.schema.fields[field_idx].r#type,
-            TypeId::of::<T>(),
-            "type mismatch"
-        );
+        assert_eq!(self.schema.fields[field_idx].r#type, TypeId::of::<T>(), "type mismatch");
 
         // if the field is already present, panic. we could technically just
         // drop the existing value, or return the new value to the caller, but
@@ -286,11 +263,7 @@ impl<'a, B: AsRef<[u8]> + AsMut<[u8]> + 'a> Row<'a, B> {
     }
 
     pub fn take<T: 'static>(&mut self, field_idx: usize) -> Option<T> {
-        assert_eq!(
-            self.schema.fields[field_idx].r#type,
-            TypeId::of::<T>(),
-            "type mismatch"
-        );
+        assert_eq!(self.schema.fields[field_idx].r#type, TypeId::of::<T>(), "type mismatch");
 
         if self.schema.occupancy_bitfield_len == 0 {
             panic!("cannot take a field if the occupancy bitfield is omitted");
@@ -434,10 +407,7 @@ impl RowBuffer {
         let offset = row_idx * self.schema.layout.size();
         let stride = self.schema.layout.size();
         let data = &self.bytes[offset..offset + stride];
-        Row {
-            schema: &self.schema,
-            data,
-        }
+        Row { schema: &self.schema, data }
     }
 
     /// # Panics
@@ -448,10 +418,7 @@ impl RowBuffer {
         let offset = row_idx * self.schema.layout.size();
         let stride = self.schema.layout.size();
         let data = &mut self.bytes[offset..offset + stride];
-        Row {
-            schema: &self.schema,
-            data,
-        }
+        Row { schema: &self.schema, data }
     }
 
     /// Resizes the row buffer to be able to hold at least `num_rows` rows.
@@ -504,10 +471,7 @@ impl RowBuffer {
         // zeroable.
         let new_bytes = AlignedBytes::new(self.bytes.layout());
         let old_bytes = std::mem::replace(&mut self.bytes, new_bytes);
-        Array {
-            bytes: old_bytes,
-            _phantom: PhantomData,
-        }
+        Array { bytes: old_bytes, _phantom: PhantomData }
     }
 
     pub fn as_mut_array<T: Copy + 'static>(&mut self) -> &mut [T] {
@@ -610,8 +574,9 @@ impl<T: Copy> std::ops::IndexMut<usize> for Array<T> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::any::TypeId;
+
+    use super::*;
 
     #[test]
     fn test_basic_insert_retrieve() {
@@ -630,11 +595,7 @@ mod tests {
     #[test]
     fn test_heterogeneous_fields() {
         let schema = RowSchema::new(
-            &[
-                TypeId::of::<u32>(),
-                TypeId::of::<String>(),
-                TypeId::of::<f64>(),
-            ],
+            &[TypeId::of::<u32>(), TypeId::of::<String>(), TypeId::of::<f64>()],
             true,
         );
         let mut buffer = RowBuffer::new(schema);
@@ -695,11 +656,7 @@ mod tests {
     #[test]
     fn test_insert_and_take() {
         let schema = RowSchema::new(
-            &[
-                TypeId::of::<u32>(),
-                TypeId::of::<String>(),
-                TypeId::of::<f64>(),
-            ],
+            &[TypeId::of::<u32>(), TypeId::of::<String>(), TypeId::of::<f64>()],
             true,
         );
         let mut buffer = RowBuffer::new(schema);
@@ -772,11 +729,7 @@ mod tests {
     #[test]
     fn test_capacity_expansion_preserves_data() {
         let schema = RowSchema::new(
-            &[
-                TypeId::of::<u32>(),
-                TypeId::of::<String>(),
-                TypeId::of::<f64>(),
-            ],
+            &[TypeId::of::<u32>(), TypeId::of::<String>(), TypeId::of::<f64>()],
             true,
         );
         let mut buffer = RowBuffer::new(schema);
@@ -955,11 +908,7 @@ mod tests {
     #[test]
     fn test_clear() {
         let schema = RowSchema::new(
-            &[
-                TypeId::of::<u32>(),
-                TypeId::of::<String>(),
-                TypeId::of::<f64>(),
-            ],
+            &[TypeId::of::<u32>(), TypeId::of::<String>(), TypeId::of::<f64>()],
             true,
         );
         let mut buffer = RowBuffer::new_with_capacity(schema, 3);
@@ -1041,11 +990,7 @@ mod tests {
     #[test]
     fn test_heterogeneous_always_present() {
         let schema = RowSchema::new(
-            &[
-                TypeId::of::<u32>(),
-                TypeId::of::<bool>(),
-                TypeId::of::<f64>(),
-            ],
+            &[TypeId::of::<u32>(), TypeId::of::<bool>(), TypeId::of::<f64>()],
             false,
         );
         let mut buffer = RowBuffer::new(schema);
@@ -1065,12 +1010,7 @@ mod tests {
     #[test]
     fn test_massive_always_present() {
         let schema = RowSchema::new(
-            &[
-                TypeId::of::<bool>(),
-                TypeId::of::<bool>(),
-                TypeId::of::<u32>(),
-                TypeId::of::<f64>(),
-            ],
+            &[TypeId::of::<bool>(), TypeId::of::<bool>(), TypeId::of::<u32>(), TypeId::of::<f64>()],
             false,
         );
         let mut buffer = RowBuffer::new(schema);

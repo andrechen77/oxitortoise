@@ -34,10 +34,7 @@ fn init_type_info_registry() -> HashMap<TypeId, Arc<TypeInfo>> {
     let mut m = HashMap::new();
     macro_rules! reg {
         ($t:ty, $is_zeroable:expr) => {
-            m.insert(
-                TypeId::of::<$t>(),
-                Arc::new(generate_type_info::<$t>($is_zeroable)),
-            );
+            m.insert(TypeId::of::<$t>(), Arc::new(generate_type_info::<$t>($is_zeroable)));
         };
     }
     reg!(u8, true);
@@ -83,8 +80,5 @@ pub fn get_type_info(r#type: TypeId) -> Arc<TypeInfo> {
 
 pub fn register_type_info<T: 'static>(is_zeroable: bool) {
     let type_info = generate_type_info::<T>(is_zeroable);
-    get_type_info_registry()
-        .write()
-        .unwrap()
-        .insert(TypeId::of::<T>(), Arc::new(type_info));
+    get_type_info_registry().write().unwrap().insert(TypeId::of::<T>(), Arc::new(type_info));
 }

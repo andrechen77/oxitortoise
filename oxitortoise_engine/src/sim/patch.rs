@@ -3,6 +3,7 @@ use std::{collections::HashMap, mem::offset_of};
 use derive_more::derive::From;
 use either::Either;
 
+use super::topology::Point;
 use crate::{
     sim::{
         agent_schema::{AgentFieldDescriptor, AgentSchemaField, PatchSchema},
@@ -12,8 +13,6 @@ use crate::{
     },
     util::row_buffer::{self, RowBuffer},
 };
-
-use super::topology::Point;
 
 // TODO make documentation better
 /// The patches in the world are indexed in a row-major order, where the first
@@ -67,21 +66,13 @@ impl Patches {
         for buffer in patches.data.iter_mut().filter_map(|b| b.as_mut()) {
             buffer.ensure_capacity(patches.num_patches as usize);
         }
-        let TopologySpec {
-            min_pxcor,
-            max_pycor,
-            patches_height,
-            patches_width,
-            ..
-        } = topology_spec;
+        let TopologySpec { min_pxcor, max_pycor, patches_height, patches_width, .. } =
+            topology_spec;
         for j in 0..*patches_height {
             for i in 0..*patches_width {
                 let x = min_pxcor + i;
                 let y = max_pycor - j;
-                let position = Point {
-                    x: x as CoordFloat,
-                    y: y as CoordFloat,
-                };
+                let position = Point { x: x as CoordFloat, y: y as CoordFloat };
                 // topology_spec.patch_at(position) should just return an
                 // increasing index anyway but this is more robust (even though
                 // it's literally the same thing just requiring more
@@ -94,11 +85,7 @@ impl Patches {
                     plabel: String::new(),
                     plabel_color: Color::BLACK, // TODO use a more sensible default
                 };
-                patches.data[0]
-                    .as_mut()
-                    .unwrap()
-                    .row_mut(id.0 as usize)
-                    .insert(0, base_data);
+                patches.data[0].as_mut().unwrap().row_mut(id.0 as usize).insert(0, base_data);
 
                 // initialize other builtins
                 let pcolor_desc = patches.patch_schema.pcolor();
@@ -120,9 +107,7 @@ impl Patches {
                             .row_mut(id.0 as usize)
                             .insert_zeroable(field.field_idx as usize);
                     } else {
-                        patches
-                            .fallback_custom_fields
-                            .insert((id, field), DynBox::ZERO);
+                        patches.fallback_custom_fields.insert((id, field), DynBox::ZERO);
                     }
                 }
                 // TODO can reduce code duplication by using a helper function
@@ -232,10 +217,7 @@ impl Patches {
     pub fn take_patch_values(&mut self, field: AgentFieldDescriptor) -> row_buffer::Array<Float> {
         // TODO make sure that patches don't have a fallback value for this
         // field
-        self.data[field.buffer_idx as usize]
-            .as_mut()
-            .unwrap()
-            .take_array()
+        self.data[field.buffer_idx as usize].as_mut().unwrap().take_array()
     }
 
     /// # Panics
@@ -247,10 +229,7 @@ impl Patches {
         &mut self,
         field: AgentFieldDescriptor,
     ) -> &mut [T] {
-        self.data[field.buffer_idx as usize]
-            .as_mut()
-            .unwrap()
-            .as_mut_array()
+        self.data[field.buffer_idx as usize].as_mut().unwrap().as_mut_array()
     }
 
     /// Resets all patch variables to their default values.

@@ -13,6 +13,7 @@ use either::Either;
 use slotmap::SlotMap;
 
 use crate::sim::agent_schema::{AgentFieldDescriptor, AgentSchemaField, TurtleSchema};
+use crate::sim::topology::Heading;
 use crate::sim::value::agentset::TurtleSet;
 use crate::sim::value::DynBox;
 use crate::util::gen_slot_tracker::{GenIndex, GenSlotTracker};
@@ -21,8 +22,6 @@ use crate::{
     sim::{color::Color, topology::Point, value},
     util::rng::Rng,
 };
-
-use crate::sim::topology::Heading;
 
 /// The who number of a turtle.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Default, PartialOrd, Ord)]
@@ -143,12 +142,9 @@ impl Turtles {
                 size: value::Float::new(1.0),
                 shape_name,
             };
-            self.data[0]
-                .as_mut()
-                .unwrap()
-                .row_mut(id.0.index as usize)
-                .insert(0, base_data);
+            self.data[0].as_mut().unwrap().row_mut(id.0.index as usize).insert(0, base_data);
 
+            // TODO is there a point in separating position/heading from base data?
             // set builtin variables that aren't in the base data
             let heading_desc = self.turtle_schema.heading();
             self.data[heading_desc.buffer_idx as usize]
@@ -176,8 +172,7 @@ impl Turtles {
                         .row_mut(idx.index as usize)
                         .insert_zeroable(field.field_idx as usize);
                 } else {
-                    self.fallback_custom_fields
-                        .insert((id, field), DynBox::ZERO);
+                    self.fallback_custom_fields.insert((id, field), DynBox::ZERO);
                 }
             }
 

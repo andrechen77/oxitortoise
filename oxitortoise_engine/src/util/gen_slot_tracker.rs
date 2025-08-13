@@ -14,11 +14,7 @@ pub struct GenIndex {
 
 impl GenIndex {
     pub const fn with_index_and_gen(index: u32, gen: u16) -> Self {
-        Self {
-            index,
-            r#gen: gen,
-            _padding: 0,
-        }
+        Self { index, r#gen: gen, _padding: 0 }
     }
 
     // TODO check that the to/from ffi functions are equivalent to transmutes.
@@ -118,16 +114,13 @@ impl GenSlotTracker {
 
     /// Iterates over all occupied slots.
     pub fn iter(&self) -> impl Iterator<Item = GenIndex> + '_ {
-        self.generations
-            .iter()
-            .enumerate()
-            .filter_map(|(i, &r#gen)| {
-                if r#gen & 1 == 1 {
-                    Some(GenIndex::with_index_and_gen(i as u32, r#gen))
-                } else {
-                    None
-                }
-            })
+        self.generations.iter().enumerate().filter_map(|(i, &r#gen)| {
+            if r#gen & 1 == 1 {
+                Some(GenIndex::with_index_and_gen(i as u32, r#gen))
+            } else {
+                None
+            }
+        })
     }
 }
 
@@ -139,17 +132,11 @@ struct Entry<T> {
 
 impl<T> Entry<T> {
     fn new(generation: u16, value: T) -> Self {
-        Self {
-            generation,
-            value: Some(value),
-        }
+        Self { generation, value: Some(value) }
     }
 
     fn empty(generation: u16) -> Self {
-        Self {
-            generation,
-            value: None,
-        }
+        Self { generation, value: None }
     }
 }
 
@@ -227,10 +214,8 @@ where
             entry.generation = key.r#gen;
             old_value.map(|v| (old_key.into(), v))
         } else {
-            let current_value = entry
-                .value
-                .as_mut()
-                .expect("since the generation matches, the value must exist");
+            let current_value =
+                entry.value.as_mut().expect("since the generation matches, the value must exist");
             mutate(current_value);
             None
         }
@@ -251,12 +236,7 @@ where
         entry.generation = key.r#gen;
         entry.value = Some(value);
 
-        old_value.map(|v| {
-            (
-                GenIndex::with_index_and_gen(key.index, old_generation).into(),
-                v,
-            )
-        })
+        old_value.map(|v| (GenIndex::with_index_and_gen(key.index, old_generation).into(), v))
     }
 
     /// Removes the value at the given key.
@@ -276,10 +256,7 @@ where
     }
 
     pub fn len(&self) -> usize {
-        self.entries
-            .iter()
-            .filter(|entry| entry.value.is_some())
-            .count()
+        self.entries.iter().filter(|entry| entry.value.is_some()).count()
     }
 
     pub fn is_empty(&self) -> bool {
@@ -297,12 +274,9 @@ where
 
     pub fn drain(&mut self) -> impl Iterator<Item = (K, V)> + '_ {
         self.entries.drain(..).enumerate().filter_map(|(i, entry)| {
-            entry.value.map(|v| {
-                (
-                    GenIndex::with_index_and_gen(i as u32, entry.generation).into(),
-                    v,
-                )
-            })
+            entry
+                .value
+                .map(|v| (GenIndex::with_index_and_gen(i as u32, entry.generation).into(), v))
         })
     }
 }
@@ -313,10 +287,7 @@ where
     GenIndex: Into<K>,
 {
     fn default() -> Self {
-        Self {
-            entries: Vec::new(),
-            _phantom: PhantomData,
-        }
+        Self { entries: Vec::new(), _phantom: PhantomData }
     }
 }
 
@@ -664,10 +635,7 @@ mod tests {
         assert_eq!(map.get_mut(wrong_gen), None);
 
         // inserting with wrong generation replaces the value
-        assert_eq!(
-            map.insert(wrong_gen, 100),
-            Some((GenIndex::with_index_and_gen(0, 1), 42))
-        );
+        assert_eq!(map.insert(wrong_gen, 100), Some((GenIndex::with_index_and_gen(0, 1), 42)));
         assert_eq!(map.remove(wrong_gen), Some(100));
     }
 
@@ -709,21 +677,15 @@ mod tests {
         assert_eq!(map.get(gen_index), Some(&10));
 
         // Mutate the existing value (should call mutate closure)
-        let result = map.mutate_or_insert(
-            gen_index,
-            |v| *v += 5,
-            || panic!("should not insert on mutate"),
-        );
+        let result =
+            map.mutate_or_insert(gen_index, |v| *v += 5, || panic!("should not insert on mutate"));
         assert_eq!(result, None);
         assert_eq!(map.get(gen_index), Some(&15));
 
         // Insert at the same index but with a different generation (should replace and return old value)
         let new_gen_index = GenIndex::with_index_and_gen(0, 3);
-        let result = map.mutate_or_insert(
-            new_gen_index,
-            |_v| panic!("should not mutate on insert"),
-            || 100,
-        );
+        let result =
+            map.mutate_or_insert(new_gen_index, |_v| panic!("should not mutate on insert"), || 100);
         assert_eq!(result, Some((gen_index, 15)));
         assert_eq!(map.get(new_gen_index), Some(&100));
         assert_eq!(map.get(gen_index), None);
