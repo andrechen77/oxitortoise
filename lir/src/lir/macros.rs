@@ -1,173 +1,216 @@
 pub use crate::instructions;
 
 #[macro_export]
-macro_rules! make_node {
-    ($insns:expr; constant($ty:ident, $value:expr)) => {
-        InsnKind::Const {
+macro_rules! push_node {
+    ($insns:expr; $label:ident; $node_label:ident) => {
+        let $label = $node_label;
+    };
+    ($insns:expr; $label:ident; [constant($ty:ident, $value:expr)]) => {
+        let $label = InsnPc::from($insns.len());
+        $insns.push(InsnKind::Const {
             r#type: ValType::$ty,
             value: $value,
-        }
+        });
     };
-    ($insns:expr; argument($ty:ident, $index:expr)) => {
-        InsnKind::Argument {
+    ($insns:expr; $label:ident; [argument($ty:ident, $index:expr)]) => {
+        let $label = InsnPc::from($insns.len());
+        $insns.push(InsnKind::Argument {
             r#type: ValType::$ty,
             index: $index,
-        }
+        });
     };
-    ($insns:expr; project($index:expr)($multivalue:tt)) => {
-        {
-            let multivalue = $crate::push_node!($insns; $multivalue);
-            InsnKind::Project {
-                multivalue,
-                index: $index,
-            }
-        }
+    ($insns:expr; $label:ident; [project($index:expr)($multivalue:tt)]) => {
+        $crate::push_node!($insns; multivalue; $multivalue);
+        let $label = InsnPc::from($insns.len());
+        $insns.push(InsnKind::Project {
+            multivalue,
+            index: $index,
+        });
     };
-    ($insns:expr; derive_field($offset:expr)($ptr:tt)) => {
-        {
-            let ptr = $crate::push_node!($insns; $ptr);
-            InsnKind::DeriveField {
-                offset: $offset,
-                ptr,
-            }
-        }
+    ($insns:expr; $label:ident; [derive_field($offset:expr)($ptr:tt)]) => {
+        $crate::push_node!($insns; ptr; $ptr);
+        let $label = InsnPc::from($insns.len());
+        $insns.push(InsnKind::DeriveField {
+            offset: $offset,
+            ptr,
+        });
     };
-    ($insns:expr; derive_element($element_size:expr)($ptr:tt, $index:tt)) => {
-        {
-            let ptr = $crate::push_node!($insns; $ptr);
-            let index = $crate::push_node!($insns; $index);
-            InsnKind::DeriveElement {
-                element_size: $element_size,
-                ptr,
-                index,
-            }
-        }
+    ($insns:expr; $label:ident; [derive_element($element_size:expr)($ptr:tt, $index:tt)]) => {
+        $crate::push_node!($insns; ptr; $ptr);
+        $crate::push_node!($insns; index; $index);
+        let $label = InsnPc::from($insns.len());
+        $insns.push(InsnKind::DeriveElement {
+            element_size: $element_size,
+            ptr,
+            index,
+        });
     };
-    ($insns:expr; mem_load($ty:ident, $offset:expr)($ptr:tt)) => {
-        {
-            let ptr = $crate::push_node!($insns; $ptr);
-            InsnKind::MemLoad {
-                r#type: ValType::$ty,
-                offset: $offset,
-                ptr,
-            }
-        }
-    };
-    ($insns:expr; mem_store($offset:expr)($ptr:tt, $value:tt)) => {
-        {
-            let ptr = $crate::push_node!($insns; $ptr);
-            let value = $crate::push_node!($insns; $value);
-            InsnKind::MemStore {
-                offset: $offset,
-                ptr,
-                value,
-            }
-        }
-    };
-    ($insns:expr; stack_load($ty:ident, $offset:expr)) => {
-        InsnKind::StackLoad {
+    ($insns:expr; $label:ident; [mem_load($ty:ident, $offset:expr)($ptr:tt)]) => {
+        $crate::push_node!($insns; ptr; $ptr);
+        let $label = InsnPc::from($insns.len());
+        $insns.push(InsnKind::MemLoad {
             r#type: ValType::$ty,
             offset: $offset,
-        }
+            ptr,
+        });
     };
-    ($insns:expr; stack_store($offset:expr)($value:tt)) => {
-        {
-            let value = $crate::push_node!($insns; $value);
-            InsnKind::StackStore {
-                offset: $offset,
-                value,
-            }
-        }
+    ($insns:expr; $label:ident; [mem_store($offset:expr)($ptr:tt, $value:tt)]) => {
+        $crate::push_node!($insns; ptr; $ptr);
+        $crate::push_node!($insns; value; $value);
+        let $label = InsnPc::from($insns.len());
+        $insns.push(InsnKind::MemStore {
+            offset: $offset,
+            ptr,
+            value,
+        });
     };
-    ($insns:expr; call_imported_function($function:expr)($($args:tt),*)) => {
-        {
-            let args = vec![$(
-                $crate::push_node!($insns; $args)
-            ),*].into_boxed_slice();
-            InsnKind::CallImportedFunction {
-                function: $function,
-                args,
-            }
-        }
+    ($insns:expr; $label:ident; [stack_load($ty:ident, $offset:expr)]) => {
+        let $label = InsnPc::from($insns.len());
+        $insns.push(InsnKind::StackLoad {
+            r#type: ValType::$ty,
+            offset: $offset,
+        });
     };
-    ($insns:expr; call_user_function($function:expr)($($args:tt),*)) => {
-        {
-            let args = vec![$(
-                $crate::push_node!($insns; $args)
-            ),*].into_boxed_slice();
-            InsnKind::CallUserFunction {
-                function: $function,
-                args,
-            }
-        }
+    ($insns:expr; $label:ident; [stack_store($offset:expr)($value:tt)]) => {
+        $crate::push_node!($insns; value; $value);
+        let $label = InsnPc::from($insns.len());
+        $insns.push(InsnKind::StackStore {
+            offset: $offset,
+            value,
+        });
     };
-    ($insns:expr; break_($depth:expr)($($values:tt),*)) => {
-        {
-            let values = Box::new([$(
-                $crate::push_node!($insns; $values)
-            ),*]);
-            InsnKind::Break {
-                depth: $depth,
-                values,
-            }
-        }
+    ($insns:expr; $label:ident; [call_imported_function($function:expr)($($args:tt),*)]) => {
+        let mut args_vec = Vec::new();
+        $(
+            $crate::push_node!($insns; arg; $args);
+            args_vec.push(arg);
+        )*
+        let $label = InsnPc::from($insns.len());
+        $insns.push(InsnKind::CallImportedFunction {
+            function: $function,
+            args: args_vec.into_boxed_slice(),
+        });
     };
-    ($insns:expr; break_if($depth:expr)($condition:tt, $($values:tt),*)) => {
-        {
-            let condition = $crate::push_node!($insns; $condition);
-            let values = Box::new([$(
-                $crate::push_node!($insns; $values)
-            ),*]);
-            InsnKind::ConditionalBreak {
-                condition,
-                depth: $depth,
-                values,
-            }
-        }
+    ($insns:expr; $label:ident; [call_user_function($function:expr)($($args:tt),*)]) => {
+        let mut args_vec = Vec::new();
+        $(
+            $crate::push_node!($insns; arg; $args);
+            args_vec.push(arg);
+        )*
+        let $label = InsnPc::from($insns.len());
+        $insns.push(InsnKind::CallUserFunction {
+            function: $function,
+            args: args_vec.into_boxed_slice(),
+        });
     };
-    ($insns:expr; loop_arg($initial_value:tt)) => {
-        {
-            let initial_value = $crate::push_node!($insns; $initial_value);
-            InsnKind::LoopArgument {
-                initial_value,
-            }
-        }
+    ($insns:expr; $label:ident; [break_($depth:expr)($($values:tt),*)]) => {
+        let mut values_vec = Vec::new();
+        $(
+            $crate::push_node!($insns; value; $values);
+            values_vec.push(value);
+        )*
+        let $label = InsnPc::from($insns.len());
+        $insns.push(InsnKind::Break {
+            depth: $depth,
+            values: values_vec.into_boxed_slice(),
+        });
     };
-    ($insns:expr; add($lhs:tt, $rhs:tt)) => {
-        {
-            let lhs = $crate::push_node!($insns; $lhs);
-            let rhs = $crate::push_node!($insns; $rhs);
-            InsnKind::BinaryOp {
-                op: BinaryOpcode::Add,
-                lhs,
-                rhs,
-            }
-        }
+    ($insns:expr; $label:ident; [break_if($depth:expr)($condition:tt, $($values:tt),*)]) => {
+        $crate::push_node!($insns; condition; $condition);
+        let mut values_vec = Vec::new();
+        $(
+            $crate::push_node!($insns; value; $values);
+            values_vec.push(value);
+        )*
+        let $label = InsnPc::from($insns.len());
+        $insns.push(InsnKind::ConditionalBreak {
+            condition,
+            depth: $depth,
+            values: values_vec.into_boxed_slice(),
+        });
+    };
+    ($insns:expr; $label:ident; [loop_argument($initial_value:tt)]) => {
+        $crate::push_node!($insns; initial_value; $initial_value);
+        let $label = InsnPc::from($insns.len());
+        $insns.push(InsnKind::LoopArgument {
+            initial_value,
+        });
+    };
+    ($insns:expr; $label:ident; [add($lhs:tt, $rhs:tt)]) => {
+        $crate::push_node!($insns; lhs; $lhs);
+        $crate::push_node!($insns; rhs; $rhs);
+        let $label = InsnPc::from($insns.len());
+        $insns.push(InsnKind::BinaryOp {
+            op: BinaryOpcode::Add,
+            lhs,
+            rhs,
+        });
+    };
+    ($insns:expr; $label:ident; [sub($lhs:tt, $rhs:tt)]) => {
+        $crate::push_node!($insns; lhs; $lhs);
+        $crate::push_node!($insns; rhs; $rhs);
+        let $label = InsnPc::from($insns.len());
+        $insns.push(InsnKind::BinaryOp {
+            op: BinaryOpcode::Sub,
+            lhs,
+            rhs,
+        });
+    };
+    ($insns:expr; $label:ident; [block { $($body:tt)* }]) => {
+        let old_len = $insns.len();
+        let $label = InsnPc::from(old_len);
+        $insns.push(InsnKind::Block {
+            body_len: 0,
+        });
+        $crate::instruction_seq!($insns; $($body)*);
+        let new_len = $insns.len();
+        let InsnKind::Block { body_len } = &mut $insns[$label] else {
+            panic!("Expected block at {:?}", $label);
+        };
+        *body_len = new_len - old_len - 1;
+    };
+    ($insns:expr; $label:ident; [if_else($condition:tt) {$($then:tt)*} {$($else:tt)*}]) => {
+        $crate::push_node!($insns; condition; $condition);
+        let old_len = $insns.len();
+        let $label = InsnPc::from(old_len);
+        $insns.push(InsnKind::IfElse {
+            condition,
+            then_len: 0,
+            else_len: 0,
+        });
+        $crate::instruction_seq!($insns; $($then)*);
+        let middle_len = $insns.len();
+        $crate::instruction_seq!($insns; $($else)*);
+        let new_len = $insns.len();
+        let InsnKind::IfElse { then_len, else_len, .. } = &mut $insns[$label] else {
+            panic!("Expected if-else at {:?}", $label);
+        };
+        *then_len = middle_len - old_len - 1;
+        *else_len = new_len - middle_len;
+    };
+    ($insns:expr; $label:ident; [loop_arg($initial:tt)]) => {
+        $crate::push_node!($insns; initial_value; $initial);
+        let $label = InsnPc::from($insns.len());
+        $insns.push(InsnKind::LoopArgument {
+            initial_value,
+        });
     }
 }
 
 #[macro_export]
-macro_rules! push_node {
-    ($insns:expr; [$node_kind:ident $($node_params:tt)*]) => {
-        {
-            let node = $crate::make_node!($insns; $node_kind $($node_params)*);
-            let pc = $insns.len();
-            $insns.push(node);
-            $crate::lir::InsnPc::from(pc)
-        }
-    };
-    ($insns:expr; $value:expr) => {
-        $value
-    };
+macro_rules! instruction_seq {
+    ($insns:expr; $($node_label:ident = $node:tt; )*) => {
+        $(
+            $crate::push_node!($insns; $node_label; $node);
+        )*
+    }
 }
 
 #[macro_export]
 macro_rules! instructions {
-    (let $insns:ident; $($node_label:ident = $node:tt; )*) => {
+    (let $insns:ident; $($inner:tt)*) => {
         let mut $insns: TiVec<InsnPc, InsnKind> = TiVec::new();
-        $(
-            let $node_label = $crate::push_node!($insns; $node);
-        )*
+        $crate::instruction_seq!($insns; $($inner)*);
     }
 }
 
@@ -177,6 +220,10 @@ mod tests {
 
     use super::super::*;
     use super::*;
+
+    use BinaryOpcode::*;
+    use InsnKind::*;
+    use ValType::*;
 
     #[test]
     fn test_macro() {
@@ -191,7 +238,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(dead_code)]
     fn test_nested_nodes() {
         instructions! {
             let insns;
@@ -255,9 +301,6 @@ mod tests {
             )];
         };
 
-        use BinaryOpcode::*;
-        use InsnKind::*;
-        use ValType::*;
         #[rustfmt::skip]
         assert_eq!(
             insns,
@@ -311,6 +354,100 @@ mod tests {
                 /*46*/ Const { r#type: I32, value: 1 },
                 /*47*/ BinaryOp { op: Add, lhs: InsnPc(45), rhs: InsnPc(46) },
                 /*48*/ LoopArgument { initial_value: InsnPc(47) }
+            ]
+        );
+    }
+
+    #[test]
+    fn test_block() {
+        instructions! {
+            let insns;
+            block_return_val = [block {
+                a = [constant(I32, 10)];
+                b = [constant(I32, 20)];
+                c = [add(a, b)];
+            }];
+            d = [add(block_return_val, [constant(I32, 30)])];
+        };
+        #[rustfmt::skip]
+        assert_eq!(
+            insns,
+            ti_vec![
+                /* 0*/ Block { body_len: 3 },
+                /* 1*/ Const { r#type: I32, value: 10 },
+                /* 2*/ Const { r#type: I32, value: 20 },
+                /* 3*/ BinaryOp { op: Add, lhs: InsnPc(1), rhs: InsnPc(2) },
+                /* 4*/ Const { r#type: I32, value: 30 },
+                /* 5*/ BinaryOp { op: Add, lhs: InsnPc(0), rhs: InsnPc(4) },
+            ]
+        );
+    }
+
+    #[test]
+    fn test_nested_blocks() {
+        instructions! {
+            let insns;
+            outer = [block {
+                a = [constant(I32, 10)];
+                b = [constant(I32, 20)];
+                c = [add(a, b)];
+                inner = [block {
+                    d = [constant(I32, 40)];
+                }];
+                _0 = [break_(0)(inner)];
+            }];
+            e = [add(outer, [constant(I32, 30)])];
+        };
+
+        #[rustfmt::skip]
+        assert_eq!(
+            insns,
+            ti_vec![
+                /*0*/ Block { body_len: 6 },
+                /*1*/ Const { r#type: I32, value: 10 },
+                /*2*/ Const { r#type: I32, value: 20 },
+                /*3*/ BinaryOp { op: Add, lhs: InsnPc(1), rhs: InsnPc(2) },
+                /*4*/ Block { body_len: 1 },
+                /*5*/ Const { r#type: I32, value: 40 },
+                /*6*/ Break { depth: 0, values: Box::new([InsnPc(4)]) },
+                /*7*/ Const { r#type: I32, value: 30 },
+                /*8*/ BinaryOp { op: Add, lhs: InsnPc(0), rhs: InsnPc(7) }
+            ]
+        );
+    }
+
+    #[test]
+    fn test_if_else() {
+        instructions! {
+            let insns;
+            if_else = [if_else([constant(I32, 10)]) {
+                a = [constant(I32, 20)];
+                b = [add(a, a)];
+                c = [add(b, b)];
+                _0 = [break_(0)(c)];
+            } {
+                d = [constant(I32, 30)];
+                e = [add(d, d)];
+                _0 = [break_(0)(e)];
+            }];
+            f = [add(if_else, [constant(I32, 40)])];
+        };
+
+        #[rustfmt::skip]
+        assert_eq!(
+            insns,
+            ti_vec![
+                /*0*/ Const { r#type: I32, value: 10 },
+                /*1*/ IfElse { condition: InsnPc(0), then_len: 4, else_len: 3 },
+                /*2*/ Const { r#type: I32, value: 20 },
+                /*3*/ BinaryOp { op: Add, lhs: InsnPc(2), rhs: InsnPc(2) },
+                /*4*/ BinaryOp { op: Add, lhs: InsnPc(3), rhs: InsnPc(3) },
+                /*5*/ Break { depth: 0, values: Box::new([InsnPc(4)]) },
+                /*6*/ Const { r#type: I32, value: 30 },
+                /*7*/ BinaryOp { op: Add, lhs: InsnPc(6), rhs: InsnPc(6) },
+                /*8*/ Break { depth: 0, values: Box::new([InsnPc(7)]) },
+                /*9*/ Const { r#type: I32, value: 40 },
+                /*10*/ BinaryOp { op: Add, lhs: InsnPc(1), rhs: InsnPc(9) }
             ]
         );
     }

@@ -3,6 +3,9 @@ use std::{
     ops::{Index, IndexMut, Range},
 };
 
+mod macros;
+pub use macros::stackification;
+
 pub trait InsnUniverse {
     type Pc: Copy + PartialEq + PartialOrd + Ord;
 
