@@ -43,7 +43,12 @@
 //! value. The return value of the if-else is encoded by the output of the
 //! `IfElseEnd` instruction, which *may not* be used inside the if-else.
 
-// TODO decide on the names of the block, loop, and if-else instructiohns
+// TODO update documentation
+
+// the body of a function should consist of just a single block that evaluates
+// to all the function's return values.
+
+// TODO add a function to validate that an LIR program is well-formed
 
 use std::ops::{Add, AddAssign, Range};
 
@@ -121,6 +126,15 @@ impl InsnOutput {
         match self {
             InsnOutput::Single(ty) => *ty,
             InsnOutput::Other(_) => panic!("expected single value, got multiple"),
+        }
+    }
+}
+
+impl AsRef<[ValType]> for InsnOutput {
+    fn as_ref(&self) -> &[ValType] {
+        match self {
+            InsnOutput::Single(ty) => std::slice::from_ref(ty),
+            InsnOutput::Other(tys) => tys.as_slice(),
         }
     }
 }
@@ -396,8 +410,14 @@ pub fn infer_output_types(instructions: &TiVec<InsnPc, InsnKind>) -> TiVec<InsnP
             InsnKind::StackStore { .. } => continue, // returns unit
             InsnKind::CallImportedFunction { .. } => todo!("function types not yet implemented"),
             InsnKind::CallUserFunction { .. } => todo!("function types not yet implemented"),
-            InsnKind::UnaryOp { op, operand } => todo!(),
-            InsnKind::BinaryOp { op, lhs, rhs } => todo!(),
+            InsnKind::UnaryOp { op, operand } => {
+                InsnOutput::Single(infer_unary_op_output_type(*op, types[*operand].unwrap_single()))
+            }
+            InsnKind::BinaryOp { op, lhs, rhs } => InsnOutput::Single(infer_binary_op_output_type(
+                *op,
+                types[*lhs].unwrap_single(),
+                types[*rhs].unwrap_single(),
+            )),
             InsnKind::Break { .. } => continue, // returns unit
             InsnKind::ConditionalBreak { .. } => continue, // returns unit
             InsnKind::Block { output_type, .. }
@@ -407,4 +427,24 @@ pub fn infer_output_types(instructions: &TiVec<InsnPc, InsnKind>) -> TiVec<InsnP
         }
     }
     types
+}
+
+fn infer_unary_op_output_type(op: UnaryOpcode, operand: ValType) -> ValType {
+    use UnaryOpcode::*;
+    use ValType::*;
+
+    match (op, operand) {
+        (I64ToI32, I64) => I32,
+        _ => todo!(),
+    }
+}
+
+fn infer_binary_op_output_type(op: BinaryOpcode, lhs: ValType, rhs: ValType) -> ValType {
+    use BinaryOpcode::*;
+    use ValType::*;
+
+    match (op, lhs, rhs) {
+        (Add, I32, I32) => I32,
+        _ => todo!(),
+    }
 }

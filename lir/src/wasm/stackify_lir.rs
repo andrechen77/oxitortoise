@@ -33,7 +33,14 @@ impl<'a> stackify::InsnUniverse for InsnsWithAdditionalInputs<'a> {
         match &self.insns[insn] {
             InsnKind::Argument { .. } => smallvec![],
             InsnKind::Const { .. } => smallvec![],
-            InsnKind::Project { multivalue, .. } => smallvec![*multivalue],
+            // for the purposes of stackification, projections do not actually
+            // take input from the multivalue being projected from, because they
+            // do not actually correspond to any real Wasm operation. Instead, a
+            // sequence of projection operations just follows the instruction
+            // they project from, each outputting their corresponding value onto
+            // the operand stack, simulating what would happen to the stack if
+            // the multivalue instruction was executed
+            InsnKind::Project { .. } => smallvec![],
             InsnKind::DeriveField { ptr, .. } => smallvec![*ptr],
             InsnKind::DeriveElement { ptr, index, .. } => smallvec![*ptr, *index],
             InsnKind::MemLoad { ptr, .. } => smallvec![*ptr],
