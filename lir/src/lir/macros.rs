@@ -156,20 +156,21 @@ macro_rules! push_node {
             rhs,
         });
     };
-    ($insns:expr; $label:ident; [block { $($body:tt)* }]) => {
+    ($insns:expr; $label:ident; [block([$($return_ty:ident)*]) { $($body:tt)* }]) => {
         let old_len = $insns.len();
         let $label = InsnPc::from(old_len);
         $insns.push(InsnKind::Block {
             body_len: 0,
+            output_type: InsnOutput::from_types([$(ValType::$return_ty),*]),
         });
         $crate::instruction_seq!($insns; $($body)*);
         let new_len = $insns.len();
-        let InsnKind::Block { body_len } = &mut $insns[$label] else {
+        let InsnKind::Block { body_len, .. } = &mut $insns[$label] else {
             panic!("Expected block at {:?}", $label);
         };
         *body_len = new_len - old_len - 1;
     };
-    ($insns:expr; $label:ident; [if_else($condition:tt) {$($then:tt)*} {$($else:tt)*}]) => {
+    ($insns:expr; $label:ident; [if_else([$($return_ty:ident)*])($condition:tt) {$($then:tt)*} {$($else:tt)*}]) => {
         $crate::push_node!($insns; condition; $condition);
         let old_len = $insns.len();
         let $label = InsnPc::from(old_len);
@@ -177,6 +178,7 @@ macro_rules! push_node {
             condition,
             then_len: 0,
             else_len: 0,
+            output_type: InsnOutput::from_types([$(ValType::$return_ty),*]),
         });
         $crate::instruction_seq!($insns; $($then)*);
         let middle_len = $insns.len();
@@ -209,6 +211,7 @@ macro_rules! instruction_seq {
 #[macro_export]
 macro_rules! instructions {
     (let $insns:ident; $($inner:tt)*) => {
+        use $crate::lir::{InsnOutput, InsnKind, InsnPc, ValType};
         let mut $insns: TiVec<InsnPc, InsnKind> = TiVec::new();
         $crate::instruction_seq!($insns; $($inner)*);
     }
@@ -224,6 +227,9 @@ mod tests {
     use super::super::*;
     use super::*;
 
+    // some instructions here make no sense, such as the break instruction,
+    // but this is just to test the macro syntax
+
     #[test]
     fn test_macro() {
         instructions! {
@@ -238,9 +244,6 @@ mod tests {
 
     #[test]
     fn test_nested_nodes() {
-        // some instructions here make no sense, such as the break instruction,
-        // but this is just to test the macro syntax
-
         instructions! {
             let insns;
             // Basic constants
@@ -364,7 +367,7 @@ mod tests {
     fn test_block() {
         instructions! {
             let insns;
-            block_return_val = [block {
+            block_return_val = [block([I32]) {
                 a = [constant(I32, 10)];
                 b = [constant(I32, 20)];
                 c = [add(a, b)];
@@ -375,7 +378,7 @@ mod tests {
         assert_eq!(
             insns,
             ti_vec![
-                /* 0*/ Block { body_len: 3 },
+                /* 0*/ Block { body_len: 3, output_type: InsnOutput::Single(I32) },
                 /* 1*/ Const { r#type: I32, value: 10 },
                 /* 2*/ Const { r#type: I32, value: 20 },
                 /* 3*/ BinaryOp { op: Add, lhs: InsnPc(1), rhs: InsnPc(2) },
@@ -389,11 +392,11 @@ mod tests {
     fn test_nested_blocks() {
         instructions! {
             let insns;
-            outer = [block {
+            outer = [block([I32]) {
                 a = [constant(I32, 10)];
                 b = [constant(I32, 20)];
                 c = [add(a, b)];
-                inner = [block {
+                inner = [block([I32]) {
                     d = [constant(I32, 40)];
                 }];
                 _0 = [break_(outer)(inner)];
@@ -405,11 +408,11 @@ mod tests {
         assert_eq!(
             insns,
             ti_vec![
-                /*0*/ Block { body_len: 6 },
+                /*0*/ Block { body_len: 6, output_type: InsnOutput::Single(I32) },
                 /*1*/ Const { r#type: I32, value: 10 },
                 /*2*/ Const { r#type: I32, value: 20 },
                 /*3*/ BinaryOp { op: Add, lhs: InsnPc(1), rhs: InsnPc(2) },
-                /*4*/ Block { body_len: 1 },
+                /*4*/ Block { body_len: 1, output_type: InsnOutput::Single(I32) },
                 /*5*/ Const { r#type: I32, value: 40 },
                 /*6*/ Break { target: InsnPc(0), values: Box::new([InsnPc(4)]) },
                 /*7*/ Const { r#type: I32, value: 30 },
@@ -422,7 +425,7 @@ mod tests {
     fn test_if_else() {
         instructions! {
             let insns;
-            if_else = [if_else([constant(I32, 10)]) {
+            if_else = [if_else([I32])([constant(I32, 10)]) {
                 a = [constant(I32, 20)];
                 b = [add(a, a)];
                 c = [add(b, b)];
@@ -440,7 +443,7 @@ mod tests {
             insns,
             ti_vec![
                 /*0*/ Const { r#type: I32, value: 10 },
-                /*1*/ IfElse { condition: InsnPc(0), then_len: 4, else_len: 3 },
+                /*1*/ IfElse { condition: InsnPc(0), then_len: 4, else_len: 3, output_type: InsnOutput::Single(I32) },
                 /*2*/ Const { r#type: I32, value: 20 },
                 /*3*/ BinaryOp { op: Add, lhs: InsnPc(2), rhs: InsnPc(2) },
                 /*4*/ BinaryOp { op: Add, lhs: InsnPc(3), rhs: InsnPc(3) },

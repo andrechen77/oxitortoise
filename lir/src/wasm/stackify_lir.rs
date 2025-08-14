@@ -13,12 +13,12 @@ use crate::{
 
 pub type Stackification = stackify::Stackification<InsnPc, TiVec<InsnPc, InsnTreeInfo<InsnPc>>>;
 
-struct InsnsWithCmpdInputs<'a> {
+struct InsnsWithAdditionalInputs<'a> {
     insns: &'a TiVec<InsnPc, InsnKind>,
-    cmpd_inputs: &'a HashMap<InsnPc, Vec<InsnPc>>,
+    additional_inputs: &'a HashMap<InsnPc, Vec<InsnPc>>,
 }
 
-impl<'a> stackify::InsnUniverse for InsnsWithCmpdInputs<'a> {
+impl<'a> stackify::InsnUniverse for InsnsWithAdditionalInputs<'a> {
     type Pc = InsnPc;
 
     fn instructions_in_range(&self, range: Range<Self::Pc>) -> impl Iterator<Item = Self::Pc> {
@@ -51,17 +51,17 @@ impl<'a> stackify::InsnUniverse for InsnsWithCmpdInputs<'a> {
                 inputs
             }
             InsnKind::Block { .. } => {
-                self.cmpd_inputs.get(&insn).map(|v| v.to_smallvec()).unwrap_or_default()
+                self.additional_inputs.get(&insn).map(|v| v.to_smallvec()).unwrap_or_default()
             }
             InsnKind::IfElse { condition, .. } => {
                 let mut inputs =
-                    self.cmpd_inputs.get(&insn).map(|v| v.to_smallvec()).unwrap_or_default();
+                    self.additional_inputs.get(&insn).map(|v| v.to_smallvec()).unwrap_or_default();
                 inputs.push(*condition);
                 println!("inputs of block are {:?}", inputs);
                 inputs
             }
             InsnKind::Loop { .. } => {
-                self.cmpd_inputs.get(&insn).map(|v| v.to_smallvec()).unwrap_or_default()
+                self.additional_inputs.get(&insn).map(|v| v.to_smallvec()).unwrap_or_default()
             }
             InsnKind::LoopArgument { initial_value: _ } => smallvec![],
         }
@@ -98,7 +98,9 @@ fn factor_common_prefix<T: PartialEq, const N: usize>(
     result
 }
 
-pub fn stackify_lir(insns: &TiVec<InsnPc, InsnKind>) -> Stackification {
+pub fn stackify_lir(
+    insns: &TiVec<InsnPc, InsnKind>,
+) -> (Stackification, HashMap<InsnPc, Vec<InsnPc>>) {
     let mut stackification = Stackification {
         forest: (0..insns.len())
             .map(|pc| InsnTreeInfo {
@@ -109,8 +111,8 @@ pub fn stackify_lir(insns: &TiVec<InsnPc, InsnKind>) -> Stackification {
         getters: BTreeMap::new(),
     };
 
-    // stores inputs that for compound instructions that might take parameters
-    let mut cmpd_inputs = HashMap::new();
+    // stores additional inputs for compound instructions that might take parameters
+    let mut additional_inputs = HashMap::new();
 
     // recursive through the compound instructions. stackify the deeper
     // compound instructions first,
@@ -118,7 +120,7 @@ pub fn stackify_lir(insns: &TiVec<InsnPc, InsnKind>) -> Stackification {
         insns,
         InsnPc::from(0)..InsnPc::from(insns.len()),
         &mut stackification,
-        &mut cmpd_inputs,
+        &mut additional_inputs,
     );
 
     // stackify the instructions in the range, recursively stackifying all
@@ -127,18 +129,13 @@ pub fn stackify_lir(insns: &TiVec<InsnPc, InsnKind>) -> Stackification {
         insns: &TiVec<InsnPc, InsnKind>,
         range: Range<InsnPc>,
         stackification: &mut Stackification,
-        cmpd_inputs: &mut HashMap<InsnPc, Vec<InsnPc>>,
+        additional_inputs: &mut HashMap<InsnPc, Vec<InsnPc>>,
     ) {
         // stackify all inner instructions first
         for (inner_seqs, pc) in InsnRefIter::new_with_range(insns, range.clone()) {
             for inner_seq in &inner_seqs {
-                stackify_recursive(insns, inner_seq.clone(), stackification, cmpd_inputs);
+                stackify_recursive(insns, inner_seq.clone(), stackification, additional_inputs);
             }
-
-            println!(
-                "encountered compound instruction at {:?}, cmpd_inputs: {:?}",
-                pc, cmpd_inputs
-            );
 
             // leading getters in the inner sequences can be factored out
             // and turned into inputs of the compound instruction
@@ -149,10 +146,9 @@ pub fn stackify_lir(insns: &TiVec<InsnPc, InsnKind>) -> Stackification {
                     // all parameters and use them as inputs to the compound
                     // instruction
                     let params = stackification.getters.remove(&seq.start).unwrap_or_default();
-                    cmpd_inputs.entry(pc).or_default().extend(params);
+                    additional_inputs.entry(pc).or_default().extend(params);
                 }
                 [a, b] => 'factoring: {
-                    println!("factoring inner sequences of {:?}", pc);
                     let Some(mut inner_0) = stackification.getters.remove(&a.start) else {
                         break 'factoring;
                     };
@@ -160,7 +156,7 @@ pub fn stackify_lir(insns: &TiVec<InsnPc, InsnKind>) -> Stackification {
                         break 'factoring;
                     };
                     let common_prefix = factor_common_prefix([&mut inner_0, &mut inner_1]);
-                    let prev_entry = cmpd_inputs.insert(pc, common_prefix);
+                    let prev_entry = additional_inputs.insert(pc, common_prefix);
                     assert!(
                         prev_entry.is_none(),
                         "there should be no previous entry for this compound insn"
@@ -191,7 +187,7 @@ pub fn stackify_lir(insns: &TiVec<InsnPc, InsnKind>) -> Stackification {
             split_end = insns[split_end].extent(split_end).1; // successor
             if matches!(this_insn, InsnKind::ConditionalBreak { .. }) || split_end == range.end {
                 stackify::stackify_sequential(
-                    &InsnsWithCmpdInputs { insns, cmpd_inputs },
+                    &InsnsWithAdditionalInputs { insns, additional_inputs },
                     split_start..split_end,
                     stackification,
                 );
@@ -200,7 +196,7 @@ pub fn stackify_lir(insns: &TiVec<InsnPc, InsnKind>) -> Stackification {
         }
     }
 
-    stackification
+    (stackification, additional_inputs)
 }
 
 fn print_with_stackification(insns: &TiVec<InsnPc, InsnKind>, stackification: &Stackification) {
@@ -239,7 +235,7 @@ mod tests {
             c = [add(a, b)];
         }
 
-        let stackification = stackify_lir(&insns);
+        let (stackification, _) = stackify_lir(&insns);
         assert_eq!(stackification, stackification! {
             Stackification;
             InsnPc;
@@ -259,9 +255,9 @@ mod tests {
             let insns;
             a = [constant(I32, 10)];
             b = [constant(I32, 20)];
-            outer = [block {
+            outer = [block([I32]) {
                 c = [add(a, b)];
-                inner = [block {
+                inner = [block([I32]) {
                     d = [add(c, a)];
                     break_2 = [break_(inner)(d)];
                 }];
@@ -269,7 +265,7 @@ mod tests {
             }];
         }
 
-        let stackification = stackify_lir(&insns);
+        let (stackification, _) = stackify_lir(&insns);
 
         assert_eq!(stackification, stackification! {
             Stackification;
@@ -295,7 +291,7 @@ mod tests {
             arg = [argument(I32, 0)];
             a = [constant(I32, 10)];
             b = [constant(I32, 20)];
-            branch = [if_else(arg) {
+            branch = [if_else([I32])(arg) {
                 d_0 = [add(a, b)];
                 break_0 = [break_(branch)(d_0)];
             } {
@@ -304,7 +300,7 @@ mod tests {
             }];
         }
 
-        let stackification = stackify_lir(&insns);
+        let (stackification, _) = stackify_lir(&insns);
 
         assert_eq!(stackification, stackification! {
             Stackification;

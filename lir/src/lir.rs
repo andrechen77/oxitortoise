@@ -104,6 +104,27 @@ pub enum ValType {
     FnPtr,
 }
 
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum InsnOutput {
+    /// The instruction outputs a single value,
+    Single(ValType),
+    /// The instruction outputs some other number of values. This may be zero.
+    Other(Vec<ValType>),
+}
+
+impl InsnOutput {
+    pub fn from_types<const N: usize>(types: [ValType; N]) -> Self {
+        if N == 1 { Self::Single(types[0]) } else { Self::Other(types.to_vec()) }
+    }
+
+    pub fn unwrap_single(&self) -> ValType {
+        match self {
+            InsnOutput::Single(ty) => *ty,
+            InsnOutput::Other(_) => panic!("expected single value, got multiple"),
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum InsnKind {
     Argument {
@@ -115,8 +136,11 @@ pub enum InsnKind {
         /// The bit pattern of the value to store.
         value: u64,
     },
-    /// Given the output of an instruction that takes multiple values, project
-    /// a single value.
+    /// Given the output of an instruction that takes multiple values, project a
+    /// single value. A project instruction can only appear in a contiguous
+    /// sequence of project instructions immediately following the instruction
+    /// producing the multivalue, and the projections must be in the same order
+    /// as they appear in the multivalue.
     Project {
         multivalue: InsnPc,
         index: u32,
@@ -181,11 +205,15 @@ pub enum InsnKind {
         lhs: InsnPc,
         rhs: InsnPc,
     },
-    /// Break out of some number of control flow constructs. The target
-    /// parameter is the location of the compound instruction that we are
-    /// breaking. **This is not the program counter we are jumping to.** Rather,
-    /// we jump to the label associated with that compound instruction. This is
-    /// also used to implement early returns.
+    /// Break out of some number of control flow constructs. This must be the
+    /// last instruction within an instruction sequence.
+    ///
+    /// # Target
+    ///
+    /// The target parameter is the location of the compound instruction that we
+    /// are breaking. **This is not the program counter we are jumping to.**
+    /// Rather, we jump to the label associated with that compound instruction.
+    /// This is also used to implement early returns.
     Break {
         target: InsnPc,
         values: Box<[InsnPc]>,
@@ -197,11 +225,15 @@ pub enum InsnKind {
         condition: InsnPc,
         values: Box<[InsnPc]>,
     },
+    // TODO add a fallthrough instruction to allow returning values from a
+    // loop without wrapping to the top of the loop again.
     /// A breakable block.
     Block {
         /// The number of instructions in the block's body. The following
         /// `body_len` instructions are considered inside this instruction.
         body_len: usize,
+        /// The type of output of this instruction.
+        output_type: InsnOutput,
     },
     /// An if-else statement.
     IfElse {
@@ -213,12 +245,16 @@ pub enum InsnKind {
         /// `then_len..then_len + else_len` instructions are considered inside
         /// this instruction.
         else_len: usize,
+        /// The type of output of this instruction.
+        output_type: InsnOutput,
     },
     /// A loop.
     Loop {
         /// The number of instructions in the loop's body. The following
         /// `body_len` instructions are considered inside this instruction.
         body_len: usize,
+        /// The type of output of this instruction.
+        output_type: InsnOutput,
     },
     /// An argument in a loop body
     LoopArgument {
@@ -228,12 +264,12 @@ pub enum InsnKind {
     },
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum UnaryOpcode {
     I64ToI32,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum BinaryOpcode {
     Add,
     Sub,
@@ -246,12 +282,12 @@ impl InsnKind {
     /// well as the program counter of the instruction that follows.
     pub fn extent(&self, my_pc: InsnPc) -> (SmallVec<[Range<InsnPc>; 2]>, InsnPc) {
         match self {
-            InsnKind::Block { body_len } => {
+            InsnKind::Block { body_len, .. } => {
                 let body_start = my_pc + 1;
                 let body_end = body_start + *body_len;
                 (smallvec![body_start..body_end], body_end)
             }
-            InsnKind::Loop { body_len } => {
+            InsnKind::Loop { body_len, .. } => {
                 let body_start = my_pc + 1;
                 let body_end = body_start + *body_len;
                 (smallvec![body_start..body_end], body_end)
@@ -340,4 +376,35 @@ pub fn count_uses(instructions: &TiVec<InsnPc, InsnKind>) -> TiVec<InsnPc, usize
         }
     }
     uses
+}
+
+pub fn infer_output_types(instructions: &TiVec<InsnPc, InsnKind>) -> TiVec<InsnPc, InsnOutput> {
+    // initialize to be all unit return types which will be overwritten later
+    let mut types = ti_vec![InsnOutput::Other(vec![]); instructions.len()];
+    for (pc, insn) in instructions.iter_enumerated() {
+        types[pc] = match insn {
+            InsnKind::Argument { r#type, .. } => InsnOutput::Single(*r#type),
+            InsnKind::Const { r#type, .. } => InsnOutput::Single(*r#type),
+            InsnKind::Project { .. } => {
+                InsnOutput::Single(todo!("projections not yet implemented"))
+            }
+            InsnKind::DeriveField { .. } => InsnOutput::Single(ValType::Ptr),
+            InsnKind::DeriveElement { .. } => InsnOutput::Single(ValType::Ptr),
+            InsnKind::MemLoad { r#type, .. } => InsnOutput::Single(*r#type),
+            InsnKind::MemStore { .. } => continue, // returns unit
+            InsnKind::StackLoad { r#type, .. } => InsnOutput::Single(*r#type),
+            InsnKind::StackStore { .. } => continue, // returns unit
+            InsnKind::CallImportedFunction { .. } => todo!("function types not yet implemented"),
+            InsnKind::CallUserFunction { .. } => todo!("function types not yet implemented"),
+            InsnKind::UnaryOp { op, operand } => todo!(),
+            InsnKind::BinaryOp { op, lhs, rhs } => todo!(),
+            InsnKind::Break { .. } => continue, // returns unit
+            InsnKind::ConditionalBreak { .. } => continue, // returns unit
+            InsnKind::Block { output_type, .. }
+            | InsnKind::IfElse { output_type, .. }
+            | InsnKind::Loop { output_type, .. } => output_type.clone(),
+            InsnKind::LoopArgument { initial_value } => types[*initial_value].clone(),
+        }
+    }
+    types
 }
