@@ -3,18 +3,19 @@
 //! like I8 which does not correspond to a Wasm type, then it will correspond
 //! to its promotion, the Wasm type I32.
 
-use std::{cell::RefCell, collections::HashMap, ops::Range};
+use std::{cell::RefCell, collections::HashMap};
 
-use typed_index_collections::{TiVec, ti_vec};
+use typed_index_collections::TiVec;
 use walrus::ir as wir;
 
-use crate::{
-    lir,
-    stackify::OutputMode,
-    wasm::stackify_lir::{Stackification, stackify_lir},
-};
+use crate::{lir, stackify::StackManipulators};
 
 mod stackify_lir;
+
+pub struct CodegenModuleCtx<'a> {
+    module: &'a mut walrus::Module,
+    memory_id: walrus::MemoryId,
+}
 
 pub fn lir_to_wasm(lir: &lir::Program) -> walrus::Module {
     let config = walrus::ModuleConfig::default();
@@ -47,40 +48,34 @@ pub fn lir_to_wasm(lir: &lir::Program) -> walrus::Module {
     module
 }
 
-pub struct CodegenModuleCtx<'a> {
-    module: &'a mut walrus::Module,
-    memory_id: walrus::MemoryId,
-}
-
-#[allow(unreachable_code)] // for the fact that i don't wanna get the memory
-pub fn add_function(ctx: &mut CodegenModuleCtx, lir: &lir::Function) {
+pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) {
     // create the function builder
     let parameter_types: Vec<_> =
-        lir.parameter_types.iter().copied().map(translate_val_type).collect();
-    let return_types: Vec<_> = lir.return_types.iter().copied().map(translate_val_type).collect();
+        func.parameter_types.iter().copied().map(translate_val_type).collect();
+    let return_types: Vec<_> =
+        func.body.output_type.as_ref().iter().copied().map(translate_val_type).collect();
     let mut function =
-        walrus::FunctionBuilder::new(&mut ctx.module.types, &parameter_types, &return_types);
+        walrus::FunctionBuilder::new(&mut mod_ctx.module.types, &parameter_types, &return_types);
 
     // calculate stackification and other metadata about the instructions
-    let lir_insns = &lir.instructions;
-    let uses = lir::count_uses(lir_insns);
-    let types = lir::infer_output_types(lir_insns);
-    let (stackification, additional_inputs) = stackify_lir(lir_insns);
+    // let mut remaining_uses = lir::count_uses(&func.body.body);
+    let types = lir::infer_output_types(func);
+    let stackification = stackify_lir::stackify_cfg(func);
+    let mut remaining_getters = stackify_lir::count_getters(&stackification);
 
     // add stack pointer if needed
     let needs_stack_ptr = true; // TODO should just check if we ever load/store to the stack
     let stack_ptr: Option<walrus::LocalId> =
-        needs_stack_ptr.then(|| ctx.module.locals.add(translate_val_type(lir::ValType::Ptr)));
+        needs_stack_ptr.then(|| mod_ctx.module.locals.add(translate_val_type(lir::ValType::Ptr)));
 
-    let mut insn_builder = function.func_body();
-
-    // associates each compound instruction with its walrus InstrSeqId
+    // associates each InsnSeqId with its walrus InstrSeqId
     let mut compound_labels = HashMap::new();
 
     // associates each instruction with the walrus local variable that holds its
     // output value, if one exists. using stackification, we are able to only
     // create local variables for instructions whose outputs are used
     // non-immediately.
+    // TODO add function arguments to the local_ids map
     let mut local_ids = HashMap::new();
     // TODO we can make more efficient use of local variables by having the
     // ctx.uses become ctx.remaining_uses, which counts down each time a getter
@@ -89,79 +84,153 @@ pub fn add_function(ctx: &mut CodegenModuleCtx, lir: &lir::Function) {
     // pull from when we need a new local variable without having to create a
     // new one every time.
 
-    let mut ctx = CodegenFnCtx {
-        module: ctx.module,
-        compound_labels: &mut compound_labels,
-        local_ids: &mut local_ids,
-        memory: ctx.memory_id,
-        stack_ptr,
-        lir_insns,
-        uses: &uses,
-        types: &types,
-        stackification: &stackification,
-        additional_inputs: &additional_inputs,
-    };
-    write_code(&mut ctx, &mut insn_builder, lir::InsnPc(0)..lir::InsnPc(lir_insns.len()));
-    // TODO there should be a special case for the first level of instructions,
-    // which we expect to be just a single block that evaluates to all the
-    // function's return values.
+    write_code(
+        &mut CodegenFnCtx {
+            module: mod_ctx.module,
+            func,
+            compound_labels: &mut compound_labels,
+            local_ids: &mut local_ids,
+            remaining_getters: &mut remaining_getters,
+            memory: mod_ctx.memory_id,
+            stack_ptr,
+            types: &types,
+            stk: &stackification,
+        },
+        &mut function.func_body(),
+        func.body.body,
+    );
 
     /// Context for codegen that does not depend on the current instruction
     /// sequence being built, but applies to the entire function.
     struct CodegenFnCtx<'a> {
         module: &'a mut walrus::Module,
-        compound_labels: &'a mut HashMap<lir::InsnPc, wir::InstrSeqId>,
-        local_ids: &'a mut HashMap<lir::InsnPc, wir::LocalId>,
+        func: &'a lir::Function,
+        compound_labels: &'a mut HashMap<lir::InsnSeqId, wir::InstrSeqId>,
+        local_ids: &'a mut HashMap<lir::ValRef, wir::LocalId>,
+        remaining_getters: &'a mut HashMap<lir::ValRef, usize>,
         memory: walrus::MemoryId,
         stack_ptr: Option<walrus::LocalId>,
-        lir_insns: &'a TiVec<lir::InsnPc, lir::InsnKind>,
-        uses: &'a TiVec<lir::InsnPc, usize>,
-        types: &'a TiVec<lir::InsnPc, lir::InsnOutput>,
-        stackification: &'a Stackification,
-        additional_inputs: &'a HashMap<lir::InsnPc, Vec<lir::InsnPc>>,
+        // remaining_uses: &'a mut TiVec<lir::ValRef, usize>,
+        types: &'a TiVec<lir::ValRef, lir::ValType>,
+        stk: &'a stackify_lir::CfgStackification,
     }
     fn write_code(
         ctx: &mut CodegenFnCtx,
         insn_builder: &mut walrus::InstrSeqBuilder,
-        seq: Range<lir::InsnPc>,
+        insn_seq_id: lir::InsnSeqId,
     ) {
-        // FUTURE add an operand stack just for validation so we know that
-        // stackification went well
+        ctx.compound_labels.insert(insn_seq_id, insn_builder.id());
 
-        for (inner_seqs, pc) in lir::InsnRefIter::new_with_range(ctx.lir_insns, seq) {
-            // insert all getters for the inputs to this instruction
-            if let Some(values_being_gotten) = ctx.stackification.getters.get(&pc) {
-                for value_being_gotten in values_being_gotten {
-                    let local_id = ctx.local_ids[value_being_gotten];
-                    insn_builder.local_get(local_id);
+        // track the operand stack. this is used so that we know what values we
+        // are capturing (if they need to be stored in a local or just dropped),
+        // as well as for validation
+        let mut op_stack: Vec<lir::ValRef> = Vec::new();
+
+        // the size of the prefix of the operand stack where all operands
+        // needing saving are known to be saved
+        let mut known_saved = 0;
+
+        let seq_stk = &ctx.stk.seqs[insn_seq_id];
+        for (pc, insn) in ctx.func.insn_seqs[insn_seq_id].iter_enumerated() {
+            let StackManipulators { captures, getters, inputs, outputs } = &seq_stk.manips[pc];
+
+            // generate code to handle capturing and saving before this
+            // instruction executes
+            for _ in 0..*captures {
+                let captured = op_stack.pop().expect("stackification should be correct");
+
+                if !ctx.local_ids.contains_key(&captured)
+                    && ctx.remaining_getters.contains_key(&captured)
+                {
+                    let local_id = allocate_local(ctx, captured);
+
+                    // add an instruction to store the captured value into a
+                    // local variable
+                    insn_builder.local_set(local_id);
+                } else {
+                    // drop the captured value
+                    insn_builder.drop();
                 }
+            }
+            if known_saved < op_stack.len() {
+                // the previous instruction introduced some new values that
+                // might need to be saved. If the operand stack looks like
+                // AAABABA, where A is an operand that does not need saving and
+                // B is one that does, then we need to pop as values as it takes
+                // to get the leftmost B on top, then tee that B, then push back
+                // all the other operands. for the common case where there is
+                // just a single value which needs saving, required_pops will be
+                // Some(0) and we will just tee that value.
+                let required_pops = op_stack
+                    .iter()
+                    .rev() // iterator counting backwards
+                    .take(op_stack.len() - known_saved) // stop when we reach known saved values
+                    .enumerate() // topmost val is 0, second top is 1, etc.
+                    .filter_map(|(i, v)| {
+                        (ctx.remaining_getters.contains_key(v) && !ctx.local_ids.contains_key(v))
+                            .then(|| i)
+                    })
+                    .last(); // get the bottomost value needing saving
+                // if required_pops is None, that means we did not find any
+                // new values that needed to be saved
+                if let Some(required_pops) = required_pops {
+                    // add instructions to pop values from the stack
+                    for i in 0..required_pops {
+                        let local_id = allocate_local(ctx, op_stack[op_stack.len() - i - 1]);
+                        insn_builder.local_set(local_id);
+                    }
+                    // the bottommost value needing saving is now on top of the
+                    // stack
+                    let local_id =
+                        allocate_local(ctx, op_stack[op_stack.len() - required_pops - 1]);
+                    insn_builder.local_tee(local_id);
+                    // add instructions to push the saved values back onto the
+                    // stack
+                    for i in (op_stack.len() - required_pops)..op_stack.len() {
+                        insn_builder.local_get(ctx.local_ids[&op_stack[i]]);
+                    }
+                }
+            }
+            // now we know every operand currently on the stack is saved (if it
+            // needs to be).
+
+            // generate code to add required getters
+            for v in getters {
+                // update bookkeeping on how many getters are left for this value
+                let num_remaining = ctx.remaining_getters.get_mut(v).unwrap();
+                *num_remaining -= 1;
+                if *num_remaining == 0 {
+                    ctx.remaining_getters.remove(v);
+                }
+
+                // generate code
+                insn_builder.local_get(ctx.local_ids[v]);
             }
 
             // generate code to execute the instruction
             use lir::InsnKind as I;
-            match &ctx.lir_insns[pc] {
-                I::Argument { .. } => {} // arguments do not show up in codegen
-                I::LoopArgument { initial_value } => {} // arguments do not show up in codegen
-                I::Project { .. } => {}  // projections do not show up in codegen
+            match insn {
+                I::Argument { r#type: _, index: _ } => {} // arguments do not show up in codegen
+                I::LoopArgument { initial_value: _ } => {} // arguments do not show up in codegen
                 I::Const { r#type, value } => {
                     insn_builder.const_(translate_val(*r#type, *value));
                 }
-                I::DeriveField { offset, ptr } => {
+                I::DeriveField { offset, ptr: _ } => {
                     insn_builder.const_(translate_usize(*offset)).binop(wir::BinaryOp::I32Add);
                 }
-                I::DeriveElement { element_size, ptr, index } => {
+                I::DeriveElement { element_size, ptr: _, index: _ } => {
                     insn_builder
                         .const_(translate_usize(*element_size))
                         .binop(wir::BinaryOp::I32Mul)
                         .binop(wir::BinaryOp::I32Add);
                 }
-                I::MemLoad { r#type, offset, ptr } => {
+                I::MemLoad { r#type, offset, ptr: _ } => {
                     let load_kind = infer_load_kind(*r#type);
                     let mem_arg = infer_mem_arg(*r#type, *offset);
                     insn_builder.load(ctx.memory, load_kind, mem_arg);
                 }
-                I::MemStore { offset, ptr, value } => {
-                    let r#type = ctx.types[*value].unwrap_single();
+                I::MemStore { offset, ptr: _, value } => {
+                    let r#type = ctx.types[*value];
                     let store_kind = infer_store_kind(r#type);
                     let mem_arg = infer_mem_arg(r#type, *offset);
                     insn_builder.store(ctx.memory, store_kind, mem_arg);
@@ -174,7 +243,7 @@ pub fn add_function(ctx: &mut CodegenModuleCtx, lir: &lir::Function) {
                         .load(ctx.memory, load_kind, mem_arg);
                 }
                 I::StackStore { offset, value } => {
-                    let r#type = ctx.types[*value].unwrap_single();
+                    let r#type = ctx.types[*value];
                     let store_kind = infer_store_kind(r#type);
                     let mem_arg = infer_mem_arg(r#type, *offset);
                     insn_builder
@@ -183,39 +252,38 @@ pub fn add_function(ctx: &mut CodegenModuleCtx, lir: &lir::Function) {
                 }
                 I::CallImportedFunction { .. } => todo!(),
                 I::CallUserFunction { .. } => todo!(),
-                I::UnaryOp { op, operand } => {
+                I::UnaryOp { op, operand: _ } => {
                     insn_builder.unop(translate_unary_op(*op));
                 }
                 I::BinaryOp { op, lhs, rhs } => {
-                    insn_builder.binop(translate_binary_op(
-                        *op,
-                        ctx.types[*lhs].unwrap_single(),
-                        ctx.types[*rhs].unwrap_single(),
-                    ));
+                    insn_builder.binop(translate_binary_op(*op, ctx.types[*lhs], ctx.types[*rhs]));
                 }
-                I::Break { target, values } => {
+                I::Break { target, values: _ } => {
                     let target = ctx.compound_labels[target];
                     insn_builder.br(target);
                 }
-                I::ConditionalBreak { target, condition, values } => {
+                I::ConditionalBreak { target, condition: _, values: _ } => {
                     let target = ctx.compound_labels[target];
                     insn_builder.br_if(target);
                 }
-                I::Block { body_len: _, output_type: _ } => {
-                    let seq_type = infer_instr_seq_type(ctx, pc);
-                    let [inner_seq] = &inner_seqs[..] else {
-                        panic!("a block instruction must have exactly one inner sequence");
-                    };
+                I::Block(lir::Block { output_type, body }) => {
+                    let seq_type = translate_instr_seq_type(
+                        &mut ctx.module.types,
+                        ctx.stk.seqs[*body].inputs.iter().map(|v| ctx.types[*v]),
+                        output_type.as_ref().iter().copied(),
+                    );
+
                     insn_builder.block(seq_type, |inner_builder| {
-                        ctx.compound_labels.insert(pc, inner_builder.id());
-                        write_code(ctx, inner_builder, inner_seq.clone());
+                        write_code(ctx, inner_builder, *body);
                     });
                 }
-                I::IfElse { condition, then_len: _, else_len: _, output_type: _ } => {
-                    let seq_type = infer_instr_seq_type(ctx, pc);
-                    let [then_seq, else_seq] = &inner_seqs[..] else {
-                        panic!("an if-else instruction must have exactly two inner sequences");
-                    };
+                I::IfElse(lir::IfElse { condition: _, then_body, else_body, output_type }) => {
+                    let seq_type = translate_instr_seq_type(
+                        &mut ctx.module.types,
+                        ctx.stk.seqs[*then_body].inputs.iter().map(|v| ctx.types[*v]),
+                        output_type.as_ref().iter().copied(),
+                    );
+
                     // put the &mut in a RefCell so we can borrow it twice in
                     // the two closures.
                     let ctx = RefCell::new(&mut *ctx);
@@ -226,90 +294,52 @@ pub fn add_function(ctx: &mut CodegenModuleCtx, lir: &lir::Function) {
                             // is okay as long as the label is set correctly while
                             // this branch is being built.
                             let mut ctx = ctx.borrow_mut();
-                            ctx.compound_labels.insert(pc, then_builder.id());
-                            write_code(&mut *ctx, then_builder, then_seq.clone());
+                            write_code(&mut *ctx, then_builder, *then_body);
                         },
                         |else_builder| {
                             // this may override the label in the other branch. this
                             // is okay as long as the label is set correctly while
                             // this branch is being built.
                             let mut ctx = ctx.borrow_mut();
-                            ctx.compound_labels.insert(pc, else_builder.id());
-                            write_code(&mut *ctx, else_builder, else_seq.clone());
+                            write_code(&mut *ctx, else_builder, *else_body);
                         },
                     );
                 }
-                I::Loop { body_len: _, output_type: _ } => {
-                    let seq_type = infer_instr_seq_type(ctx, pc);
-                    let [inner_seq] = &inner_seqs[..] else {
-                        panic!("a loop instruction must have exactly one inner sequence");
-                    };
+                I::Loop(lir::Loop { body, inputs, output_type }) => {
+                    let seq_type = translate_instr_seq_type(
+                        &mut ctx.module.types,
+                        inputs.iter().map(|v| ctx.types[*v]),
+                        output_type.as_ref().iter().copied(),
+                    );
+
                     insn_builder.loop_(seq_type, |inner_builder| {
-                        ctx.compound_labels.insert(pc, inner_builder.id());
-                        write_code(ctx, inner_builder, inner_seq.clone());
+                        write_code(ctx, inner_builder, *body);
                     });
                 }
             };
 
-            // resolve the output mode of this instruction
-            match &ctx.types[pc] {
-                lir::InsnOutput::Other(types) if types.is_empty() => {
-                    // the instruction has no outputs, so we don't need to do
-                    // anything
-                    assert!(ctx.stackification.forest[pc].output_mode == OutputMode::Available);
-                }
-                lir::InsnOutput::Single(r#type) => {
-                    match ctx.stackification.forest[pc].output_mode {
-                        OutputMode::Available | OutputMode::Capture { .. } => {
-                            // do not release the output value onto the stack.
-                            if ctx.uses[pc] == 0 {
-                                // drop the value right then and there
-                                insn_builder.drop();
-                            } else {
-                                // store the value into a local variable
-                                let local_id = allocate_local(ctx, *r#type, pc);
-                                insn_builder.local_set(local_id);
-                            }
-                        }
-                        OutputMode::Release { .. } => {
-                            if ctx.uses[pc] > 1 {
-                                // tee the value into a local variable
-                                let local_id = allocate_local(ctx, *r#type, pc);
-                                insn_builder.local_tee(local_id);
-                            }
-                        }
-                    }
-                }
-                lir::InsnOutput::Other(types) => {
-                    // A multivalue instruction itself doesn't actually output
-                    // any values from a LIR perspective, even if the
-                    // corresponding Wasm instruction does. Instead, the
-                    // multivalue instruction is followed by a sequence of
-                    // projection instructions which each in turn output the
-                    // corresponding value, simulating what would happen if the
-                    // real multivalue instruction was executed. Thus, it is
-                    // actually the output mode of the projection instructions
-                    // that determines how multivalues are handled. we don't
-                    // need to do anything here.
-                }
+            // remove the inputs from our symbolic operand stack
+            for input in inputs.iter().rev() {
+                let consumed = op_stack.pop();
+                assert_eq!(consumed, Some(*input));
             }
+            known_saved = op_stack.len();
+            // add the outputs to our symbolic operand stack
+            let outputs = outputs;
+            op_stack.extend(outputs);
         }
+
+        // TODO should we deliberately skip stack manipulators at the end? the
+        // end pc won't show up because it's not a real instruction
     }
-    fn infer_instr_seq_type(ctx: &mut CodegenFnCtx, pc: lir::InsnPc) -> wir::InstrSeqType {
-        let inputs =
-            ctx.additional_inputs[&pc].iter().map(|&input_pc| ctx.types[input_pc].unwrap_single());
-        let outputs = ctx.types[pc].as_ref().iter().copied();
-        translate_instr_seq_type(&mut ctx.module.types, inputs, outputs)
-    }
-    fn allocate_local(
-        ctx: &mut CodegenFnCtx,
-        r#type: lir::ValType,
-        pc: lir::InsnPc,
-    ) -> wir::LocalId {
-        let local_id = ctx.module.locals.add(translate_val_type(r#type));
-        ctx.local_ids.insert(pc, local_id);
+    fn allocate_local(ctx: &mut CodegenFnCtx, val: lir::ValRef) -> wir::LocalId {
+        let local_id = ctx.module.locals.add(translate_val_type(ctx.types[val]));
+        ctx.local_ids.insert(val, local_id);
         local_id
     }
+
+    // TODO add function arguments
+    function.finish(vec![], &mut mod_ctx.module.funcs);
 }
 
 /// Translate a LIR value type to a Wasm value type.
@@ -426,21 +456,30 @@ fn translate_instr_seq_type(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::instructions;
+    use crate::lir::lir_function;
 
     #[test]
     fn empty_module() {
-        let lir = lir::Program { entrypoints: vec![], functions: vec![] };
+        let lir = lir::Program::default();
         let mut module = lir_to_wasm(&lir);
         let wasm = module.emit_wasm();
         std::fs::write("test.wasm", wasm).unwrap();
     }
 
     #[test]
-    fn simple_function() {
-        instructions! {
-            let insns;
-
+    fn return_1() {
+        lir_function! {
+            let func return [I32];
+            main: {
+                break_(main)(constant(I32, 10));
+            }
         }
+        let mut lir = lir::Program::default();
+        let func_id = lir.functions.push_and_get_key(func);
+        lir.entrypoints.push(func_id);
+
+        let mut module = lir_to_wasm(&lir);
+        let wasm = module.emit_wasm();
+        std::fs::write("test.wasm", wasm).unwrap();
     }
 }

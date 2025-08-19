@@ -1,635 +1,1370 @@
-use std::{
-    collections::{BTreeMap, VecDeque},
-    ops::{Index, IndexMut, Range},
-};
+use std::{collections::HashMap, hash::Hash, iter::Step};
 
 mod macros;
 pub use macros::stackification;
+use smallvec::SmallVec;
+use typed_index_collections::TiVec;
 
-pub trait InsnUniverse {
-    type Pc: Copy + PartialEq + PartialOrd + Ord;
+/*
+stackification model
 
-    /// An iterator over all instructions of a certain range, without recursing
-    /// into compound instructions in the range.
-    fn instructions_in_range(&self, range: Range<Self::Pc>) -> impl Iterator<Item = Self::Pc>;
+the function is given an iterator over (pc, input, output). each one of these
+means that at the given pc, an instruction is executed that expects the given
+inputs on the operand stack and pushes the given outputs onto the operand stack.
+A regular instruction will just push one output, representing the value of the
+instruction's calculation, onto the stack, but other instructions might push
+multiple values, or propagate values from other instructions. A value is
+immutable, so any reference to a value can be satisfied by any instance of that
+value: e.g. if instruction A pushes a value A.v onto the stack, and then an
+identity instruction B pops A.v and pushes A.v again, then future instructions
+can use the output of B if it expects A.v.
 
-    /// Returns the instruction that shallowly succeeds the specified
-    /// instruction (compound instructions are considered one instruction).
-    fn succ_of(&self, insn: Self::Pc) -> Self::Pc;
-
-    /// Which instructions are used by the specified instruction as input,
-    /// given in the order they must be on the stack (bottom first).
-    fn inputs_of(&self, insn: Self::Pc) -> impl DoubleEndedIterator<Item = Self::Pc>;
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum OutputMode<Pc> {
-    /// This represents an undetermined output type. If this instruction
-    /// releases its result onto the operand stack, it will *not* be picked up
-    /// before the next available instruction.
-    Available,
-    /// This instruction will release its result onto the operand stack, and it
-    /// will be picked up by the parent instruction before the next available
-    /// instruction.
-    Release { parent: Pc },
-    /// Do not let this instruction release its result onto the operand stack.
-    /// The parent instruction is the instruction whose arguments were being
-    /// calculated when this instruction was captured.
-    Capture { parent: Pc },
-}
+The goal of the function is to return a list of values, associated with each pc,
+indicating the number of captures at that pc (indicating operands removed from
+the stack) and getters to insert at that pc, before the instruction at that pc
+runs. It also returns a list of values representing the available operands on
+the stack at the end of the sequence,
+*/
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct Stackification<Pc, M>
-where
-    M: IndexMut<Pc, Output = InsnTreeInfo<Pc>>,
+pub struct InsnSeqStackification<V, Pc: From<usize>> {
+    /// Values that must be on the stack when entering this instruction
+    /// sequence to get proper stack machine execution.
+    pub inputs: Vec<V>,
+    /// Information about execution at the specified pc to get proper stack
+    /// machine execution.
+    pub manips: TiVec<Pc, StackManipulators<V>>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct AvailOperand<V, Pc> {
+    value: V,
+    /// The pc at which the operand can be released (one plus the pc of the
+    /// instruction that outputs it, or zero if the operand is a forced
+    /// argument). These values are monotonically increasing over the
+    /// multivalues on the operand stack.
+    releases_at: Pc,
+    /// The pc at which the direct calculation of this operand, represented as
+    /// a tree, begins. Retro-inserting something onto the stack before this
+    /// operand can be done no later than this pc.
+    subtree_start: Pc,
+    /// If true, then this operand ends a multivalue. Each single value operand
+    /// ends a multivalue with just itself. All values of a multivalue except
+    /// for the last one will have this set to false. A getter can only be
+    /// inserted before an operand that ends a multivalue. If value in a
+    /// multivalue is captured, then all following values in the same multivalue
+    /// must also be captured. A multivalue on the stack (a sequence of [false,
+    /// false, ..., true]) does not necessarily have to come from a single
+    /// instruction. For example, if an instruction consumes only the suffix of
+    /// a multivalue and then outputs its own value on the stack, then it will
+    /// create a Frankenstein multivalue consisting of the unconsumed prefix of
+    /// the original multivalue concatenated with the return value of the
+    /// just-executed instruction. This is okay and is treated the same as any
+    /// other multivalue.
+    ends_multivalue: bool,
+}
+
+/// Describes what stack manipulators exist/need to be added at a given pc.
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct StackManipulators<V> {
+    /// The number of captures to insert at this pc. A "capture" corresponds to
+    /// popping a value off the top of the stack and dropping it. These captures
+    /// are inserted first before any other stack manipulators and before the
+    /// instruction at the pc is executed.
+    pub captures: usize,
+    /// The values for the getters to insert at this pc. These are inserted
+    /// after the captures but before the instruction at the pc is executed.
+    pub getters: Vec<V>,
+    /// The inputs to the instruction at this pc.
+    pub inputs: SmallVec<[V; 2]>,
+    /// The outputs of the instruction at this pc.
+    pub outputs: SmallVec<[V; 1]>,
+}
+
+// impl<V> Default for StackManipulators<V> {
+//     fn default() -> Self {
+//         Self { captures: 0, getters: Vec::new() }
+//     }
+// }
+
+/// * `available_operand_stack` - The stack of operands that are available to
+///   the current instruction.
+/// * `available_getters` - Maps each value to the earliest pc at which it can
+///   be gotten. None indicates that the value was calculated before any pc.
+/// * `my_pc` - The pc at which the instruction is executed. Must be greater
+///   than allPc's in the available_operands stack and available_getters
+pub fn stackify_single<V, Pc>(
+    available_operand_stack: &mut Vec<AvailOperand<V, Pc>>,
+    available_getters: &mut HashMap<V, Pc>,
+    stack_manips: &mut TiVec<Pc, StackManipulators<V>>,
+    my_pc: Pc,
+    inputs: SmallVec<[V; 2]>,
+    outputs: SmallVec<[V; 1]>,
+) where
+    V: Copy + PartialEq + Eq + Hash,
+    Pc: PartialOrd + Ord + Copy + Step + From<usize>,
+    usize: From<Pc>,
 {
-    pub forest: M,
-    pub getters: BTreeMap<Pc, VecDeque<Pc>>,
-}
+    // The order barrier is an index into the operand stack. Only operands
+    // after the order barrier may be released. Getters may only be inserted
+    // after the order barrier. This restriction ensures that the inputs to
+    // the current instruction are in the correct order.
+    let mut order_barrier = 0;
+    // An index to the operand stack indicating the first operand to be
+    // released.
+    let mut first_released_operand = None;
 
-/// Information associated with an instruction that helps determine its
-/// input/output relations with other instructions.
-#[derive(Debug, PartialEq, Eq)]
-pub struct InsnTreeInfo<Pc> {
-    pub output_mode: OutputMode<Pc>,
-    /// The start of the subtree rooted at this instruction.
-    pub subtree_start: Pc,
-}
+    let mut operand_is_released = vec![false; available_operand_stack.len()];
 
-/// Finds the root of the subtree that includes `start_insn`. If the next parent
-/// encountered would be `ignore_insn`, then stops and returns the previous
-/// instruction traversed.
-fn find_root<Pc: PartialEq + PartialOrd + Copy, M>(
-    forest: &M,
-    start_insn: Pc,
-    ignore_insn: Pc,
-) -> Pc
-where
-    M: Index<Pc, Output = InsnTreeInfo<Pc>>,
-{
-    let mut insn = start_insn;
-    while let OutputMode::Capture { parent } | OutputMode::Release { parent } =
-        forest[insn].output_mode
-        && parent != ignore_insn
-    {
-        insn = parent;
-    }
-    insn
-}
+    // If we haven't released any inputs yet, then we won't know where to insert
+    // a getter even if know we need a getter. There are called "lost getters",
+    // and will be stored at the pc of the current instruction if there are no
+    // released inputs, and before the first released input if there are.
+    let mut getters = Vec::new();
 
-/// Calculates how the given instruction sequence with sequential control flow
-/// can be made to execute correctly on a stack machine. This function is only
-/// valid for ranges of instructions with sequential control flow, meaning each
-/// instruction leads into the next one (or diverges). Assume a stack machine
-/// where each instruction, when executed, pops some number of values off the
-/// top of the operand stack and pushes the result onto the operand stack. This
-/// function calculates the correct points at which to insert operand stack
-/// manipulators so that each each LIR instruction in the given sequence, when
-/// executed *in that sequence*, will see its inputs on the stack in the correct
-/// order. Notice that this function will never re-order instructions: it works
-/// with the given order.
-///
-/// # Returns
-///
-/// A tuple containing: 0) the output mode for each instruction in the block,
-/// and 1) additional places to insert local variable getter. For `return.0`,
-/// the output mode of index `i` indicates what manipulators, if any, should be
-/// inserted *after* the instruction at index `i` in the block, to get correct
-/// stack machine execution. For `return.1`, the tuple `(i, insn)` indicates
-/// that a local variable getter should be inserted *before* the instruction at
-/// index `i` in the block, to get correct stack machine execution. This list
-/// will be sorted by `i`. There may be multiple local variable getters before
-/// the same index. In this case they should inserted in the order they appear.
-pub fn stackify_sequential<T: InsnUniverse, M: IndexMut<T::Pc, Output = InsnTreeInfo<T::Pc>>>(
-    insns: &T,
-    seq: Range<T::Pc>,
-    stackification: &mut Stackification<T::Pc, M>,
-) {
-    /*
-    Algorithm: All instructions start with an output mode of available. Iterate
-    through each LIR instruction, conceptually executing
-    them one at a time. When an instruction C needs inputs from previous
-    instructions A_0, A_1, A_2, etc. (where they are numbered according to the
-    argument order of C), attempt to allow A_0, etc. to release their
-    results onto the operand stack in argument order. Let the instruction for
-    which we are evaluating release be A_x.
+    for input in &inputs {
+        // check if the input is available on the operand stack after the
+        // order barrier
+        if let Some((operand_idx, operand)) =
+            available_operand_stack.iter().enumerate().skip(order_barrier).find(|(_, o)| o.value == *input)
+            // check if the subtree start of the input comes after all previous
+            // inputs with lost getters
+            && getters.iter().all(|(_, v)| available_getters.get(v) <= Some(&operand.subtree_start))
+        {
+            // the input can be released
+            operand_is_released[operand_idx] = true;
 
-    Releasing A_x cannot be done if one of the following is true.
-    - A_x is not available (including if it was already released).
-    - A_x was executed before a previous input A_y where y < x. Releasing A_x
-    here would cause the operands to be out of order.
-    - There exists a previous input A_y where y < x such that the subtree rooted
-    at A_x includes A_y. The subtree comprises all instructions which are used
-    to build
-    up the operand for A_x; on the right it is bordered by and excludes A_x, and
-    on the left it is bordered by and includes the subtree for
-    A_x's first released argument. Releasing A_x
-    would make it impossible to get A_y in the correct place. Since A_y is
-    calculated within the subtree, we cannot add a getter for
-    A_y before the subtree.
+            if first_released_operand.is_none() {
+                first_released_operand = Some(operand_idx);
 
-    Based on the above, do the following.
-    - If A_x can be released, set its output mode to `Release`
-    - If A_x cannot be released, insert a getter manipulator directly after
-    A_{x-1}, or directly at the next available sport after the A_x instruction
-    itself, whichever comes later; or if A_x is the first argument A_0, directly
-    before A_1; or if A_x is the last argument, directly before C. This will
-    ensure the argument is in the correct place on the operand stack when C
-    executes. Do not change its output mode yet.
-
-    At this point, all arguments A_0, etc. have been accounted for. Now we
-    handle all instructions between the released arguments and C.
-    Let a be the index of the earliest executed instruction in A_0, etc. that
-    was released. Let c be the index of C. For all instructions I in [a, c),
-    if I was available, change I's output mode to `Capture`. This will prevent
-    any instructions other than those we want to be released from affecting the
-    operand stack when C executes.
-    */
-
-    for current_insn in insns.instructions_in_range(seq.clone()) {
-        #[derive(Clone, Copy)]
-        struct SubtreeSpan<Pc> {
-            // this is the first input that was released.
-            first_released: Pc,
-            // this is the pc at which the latest input was released/gotten.
-            // inserting a getter or releasing an operand earlier than this point
-            // will cause operands to be out of order.
-            insertion_pc: Pc,
-        }
-        let mut subtree_span: Option<SubtreeSpan<T::Pc>> = None;
-
-        // vector of (insertion_pc, value) pairs indicating getters for `value`
-        // inserted at `insertion_pc`
-        let mut current_getters: Vec<(T::Pc, T::Pc)> = vec![];
-
-        for input_insn in insns.inputs_of(current_insn) {
-            // check if the input can be released
-
-            // the input must be inside the current block. assume that
-            // instructions only use inputs that are in scope (i.e. does not
-            // reach into compound instructions or use inputs from the future),
-            // which is required for well-formed instruction sequences.
-            if seq.contains(&input_insn)
-                // the input must be available
-                && stackification.forest[input_insn].output_mode == OutputMode::Available
-                // the input must not occur out of order. None compares less
-                // than any index
-                && Some(input_insn) >= subtree_span.map(|s| s.insertion_pc)
-                // the input must be calculated after all previous inputs that
-                // need a getter
-                && current_getters.iter().all(|&(_, value)| value < stackification.forest[input_insn].subtree_start)
-            {
-                // the input can be released
-                match &mut subtree_span {
-                    Some(s) => s.insertion_pc = insns.succ_of(input_insn),
-                    None => {
-                        subtree_span = Some(SubtreeSpan {
-                            first_released: input_insn,
-                            insertion_pc: insns.succ_of(input_insn),
-                        });
-
-                        // since this is the first input to be released, we need
-                        // to move the getters for all previous inputs to be
-                        // before this input
-                        for (pc, _) in &mut current_getters {
-                            *pc = stackification.forest[input_insn].subtree_start;
-                        }
-                    }
+                // since this is the first input to be released, we need to move
+                // the getters for all previous inputs to be before this input.
+                // the above check that the subtree start comes after all
+                // previous getter-needing inputs ensures that the getters are
+                // valid at their new position.
+                for (pc, _) in &mut getters {
+                    *pc = operand.subtree_start;
                 }
-                stackification.forest[input_insn].output_mode =
-                    OutputMode::Release { parent: current_insn };
+            }
+
+            // update the order barrier on the operand stack to right after this
+            // input. this ensures that the next inputs to the instruction are
+            // in the correct order
+            order_barrier = operand_idx + 1;
+        } else {
+            // the input cannot be released. insert a getter for it.
+
+            // get the pc after which the value can be gotten.
+            let birthdate = available_getters.get(input);
+            assert!(birthdate <= Some(&my_pc));
+
+            if first_released_operand.is_some() {
+                // a previous input has already been released. try to insert the
+                // getter as early as possible after the most recently released
+                // input while respecting the order of inputs
+
+                let (new_order_barrier, insertion_pc) = (order_barrier..)
+                    .map(|i| (i, &available_operand_stack[i - 1])) // order barrier must be > 0 bc something was released
+                    .find_map(|(i, o)| {
+                        (o.ends_multivalue && Some(&o.releases_at) >= birthdate)
+                            .then(|| (i, o.releases_at))
+                    })
+                    // if the top of the stack is just part of a multivalue,
+                    // the suffix of which was chomped off by someone else
+                    // before we got here, then we can't insert a getter after
+                    // that multivalue was released. therefore, put the getter
+                    // before this instruction.
+                    .unwrap_or((available_operand_stack.len(), my_pc));
+
+                // update the order barrier to ensure that the next input is in
+                // the correct order
+                order_barrier = new_order_barrier;
+
+                getters.push((insertion_pc, *input));
             } else {
-                // the input cannot be released. insert a getter for it
-                match &mut subtree_span {
-                    Some(s) => {
-                        // ignore the current instruction when finding the
-                        // root because we still haven't finished building
-                        // the subtree rooted at the current instruction
-                        // yet
-                        let root_insn = find_root(&stackification.forest, input_insn, current_insn);
-                        if root_insn != current_insn && root_insn > s.insertion_pc {
-                            s.insertion_pc = insns.succ_of(root_insn);
-                        }
-                        current_getters.push((s.insertion_pc, input_insn));
-                    }
-                    None => {
-                        // no inputs have been released yet. we don't know where
-                        // to insert the getter, so insert it before the current
-                        // instruction for now
-                        current_getters.push((current_insn, input_insn));
-                    }
-                }
-            }
-        }
-
-        // at this point we have gone through all the inputs of the current
-        // instruction. if some inputs were released, then we need to lock up
-        // all instructions between the first released input and the current
-        // instruction
-        if let Some(SubtreeSpan { first_released, .. }) = subtree_span {
-            stackification.forest[current_insn].subtree_start =
-                stackification.forest[first_released].subtree_start;
-            // do not lock the current instruction, since its output type is
-            // still undetermined
-            for to_be_locked in insns.instructions_in_range(first_released..current_insn) {
-                if stackification.forest[to_be_locked].output_mode == OutputMode::Available {
-                    stackification.forest[to_be_locked].output_mode =
-                        OutputMode::Capture { parent: current_insn };
-                }
-            }
-        }
-
-        // insert getters required for inputs to the current insn. insert the
-        // getters in the order they appear; however they must all be inserted
-        // before any other getters at the same index. this is because any
-        // getters already inserted are meant to apply to the instruction
-        // following them, which binds more tightly than the current
-        // instruction.
-        for (insertion_pc, value) in current_getters.into_iter().rev() {
-            stackification.getters.entry(insertion_pc).or_default().push_front(value);
+                // no previous inputs have been released yet. we don't know
+                // where to insert the getter, so store it before the current
+                // instruction for now
+                getters.push((my_pc, *input));
+            };
         }
     }
-    debug_assert!(verify_stackification(insns, seq, &stackification).is_ok());
+
+    let my_subtree_start =
+        first_released_operand.map_or(my_pc, |i| available_operand_stack[i].subtree_start);
+
+    // at this point we have gone through all the inputs of the current
+    // instruction.
+
+    // if some inputs were released, then we need to remove all operands on the
+    // stack after the first released operand, capturing where appropriate.
+    if let Some(first_released_operand) = first_released_operand {
+        remove_excess_operands(
+            available_operand_stack
+                .drain(first_released_operand..)
+                .zip(operand_is_released.drain(first_released_operand..)),
+            stack_manips,
+            my_pc,
+        );
+    }
+    // in addition, insert all getters at the correct locations. the getters are
+    // inserted in the order they appear, but they must come before any getters
+    // already inserted at the same pc. The pre-existing getters should bind
+    // more tightly, which is done by having them come after
+    for (insertion_pc, v) in getters.into_iter().rev() {
+        // FUTURE can be made faster
+        stack_manips[insertion_pc].getters.insert(0, v);
+    }
+
+    // at this point we have removed all inputs for the current instruction.
+    // now we need to add the outputs of the current instruction to the
+    // operand stack for the next instruction to potentially use
+    let succ_pc = Pc::forward(my_pc, 1);
+    for (i, output) in outputs.iter().enumerate() {
+        available_operand_stack.push(AvailOperand {
+            value: *output,
+            releases_at: succ_pc,
+            subtree_start: my_subtree_start,
+            ends_multivalue: i == outputs.len() - 1,
+        });
+        available_getters.insert(*output, succ_pc);
+    }
+
+    stack_manips[my_pc].inputs = inputs;
+    stack_manips[my_pc].outputs = outputs;
 }
 
-/// Verifies if the given stackfication is correct with respect to the given
-/// instruction sequence. Returns an error with the instruction at which an
-/// error occurs.
-fn verify_stackification<T: InsnUniverse, M: IndexMut<T::Pc, Output = InsnTreeInfo<T::Pc>>>(
-    insns: &T,
-    seq: Range<T::Pc>,
-    stackification: &Stackification<T::Pc, M>,
-) -> Result<(), T::Pc> {
-    let mut op_stack: Vec<T::Pc> = vec![];
+/// Given that a subsequence of instructions has been stackified and results in
+/// the given stack of excess operands, add manipulators such that there is no
+/// excess except for the operands marked as released.
+///
+/// # Arguments
+///
+/// * `excess_op_stack` - An iterator over all operands needing to be cleared,
+/// paired with a boolean indicating whether the operand should be released.
+/// False means the operand is excess and should be captured, while true means
+/// the operand is required and should be released.
+/// * `manips` - The set of stack manipulators to add to such to achieve the
+/// desired result.
+/// * `target_pc` - The pc at which we want to achieve the target state with the
+/// operand stack containing only the released operands. This is also the
+/// fallback location to add stack manipulators if manipulators cannot be added
+/// immediately after the instructions that produced the operands. This value
+/// must be greater than all pc's in the excess op stack.
+pub fn remove_excess_operands<V, Pc>(
+    excess_op_stack: impl Iterator<Item = (AvailOperand<V, Pc>, bool)>,
+    manips: &mut TiVec<Pc, StackManipulators<V>>,
+    target_pc: Pc,
+) where
+    V: Copy + PartialEq + Eq + Hash,
+    Pc: PartialOrd + Ord + Copy + Step + From<usize>,
+    usize: From<Pc>,
+{
+    // The general idea of the algorithm is to go through each operand and, if
+    // it is required, release it, and if it is excess, capture it. This can
+    // usually be done by simply adding or not adding a capture at the pc where
+    // the operand would be released.
+    //
+    // However, if the operand being captured is not the last operand in a
+    // multivalue, then all following operands in the same multivalue must also
+    // be captured. if one such operand was supposed to be released, then it
+    // will instead be captured and then re-released at the end of the
+    // multivalue. this process is known as "re-releasing" multivalues. The
+    // variable `queued_for_rerelease` is None if a rerelease is not in
+    // progress, otherwise it is Some.
+    let mut queued_for_rerelease: Option<Vec<V>> = None;
+    let mut num_captures = 0;
 
-    for insn in insns.instructions_in_range(seq) {
-        // first, resolve all local getters before this instruction
-        if let Some(values) = stackification.getters.get(&insn) {
-            for &value in values {
-                // verify that the instruction being gotten has actually been
-                // calculcated
-                if value >= insn {
-                    return Err(insn);
+    for (operand, should_be_released) in excess_op_stack {
+        if should_be_released {
+            if let Some(queued) = &mut queued_for_rerelease {
+                // insert a capture to account for the operand to prevent it
+                // from being released, but queue it for re-release so that
+                // it will show up as normal when the multivalue ends
+                num_captures += 1;
+                queued.push(operand.value);
+            } else {
+                // release normally, which is done by simply not adding
+                // a capture
+            }
+        } else {
+            // insert a capture for the operand to prevent it from being
+            // released
+            num_captures += 1;
+
+            if !operand.ends_multivalue {
+                queued_for_rerelease.get_or_insert_default();
+            }
+        }
+
+        if operand.ends_multivalue {
+            // now re-release all the queued operands and add the captures
+            // we counted
+            if queued_for_rerelease.as_ref().is_some_and(|v| !v.is_empty()) || num_captures > 0 {
+                let manips = &mut manips[operand.releases_at];
+                if let Some(v) = queued_for_rerelease.take() {
+                    manips.getters.extend(v.into_iter());
                 }
-
-                op_stack.push(value);
+                manips.captures += num_captures;
             }
-        }
 
-        // take input operands off the operand stack
-        for input in insns.inputs_of(insn).into_iter().rev() {
-            if op_stack.pop() != Some(input) {
-                return Err(insn);
-            }
-        }
-
-        // push the result onto the operand stack unless it is captured
-        match stackification.forest[insn].output_mode {
-            OutputMode::Release { .. } | OutputMode::Available => op_stack.push(insn),
-            OutputMode::Capture { .. } => {}
+            queued_for_rerelease = None;
+            num_captures = 0;
         }
     }
 
-    Ok(())
+    if let Some(queued) = queued_for_rerelease {
+        // this means the last operand did not end a multivalue. whatever
+        // captures and queued re-releases we counted cannot be inserted
+        // at the end of the multivalue because the end was used by a
+        // previous instruction. instead, insert the captures and getters
+        // immediately before the target pc
+        let manips = &mut manips[target_pc];
+        manips.getters.extend(queued.into_iter());
+        manips.captures += num_captures;
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use smallvec::{ToSmallVec as _, smallvec};
+    use typed_index_collections::ti_vec;
+
     use super::*;
 
-    #[derive(Clone, Debug)]
-    struct TestInsn {
-        inputs: Vec<usize>,
-    }
-    type TestInsnUniverse = Vec<TestInsn>;
-    impl InsnUniverse for TestInsnUniverse {
-        type Pc = usize;
+    type Pc = usize;
+    type V = &'static str;
 
-        fn instructions_in_range(&self, range: Range<Self::Pc>) -> impl Iterator<Item = Self::Pc> {
-            range.start..range.end
-        }
-
-        fn inputs_of(&self, insn: Self::Pc) -> impl DoubleEndedIterator<Item = Self::Pc> {
-            self[insn].inputs.iter().copied()
-        }
-
-        fn succ_of(&self, insn: Self::Pc) -> Self::Pc {
-            insn + 1
-        }
+    macro_rules! avail_operand {
+        ($value:expr, $range:expr, $ends_multivalue:expr) => {
+            AvailOperand {
+                value: $value,
+                releases_at: $range.end,
+                subtree_start: $range.start,
+                ends_multivalue: $ends_multivalue,
+            }
+        };
     }
 
-    fn create_stackification(
-        insns: &TestInsnUniverse,
-    ) -> Stackification<usize, Vec<InsnTreeInfo<usize>>> {
-        Stackification {
-            forest: (0..insns.len())
-                .map(|i| InsnTreeInfo { output_mode: OutputMode::Available, subtree_start: i })
-                .collect(),
-            getters: BTreeMap::new(),
-        }
+    #[test]
+    fn no_op() {
+        let mut op_stack = vec![avail_operand!("a", 0..0, true), avail_operand!("b", 0..1, true)];
+        let mut getters = HashMap::from([("a", 0), ("b", 1)]);
+        let mut stk = stackification! {
+            inputs [];
+            [0] cap(0) get[] [] => [];
+            [1] cap(0) get[] [] => [];
+            [2] cap(0) get[] [] => [];
+        };
+
+        stackify_single::<V, Pc>(
+            &mut op_stack,
+            &mut getters,
+            &mut stk.manips,
+            2,
+            smallvec![],
+            smallvec![],
+        );
+        assert_eq!(
+            op_stack,
+            vec![avail_operand!("a", 0..0, true), avail_operand!("b", 0..1, true)]
+        );
+        assert_eq!(getters, HashMap::from([("a", 0), ("b", 1)]));
+        assert_eq!(
+            stk,
+            stackification! {
+                inputs [];
+                [0] cap(0) get[] [] => [];
+                [1] cap(0) get[] [] => [];
+                [2] cap(0) get[] [] => [];
+            }
+        );
+    }
+
+    #[test]
+    fn three_args_one_output() {
+        let mut op_stack = vec![
+            avail_operand!("a", 0..0, true),
+            avail_operand!("b", 0..1, true),
+            avail_operand!("c", 1..2, true),
+        ];
+        let mut getters = HashMap::from([("a", 0), ("b", 1), ("c", 2)]);
+        let mut stk = stackification! {
+            inputs [];
+            [0] cap(0) get[] [] => [];
+            [1] cap(0) get[] [] => [];
+            [2] cap(0) get[] [] => [];
+        };
+
+        stackify_single::<V, Pc>(
+            &mut op_stack,
+            &mut getters,
+            &mut stk.manips,
+            2,
+            smallvec!["a", "b", "c"],
+            smallvec!["x"],
+        );
+
+        assert_eq!(op_stack, vec![avail_operand!("x", 0..3, true)]);
+        assert_eq!(getters, HashMap::from([("a", 0), ("b", 1), ("c", 2), ("x", 3)]));
+        assert_eq!(
+            stk,
+            stackification! {
+                inputs [];
+                [0] cap(0) get[] [] => [];
+                [1] cap(0) get[] [] => [];
+                [2] cap(0) get[] ["a", "b", "c"] => ["x"];
+            }
+        );
+    }
+
+    #[test]
+    fn args_out_of_order() {
+        let mut op_stack = vec![
+            avail_operand!("a", 0..0, true),
+            avail_operand!("b", 0..1, true),
+            avail_operand!("c", 1..2, true),
+            avail_operand!("d", 2..3, true),
+        ];
+        let mut getters = HashMap::from([("a", 0), ("b", 1), ("c", 2), ("d", 3)]);
+        let mut stk = stackification! {
+            inputs [];
+            [0] cap(0) get[] [] => [];
+            [1] cap(0) get[] [] => [];
+            [2] cap(0) get[] [] => [];
+            [3] cap(0) get[] [] => [];
+        };
+
+        stackify_single::<V, Pc>(
+            &mut op_stack,
+            &mut getters,
+            &mut stk.manips,
+            3,
+            smallvec!["c", "b", "d"],
+            smallvec!["x"],
+        );
+
+        assert_eq!(
+            op_stack,
+            vec![
+                avail_operand!("a", 0..0, true),
+                avail_operand!("b", 0..1, true),
+                avail_operand!("x", 1..4, true),
+            ]
+        );
+        assert_eq!(getters, HashMap::from([("a", 0), ("b", 1), ("c", 2), ("d", 3), ("x", 4)]));
+        assert_eq!(
+            stk,
+            stackification! {
+                inputs [];
+                [0] cap(0) get[] [] => [];
+                [1] cap(0) get[] [] => [];
+                [2] cap(0) get["b"] [] => [];
+                [3] cap(0) get[] ["c", "b", "d"] => ["x"];
+            }
+        );
+    }
+
+    #[test]
+    fn stackify_args_with_captures() {
+        let mut op_stack = vec![
+            avail_operand!("a", 0..0, true),
+            avail_operand!("b", 0..1, true),
+            avail_operand!("c", 1..2, true),
+            avail_operand!("d", 2..3, true),
+        ];
+        let mut getters = HashMap::from([("a", 0), ("b", 1), ("c", 2), ("d", 3)]);
+        let mut stk = stackification! {
+            inputs [];
+            [0] cap(0) get[] [] => [];
+            [1] cap(0) get[] [] => [];
+            [2] cap(0) get[] [] => [];
+            [3] cap(0) get[] [] => [];
+        };
+
+        stackify_single::<V, Pc>(
+            &mut op_stack,
+            &mut getters,
+            &mut stk.manips,
+            3,
+            smallvec!["b", "d"],
+            smallvec!["x"],
+        );
+
+        assert_eq!(
+            op_stack,
+            vec![avail_operand!("a", 0..0, true), avail_operand!("x", 0..4, true),]
+        );
+        assert_eq!(getters, HashMap::from([("a", 0), ("b", 1), ("c", 2), ("d", 3), ("x", 4)]));
+        assert_eq!(
+            stk,
+            stackification! {
+                inputs [];
+                [0] cap(0) get[] [] => [];
+                [1] cap(0) get[] [] => [];
+                [2] cap(1) get[] [] => [];
+                [3] cap(0) get[] ["b", "d"] => ["x"];
+            }
+        );
+    }
+
+    #[test]
+    fn multivalue_output() {
+        let mut op_stack = vec![
+            avail_operand!("a", 0..0, true),
+            avail_operand!("b", 0..1, true),
+            avail_operand!("c", 1..2, true),
+            avail_operand!("d", 2..3, true),
+        ];
+        let mut getters = HashMap::from([("a", 0), ("b", 1), ("c", 2), ("d", 3)]);
+        let mut stk = stackification! {
+            inputs [];
+            [0] cap(0) get[] [] => [];
+            [1] cap(0) get[] [] => [];
+            [2] cap(0) get[] [] => [];
+            [3] cap(0) get[] [] => [];
+        };
+
+        stackify_single::<V, Pc>(
+            &mut op_stack,
+            &mut getters,
+            &mut stk.manips,
+            3,
+            smallvec!["c"],
+            smallvec!["x", "y", "z"],
+        );
+
+        assert_eq!(
+            op_stack,
+            vec![
+                avail_operand!("a", 0..0, true),
+                avail_operand!("b", 0..1, true),
+                avail_operand!("x", 1..4, false),
+                avail_operand!("y", 1..4, false),
+                avail_operand!("z", 1..4, true),
+            ]
+        );
+        assert_eq!(
+            getters,
+            HashMap::from([("a", 0), ("b", 1), ("c", 2), ("d", 3), ("x", 4), ("y", 4), ("z", 4)])
+        );
+        assert_eq!(
+            stk,
+            stackification! {
+                inputs [];
+                [0] cap(0) get[] [] => [];
+                [1] cap(0) get[] [] => [];
+                [2] cap(0) get[] [] => [];
+                [3] cap(1) get[] ["c"] => ["x", "y", "z"];
+            }
+        );
+    }
+
+    #[test]
+    fn multivalue_input_whole() {
+        let mut op_stack = vec![
+            avail_operand!("a", 0..0, true),
+            avail_operand!("b", 0..1, true),
+            avail_operand!("c", 1..2, false),
+            avail_operand!("d", 1..2, false),
+            avail_operand!("e", 1..2, true),
+            avail_operand!("f", 2..3, true),
+        ];
+        let mut getters =
+            HashMap::from([("a", 0), ("b", 1), ("c", 2), ("d", 2), ("e", 2), ("f", 3)]);
+        let mut stk = stackification! {
+            inputs [];
+            [0] cap(0) get[] [] => [];
+            [1] cap(0) get[] [] => [];
+            [2] cap(0) get[] [] => [];
+            [3] cap(0) get[] [] => [];
+        };
+
+        stackify_single::<V, Pc>(
+            &mut op_stack,
+            &mut getters,
+            &mut stk.manips,
+            3,
+            smallvec!["c", "d", "e", "f"],
+            smallvec!["x"],
+        );
+
+        assert_eq!(
+            op_stack,
+            vec![
+                avail_operand!("a", 0..0, true),
+                avail_operand!("b", 0..1, true),
+                avail_operand!("x", 1..4, true)
+            ]
+        );
+        assert_eq!(
+            getters,
+            HashMap::from([("a", 0), ("b", 1), ("c", 2), ("d", 2), ("e", 2), ("f", 3), ("x", 4)])
+        );
+        assert_eq!(
+            stk,
+            stackification! {
+                inputs [];
+                [0] cap(0) get[] [] => [];
+                [1] cap(0) get[] [] => [];
+                [2] cap(0) get[] [] => [];
+                [3] cap(0) get[] ["c", "d", "e", "f"] => ["x"];
+            }
+        );
+    }
+
+    #[test]
+    fn multivalue_input_prefix() {
+        let mut op_stack = vec![
+            avail_operand!("a", 0..0, true),
+            avail_operand!("b", 0..1, false),
+            avail_operand!("c", 0..1, false),
+            avail_operand!("d", 0..1, true),
+        ];
+        let mut getters = HashMap::from([("a", 0), ("b", 1), ("c", 1), ("d", 1)]);
+        let mut stk = stackification! {
+            inputs [];
+            [0] cap(0) get[] [] => [];
+            [1] cap(0) get[] [] => [];
+        };
+
+        stackify_single::<V, Pc>(
+            &mut op_stack,
+            &mut getters,
+            &mut stk.manips,
+            1,
+            smallvec!["b", "c"],
+            smallvec!["x"],
+        );
+
+        assert_eq!(
+            op_stack,
+            vec![avail_operand!("a", 0..0, true), avail_operand!("x", 0..2, true)]
+        );
+        assert_eq!(getters, HashMap::from([("a", 0), ("b", 1), ("c", 1), ("d", 1), ("x", 2)]));
+        assert_eq!(
+            stk,
+            stackification! {
+                inputs [];
+                [0] cap(0) get[] [] => [];
+                [1] cap(1) get[] ["b", "c"] => ["x"];
+            }
+        );
+    }
+
+    #[test]
+    fn multivalue_input_suffix() {
+        let mut op_stack = vec![
+            avail_operand!("a", 0..0, true),
+            avail_operand!("b", 0..1, false),
+            avail_operand!("c", 0..1, false),
+            avail_operand!("d", 0..1, true),
+            avail_operand!("e", 1..2, true),
+        ];
+        let mut getters = HashMap::from([("a", 0), ("b", 1), ("c", 1), ("d", 1), ("e", 2)]);
+        let mut stk = stackification! {
+            inputs [];
+            [0] cap(0) get[] [] => [];
+            [1] cap(0) get[] [] => [];
+            [2] cap(0) get[] [] => [];
+        };
+
+        stackify_single::<V, Pc>(
+            &mut op_stack,
+            &mut getters,
+            &mut stk.manips,
+            2,
+            smallvec!["c", "d", "e"],
+            smallvec!["x"],
+        );
+
+        assert_eq!(
+            op_stack,
+            vec![
+                avail_operand!("a", 0..0, true),
+                avail_operand!("b", 0..1, false),
+                avail_operand!("x", 0..3, true)
+            ]
+        );
+        assert_eq!(
+            getters,
+            HashMap::from([("a", 0), ("b", 1), ("c", 1), ("d", 1), ("e", 2), ("x", 3)])
+        );
+        assert_eq!(
+            stk,
+            stackification! {
+                inputs [];
+                [0] cap(0) get[] [] => [];
+                [1] cap(0) get[] [] => [];
+                [2] cap(0) get[] ["c", "d", "e"] => ["x"];
+            }
+        );
+    }
+
+    #[test]
+    fn multivalue_input_interleaved() {
+        let mut op_stack = vec![
+            avail_operand!("a", 0..0, true),
+            avail_operand!("b", 0..1, true),
+            avail_operand!("c", 1..2, true),
+            avail_operand!("d", 2..3, false),
+            avail_operand!("e", 2..3, false),
+            avail_operand!("f", 2..3, false),
+            avail_operand!("g", 2..3, true),
+            avail_operand!("h", 3..4, true),
+            avail_operand!("i", 4..5, true),
+        ];
+        let mut getters = HashMap::from([
+            ("a", 0),
+            ("b", 1),
+            ("c", 2),
+            ("d", 3),
+            ("e", 3),
+            ("f", 3),
+            ("g", 3),
+            ("h", 4),
+            ("i", 5),
+        ]);
+        let mut stk = stackification! {
+            inputs [];
+            [0] cap(0) get[] [] => [];
+            [1] cap(0) get[] [] => [];
+            [2] cap(0) get[] [] => [];
+            [3] cap(0) get[] [] => [];
+            [4] cap(0) get[] [] => [];
+            [5] cap(0) get[] [] => [];
+        };
+
+        stackify_single::<V, Pc>(
+            &mut op_stack,
+            &mut getters,
+            &mut stk.manips,
+            5,
+            smallvec!["b", "e", "g", "i"],
+            smallvec!["x"],
+        );
+
+        assert_eq!(
+            op_stack,
+            vec![avail_operand!("a", 0..0, true), avail_operand!("x", 0..6, true),]
+        );
+        assert_eq!(
+            stk,
+            stackification! {
+                inputs [];
+                [0] cap(0) get[] [] => [];
+                [1] cap(0) get[] [] => [];
+                [2] cap(1) get[] [] => [];
+                [3] cap(4) get["e", "g"] [] => [];
+                [4] cap(1) get[] [] => [];
+                [5] cap(0) get[] ["b", "e", "g", "i"] => ["x"];
+            }
+        );
+    }
+
+    #[test]
+    fn multivalue_input_partial_interleaved() {
+        let mut op_stack = vec![
+            avail_operand!("a", 0..0, true),
+            avail_operand!("b", 0..1, true),
+            avail_operand!("c", 1..2, true),
+            avail_operand!("d", 2..3, false),
+            avail_operand!("e", 2..3, false),
+            avail_operand!("f", 2..3, false),
+            avail_operand!("g", 2..3, true),
+            avail_operand!("h", 3..4, true),
+            avail_operand!("i", 4..5, true),
+        ];
+        let mut getters = HashMap::from([
+            ("a", 0),
+            ("b", 1),
+            ("c", 2),
+            ("d", 3),
+            ("e", 3),
+            ("f", 3),
+            ("g", 3),
+            ("h", 4),
+            ("i", 5),
+        ]);
+        let mut stk = stackification! {
+            inputs [];
+            [0] cap(0) get[] [] => [];
+            [1] cap(0) get[] [] => [];
+            [2] cap(0) get[] [] => [];
+            [3] cap(0) get[] [] => [];
+            [4] cap(0) get[] [] => [];
+            [5] cap(0) get[] [] => [];
+        };
+
+        stackify_single::<V, Pc>(
+            &mut op_stack,
+            &mut getters,
+            &mut stk.manips,
+            5,
+            smallvec!["e", "g", "i"],
+            smallvec!["x"],
+        );
+
+        assert_eq!(
+            op_stack,
+            vec![
+                avail_operand!("a", 0..0, true),
+                avail_operand!("b", 0..1, true),
+                avail_operand!("c", 1..2, true),
+                avail_operand!("d", 2..3, false),
+                avail_operand!("x", 2..6, true),
+            ]
+        );
+        assert_eq!(
+            stk,
+            stackification! {
+                inputs [];
+                [0] cap(0) get[] [] => [];
+                [1] cap(0) get[] [] => [];
+                [2] cap(0) get[] [] => [];
+                [3] cap(2) get["g"] [] => [];
+                [4] cap(1) get[] [] => [];
+                [5] cap(0) get[] ["e", "g", "i"] => ["x"];
+            }
+        );
+    }
+
+    #[test]
+    fn multivalue_frankenstein_input() {
+        let mut op_stack = vec![
+            avail_operand!("a", 0..0, true),
+            avail_operand!("b", 0..1, true),
+            avail_operand!("c", 1..2, true),
+            avail_operand!("d", 2..3, false),
+            avail_operand!("x", 2..6, false),
+            avail_operand!("y", 2..6, false),
+            avail_operand!("z", 2..6, true),
+        ];
+        let mut getters =
+            HashMap::from([("a", 0), ("b", 1), ("c", 2), ("d", 3), ("x", 4), ("y", 4), ("z", 5)]);
+        let mut stk = stackification! {
+            inputs [];
+            [0] cap(0) get[] [] => [];
+            [1] cap(0) get[] [] => [];
+            [2] cap(0) get[] [] => [];
+            [3] cap(0) get[] [] => [];
+            [4] cap(0) get[] [] => [];
+            [5] cap(0) get[] [] => [];
+            [6] cap(0) get[] [] => [];
+        };
+
+        stackify_single::<V, Pc>(
+            &mut op_stack,
+            &mut getters,
+            &mut stk.manips,
+            6,
+            smallvec!["y", "d"],
+            smallvec!["w"],
+        );
+
+        assert_eq!(
+            op_stack,
+            vec![
+                avail_operand!("a", 0..0, true),
+                avail_operand!("b", 0..1, true),
+                avail_operand!("c", 1..2, true),
+                avail_operand!("d", 2..3, false),
+                avail_operand!("x", 2..6, false),
+                avail_operand!("w", 2..7, true),
+            ]
+        );
+        assert_eq!(
+            getters,
+            HashMap::from([
+                ("a", 0),
+                ("b", 1),
+                ("c", 2),
+                ("d", 3),
+                ("x", 4),
+                ("y", 4),
+                ("z", 5),
+                ("w", 7),
+            ])
+        );
+        assert_eq!(
+            stk,
+            stackification! {
+                inputs [];
+                [0] cap(0) get[] [] => [];
+                [1] cap(0) get[] [] => [];
+                [2] cap(0) get[] [] => [];
+                [3] cap(0) get[] [] => [];
+                [4] cap(0) get[] [] => [];
+                [5] cap(0) get[] [] => [];
+                [6] cap(1) get["d"] ["y", "d"] => ["w"];
+            }
+        );
+    }
+
+    #[test]
+    fn repeated_inputs() {
+        let mut op_stack = vec![
+            avail_operand!("a", 0..0, true),
+            avail_operand!("b", 0..1, true),
+            avail_operand!("c", 1..2, true),
+        ];
+        let mut getters = HashMap::from([("a", 0), ("b", 1), ("c", 2)]);
+        let mut stk = stackification! {
+            inputs [];
+            [0] cap(0) get[] [] => [];
+            [1] cap(0) get[] [] => [];
+            [2] cap(0) get[] [] => [];
+        };
+
+        stackify_single::<V, Pc>(
+            &mut op_stack,
+            &mut getters,
+            &mut stk.manips,
+            2,
+            smallvec!["b", "b"],
+            smallvec!["x"],
+        );
+
+        assert_eq!(
+            op_stack,
+            vec![avail_operand!("a", 0..0, true), avail_operand!("x", 0..3, true)]
+        );
+        assert_eq!(getters, HashMap::from([("a", 0), ("b", 1), ("c", 2), ("x", 3)]));
+        assert_eq!(
+            stk,
+            stackification! {
+                inputs [];
+                [0] cap(0) get[] [] => [];
+                [1] cap(0) get["b"] [] => [];
+                [2] cap(1) get[] ["b", "b"] => ["x"];
+            }
+        );
+    }
+
+    #[test]
+    fn repeated_inputs_with_in_between() {
+        let mut op_stack = vec![
+            avail_operand!("a", 0..0, true),
+            avail_operand!("b", 0..1, true),
+            avail_operand!("c", 1..2, true),
+        ];
+        let mut getters = HashMap::from([("a", 0), ("b", 1), ("c", 2)]);
+        let mut stk = stackification! {
+            inputs [];
+            [0] cap(0) get[] [] => [];
+            [1] cap(0) get[] [] => [];
+            [2] cap(0) get[] [] => [];
+        };
+
+        stackify_single::<V, Pc>(
+            &mut op_stack,
+            &mut getters,
+            &mut stk.manips,
+            2,
+            smallvec!["b", "a", "b"],
+            smallvec!["x"],
+        );
+        assert_eq!(
+            op_stack,
+            vec![avail_operand!("a", 0..0, true), avail_operand!("x", 0..3, true)]
+        );
+        assert_eq!(getters, HashMap::from([("a", 0), ("b", 1), ("c", 2), ("x", 3)]));
+        assert_eq!(
+            stk,
+            stackification! {
+                inputs [];
+                [0] cap(0) get[] [] => [];
+                [1] cap(0) get["a", "b"] [] => [];
+                [2] cap(1) get[] ["b", "a", "b"] => ["x"];
+            }
+        );
     }
 
     macro_rules! test_insns {
-        ($(($idx:expr) [$($input:expr),* $(,)*]),* $(,)*) => {
-            vec![
+        ($([$($input:expr),*] => [$($output:expr),*]),* $(,)?) => {
+            [
                 $(
-                    TestInsn {
-                        inputs: vec![$($input),* ]
-                    },
+                    (&[$($input),*], &[$($output),*]),
                 )*
             ]
         };
     }
 
-    #[test]
-    fn test_insns_macro() {
-        let insns = test_insns![
-            (0) [1, 2],
-            (1) [3, 4, 5],
-            (2) [], // Empty inputs
-        ];
+    // TODO change the function to not need external values, since the algorithm
+    // above was changed to interpret any value without an entry in
+    // `available_getters` as being always available
+    fn test_skeleton(external: &[V], insns: &[(&[V], &[V])]) -> InsnSeqStackification<V, Pc> {
+        // each sequence starts with fresh operand stack and manipulators
+        let mut op_stack = Vec::new();
+        let mut getters = HashMap::from_iter(external.iter().map(|&v| (v, 0)));
+        let mut stk = InsnSeqStackification {
+            inputs: vec![],
+            manips: ti_vec![StackManipulators {
+                captures: 0,
+                getters: vec![],
+                inputs: smallvec![],
+                outputs: smallvec![],
+            }; insns.len() + 1],
+        };
 
-        assert_eq!(insns.len(), 3);
-        assert_eq!(insns[0].inputs, vec![1, 2]);
-        assert_eq!(insns[1].inputs, vec![3, 4, 5]);
-        assert!(insns[2].inputs.is_empty());
+        for (i, (inputs, outputs)) in insns.iter().enumerate() {
+            stackify_single(
+                &mut op_stack,
+                &mut getters,
+                &mut stk.manips,
+                i,
+                inputs.to_smallvec(),
+                outputs.to_smallvec(),
+            );
+        }
+        remove_excess_operands(
+            op_stack.drain(..).zip(std::iter::repeat(false)),
+            &mut stk.manips,
+            insns.len(),
+        );
+
+        stk
     }
 
     #[test]
     fn ignore_all() {
-        let block = test_insns![
-            (0) [],
-            (1) [],
-            (2) [],
-            (3) [],
-        ];
-        let mut stackification = create_stackification(&block);
-        stackify_sequential(&block, 0..block.len(), &mut stackification);
-        assert_eq!(stackification.forest, [
-            InsnTreeInfo { output_mode: OutputMode::Available, subtree_start: 0 },
-            InsnTreeInfo { output_mode: OutputMode::Available, subtree_start: 1 },
-            InsnTreeInfo { output_mode: OutputMode::Available, subtree_start: 2 },
-            InsnTreeInfo { output_mode: OutputMode::Available, subtree_start: 3 },
-        ]);
-        assert_eq!(stackification.getters, BTreeMap::new());
+        let stk = test_skeleton(
+            &[],
+            &test_insns![
+                [] => ["a"],
+                [] => ["b"],
+                [] => ["c"],
+                [] => ["d"],
+            ],
+        );
+        assert_eq!(
+            stk,
+            stackification! {
+                inputs [];
+                [0] cap(0) get[] [] => ["a"];
+                [1] cap(1) get[] [] => ["b"];
+                [2] cap(1) get[] [] => ["c"];
+                [3] cap(1) get[] [] => ["d"];
+                [4] cap(1) get[] [] => [];
+            }
+        );
     }
 
     #[test]
     fn use_all_in_order() {
-        let block = test_insns![
-            (0) [],
-            (1) [],
-            (2) [],
-            (3) [],
-            (4) [0, 1, 2, 3],
-        ];
-        let mut stackification = create_stackification(&block);
-        stackify_sequential(&block, 0..block.len(), &mut stackification);
-        assert_eq!(stackification.forest, [
-            InsnTreeInfo { output_mode: OutputMode::Release { parent: 4 }, subtree_start: 0 },
-            InsnTreeInfo { output_mode: OutputMode::Release { parent: 4 }, subtree_start: 1 },
-            InsnTreeInfo { output_mode: OutputMode::Release { parent: 4 }, subtree_start: 2 },
-            InsnTreeInfo { output_mode: OutputMode::Release { parent: 4 }, subtree_start: 3 },
-            InsnTreeInfo { output_mode: OutputMode::Available, subtree_start: 0 },
-        ]);
-        assert_eq!(stackification.getters, BTreeMap::new());
+        let stk = test_skeleton(
+            &[],
+            &test_insns![
+                [] => ["a"],
+                [] => ["b"],
+                [] => ["c"],
+                [] => ["d"],
+                ["a", "b", "c", "d"] => ["e"],
+            ],
+        );
+        assert_eq!(
+            stk,
+            stackification! {
+                inputs [];
+                [0] cap(0) get[] [] => ["a"];
+                [1] cap(0) get[] [] => ["b"];
+                [2] cap(0) get[] [] => ["c"];
+                [3] cap(0) get[] [] => ["d"];
+                [4] cap(0) get[] ["a", "b", "c", "d"] => ["e"];
+                [5] cap(1) get[] [] => [];
+            }
+        );
     }
 
     #[test]
     fn use_skipping_in_order() {
-        let block = test_insns![
-            (0) [],
-            (1) [],
-            (2) [],
-            (3) [],
-            (4) [1, 3],
-        ];
-        let mut stackification = create_stackification(&block);
-        stackify_sequential(&block, 0..block.len(), &mut stackification);
-        assert_eq!(stackification.forest, [
-            InsnTreeInfo { output_mode: OutputMode::Available, subtree_start: 0 },
-            InsnTreeInfo { output_mode: OutputMode::Release { parent: 4 }, subtree_start: 1 },
-            InsnTreeInfo { output_mode: OutputMode::Capture { parent: 4 }, subtree_start: 2 },
-            InsnTreeInfo { output_mode: OutputMode::Release { parent: 4 }, subtree_start: 3 },
-            InsnTreeInfo { output_mode: OutputMode::Available, subtree_start: 1 },
-        ]);
-        assert_eq!(stackification.getters, BTreeMap::new());
+        let stk = test_skeleton(
+            &[],
+            &test_insns![
+                [] => ["a"],
+                [] => ["b"],
+                [] => ["c"],
+                [] => ["d"],
+                ["b", "d"] => ["e"],
+            ],
+        );
+        assert_eq!(
+            stk,
+            stackification! {
+                inputs [];
+                [0] cap(0) get[] [] => ["a"];
+                [1] cap(1) get[] [] => ["b"];
+                [2] cap(0) get[] [] => ["c"];
+                [3] cap(1) get[] [] => ["d"];
+                [4] cap(0) get[] ["b", "d"] => ["e"];
+                [5] cap(1) get[] [] => [];
+            }
+        );
     }
 
     #[test]
     fn use_out_of_order() {
-        let block = test_insns![
-            (0) [],
-            (1) [],
-            (2) [],
-            (3) [],
-            (4) [1, 3, 2, 0],
-        ];
-        let mut stackification = create_stackification(&block);
-        stackify_sequential(&block, 0..block.len(), &mut stackification);
-        assert_eq!(stackification.forest, [
-            InsnTreeInfo { output_mode: OutputMode::Available, subtree_start: 0 },
-            InsnTreeInfo { output_mode: OutputMode::Release { parent: 4 }, subtree_start: 1 },
-            InsnTreeInfo { output_mode: OutputMode::Capture { parent: 4 }, subtree_start: 2 },
-            InsnTreeInfo { output_mode: OutputMode::Release { parent: 4 }, subtree_start: 3 },
-            InsnTreeInfo { output_mode: OutputMode::Available, subtree_start: 1 },
-        ]);
-        assert_eq!(stackification.getters, BTreeMap::from([(4, VecDeque::from([2, 0]))]),);
+        let stk = test_skeleton(
+            &[],
+            &test_insns![
+                [] => ["a"],
+                [] => ["b"],
+                [] => ["c"],
+                [] => ["d"],
+                ["b", "d", "c", "a"] => ["e"],
+            ],
+        );
+        assert_eq!(
+            stk,
+            stackification! {
+                inputs [];
+                [0] cap(0) get[] [] => ["a"];
+                [1] cap(1) get[] [] => ["b"];
+                [2] cap(0) get[] [] => ["c"];
+                [3] cap(1) get[] [] => ["d"];
+                [4] cap(0) get["c", "a"] ["b", "d", "c", "a"] => ["e"];
+                [5] cap(1) get[] [] => [];
+            }
+        );
     }
 
     #[test]
     fn use_repeated() {
-        let block = test_insns![
-            (0) [],
-            (1) [],
-            (2) [0, 0, 1],
-        ];
-        let mut stackification = create_stackification(&block);
-        stackify_sequential(&block, 0..block.len(), &mut stackification);
-        assert_eq!(stackification.forest, [
-            InsnTreeInfo { output_mode: OutputMode::Release { parent: 2 }, subtree_start: 0 },
-            InsnTreeInfo { output_mode: OutputMode::Release { parent: 2 }, subtree_start: 1 },
-            InsnTreeInfo { output_mode: OutputMode::Available, subtree_start: 0 },
-        ]);
-        assert_eq!(stackification.getters, BTreeMap::from([(1, VecDeque::from([0]))]));
+        let stk = test_skeleton(
+            &[],
+            &test_insns![
+                [] => ["a"],
+                [] => ["b"],
+                ["a", "a", "b"] => ["c"],
+            ],
+        );
+        assert_eq!(
+            stk,
+            stackification! {
+                inputs [];
+                [0] cap(0) get[] [] => ["a"];
+                [1] cap(0) get["a"] [] => ["b"];
+                [2] cap(0) get[] ["a", "a", "b"] => ["c"];
+                [3] cap(1) get[] [] => [];
+            }
+        );
     }
 
     #[test]
     fn queueing_getters() {
-        let block = test_insns![
-            (0) [],
-            (1) [],
-            (2) [0, 1],
-            (3) [],
-            (4) [1, 0, 3],
-        ];
-        let mut stackification = create_stackification(&block);
-        stackify_sequential(&block, 0..block.len(), &mut stackification);
-        assert_eq!(stackification.forest, [
-            InsnTreeInfo { output_mode: OutputMode::Release { parent: 2 }, subtree_start: 0 },
-            InsnTreeInfo { output_mode: OutputMode::Release { parent: 2 }, subtree_start: 1 },
-            InsnTreeInfo { output_mode: OutputMode::Available, subtree_start: 0 },
-            InsnTreeInfo { output_mode: OutputMode::Release { parent: 4 }, subtree_start: 3 },
-            InsnTreeInfo { output_mode: OutputMode::Available, subtree_start: 3 },
-        ]);
-        assert_eq!(stackification.getters, BTreeMap::from([(3, VecDeque::from([1, 0]))]));
+        let stk = test_skeleton(
+            &[],
+            &test_insns![
+                [] => ["a"],
+                [] => ["b"],
+                ["a", "b"] => ["c"],
+                [] => ["d"],
+                ["b", "a", "d"] => ["e"],
+            ],
+        );
+        assert_eq!(
+            stk,
+            stackification! {
+                inputs [];
+                [0] cap(0) get[] [] => ["a"];
+                [1] cap(0) get[] [] => ["b"];
+                [2] cap(0) get[] ["a", "b"] => ["c"];
+                [3] cap(1) get["b", "a"] [] => ["d"];
+                [4] cap(0) get[] ["b", "a", "d"] => ["e"];
+                [5] cap(1) get[] [] => [];
+            }
+        );
     }
 
     #[test]
     fn staircase() {
-        let block = test_insns![
-            (0) [],
-            (1) [0],
-            (2) [0, 1],
-            (3) [0, 1, 1, 2],
-        ];
-        let mut stackification = create_stackification(&block);
-        stackify_sequential(&block, 0..block.len(), &mut stackification);
-        assert_eq!(stackification.forest, [
-            InsnTreeInfo { output_mode: OutputMode::Release { parent: 1 }, subtree_start: 0 },
-            InsnTreeInfo { output_mode: OutputMode::Available, subtree_start: 0 },
-            InsnTreeInfo { output_mode: OutputMode::Release { parent: 3 }, subtree_start: 2 },
-            InsnTreeInfo { output_mode: OutputMode::Available, subtree_start: 2 },
-        ]);
-        assert_eq!(stackification.getters, BTreeMap::from([(2, VecDeque::from([0, 1, 1, 0, 1]))]));
+        let stk = test_skeleton(
+            &[],
+            &test_insns![
+                [] => ["a"],
+                ["a"] => ["b"],
+                ["a", "b"] => ["c"],
+                ["a", "b", "b", "c"] => ["d"],
+            ],
+        );
+        assert_eq!(
+            stk,
+            stackification! {
+                inputs [];
+                [0] cap(0) get[] [] => ["a"];
+                [1] cap(0) get[] ["a"] => ["b"];
+                [2] cap(1) get["a", "b", "b", "a", "b"] ["a", "b"] => ["c"];
+                [3] cap(0) get[] ["a", "b", "b", "c"] => ["d"];
+                [4] cap(1) get[] [] => [];
+            }
+        );
     }
 
     #[test]
     fn nested_operators() {
-        let block = test_insns![
-            (0) [],
-            (1) [],
-            (2) [0, 1],
-            (3) [1],
-            (4) [],
-            (5) [4],
-            (6) [2, 5],
-            (7) [0, 6],
-        ];
-        let mut stackification = create_stackification(&block);
-        stackify_sequential(&block, 0..block.len(), &mut stackification);
-        assert_eq!(stackification.forest, [
-            InsnTreeInfo { output_mode: OutputMode::Release { parent: 2 }, subtree_start: 0 },
-            InsnTreeInfo { output_mode: OutputMode::Release { parent: 2 }, subtree_start: 1 },
-            InsnTreeInfo { output_mode: OutputMode::Release { parent: 6 }, subtree_start: 0 },
-            InsnTreeInfo { output_mode: OutputMode::Capture { parent: 6 }, subtree_start: 3 },
-            InsnTreeInfo { output_mode: OutputMode::Release { parent: 5 }, subtree_start: 4 },
-            InsnTreeInfo { output_mode: OutputMode::Release { parent: 6 }, subtree_start: 4 },
-            InsnTreeInfo { output_mode: OutputMode::Available, subtree_start: 0 },
-            InsnTreeInfo { output_mode: OutputMode::Available, subtree_start: 7 },
-        ]);
+        let stk = test_skeleton(
+            &[],
+            &test_insns![
+                [] => ["a"],
+                [] => ["b"],
+                ["a", "b"] => ["c"],
+                ["b"] => ["d"],
+                [] => ["e"],
+                ["e"] => ["f"],
+                ["c", "f"] => ["g"],
+                ["a", "g"] => ["h"],
+            ],
+        );
         assert_eq!(
-            stackification.getters,
-            BTreeMap::from([(3, VecDeque::from([1])), (7, VecDeque::from([0, 6]))])
+            stk,
+            stackification! {
+                inputs [];
+                [0] cap(0) get[] [] => ["a"];
+                [1] cap(0) get[] [] => ["b"];
+                [2] cap(0) get[] ["a", "b"] => ["c"];
+                [3] cap(0) get["b"] ["b"] => ["d"];
+                [4] cap(1) get[] [] => ["e"];
+                [5] cap(0) get[] ["e"] => ["f"];
+                [6] cap(0) get[] ["c", "f"] => ["g"];
+                [7] cap(1) get["a", "g"] ["a", "g"] => ["h"];
+                [8] cap(1) get[] [] => [];
+            }
         );
     }
 
     #[test]
     fn external_instructions() {
-        let block = test_insns![
-            (0) [],
-            (1) [],
-            (2) [],
-            (3) [],
-            (4) [],
-            (5) [],
-            (6) [],
-            (7) [],
-            (8) [],
-            (9) [],
-            (10) [9],
-            (11) [10],
-            (12) [11, 10],
-        ];
-        let mut stackification = create_stackification(&block);
-        stackify_sequential(&block, 10..block.len(), &mut stackification);
-        assert_eq!(stackification.forest[10..], [
-            InsnTreeInfo { output_mode: OutputMode::Release { parent: 11 }, subtree_start: 10 },
-            InsnTreeInfo { output_mode: OutputMode::Release { parent: 12 }, subtree_start: 10 },
-            InsnTreeInfo { output_mode: OutputMode::Available, subtree_start: 10 },
-        ]);
-        assert_eq!(
-            stackification.getters,
-            BTreeMap::from([(10, VecDeque::from([9])), (12, VecDeque::from([10]))])
+        let stk = test_skeleton(
+            &["ex0"],
+            &test_insns![
+                ["ex0"] => ["a"],
+                ["a"] => ["b"],
+                ["b", "a"] => ["c"],
+            ],
         );
+        assert_eq!(
+            stk,
+            stackification! {
+                inputs [];
+                [0] cap(0) get["ex0"] ["ex0"] => ["a"];
+                [1] cap(0) get[] ["a"] => ["b"];
+                [2] cap(0) get["a"] ["b", "a"] => ["c"];
+                [3] cap(1) get[] [] => [];
+            }
+        )
     }
 
     #[test]
     fn conflicting_getter_locations() {
-        let block = test_insns![
-            (0) [],
-            (1) [],
-            (2) [],
-            (3) [],
-            (4) [],
-            (5) [],
-            (6) [],
-            (7) [],
-            (8) [],
-            (9) [],
-            (10) [],
-            (11) [],
-            (12) [10, 11],
-            (13) [10],
-            (14) [12, 11, 13],
-        ];
-        let mut stackification = create_stackification(&block);
-        stackify_sequential(&block, 10..block.len(), &mut stackification);
-        assert_eq!(stackification.forest[10..], [
-            InsnTreeInfo { output_mode: OutputMode::Release { parent: 12 }, subtree_start: 10 },
-            InsnTreeInfo { output_mode: OutputMode::Release { parent: 12 }, subtree_start: 11 },
-            InsnTreeInfo { output_mode: OutputMode::Release { parent: 14 }, subtree_start: 10 },
-            InsnTreeInfo { output_mode: OutputMode::Release { parent: 14 }, subtree_start: 13 },
-            InsnTreeInfo { output_mode: OutputMode::Available, subtree_start: 10 },
-        ]);
-        assert_eq!(stackification.getters, BTreeMap::from([(13, VecDeque::from([11, 10]))]));
+        let stk = test_skeleton(
+            &[],
+            &test_insns![
+                [] => ["a"],
+                [] => ["b"],
+                ["a", "b"] => ["c"],
+                ["a"] => ["d"],
+                ["c", "b", "d"] => ["e"],
+            ],
+        );
+        assert_eq!(
+            stk,
+            stackification! {
+                inputs [];
+                [0] cap(0) get[] [] => ["a"];
+                [1] cap(0) get[] [] => ["b"];
+                [2] cap(0) get[] ["a", "b"] => ["c"];
+                [3] cap(0) get["b", "a"] ["a"] => ["d"];
+                [4] cap(0) get[] ["c", "b", "d"] => ["e"];
+                [5] cap(1) get[] [] => [];
+            }
+        )
     }
 
     #[test]
     fn getter_before_calculation_after_release() {
-        let block = test_insns![
-            (0) [],
-            (1) [],
-            (2) [],
-            (3) [1, 2],
-            (4) [3],
-            (5) [0, 3],
-        ];
-
-        let mut stackification = create_stackification(&block);
-        stackify_sequential(&block, 0..block.len(), &mut stackification);
-        assert_eq!(stackification.forest, [
-            InsnTreeInfo { output_mode: OutputMode::Release { parent: 5 }, subtree_start: 0 },
-            InsnTreeInfo { output_mode: OutputMode::Release { parent: 3 }, subtree_start: 1 },
-            InsnTreeInfo { output_mode: OutputMode::Release { parent: 3 }, subtree_start: 2 },
-            InsnTreeInfo { output_mode: OutputMode::Release { parent: 4 }, subtree_start: 1 },
-            InsnTreeInfo { output_mode: OutputMode::Capture { parent: 5 }, subtree_start: 1 },
-            InsnTreeInfo { output_mode: OutputMode::Available, subtree_start: 0 },
-        ]);
-        assert_eq!(stackification.getters, BTreeMap::from([(5, VecDeque::from([3]))]));
+        let stk = test_skeleton(
+            &[],
+            &test_insns![
+                [] => ["a"],
+                [] => ["b"],
+                [] => ["c"],
+                ["b", "c"] => ["d"],
+                ["d"] => ["e"],
+                ["a", "d"] => ["f"],
+            ],
+        );
+        assert_eq!(
+            stk,
+            stackification! {
+                inputs [];
+                [0] cap(0) get[] [] => ["a"];
+                [1] cap(0) get[] [] => ["b"];
+                [2] cap(0) get[] [] => ["c"];
+                [3] cap(0) get[] ["b", "c"] => ["d"];
+                [4] cap(0) get[] ["d"] => ["e"];
+                [5] cap(1) get["d"] ["a", "d"] => ["f"];
+                [6] cap(1) get[] [] => [];
+            }
+        );
     }
 
     #[test]
     fn getter_before_calculation_before_release() {
-        let block = test_insns![
-            (0) [],
-            (1) [],
-            (2) [],
-            (3) [1, 2],
-            (4) [3],
-            (5) [3, 0],
-        ];
+        let stk = test_skeleton(
+            &[],
+            &test_insns![
+                [] => ["a"],
+                [] => ["b"],
+                [] => ["c"],
+                ["b", "c"] => ["d"],
+                ["d"] => ["e"],
+                ["d", "a"] => ["f"],
+            ],
+        );
+        assert_eq!(
+            stk,
+            stackification! {
+                inputs [];
+                [0] cap(0) get[] [] => ["a"];
+                [1] cap(1) get[] [] => ["b"];
+                [2] cap(0) get[] [] => ["c"];
+                [3] cap(0) get[] ["b", "c"] => ["d"];
+                [4] cap(0) get[] ["d"] => ["e"];
+                [5] cap(1) get["d", "a"] ["d", "a"] => ["f"];
+                [6] cap(1) get[] [] => [];
+            }
+        );
+    }
 
-        let mut stackification = create_stackification(&block);
-        stackify_sequential(&block, 0..block.len(), &mut stackification);
-        assert_eq!(stackification.forest, [
-            InsnTreeInfo { output_mode: OutputMode::Available, subtree_start: 0 },
-            InsnTreeInfo { output_mode: OutputMode::Release { parent: 3 }, subtree_start: 1 },
-            InsnTreeInfo { output_mode: OutputMode::Release { parent: 3 }, subtree_start: 2 },
-            InsnTreeInfo { output_mode: OutputMode::Release { parent: 4 }, subtree_start: 1 },
-            InsnTreeInfo { output_mode: OutputMode::Available, subtree_start: 1 },
-            InsnTreeInfo { output_mode: OutputMode::Available, subtree_start: 5 },
-        ]);
-        assert_eq!(stackification.getters, BTreeMap::from([(5, VecDeque::from([3, 0]))]));
+    #[test]
+    fn transparent_instruction() {
+        let stk = test_skeleton(
+            &[],
+            &test_insns![
+                [] => ["a"],
+                [] => ["b"],
+                [] => ["c"],
+                [] => ["d"],
+                [] => ["e"],
+                ["b", "c", "d", "e"] => ["b", "c", "d"],
+                ["a", "c"] => ["f"],
+                ["d", "b"] => ["g"],
+            ],
+        );
+        assert_eq!(
+            stk,
+            stackification! {
+                inputs [];
+                [0] cap(0) get[] [] => ["a"];
+                [1] cap(0) get[] [] => ["b"];
+                [2] cap(0) get[] [] => ["c"];
+                [3] cap(0) get[] [] => ["d"];
+                [4] cap(0) get[] [] => ["e"];
+                [5] cap(0) get[] ["b", "c", "d", "e"] => ["b", "c", "d"];
+                [6] cap(3) get["c"] ["a", "c"] => ["f"];
+                [7] cap(1) get["d", "b"] ["d", "b"] => ["g"];
+                [8] cap(1) get[] [] => [];
+            }
+        );
     }
 }

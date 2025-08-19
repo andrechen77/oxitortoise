@@ -1,86 +1,16 @@
-use std::{
-    collections::{BTreeMap, HashMap, VecDeque},
-    ops::Range,
-};
+use std::{cell::Cell, collections::HashMap, iter::Step as _};
 
 use smallvec::{SmallVec, ToSmallVec, smallvec};
-use typed_index_collections::TiVec;
+use typed_index_collections::{TiVec, ti_vec};
 
 use crate::{
-    lir::{InsnKind, InsnPc, InsnRefIter},
-    stackify::{self, InsnTreeInfo, OutputMode},
+    lir::{Block, Function, IfElse, InsnKind, InsnPc, InsnSeqId, Loop, ValRef},
+    stackify::{self, InsnSeqStackification, StackManipulators},
 };
-
-pub type Stackification = stackify::Stackification<InsnPc, TiVec<InsnPc, InsnTreeInfo<InsnPc>>>;
-
-struct InsnsWithAdditionalInputs<'a> {
-    insns: &'a TiVec<InsnPc, InsnKind>,
-    additional_inputs: &'a HashMap<InsnPc, Vec<InsnPc>>,
-}
-
-impl<'a> stackify::InsnUniverse for InsnsWithAdditionalInputs<'a> {
-    type Pc = InsnPc;
-
-    fn instructions_in_range(&self, range: Range<Self::Pc>) -> impl Iterator<Item = Self::Pc> {
-        InsnRefIter::new_with_range(self.insns, range).map(|(_, pc)| pc)
-    }
-
-    fn succ_of(&self, insn: Self::Pc) -> Self::Pc {
-        self.insns[insn].extent(insn).1
-    }
-
-    fn inputs_of(&self, insn: Self::Pc) -> impl DoubleEndedIterator<Item = Self::Pc> {
-        match &self.insns[insn] {
-            InsnKind::Argument { .. } => smallvec![],
-            InsnKind::Const { .. } => smallvec![],
-            // for the purposes of stackification, projections do not actually
-            // take input from the multivalue being projected from, because they
-            // do not actually correspond to any real Wasm operation. Instead, a
-            // sequence of projection operations just follows the instruction
-            // they project from, each outputting their corresponding value onto
-            // the operand stack, simulating what would happen to the stack if
-            // the multivalue instruction was executed
-            InsnKind::Project { .. } => smallvec![],
-            InsnKind::DeriveField { ptr, .. } => smallvec![*ptr],
-            InsnKind::DeriveElement { ptr, index, .. } => smallvec![*ptr, *index],
-            InsnKind::MemLoad { ptr, .. } => smallvec![*ptr],
-            InsnKind::MemStore { ptr, value, .. } => smallvec![*ptr, *value],
-            InsnKind::StackLoad { .. } => smallvec![],
-            InsnKind::StackStore { value, .. } => smallvec![*value],
-            InsnKind::CallImportedFunction { args, .. } => args.to_smallvec(),
-            InsnKind::CallUserFunction { args, .. } => args.to_smallvec(),
-            InsnKind::UnaryOp { operand, .. } => smallvec![*operand],
-            InsnKind::BinaryOp { lhs, rhs, .. } => smallvec![*lhs, *rhs],
-            InsnKind::Break { values, .. } => values.to_smallvec(),
-            InsnKind::ConditionalBreak { condition, values, .. } => {
-                let mut inputs: SmallVec<[InsnPc; 2]> = values.to_smallvec();
-                inputs.push(*condition);
-                inputs
-            }
-            InsnKind::Block { .. } => {
-                self.additional_inputs.get(&insn).map(|v| v.to_smallvec()).unwrap_or_default()
-            }
-            InsnKind::IfElse { condition, .. } => {
-                let mut inputs =
-                    self.additional_inputs.get(&insn).map(|v| v.to_smallvec()).unwrap_or_default();
-                inputs.push(*condition);
-                println!("inputs of block are {:?}", inputs);
-                inputs
-            }
-            InsnKind::Loop { .. } => {
-                self.additional_inputs.get(&insn).map(|v| v.to_smallvec()).unwrap_or_default()
-            }
-            InsnKind::LoopArgument { initial_value: _ } => smallvec![],
-        }
-        .into_iter()
-    }
-}
 
 /// Factors out all elements that are equal at the beginning of all the
 /// sequences, and returns them in a vector in the same order.
-fn factor_common_prefix<T: PartialEq, const N: usize>(
-    mut sequences: [&mut VecDeque<T>; N],
-) -> Vec<T> {
+fn factor_common_prefix<T: PartialEq, const N: usize>(mut sequences: [&mut Vec<T>; N]) -> Vec<T> {
     if N == 0 {
         return Vec::new();
     }
@@ -91,238 +21,332 @@ fn factor_common_prefix<T: PartialEq, const N: usize>(
     let mut result = Vec::new();
     let m = sequences[0].len();
     for _ in 0..m {
-        let v = sequences[0].front().unwrap();
-        if !sequences[1..].iter().all(|seq| seq.front() == Some(v)) {
+        let v = sequences[0].first().unwrap();
+        if !sequences[1..].iter().all(|seq| seq.first() == Some(v)) {
             return result;
         }
 
         // all elements match, so add them to the result
-        result.push(sequences[0].pop_front().unwrap());
+        result.push(sequences[0].remove(0));
         for seq in &mut sequences[1..] {
-            seq.pop_front();
+            seq.remove(0);
         }
     }
     result
 }
 
-pub fn stackify_lir(
-    insns: &TiVec<InsnPc, InsnKind>,
-) -> (Stackification, HashMap<InsnPc, Vec<InsnPc>>) {
-    let mut stackification = Stackification {
-        forest: (0..insns.len())
-            .map(|pc| InsnTreeInfo {
-                output_mode: OutputMode::Available,
-                subtree_start: InsnPc::from(pc),
-            })
-            .collect(),
-        getters: BTreeMap::new(),
-    };
-
-    // stores additional inputs for compound instructions that might take parameters
-    let mut additional_inputs = HashMap::new();
-
-    // recursive through the compound instructions. stackify the deeper
-    // compound instructions first,
-    stackify_recursive(
-        insns,
-        InsnPc::from(0)..InsnPc::from(insns.len()),
-        &mut stackification,
-        &mut additional_inputs,
-    );
-
-    // stackify the instructions in the range, recursively stackifying all
-    // inner compound instructions as well
-    fn stackify_recursive(
-        insns: &TiVec<InsnPc, InsnKind>,
-        range: Range<InsnPc>,
-        stackification: &mut Stackification,
-        additional_inputs: &mut HashMap<InsnPc, Vec<InsnPc>>,
-    ) {
-        // stackify all inner instructions first
-        for (inner_seqs, pc) in InsnRefIter::new_with_range(insns, range.clone()) {
-            for inner_seq in &inner_seqs {
-                stackify_recursive(insns, inner_seq.clone(), stackification, additional_inputs);
-            }
-
-            // leading getters in the inner sequences can be factored out
-            // and turned into inputs of the compound instruction
-            match &inner_seqs[..] {
-                [] => {}
-                [seq] => {
-                    // there is only one inner sequences, so we can "factor out"
-                    // all parameters and use them as inputs to the compound
-                    // instruction
-                    let params = stackification.getters.remove(&seq.start).unwrap_or_default();
-                    additional_inputs.entry(pc).or_default().extend(params);
-                }
-                [a, b] => 'factoring: {
-                    let Some(mut inner_0) = stackification.getters.remove(&a.start) else {
-                        break 'factoring;
-                    };
-                    let Some(mut inner_1) = stackification.getters.remove(&b.start) else {
-                        break 'factoring;
-                    };
-                    let common_prefix = factor_common_prefix([&mut inner_0, &mut inner_1]);
-                    let prev_entry = additional_inputs.insert(pc, common_prefix);
-                    assert!(
-                        prev_entry.is_none(),
-                        "there should be no previous entry for this compound insn"
-                    );
-                    // Only insert the getters back if the list is non-empty, to
-                    // make testing easier
-                    if !inner_0.is_empty() {
-                        stackification.getters.insert(a.start, inner_0);
-                    }
-                    if !inner_1.is_empty() {
-                        stackification.getters.insert(b.start, inner_1);
-                    }
-                }
-                _ => unimplemented!(
-                    "did not expect a compound instruction with more than 2 inner sequences"
-                ),
-            }
-        }
-
-        // split the range by conditional branches, since in Wasm, the
-        // conditional branch spits its arguments back onto the stack if the
-        // branch is not taken, but the stackify function does not have a way
-        // to handle this
-        let mut split_start = range.start;
-        let mut split_end = range.start;
-        while split_end < range.end {
-            let this_insn = &insns[split_end];
-            split_end = insns[split_end].extent(split_end).1; // successor
-            if matches!(this_insn, InsnKind::ConditionalBreak { .. }) || split_end == range.end {
-                stackify::stackify_sequential(
-                    &InsnsWithAdditionalInputs { insns, additional_inputs },
-                    split_start..split_end,
-                    stackification,
-                );
-                split_start = split_end;
-            }
-        }
-    }
-
-    (stackification, additional_inputs)
+#[derive(Debug, PartialEq, Eq)]
+pub struct CfgStackification {
+    /// Maps each instruction sequence to the set of manipulators to be injected
+    /// to get proper stack machine execution.
+    pub seqs: TiVec<InsnSeqId, InsnSeqStackification<ValRef, InsnPc>>,
 }
 
-fn print_with_stackification(insns: &TiVec<InsnPc, InsnKind>, stackification: &Stackification) {
-    for pc in (0..insns.len()).map(InsnPc::from) {
-        // look for getters
-        if let Some(values) = stackification.getters.get(&pc) {
-            for value in values {
-                println!("get ${}", usize::from(*value));
-            }
-        }
+pub fn stackify_cfg(function: &Function) -> CfgStackification {
+    let mut result = CfgStackification { seqs: TiVec::new() };
+    let current_val_ref = Cell::new(ValRef(0));
+    stackify_insn_seq(function, function.body.body, &mut result.seqs, &current_val_ref);
+    fn stackify_insn_seq(
+        function: &Function,
+        seq_id: InsnSeqId,
+        out: &mut TiVec<InsnSeqId, InsnSeqStackification<ValRef, InsnPc>>,
+        current_val_ref: &Cell<ValRef>,
+    ) {
+        // start the sequence with a fresh operand stack and no manipulators
+        let mut op_stack = Vec::new();
+        let mut getters = HashMap::new();
 
-        let output_mode = match stackification.forest[pc].output_mode {
-            OutputMode::Available => "A".to_string(),
-            OutputMode::Release { parent } => format!("R{}", usize::from(parent)),
-            OutputMode::Capture { parent } => format!("C{}", usize::from(parent)),
+        let insns = &function.insn_seqs[seq_id];
+
+        if seq_id.0 >= out.len() {
+            assert_eq!(out.next_key(), seq_id);
+            out.push(InsnSeqStackification {
+                inputs: vec![],
+                manips: ti_vec![StackManipulators {
+                    captures: 0,
+                    getters: vec![],
+                    inputs: smallvec![],
+                    outputs: smallvec![],
+                }; insns.len() + 1],
+            });
+        }
+        let next_val = || {
+            let val_ref = current_val_ref.get();
+            current_val_ref.set(ValRef::forward(val_ref, 1));
+            val_ref
         };
 
-        println!("{} ${} = {:?}", output_mode, usize::from(pc), insns[pc],);
+        for (pc, insn) in insns.iter_enumerated() {
+            let (inputs, outputs): (SmallVec<[ValRef; 2]>, SmallVec<[ValRef; 1]>) = match insn {
+                InsnKind::Argument { .. } => {
+                    // take up a val ref, but don't actually output it onto
+                    // the stack. this is because arguments are just symbolic
+                    // and don't translate to Wasm instructions
+                    next_val();
+                    (smallvec![], smallvec![])
+                }
+                InsnKind::LoopArgument { .. } => {
+                    // take up a val ref, but don't actually output it onto
+                    // the stack. this is because loop arguments are just
+                    // symbolic and don't translate to Wasm instructions
+                    next_val();
+                    (smallvec![], smallvec![])
+                }
+                InsnKind::Const { .. } => (smallvec![], smallvec![next_val()]),
+                InsnKind::DeriveField { ptr, .. } => (smallvec![*ptr], smallvec![next_val()]),
+                InsnKind::DeriveElement { ptr, index, .. } => {
+                    (smallvec![*ptr, *index], smallvec![next_val()])
+                }
+                InsnKind::MemLoad { ptr, .. } => (smallvec![*ptr], smallvec![next_val()]),
+                InsnKind::MemStore { ptr, value, .. } => (smallvec![*ptr, *value], smallvec![]),
+                InsnKind::StackLoad { .. } => (smallvec![], smallvec![next_val()]),
+                InsnKind::StackStore { value, .. } => (smallvec![*value], smallvec![]),
+                #[allow(unreachable_code)]
+                InsnKind::CallImportedFunction { args, .. } => {
+                    (args.iter().map(|v| *v).collect(), todo!("look up return type of function"))
+                }
+                #[allow(unreachable_code)]
+                InsnKind::CallUserFunction { args, .. } => {
+                    (args.iter().map(|v| *v).collect(), todo!("look up return type of function"))
+                }
+                InsnKind::UnaryOp { operand, .. } => (smallvec![*operand], smallvec![next_val()]),
+                InsnKind::BinaryOp { lhs, rhs, .. } => {
+                    (smallvec![*lhs, *rhs], smallvec![next_val()])
+                }
+                InsnKind::Break { values, .. } => {
+                    (values.iter().map(|v| *v).collect(), smallvec![])
+                }
+                InsnKind::ConditionalBreak { condition, values, .. } => {
+                    let outputs: SmallVec<[ValRef; 1]> = values.iter().map(|v| *v).collect();
+                    let mut inputs = outputs.to_smallvec();
+                    inputs.push(*condition);
+                    (inputs, outputs)
+                }
+                InsnKind::Block(Block { body, output_type }) => {
+                    // generate val refs for the outputs
+                    let outputs = output_type.as_ref().iter().map(|_| next_val()).collect();
+
+                    // stackify the inner block
+                    stackify_insn_seq(function, *body, out, current_val_ref);
+
+                    // turn all leading getters into inputs to the block
+                    let leading_manips = &mut out[*body].manips[InsnPc(0)];
+                    assert_eq!(
+                        leading_manips.captures, 0,
+                        "an insn seq stackified without parameters should not have any leading captures"
+                    );
+                    let leading_getters = std::mem::take(&mut leading_manips.getters);
+                    let inputs = leading_getters.to_smallvec();
+                    out[*body].inputs = leading_getters;
+
+                    (inputs, outputs)
+                }
+                InsnKind::IfElse(IfElse { condition, output_type, then_body, else_body }) => {
+                    // generate val refs for the outputs
+                    let outputs = output_type.as_ref().iter().map(|_| next_val()).collect();
+
+                    // stackify the inner blocks
+                    stackify_insn_seq(function, *then_body, out, current_val_ref);
+                    stackify_insn_seq(function, *else_body, out, current_val_ref);
+
+                    // turn common leading getters into inputs to the if-else
+                    let then_leading_manips = &mut out[*then_body].manips[InsnPc(0)];
+                    assert_eq!(then_leading_manips.captures, 0);
+                    let mut then_leading_getters = std::mem::take(&mut then_leading_manips.getters);
+                    let else_leading_manips = &mut out[*else_body].manips[InsnPc(0)];
+                    assert_eq!(else_leading_manips.captures, 0);
+                    let mut else_leading_getters = std::mem::take(&mut else_leading_manips.getters);
+                    let common_prefix = factor_common_prefix([
+                        &mut then_leading_getters,
+                        &mut else_leading_getters,
+                    ]);
+                    let mut inputs = common_prefix.to_smallvec();
+                    inputs.push(*condition);
+                    out[*then_body].inputs = common_prefix.clone();
+                    out[*then_body].manips[InsnPc(0)].getters = then_leading_getters;
+                    out[*else_body].inputs = common_prefix;
+                    out[*else_body].manips[InsnPc(0)].getters = else_leading_getters;
+
+                    (inputs, outputs)
+                }
+                InsnKind::Loop(Loop { inputs, output_type, body }) => {
+                    // generate val refs for the outputs
+                    let outputs = output_type.as_ref().iter().map(|_| next_val()).collect();
+
+                    // stackify the inner block
+                    stackify_insn_seq(function, *body, out, current_val_ref);
+
+                    let inputs = inputs.to_smallvec();
+
+                    (inputs, outputs)
+                }
+            };
+            stackify::stackify_single(
+                &mut op_stack,
+                &mut getters,
+                &mut out[seq_id].manips,
+                pc,
+                inputs,
+                outputs,
+            );
+        }
+
+        // any excess operands on the stack should be eliminated
+        stackify::remove_excess_operands(
+            op_stack.drain(..).zip(std::iter::repeat(false)),
+            &mut out[seq_id].manips,
+            insns.next_key(),
+        );
     }
+
+    result
+}
+
+/// Within an entire function, counts the number of getters exist for each
+/// value.
+pub fn count_getters(stk: &CfgStackification) -> HashMap<ValRef, usize> {
+    let mut result = HashMap::new();
+    for seq in &stk.seqs {
+        for manips in &seq.manips {
+            for v in &manips.getters {
+                *result.entry(*v).or_insert(0) += 1;
+            }
+        }
+    }
+    result
 }
 
 #[cfg(test)]
 mod tests {
+    use typed_index_collections::ti_vec;
+
     use super::*;
-    use crate::{
-        lir::{BinaryOpcode, ValType, instructions},
-        stackification,
-    };
+    use crate::lir::lir_function;
+    use crate::stackify::stackification;
 
     #[test]
     fn basic_sequence() {
-        instructions! {
-            let insns;
-            a = [constant(I32, 0)];
-            b = [constant(I32, 1)];
-            c = [add(a, b)];
+        lir_function! {
+            let block return [I32];
+            main: {
+                %a = constant(I32, 0);
+                %b = constant(I32, 1);
+                %c = Add(a, b);
+                break_(main)(c);
+            }
         }
 
-        let (stackification, _) = stackify_lir(&insns);
-        assert_eq!(stackification, stackification! {
-            Stackification;
-            InsnPc;
-            count 3;
-
-            [(a) =| c]
-            [(b) =| c]
-            [(c) ==]
-        });
+        let stackification = stackify_cfg(&block);
+        assert_eq!(stackification.seqs[InsnSeqId(0)], stackification! { inputs []; });
     }
 
     #[test]
     fn block_parameters() {
         // all leading getters in a block should be factored out and used as
         // inputs to the block instruction
-        instructions! {
-            let insns;
-            a = [constant(I32, 10)];
-            b = [constant(I32, 20)];
-            outer = [block([I32]) {
-                c = [add(a, b)];
-                inner = [block([I32]) {
-                    d = [add(c, a)];
-                    break_2 = [break_(inner)(d)];
-                }];
-                break_1 = [break_(outer)(inner)];
-            }];
+        lir_function! {
+            let block return [I32];
+            main: {
+                %a = constant(I32, 10);
+                %b = constant(I32, 20);
+                %[outer] = block([I32]) outer_block: {
+                    %c = Add(a, b);
+                    %[inner] = block([I32]) inner_block: {
+                        %d = Add(c, a);
+                        break_(inner_block)(d);
+                    };
+                    break_(outer_block)(inner);
+                };
+                break_(main)(outer);
+            }
         }
 
-        let (stackification, _) = stackify_lir(&insns);
+        let stackification = stackify_cfg(&block);
 
-        assert_eq!(stackification, stackification! {
-            Stackification;
-            InsnPc;
-            count 8;
-
-            [(a) =| outer]
-            [(b) =| outer]
-            [(outer) ==]
-            [(c) =| inner]
-            [(inner) <~ a]
-            [(inner) =| break_1]
-            [(d) =| break_2]
-            [(break_2) ==]
-            [(break_1) ==]
-        })
+        assert_eq!(
+            stackification.seqs,
+            ti_vec![
+                stackification! {
+                    inputs [];
+                    [InsnPc(0)] cap(0) get[] [] => [a];
+                    [InsnPc(1)] cap(0) get[] [] => [b];
+                    [InsnPc(2)] cap(0) get[] [] => [outer];
+                    [InsnPc(3)] cap(0) get[] [outer] => [];
+                    [InsnPc(4)] cap(0) get[] [] => [];
+                },
+                stackification! {
+                    inputs [a, b];
+                    [InsnPc(0)] cap(0) get[] [a, b] => [c];
+                    [InsnPc(1)] cap(0) get[a] [c, a] => [inner];
+                    [InsnPc(2)] cap(0) get[] [inner] => [];
+                    [InsnPc(3)] cap(0) get[] [] => [];
+                },
+                stackification! {
+                    inputs [c, a];
+                    [InsnPc(0)] cap(0) get[] [c, a] => [d];
+                    [InsnPc(1)] cap(0) get[] [d] => [];
+                    [InsnPc(2)] cap(0) get[] [] => [];
+                },
+            ],
+        );
     }
 
     #[test]
     fn includes_branches() {
-        instructions! {
-            let insns;
-            arg = [argument(I32, 0)];
-            a = [constant(I32, 10)];
-            b = [constant(I32, 20)];
-            branch = [if_else([I32])(arg) {
-                d_0 = [add(a, b)];
-                break_0 = [break_(branch)(d_0)];
-            } {
-                d_1 = [sub(a, b)];
-                break_1 = [break_(branch)(d_1)];
-            }];
+        lir_function! {
+            let block return [I32];
+            main: {
+                %arg = argument(I32, 0);
+                %a = constant(I32, 10);
+                %b = constant(I32, 20);
+                %c = constant(I32, 30);
+                %d = constant(I32, 40);
+                %[branch] = if_else([I32])(arg) then: {
+                    // get a, b, c
+                    %res_0 = Add(a, Add(b, c));
+                    break_(then)(res_0);
+                } else_: {
+                    // get a, b, d
+                    %res_1 = Sub(a, Sub(b, d));
+                    break_(else_)(res_1);
+                };
+                break_(main)(branch);
+            }
         }
 
-        let (stackification, _) = stackify_lir(&insns);
+        let stackification = stackify_cfg(&block);
 
-        assert_eq!(stackification, stackification! {
-            Stackification;
-            InsnPc;
-            count 8;
-
-            [(arg) ==]
-            [(a) =| branch]
-            [(b) =| branch]
-            [(branch) <~ arg]
-            [(branch) ==]
-            [(d_0) =| break_0]
-            [(break_0) ==]
-            [(d_1) =| break_1]
-            [(break_1) ==]
-        })
+        assert_eq!(
+            stackification.seqs,
+            ti_vec![
+                stackification! {
+                    inputs [];
+                    [InsnPc(0)] cap(0) get[] [] => [arg];
+                    [InsnPc(1)] cap(1) get[] [] => [a];
+                    [InsnPc(2)] cap(0) get[] [] => [b];
+                    [InsnPc(3)] cap(0) get[arg] [] => [c];
+                    [InsnPc(4)] cap(1) get[] [] => [d];
+                    [InsnPc(5)] cap(1) get[] [a, b, arg] => [branch];
+                    [InsnPc(6)] cap(0) get[] [branch] => [];
+                    [InsnPc(7)] cap(0) get[] [] => [];
+                },
+                // then branch
+                stackification! {
+                    inputs [a, b];
+                    [InsnPc(0)] cap(0) get[c] [b, c] => [ValRef::backward(res_0, 1)];
+                    [InsnPc(1)] cap(0) get[] [a, ValRef::backward(res_0, 1)] => [res_0];
+                    [InsnPc(2)] cap(0) get[] [res_0] => [];
+                    [InsnPc(3)] cap(0) get[] [] => [];
+                },
+                // else branch
+                stackification! {
+                    inputs [a, b];
+                    [InsnPc(0)] cap(0) get[d] [b, d] => [ValRef::backward(res_1, 1)];
+                    [InsnPc(1)] cap(0) get[] [a, ValRef::backward(res_1, 1)] => [res_1];
+                    [InsnPc(2)] cap(0) get[] [res_1] => [];
+                    [InsnPc(3)] cap(0) get[] [] => [];
+                },
+            ]
+        )
     }
 }
