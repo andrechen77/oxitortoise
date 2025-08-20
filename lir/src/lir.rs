@@ -192,6 +192,11 @@ pub enum InsnKind {
         offset: usize,
         value: ValRef,
     },
+    /// Get the address of a value on the stack
+    StackAddr {
+        /// The offset from the top of the stack.
+        offset: usize,
+    },
     CallImportedFunction {
         function: ImportedFunctionId,
         output_type: SmallVec<[ValType; 1]>,
@@ -355,6 +360,9 @@ pub fn infer_output_types(function: &Function) -> HashMap<ValRef, ValType> {
                     self.types.insert(ValRef(pc, 0), *r#type);
                 }
                 InsnKind::StackStore { .. } => {}
+                InsnKind::StackAddr { .. } => {
+                    self.types.insert(ValRef(pc, 0), ValType::Ptr);
+                }
                 InsnKind::UnaryOp { op, operand } => {
                     self.types.insert(
                         ValRef(pc, 0),

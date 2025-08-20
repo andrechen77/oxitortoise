@@ -359,13 +359,24 @@ pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) -> wal
                 I::StackLoad { r#type, offset } => {
                     let load_kind = infer_load_kind(*r#type);
                     let mem_arg = infer_mem_arg(*r#type, *offset);
-                    insn_builder.load(ctx.memory, load_kind, mem_arg);
+                    insn_builder
+                        .local_get(ctx.stack_ptr_local.expect("the presence of a StackAddr instruction means there must be a stack pointer local var"))
+                        .load(ctx.memory, load_kind, mem_arg);
                 }
                 I::StackStore { offset, value } => {
                     let r#type = ctx.types[value];
                     let store_kind = infer_store_kind(r#type);
                     let mem_arg = infer_mem_arg(r#type, *offset);
+                    // stackification ensured that the stack pointer, followed
+                    // by the value, are already on the operand stack. we just
+                    // need to emit the store instruction.
                     insn_builder.store(ctx.memory, store_kind, mem_arg);
+                }
+                I::StackAddr { offset } => {
+                    insn_builder
+                        .local_get(ctx.stack_ptr_local.expect("the presence of a StackAddr instruction means there must be a stack pointer local var"))
+                        .const_(translate_usize(*offset))
+                        .binop(wir::BinaryOp::I32Add);
                 }
                 I::CallImportedFunction { function, args: _, output_type: _ } => {
                     let callee = ctx.imported_function_ids[function];
@@ -637,8 +648,8 @@ mod tests {
             main: {
                 %arg = arguments(-> (I32));
                 stack_store(8)(arg);
-                %res = stack_load(I16, 8);
-                break_(main)(res);
+                %_res = stack_load(I16, 8);
+                break_(main)(stack_addr(8));
             }
         }
 

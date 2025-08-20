@@ -121,12 +121,11 @@ pub fn stackify_cfg(function: &Function) -> CfgStackification {
                 InsnKind::MemStore { ptr, value, .. } => {
                     (smallvec![(*ptr).into(), (*value).into()], smallvec![])
                 }
-                InsnKind::StackLoad { .. } => {
-                    (smallvec![ValRefOrStackPtr::StackPtr], smallvec![ValRef(pc, 0).into()])
-                }
+                InsnKind::StackLoad { .. } => (smallvec![], smallvec![ValRef(pc, 0).into()]),
                 InsnKind::StackStore { value, .. } => {
                     (smallvec![ValRefOrStackPtr::StackPtr, (*value).into()], smallvec![])
                 }
+                InsnKind::StackAddr { .. } => (smallvec![], smallvec![ValRef(pc, 0).into()]),
                 InsnKind::CallImportedFunction { args, output_type, .. } => (
                     args.iter().map(|v| (*v).into()).collect(),
                     (0..output_type.len())

@@ -105,6 +105,10 @@ macro_rules! push_node {
             value,
         });
     };
+    ($ctx:expr; % $val_ref:pat = stack_addr($offset:expr)) => {
+        let insn_idx = $ctx.0[$ctx.1].push_and_get_key($crate::lir::InsnKind::StackAddr { offset: $offset });
+        let $val_ref = $crate::lir::ValRef($crate::lir::InsnPc($ctx.1, insn_idx), 0);
+    };
     ($ctx:expr; % $val_ref:pat = call_imported_function($function:ident -> ($($return_ty:ident),*))(
         $(
             $arg_ident:ident $(($($arg_param:tt)*))*
