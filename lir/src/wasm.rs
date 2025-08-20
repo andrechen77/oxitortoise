@@ -469,8 +469,7 @@ mod tests {
     #[test]
     fn return_1() {
         lir_function! {
-            let func return [I32];
-            main: {
+            fn func() -> (I32) main: {
                 break_(main)(constant(I32, 10));
             }
         }

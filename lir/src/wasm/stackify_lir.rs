@@ -227,8 +227,7 @@ mod tests {
     #[test]
     fn basic_sequence() {
         lir_function! {
-            let block return [I32];
-            main: {
+            fn block() -> (I32) main: {
                 %a = constant(I32, 0);
                 %b = constant(I32, 1);
                 %c = Add(a, b);
@@ -245,13 +244,12 @@ mod tests {
         // all leading getters in a block should be factored out and used as
         // inputs to the block instruction
         lir_function! {
-            let block return [I32];
-            main: {
+            fn block() -> (I32) main: {
                 %a = constant(I32, 10);
                 %b = constant(I32, 20);
-                %[outer] = block([I32]) outer_block: {
+                %outer = block(-> (I32)) outer_block: {
                     %c = Add(a, b);
-                    %[inner] = block([I32]) inner_block: {
+                    %inner = block(-> (I32)) inner_block: {
                         %d = Add(c, a);
                         break_(inner_block)(d);
                     };
@@ -294,14 +292,13 @@ mod tests {
     #[test]
     fn includes_branches() {
         lir_function! {
-            let block return [I32];
-            main: {
+            fn block() -> (I32) main: {
                 %arg = argument(I32, 0);
                 %a = constant(I32, 10);
                 %b = constant(I32, 20);
                 %c = constant(I32, 30);
                 %d = constant(I32, 40);
-                %[branch] = if_else([I32])(arg) then: {
+                %branch = if_else(-> (I32))(arg) then: {
                     // get a, b, c
                     %res_0 = Add(a, Add(b, c));
                     break_(then)(res_0);

@@ -101,7 +101,7 @@ macro_rules! push_node {
             value: $value,
         });
     };
-    ($ctx:expr; % $val_ref:pat = call_imported_function($function:ident)(
+    ($ctx:expr; % $val_ref:pat = call_imported_function($function:ident -> ($($return_ty:ident),*))(
         $(
             $arg_ident:ident $(($($arg_param:tt)*))*
         ),* $(,)?
@@ -112,13 +112,16 @@ macro_rules! push_node {
             args.push(arg);
         )*
 
-        let $val_ref = $crate::next_val_ref!($ctx);
+        let $val_ref = ($({
+            $crate::lir::ValType::$return_ty;
+            $crate::next_val_ref!($ctx)
+        }),*);
         $ctx.insn_seqs[$ctx.curr_seq_id].push($crate::lir::InsnKind::CallImportedFunction {
             function: $crate::lir::ImportedFunctionId { name: stringify!($function) },
             args: args.into_boxed_slice(),
         });
     };
-    ($ctx:expr; % $val_ref:pat = call_user_function($function:ident, [$($return_ty:ident),*])(
+    ($ctx:expr; % $val_ref:pat = call_user_function($function:ident -> ($($return_ty:ident),*))(
         $(
             $arg_ident:ident $(($($arg_param:tt)*))*
         ),* $(,)?
@@ -128,10 +131,10 @@ macro_rules! push_node {
             $crate::push_node!($ctx; %arg = $arg_ident $(($($arg_param)*))*);
             args.push(arg);
         )*
-        let $val_ref = [$({
+        let $val_ref = ($({
             $crate::lir::ValType::$return_ty;
             $crate::next_val_ref!($ctx)
-        }),*];
+        }),*);
         $ctx.insn_seqs[$ctx.curr_seq_id].push($crate::lir::InsnKind::CallUserFunction {
             function: $crate::lir::FunctionId,
             args: args.into_boxed_slice(),
@@ -194,12 +197,12 @@ macro_rules! push_node {
             values: values.into_boxed_slice(),
         });
     };
-    ($ctx:expr; % $val_ref:pat = block([$($return_ty:ident),*]) $label:ident: {$($inner:tt)*}) => {
-        let $val_ref = [$({
+    ($ctx:expr; % $val_ref:pat = block(-> ($($return_ty:ident),*)) $label:ident: {$($inner:tt)*}) => {
+        let $val_ref = ($({
             #[allow(unused)]
             $crate::lir::ValType::$return_ty;
             $crate::next_val_ref!($ctx)
-        }),*];
+        }),*);
 
         $crate::instruction_seq!($ctx; $label: { $($inner)* });
 
@@ -208,16 +211,16 @@ macro_rules! push_node {
             body: $label,
         }));
     };
-    ($ctx:expr; % $val_ref:pat = if_else([$($return_ty:ident),*])(
+    ($ctx:expr; % $val_ref:pat = if_else(-> ($($return_ty:ident),*))(
         $condition_ident:ident $(($($condition_param:tt)*))*
     ) $then_label:ident: {$($then_inner:tt)*} $else_label:ident: {$($else_inner:tt)*}) => {
         $crate::push_node!($ctx; %condition = $condition_ident $(($($condition_param)*))*);
 
-        let $val_ref = [$({
+        let $val_ref = ($({
             #[allow(unused)]
             $crate::lir::ValType::$return_ty;
             $crate::next_val_ref!($ctx)
-        }),*];
+        }),*);
 
         $crate::instruction_seq!($ctx; $then_label: { $($then_inner)* });
         $crate::instruction_seq!($ctx; $else_label: { $($else_inner)* });
@@ -249,8 +252,7 @@ macro_rules! instruction_seq {
 
 #[macro_export]
 macro_rules! lir_function {
-    (let $func:ident return [$($return_ty:ident),*]; $label:ident: { $($inner:tt)* }) => {
-
+    (fn $func:ident($($param_ty:ident),*) -> ($($return_ty:ident),*) $label:ident: { $($inner:tt)* }) => {
         struct FnBuilderCtx<'a> {
             insn_seqs: &'a mut typed_index_collections::TiVec<$crate::lir::InsnSeqId, typed_index_collections::TiVec<$crate::lir::InsnPc, $crate::lir::InsnKind>>,
             curr_seq_id: $crate::lir::InsnSeqId,
@@ -267,7 +269,7 @@ macro_rules! lir_function {
         $crate::instruction_seq!(ctx; $label: { $($inner)* });
 
         let $func = $crate::lir::Function {
-            parameter_types: vec![],
+            parameter_types: vec![$($crate::lir::ValType::$param_ty),*],
             body: $crate::lir::Block {
                 output_type: $crate::lir::InsnOutput::from_types_array([$($crate::lir::ValType::$return_ty),*]),
                 body: $crate::lir::InsnSeqId(0),
