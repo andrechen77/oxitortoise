@@ -111,7 +111,7 @@ pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) {
         memory: walrus::MemoryId,
         stack_ptr: Option<walrus::LocalId>,
         // remaining_uses: &'a mut TiVec<lir::ValRef, usize>,
-        types: &'a TiVec<lir::ValRef, lir::ValType>,
+        types: &'a HashMap<lir::ValRef, lir::ValType>,
         stk: &'a stackify_lir::CfgStackification,
     }
     fn write_code(
@@ -131,8 +131,9 @@ pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) {
         let mut known_saved = 0;
 
         let seq_stk = &ctx.stk.seqs[insn_seq_id];
-        for (pc, insn) in ctx.func.insn_seqs[insn_seq_id].iter_enumerated() {
-            let StackManipulators { captures, getters, inputs, outputs } = &seq_stk.manips[pc];
+        for (idx, insn) in ctx.func.insn_seqs[insn_seq_id].iter_enumerated() {
+            let pc = lir::InsnPc(insn_seq_id, idx);
+            let StackManipulators { captures, getters, inputs, outputs } = &seq_stk.manips[idx];
 
             // generate code to handle capturing and saving before this
             // instruction executes
@@ -210,8 +211,20 @@ pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) {
             // generate code to execute the instruction
             use lir::InsnKind as I;
             match insn {
-                I::Argument { r#type: _, index: _ } => {} // arguments do not show up in codegen
-                I::LoopArgument { initial_value: _ } => {} // arguments do not show up in codegen
+                I::FunctionArgs { output_type } => {
+                    // arguments do not show up in codegen. However, any future
+                    // instructions that use this argument need to know that
+                    // they can get it using a local getter.
+                    for i in 0..output_type.as_ref().len() {
+                        let i: u8 = i.try_into().unwrap();
+                        allocate_local(ctx, lir::ValRef(pc, i));
+                    }
+                }
+                I::LoopArg { initial_value: _ } => {
+                    // arguments do not show up in codegen. Unlike function
+                    // args, however, loop args do output values onto the
+                    // operand stack, so things are automatically handled.
+                }
                 I::Const { r#type, value } => {
                     insn_builder.const_(translate_val(*r#type, *value));
                 }
@@ -230,7 +243,7 @@ pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) {
                     insn_builder.load(ctx.memory, load_kind, mem_arg);
                 }
                 I::MemStore { offset, ptr: _, value } => {
-                    let r#type = ctx.types[*value];
+                    let r#type = ctx.types[value];
                     let store_kind = infer_store_kind(r#type);
                     let mem_arg = infer_mem_arg(r#type, *offset);
                     insn_builder.store(ctx.memory, store_kind, mem_arg);
@@ -243,7 +256,7 @@ pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) {
                         .load(ctx.memory, load_kind, mem_arg);
                 }
                 I::StackStore { offset, value } => {
-                    let r#type = ctx.types[*value];
+                    let r#type = ctx.types[value];
                     let store_kind = infer_store_kind(r#type);
                     let mem_arg = infer_mem_arg(r#type, *offset);
                     insn_builder
@@ -256,7 +269,7 @@ pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) {
                     insn_builder.unop(translate_unary_op(*op));
                 }
                 I::BinaryOp { op, lhs, rhs } => {
-                    insn_builder.binop(translate_binary_op(*op, ctx.types[*lhs], ctx.types[*rhs]));
+                    insn_builder.binop(translate_binary_op(*op, ctx.types[lhs], ctx.types[rhs]));
                 }
                 I::Break { target, values: _ } => {
                     let target = ctx.compound_labels[target];
@@ -269,7 +282,7 @@ pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) {
                 I::Block(lir::Block { output_type, body }) => {
                     let seq_type = translate_instr_seq_type(
                         &mut ctx.module.types,
-                        ctx.stk.seqs[*body].inputs.iter().map(|v| ctx.types[*v]),
+                        ctx.stk.seqs[*body].inputs.iter().map(|v| ctx.types[v]),
                         output_type.as_ref().iter().copied(),
                     );
 
@@ -280,7 +293,7 @@ pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) {
                 I::IfElse(lir::IfElse { condition: _, then_body, else_body, output_type }) => {
                     let seq_type = translate_instr_seq_type(
                         &mut ctx.module.types,
-                        ctx.stk.seqs[*then_body].inputs.iter().map(|v| ctx.types[*v]),
+                        ctx.stk.seqs[*then_body].inputs.iter().map(|v| ctx.types[v]),
                         output_type.as_ref().iter().copied(),
                     );
 
@@ -308,7 +321,7 @@ pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) {
                 I::Loop(lir::Loop { body, inputs, output_type }) => {
                     let seq_type = translate_instr_seq_type(
                         &mut ctx.module.types,
-                        inputs.iter().map(|v| ctx.types[*v]),
+                        inputs.iter().map(|v| ctx.types[v]),
                         output_type.as_ref().iter().copied(),
                     );
 
@@ -330,10 +343,10 @@ pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) {
         }
 
         // TODO should we deliberately skip stack manipulators at the end? the
-        // end pc won't show up because it's not a real instruction
+        // end idx won't show up because it's not a real instruction
     }
     fn allocate_local(ctx: &mut CodegenFnCtx, val: lir::ValRef) -> wir::LocalId {
-        let local_id = ctx.module.locals.add(translate_val_type(ctx.types[val]));
+        let local_id = ctx.module.locals.add(translate_val_type(ctx.types[&val]));
         ctx.local_ids.insert(val, local_id);
         local_id
     }

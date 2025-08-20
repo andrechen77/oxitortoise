@@ -8,8 +8,8 @@ use typed_index_collections::TiVec;
 /*
 stackification model
 
-the function is given an iterator over (pc, input, output). each one of these
-means that at the given pc, an instruction is executed that expects the given
+the function is given an iterator over (idx, input, output). each one of these
+means that at the given idx, an instruction is executed that expects the given
 inputs on the operand stack and pushes the given outputs onto the operand stack.
 A regular instruction will just push one output, representing the value of the
 instruction's calculation, onto the stack, but other instructions might push
@@ -19,35 +19,35 @@ value: e.g. if instruction A pushes a value A.v onto the stack, and then an
 identity instruction B pops A.v and pushes A.v again, then future instructions
 can use the output of B if it expects A.v.
 
-The goal of the function is to return a list of values, associated with each pc,
-indicating the number of captures at that pc (indicating operands removed from
-the stack) and getters to insert at that pc, before the instruction at that pc
+The goal of the function is to return a list of values, associated with each idx,
+indicating the number of captures at that idx (indicating operands removed from
+the stack) and getters to insert at that idx, before the instruction at that idx
 runs. It also returns a list of values representing the available operands on
 the stack at the end of the sequence,
 */
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct InsnSeqStackification<V, Pc: From<usize>> {
+pub struct InsnSeqStackification<V, Idx: From<usize>> {
     /// Values that must be on the stack when entering this instruction
     /// sequence to get proper stack machine execution.
     pub inputs: Vec<V>,
-    /// Information about execution at the specified pc to get proper stack
+    /// Information about execution at the specified idx to get proper stack
     /// machine execution.
-    pub manips: TiVec<Pc, StackManipulators<V>>,
+    pub manips: TiVec<Idx, StackManipulators<V>>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct AvailOperand<V, Pc> {
+pub struct AvailOperand<V, Idx> {
     value: V,
-    /// The pc at which the operand can be released (one plus the pc of the
+    /// The index at which the operand can be released (one plus the index of the
     /// instruction that outputs it, or zero if the operand is a forced
     /// argument). These values are monotonically increasing over the
     /// multivalues on the operand stack.
-    releases_at: Pc,
-    /// The pc at which the direct calculation of this operand, represented as
+    releases_at: Idx,
+    /// The index at which the direct calculation of this operand, represented as
     /// a tree, begins. Retro-inserting something onto the stack before this
-    /// operand can be done no later than this pc.
-    subtree_start: Pc,
+    /// operand can be done no later than this index.
+    subtree_start: Idx,
     /// If true, then this operand ends a multivalue. Each single value operand
     /// ends a multivalue with just itself. All values of a multivalue except
     /// for the last one will have this set to false. A getter can only be
@@ -64,20 +64,20 @@ pub struct AvailOperand<V, Pc> {
     ends_multivalue: bool,
 }
 
-/// Describes what stack manipulators exist/need to be added at a given pc.
+/// Describes what stack manipulators exist/need to be added at a given idx.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct StackManipulators<V> {
-    /// The number of captures to insert at this pc. A "capture" corresponds to
+    /// The number of captures to insert at this idx. A "capture" corresponds to
     /// popping a value off the top of the stack and dropping it. These captures
     /// are inserted first before any other stack manipulators and before the
-    /// instruction at the pc is executed.
+    /// instruction at the idx is executed.
     pub captures: usize,
-    /// The values for the getters to insert at this pc. These are inserted
-    /// after the captures but before the instruction at the pc is executed.
+    /// The values for the getters to insert at this idx. These are inserted
+    /// after the captures but before the instruction at the idx is executed.
     pub getters: Vec<V>,
-    /// The inputs to the instruction at this pc.
+    /// The inputs to the instruction at this idx.
     pub inputs: SmallVec<[V; 2]>,
-    /// The outputs of the instruction at this pc.
+    /// The outputs of the instruction at this idx.
     pub outputs: SmallVec<[V; 1]>,
 }
 
@@ -89,21 +89,21 @@ pub struct StackManipulators<V> {
 
 /// * `available_operand_stack` - The stack of operands that are available to
 ///   the current instruction.
-/// * `available_getters` - Maps each value to the earliest pc at which it can
-///   be gotten. None indicates that the value was calculated before any pc.
-/// * `my_pc` - The pc at which the instruction is executed. Must be greater
-///   than allPc's in the available_operands stack and available_getters
-pub fn stackify_single<V, Pc>(
-    available_operand_stack: &mut Vec<AvailOperand<V, Pc>>,
-    available_getters: &mut HashMap<V, Pc>,
-    stack_manips: &mut TiVec<Pc, StackManipulators<V>>,
-    my_pc: Pc,
+/// * `available_getters` - Maps each value to the earliest idx at which it can
+///   be gotten. None indicates that the value was calculated before any idx.
+/// * `my_idx` - The idx at which the instruction is executed. Must be greater
+///   than all idx's in the available_operands stack and available_getters
+pub fn stackify_single<V, Idx>(
+    available_operand_stack: &mut Vec<AvailOperand<V, Idx>>,
+    available_getters: &mut HashMap<V, Idx>,
+    stack_manips: &mut TiVec<Idx, StackManipulators<V>>,
+    my_idx: Idx,
     inputs: SmallVec<[V; 2]>,
     outputs: SmallVec<[V; 1]>,
 ) where
     V: Copy + PartialEq + Eq + Hash,
-    Pc: PartialOrd + Ord + Copy + Step + From<usize>,
-    usize: From<Pc>,
+    Idx: PartialOrd + Ord + Copy + Step + From<usize>,
+    usize: From<Idx>,
 {
     // The order barrier is an index into the operand stack. Only operands
     // after the order barrier may be released. Getters may only be inserted
@@ -118,7 +118,7 @@ pub fn stackify_single<V, Pc>(
 
     // If we haven't released any inputs yet, then we won't know where to insert
     // a getter even if know we need a getter. There are called "lost getters",
-    // and will be stored at the pc of the current instruction if there are no
+    // and will be stored at the idx of the current instruction if there are no
     // released inputs, and before the first released input if there are.
     let mut getters = Vec::new();
 
@@ -142,8 +142,8 @@ pub fn stackify_single<V, Pc>(
                 // the above check that the subtree start comes after all
                 // previous getter-needing inputs ensures that the getters are
                 // valid at their new position.
-                for (pc, _) in &mut getters {
-                    *pc = operand.subtree_start;
+                for (idx, _) in &mut getters {
+                    *idx = operand.subtree_start;
                 }
             }
 
@@ -154,16 +154,16 @@ pub fn stackify_single<V, Pc>(
         } else {
             // the input cannot be released. insert a getter for it.
 
-            // get the pc after which the value can be gotten.
+            // get the idx after which the value can be gotten.
             let birthdate = available_getters.get(input);
-            assert!(birthdate <= Some(&my_pc));
+            assert!(birthdate <= Some(&my_idx));
 
             if first_released_operand.is_some() {
                 // a previous input has already been released. try to insert the
                 // getter as early as possible after the most recently released
                 // input while respecting the order of inputs
 
-                let (new_order_barrier, insertion_pc) = (order_barrier..)
+                let (new_order_barrier, insertion_idx) = (order_barrier..)
                     .map(|i| (i, &available_operand_stack[i - 1])) // order barrier must be > 0 bc something was released
                     .find_map(|(i, o)| {
                         (o.ends_multivalue && Some(&o.releases_at) >= birthdate)
@@ -174,24 +174,24 @@ pub fn stackify_single<V, Pc>(
                     // before we got here, then we can't insert a getter after
                     // that multivalue was released. therefore, put the getter
                     // before this instruction.
-                    .unwrap_or((available_operand_stack.len(), my_pc));
+                    .unwrap_or((available_operand_stack.len(), my_idx));
 
                 // update the order barrier to ensure that the next input is in
                 // the correct order
                 order_barrier = new_order_barrier;
 
-                getters.push((insertion_pc, *input));
+                getters.push((insertion_idx, *input));
             } else {
                 // no previous inputs have been released yet. we don't know
                 // where to insert the getter, so store it before the current
                 // instruction for now
-                getters.push((my_pc, *input));
+                getters.push((my_idx, *input));
             };
         }
     }
 
     let my_subtree_start =
-        first_released_operand.map_or(my_pc, |i| available_operand_stack[i].subtree_start);
+        first_released_operand.map_or(my_idx, |i| available_operand_stack[i].subtree_start);
 
     // at this point we have gone through all the inputs of the current
     // instruction.
@@ -204,34 +204,34 @@ pub fn stackify_single<V, Pc>(
                 .drain(first_released_operand..)
                 .zip(operand_is_released.drain(first_released_operand..)),
             stack_manips,
-            my_pc,
+            my_idx,
         );
     }
     // in addition, insert all getters at the correct locations. the getters are
     // inserted in the order they appear, but they must come before any getters
-    // already inserted at the same pc. The pre-existing getters should bind
+    // already inserted at the same idx. The pre-existing getters should bind
     // more tightly, which is done by having them come after
-    for (insertion_pc, v) in getters.into_iter().rev() {
+    for (insertion_idx, v) in getters.into_iter().rev() {
         // FUTURE can be made faster
-        stack_manips[insertion_pc].getters.insert(0, v);
+        stack_manips[insertion_idx].getters.insert(0, v);
     }
 
     // at this point we have removed all inputs for the current instruction.
     // now we need to add the outputs of the current instruction to the
     // operand stack for the next instruction to potentially use
-    let succ_pc = Pc::forward(my_pc, 1);
+    let succ_idx = Idx::forward(my_idx, 1);
     for (i, output) in outputs.iter().enumerate() {
         available_operand_stack.push(AvailOperand {
             value: *output,
-            releases_at: succ_pc,
+            releases_at: succ_idx,
             subtree_start: my_subtree_start,
             ends_multivalue: i == outputs.len() - 1,
         });
-        available_getters.insert(*output, succ_pc);
+        available_getters.insert(*output, succ_idx);
     }
 
-    stack_manips[my_pc].inputs = inputs;
-    stack_manips[my_pc].outputs = outputs;
+    stack_manips[my_idx].inputs = inputs;
+    stack_manips[my_idx].outputs = outputs;
 }
 
 /// Given that a subsequence of instructions has been stackified and results in
@@ -246,23 +246,23 @@ pub fn stackify_single<V, Pc>(
 /// the operand is required and should be released.
 /// * `manips` - The set of stack manipulators to add to such to achieve the
 /// desired result.
-/// * `target_pc` - The pc at which we want to achieve the target state with the
+/// * `target_idx` - The idx at which we want to achieve the target state with the
 /// operand stack containing only the released operands. This is also the
 /// fallback location to add stack manipulators if manipulators cannot be added
 /// immediately after the instructions that produced the operands. This value
-/// must be greater than all pc's in the excess op stack.
-pub fn remove_excess_operands<V, Pc>(
-    excess_op_stack: impl Iterator<Item = (AvailOperand<V, Pc>, bool)>,
-    manips: &mut TiVec<Pc, StackManipulators<V>>,
-    target_pc: Pc,
+/// must be greater than all idx's in the excess op stack.
+pub fn remove_excess_operands<V, Idx>(
+    excess_op_stack: impl Iterator<Item = (AvailOperand<V, Idx>, bool)>,
+    manips: &mut TiVec<Idx, StackManipulators<V>>,
+    target_idx: Idx,
 ) where
     V: Copy + PartialEq + Eq + Hash,
-    Pc: PartialOrd + Ord + Copy + Step + From<usize>,
-    usize: From<Pc>,
+    Idx: PartialOrd + Ord + Copy + Step + From<usize>,
+    usize: From<Idx>,
 {
     // The general idea of the algorithm is to go through each operand and, if
     // it is required, release it, and if it is excess, capture it. This can
-    // usually be done by simply adding or not adding a capture at the pc where
+    // usually be done by simply adding or not adding a capture at the idx where
     // the operand would be released.
     //
     // However, if the operand being captured is not the last operand in a
@@ -318,8 +318,8 @@ pub fn remove_excess_operands<V, Pc>(
         // captures and queued re-releases we counted cannot be inserted
         // at the end of the multivalue because the end was used by a
         // previous instruction. instead, insert the captures and getters
-        // immediately before the target pc
-        let manips = &mut manips[target_pc];
+        // immediately before the target idx
+        let manips = &mut manips[target_idx];
         manips.getters.extend(queued.into_iter());
         manips.captures += num_captures;
     }
@@ -332,7 +332,7 @@ mod tests {
 
     use super::*;
 
-    type Pc = usize;
+    type Idx = usize;
     type V = &'static str;
 
     macro_rules! avail_operand {
@@ -357,7 +357,7 @@ mod tests {
             [2] cap(0) get[] [] => [];
         };
 
-        stackify_single::<V, Pc>(
+        stackify_single::<V, Idx>(
             &mut op_stack,
             &mut getters,
             &mut stk.manips,
@@ -396,7 +396,7 @@ mod tests {
             [2] cap(0) get[] [] => [];
         };
 
-        stackify_single::<V, Pc>(
+        stackify_single::<V, Idx>(
             &mut op_stack,
             &mut getters,
             &mut stk.manips,
@@ -435,7 +435,7 @@ mod tests {
             [3] cap(0) get[] [] => [];
         };
 
-        stackify_single::<V, Pc>(
+        stackify_single::<V, Idx>(
             &mut op_stack,
             &mut getters,
             &mut stk.manips,
@@ -482,7 +482,7 @@ mod tests {
             [3] cap(0) get[] [] => [];
         };
 
-        stackify_single::<V, Pc>(
+        stackify_single::<V, Idx>(
             &mut op_stack,
             &mut getters,
             &mut stk.manips,
@@ -525,7 +525,7 @@ mod tests {
             [3] cap(0) get[] [] => [];
         };
 
-        stackify_single::<V, Pc>(
+        stackify_single::<V, Idx>(
             &mut op_stack,
             &mut getters,
             &mut stk.manips,
@@ -580,7 +580,7 @@ mod tests {
             [3] cap(0) get[] [] => [];
         };
 
-        stackify_single::<V, Pc>(
+        stackify_single::<V, Idx>(
             &mut op_stack,
             &mut getters,
             &mut stk.manips,
@@ -628,7 +628,7 @@ mod tests {
             [1] cap(0) get[] [] => [];
         };
 
-        stackify_single::<V, Pc>(
+        stackify_single::<V, Idx>(
             &mut op_stack,
             &mut getters,
             &mut stk.manips,
@@ -669,7 +669,7 @@ mod tests {
             [2] cap(0) get[] [] => [];
         };
 
-        stackify_single::<V, Pc>(
+        stackify_single::<V, Idx>(
             &mut op_stack,
             &mut getters,
             &mut stk.manips,
@@ -735,7 +735,7 @@ mod tests {
             [5] cap(0) get[] [] => [];
         };
 
-        stackify_single::<V, Pc>(
+        stackify_single::<V, Idx>(
             &mut op_stack,
             &mut getters,
             &mut stk.manips,
@@ -796,7 +796,7 @@ mod tests {
             [5] cap(0) get[] [] => [];
         };
 
-        stackify_single::<V, Pc>(
+        stackify_single::<V, Idx>(
             &mut op_stack,
             &mut getters,
             &mut stk.manips,
@@ -853,7 +853,7 @@ mod tests {
             [6] cap(0) get[] [] => [];
         };
 
-        stackify_single::<V, Pc>(
+        stackify_single::<V, Idx>(
             &mut op_stack,
             &mut getters,
             &mut stk.manips,
@@ -916,7 +916,7 @@ mod tests {
             [2] cap(0) get[] [] => [];
         };
 
-        stackify_single::<V, Pc>(
+        stackify_single::<V, Idx>(
             &mut op_stack,
             &mut getters,
             &mut stk.manips,
@@ -956,7 +956,7 @@ mod tests {
             [2] cap(0) get[] [] => [];
         };
 
-        stackify_single::<V, Pc>(
+        stackify_single::<V, Idx>(
             &mut op_stack,
             &mut getters,
             &mut stk.manips,
@@ -993,7 +993,7 @@ mod tests {
     // TODO change the function to not need external values, since the algorithm
     // above was changed to interpret any value without an entry in
     // `available_getters` as being always available
-    fn test_skeleton(external: &[V], insns: &[(&[V], &[V])]) -> InsnSeqStackification<V, Pc> {
+    fn test_skeleton(external: &[V], insns: &[(&[V], &[V])]) -> InsnSeqStackification<V, Idx> {
         // each sequence starts with fresh operand stack and manipulators
         let mut op_stack = Vec::new();
         let mut getters = HashMap::from_iter(external.iter().map(|&v| (v, 0)));

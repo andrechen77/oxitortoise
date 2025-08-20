@@ -16,17 +16,13 @@
 //! containing control flow constructs.
 //!
 //! Instructions are identified by an index within their containing sequence,
-//! this is their [`InsnPc`] where "PC" means "program counter." Instruction
-//! sequences also have their own unique ID, [`InsnSeqId`]. An instruction
-//! sequence ID and a pc together uniquely identify an instruction.
+//! this is their [`InsnIdx`]. Instruction sequences also have their own unique
+//! ID, [`InsnSeqId`]. An instruction sequence ID and an index together uniquely
+//! identify an instruction, known as the [`InsnPc`].
 //!
 //! A separate ID called [`ValRef`] identifies outputs of instructions. Some
 //! instructions have no outputs and therefore do not get any `ValRef`s; others
-//! may have multiple and would get multiple `ValRef`s. The current
-//! implementation assigns each output an increasing `ValRef`, counting up from
-//! zero, in the order obtained by traversing the instruction sequence of the
-//! entire function while recursing into compound instructions. (See the
-//! [`LirVisitor`] for the exact sequence).
+//! may have multiple and would get multiple `ValRef`s.
 //!
 //! ## Control Flow Instructions
 //!
@@ -46,7 +42,7 @@
 //! will exit the current iteration of the loop body and re-enter the loop body
 //! with the loop iteration values set to the values that were broken with.
 
-use std::iter::Step;
+use std::{collections::HashMap, iter::Step};
 
 use derive_more::{From, Into};
 use typed_index_collections::{TiSlice, TiVec, ti_vec};
@@ -65,25 +61,25 @@ pub struct Program {
 pub struct Function {
     pub parameter_types: Vec<ValType>,
     pub body: Block,
-    pub insn_seqs: TiVec<InsnSeqId, TiVec<InsnPc, InsnKind>>,
+    pub insn_seqs: TiVec<InsnSeqId, TiVec<InsnIdx, InsnKind>>,
 }
 
 #[derive(Debug, PartialEq, Eq, Into, From)]
 pub struct FunctionId(pub usize);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Into, From)]
-pub struct InsnPc(pub usize);
-impl Step for InsnPc {
+pub struct InsnIdx(pub usize);
+impl Step for InsnIdx {
     fn steps_between(start: &Self, end: &Self) -> (usize, Option<usize>) {
         (end.0 - start.0, Some(end.0 - start.0))
     }
 
     fn forward_checked(start: Self, count: usize) -> Option<Self> {
-        Some(InsnPc(start.0.checked_add(count)?))
+        Some(InsnIdx(start.0.checked_add(count)?))
     }
 
     fn backward_checked(start: Self, count: usize) -> Option<Self> {
-        Some(InsnPc(start.0.checked_sub(count)?))
+        Some(InsnIdx(start.0.checked_sub(count)?))
     }
 }
 
@@ -137,39 +133,38 @@ impl AsRef<[ValType]> for InsnOutput {
     }
 }
 
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+pub struct InsnPc(pub InsnSeqId, pub InsnIdx);
+
 /// A reference to a value produced by an instruction. Starts from 0 and counts
 /// up for each value produced by an instruction in the function. Some
 /// instructions may produce multiple values, while others may produce zero.
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy, From, Into)]
-pub struct ValRef(pub usize);
-impl Step for ValRef {
-    fn steps_between(start: &Self, end: &Self) -> (usize, Option<usize>) {
-        (end.0 - start.0, Some(end.0 - start.0))
-    }
+#[derive(Debug, PartialEq, Eq, /* PartialOrd, Ord, */ Hash, Clone, Copy)]
+pub struct ValRef(pub InsnPc, pub u8);
 
-    fn forward_checked(start: Self, count: usize) -> Option<Self> {
-        Some(ValRef(start.0.checked_add(count)?))
-    }
-
-    fn backward_checked(start: Self, count: usize) -> Option<Self> {
-        Some(ValRef(start.0.checked_sub(count)?))
-    }
-}
-
-pub type InsnSeq = TiSlice<InsnPc, InsnKind>;
+pub type InsnSeq = TiSlice<InsnIdx, InsnKind>;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, From, Into)]
 pub struct InsnSeqId(pub usize);
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum InsnKind {
-    Argument {
-        r#type: ValType,
-        index: u32,
+    /// Outputs all arguments of the function.
+    FunctionArgs {
+        output_type: InsnOutput,
     },
-    /// An argument in a loop body
-    LoopArgument {
-        /// The initial value of the argument when the loop is entered.
+    // TODO rethink loop args. first, they should output a multivalue, instead
+    // of being a single value, since that's what it will look like on the stack
+    // machine. In addition, should the loop args instruction be considered to
+    // output values on the stack, or does the instruction only exist so that
+    // other instructions can have a ValRef to use the loop args? If the latter,
+    // then I need to modify the stackify_lir code so that entering a loop body
+    // *doesn't* start with a fresh stack. If the former, then I'll have to deal
+    // with the fact that every loop body must start with a loop args
+    // instruction.
+    /// Outputs all arguments of a loop body.
+    LoopArg {
+        /// The initial value of the arguments when the loop is entered.
         /// This is not considered an input to this instruction.
         initial_value: ValRef,
     },
@@ -313,24 +308,12 @@ pub enum BinaryOpcode {
 }
 
 impl InsnKind {
-    /// Returns all nested instruction sequences inside this instruction
-    // pub fn extent(&self) -> SmallVec<[&InsnSeq; 2]> {
-    //     match self {
-    //         InsnKind::Block(block) => smallvec![block.body.as_slice()],
-    //         InsnKind::Loop(loop_) => smallvec![loop_.body.as_slice()],
-    //         InsnKind::IfElse(if_else) => {
-    //             smallvec![if_else.then_body.as_slice(), if_else.else_body.as_slice()]
-    //         }
-    //         _ => smallvec![],
-    //     }
-    // }
-
     /// Returns the number of new names produced by this instruction. This is
     /// used to assign [`ValRef`]s to the outputs of instructions.
     pub fn num_outputs(&self) -> usize {
         match self {
-            InsnKind::Argument { .. } => 1,
-            InsnKind::LoopArgument { .. } => 1,
+            InsnKind::FunctionArgs { .. } => 1,
+            InsnKind::LoopArg { .. } => 1,
             InsnKind::Const { .. } => 1,
             InsnKind::DeriveField { .. } => 1,
             InsnKind::DeriveElement { .. } => 1,
@@ -359,33 +342,42 @@ pub trait LirVisitor {
     /// Visits an instruction. `next_val_ref` is the index of the first output
     /// of this instruction, if it outputs any; this is used for assertions to
     /// ensure that output counting was correct.
-    fn visit_insn(&mut self, insn: &InsnKind, next_val_ref: ValRef);
+    fn visit_insn(&mut self, insn: &InsnKind, pc: InsnPc);
 }
 
 pub fn visit_insn_seq<V: LirVisitor>(visitor: &mut V, function: &Function) {
-    let mut next_val_ref = ValRef(0);
-    visit_insn_seq_recursive(visitor, function, function.body.body, &mut next_val_ref);
+    // let mut next_val_ref = ValRef(0);
+    visit_insn_seq_recursive(visitor, function, function.body.body /* &mut next_val_ref */);
     fn visit_insn_seq_recursive<V: LirVisitor>(
         visitor: &mut V,
         function: &Function,
         seq_id: InsnSeqId,
-        next_val: &mut ValRef,
+        // next_val: &mut ValRef,
     ) {
         // let seq_id = *curr_seq_id;
         visitor.start_insn_seq(seq_id);
-        for insn in &function.insn_seqs[seq_id] {
-            visitor.visit_insn(insn, *next_val);
-            next_val.0 += insn.num_outputs();
+        for (idx, insn) in function.insn_seqs[seq_id].iter_enumerated() {
+            let pc = InsnPc(seq_id, idx);
+            visitor.visit_insn(insn, pc);
+            // next_val.0 += insn.num_outputs();
             match insn {
                 InsnKind::Block(block) => {
-                    visit_insn_seq_recursive(visitor, function, block.body, next_val);
+                    visit_insn_seq_recursive(visitor, function, block.body /* next_val */);
                 }
                 InsnKind::IfElse(if_else) => {
-                    visit_insn_seq_recursive(visitor, function, if_else.then_body, next_val);
-                    visit_insn_seq_recursive(visitor, function, if_else.else_body, next_val);
+                    visit_insn_seq_recursive(
+                        visitor,
+                        function,
+                        if_else.then_body, /* next_val */
+                    );
+                    visit_insn_seq_recursive(
+                        visitor,
+                        function,
+                        if_else.else_body, /* next_val */
+                    );
                 }
                 InsnKind::Loop(r#loop) => {
-                    visit_insn_seq_recursive(visitor, function, r#loop.body, next_val);
+                    visit_insn_seq_recursive(visitor, function, r#loop.body /* next_val */);
                 }
                 _ => {}
             }
@@ -394,57 +386,71 @@ pub fn visit_insn_seq<V: LirVisitor>(visitor: &mut V, function: &Function) {
     }
 }
 
-pub fn infer_output_types(function: &Function) -> TiVec<ValRef, ValType> {
+pub fn infer_output_types(function: &Function) -> HashMap<ValRef, ValType> {
     struct InferOutputTypesVisitor {
-        types: TiVec<ValRef, ValType>,
+        types: HashMap<ValRef, ValType>,
     }
     impl LirVisitor for InferOutputTypesVisitor {
         fn start_insn_seq(&mut self, _id: InsnSeqId) {}
 
         fn end_insn_seq(&mut self, _id: InsnSeqId) {}
 
-        fn visit_insn(&mut self, insn: &InsnKind, next_val_ref: ValRef) {
+        fn visit_insn(&mut self, insn: &InsnKind, pc: InsnPc) {
             // make sure that we are assigning the correct val ref
-            assert_eq!(next_val_ref, self.types.next_key());
+            // assert_eq!(next_val_ref, self.types.next_key());
 
             match insn {
-                InsnKind::Argument { r#type, .. } => self.types.push(*r#type),
-                InsnKind::Const { r#type, .. } => self.types.push(*r#type),
-                InsnKind::DeriveField { .. } => self.types.push(ValType::Ptr),
-                InsnKind::DeriveElement { .. } => self.types.push(ValType::Ptr),
-                InsnKind::MemLoad { r#type, .. } => self.types.push(*r#type),
+                InsnKind::Const { r#type, .. } => {
+                    self.types.insert(ValRef(pc, 0), *r#type);
+                }
+                InsnKind::DeriveField { .. } => {
+                    self.types.insert(ValRef(pc, 0), ValType::Ptr);
+                }
+                InsnKind::DeriveElement { .. } => {
+                    self.types.insert(ValRef(pc, 0), ValType::Ptr);
+                }
+                InsnKind::MemLoad { r#type, .. } => {
+                    self.types.insert(ValRef(pc, 0), *r#type);
+                }
                 InsnKind::MemStore { .. } => {}
-                InsnKind::StackLoad { r#type, .. } => self.types.push(*r#type),
+                InsnKind::StackLoad { r#type, .. } => {
+                    self.types.insert(ValRef(pc, 0), *r#type);
+                }
                 InsnKind::StackStore { .. } => {}
                 InsnKind::CallImportedFunction { .. } => {
                     todo!("function types not yet implemented")
                 }
                 InsnKind::CallUserFunction { .. } => todo!("function types not yet implemented"),
                 InsnKind::UnaryOp { op, operand } => {
-                    self.types.push(infer_unary_op_output_type(*op, self.types[*operand]));
+                    self.types.insert(
+                        ValRef(pc, 0),
+                        infer_unary_op_output_type(*op, self.types[operand]),
+                    );
                 }
                 InsnKind::BinaryOp { op, lhs, rhs } => {
-                    self.types.push(infer_binary_op_output_type(
-                        *op,
-                        self.types[*lhs],
-                        self.types[*rhs],
-                    ));
+                    self.types.insert(
+                        ValRef(pc, 0),
+                        infer_binary_op_output_type(*op, self.types[lhs], self.types[rhs]),
+                    );
                 }
                 InsnKind::Break { .. } => {}
                 InsnKind::ConditionalBreak { .. } => {}
-                InsnKind::Block(Block { output_type, .. })
+                InsnKind::FunctionArgs { output_type, .. }
+                | InsnKind::Block(Block { output_type, .. })
                 | InsnKind::IfElse(IfElse { output_type, .. })
                 | InsnKind::Loop(Loop { output_type, .. }) => {
-                    self.types.extend_from_slice(output_type.as_ref().as_ref())
+                    for (idx, ty) in output_type.as_ref().iter().enumerate() {
+                        self.types.insert(ValRef(pc, idx.try_into().unwrap()), *ty);
+                    }
                 }
-                InsnKind::LoopArgument { initial_value } => {
-                    self.types.push(self.types[*initial_value])
+                InsnKind::LoopArg { initial_value } => {
+                    self.types.insert(ValRef(pc, 0), self.types[initial_value]);
                 }
-            }
+            };
         }
     }
 
-    let mut visitor = InferOutputTypesVisitor { types: ti_vec![] };
+    let mut visitor = InferOutputTypesVisitor { types: HashMap::new() };
     visit_insn_seq(&mut visitor, function);
     visitor.types
 }
