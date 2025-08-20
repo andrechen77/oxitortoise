@@ -287,33 +287,6 @@ pub enum BinaryOpcode {
     Eq,
 }
 
-impl InsnKind {
-    /// Returns the number of new names produced by this instruction. This is
-    /// used to assign [`ValRef`]s to the outputs of instructions.
-    pub fn num_outputs(&self) -> usize {
-        match self {
-            InsnKind::FunctionArgs { .. } => 1,
-            InsnKind::LoopArg { .. } => 1,
-            InsnKind::Const { .. } => 1,
-            InsnKind::DeriveField { .. } => 1,
-            InsnKind::DeriveElement { .. } => 1,
-            InsnKind::MemLoad { .. } => 1,
-            InsnKind::MemStore { .. } => 0,
-            InsnKind::StackLoad { .. } => 1,
-            InsnKind::StackStore { .. } => 0,
-            InsnKind::UnaryOp { .. } => 1,
-            InsnKind::BinaryOp { .. } => 1,
-            InsnKind::Break { .. } => 0,
-            InsnKind::ConditionalBreak { .. } => 0,
-            InsnKind::Block(Block { output_type, .. })
-            | InsnKind::IfElse(IfElse { output_type, .. })
-            | InsnKind::Loop(Loop { output_type, .. })
-            | InsnKind::CallImportedFunction { output_type, .. }
-            | InsnKind::CallUserFunction { output_type, .. } => output_type.len(),
-        }
-    }
-}
-
 pub trait LirVisitor {
     fn start_insn_seq(&mut self, id: InsnSeqId);
 
@@ -326,38 +299,26 @@ pub trait LirVisitor {
 }
 
 pub fn visit_insn_seq<V: LirVisitor>(visitor: &mut V, function: &Function) {
-    // let mut next_val_ref = ValRef(0);
-    visit_insn_seq_recursive(visitor, function, function.body.body /* &mut next_val_ref */);
+    visit_insn_seq_recursive(visitor, function, function.body.body);
     fn visit_insn_seq_recursive<V: LirVisitor>(
         visitor: &mut V,
         function: &Function,
         seq_id: InsnSeqId,
-        // next_val: &mut ValRef,
     ) {
-        // let seq_id = *curr_seq_id;
         visitor.start_insn_seq(seq_id);
         for (idx, insn) in function.insn_seqs[seq_id].iter_enumerated() {
             let pc = InsnPc(seq_id, idx);
             visitor.visit_insn(insn, pc);
-            // next_val.0 += insn.num_outputs();
             match insn {
                 InsnKind::Block(block) => {
-                    visit_insn_seq_recursive(visitor, function, block.body /* next_val */);
+                    visit_insn_seq_recursive(visitor, function, block.body);
                 }
                 InsnKind::IfElse(if_else) => {
-                    visit_insn_seq_recursive(
-                        visitor,
-                        function,
-                        if_else.then_body, /* next_val */
-                    );
-                    visit_insn_seq_recursive(
-                        visitor,
-                        function,
-                        if_else.else_body, /* next_val */
-                    );
+                    visit_insn_seq_recursive(visitor, function, if_else.then_body);
+                    visit_insn_seq_recursive(visitor, function, if_else.else_body);
                 }
                 InsnKind::Loop(r#loop) => {
-                    visit_insn_seq_recursive(visitor, function, r#loop.body /* next_val */);
+                    visit_insn_seq_recursive(visitor, function, r#loop.body);
                 }
                 _ => {}
             }
@@ -376,9 +337,6 @@ pub fn infer_output_types(function: &Function) -> HashMap<ValRef, ValType> {
         fn end_insn_seq(&mut self, _id: InsnSeqId) {}
 
         fn visit_insn(&mut self, insn: &InsnKind, pc: InsnPc) {
-            // make sure that we are assigning the correct val ref
-            // assert_eq!(next_val_ref, self.types.next_key());
-
             match insn {
                 InsnKind::Const { r#type, .. } => {
                     self.types.insert(ValRef(pc, 0), *r#type);
