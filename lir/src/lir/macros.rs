@@ -102,7 +102,7 @@ macro_rules! push_node {
 
         $ctx.insn_seqs[$ctx.curr_seq_id].push($crate::lir::InsnKind::StackStore {
             offset: $offset,
-            value: $value,
+            value,
         });
     };
     ($ctx:expr; % $val_ref:pat = call_imported_function($function:ident -> ($($return_ty:ident),*))(
@@ -289,7 +289,11 @@ macro_rules! instruction_seq {
 
 #[macro_export]
 macro_rules! lir_function {
-    (fn $func:ident($($param_ty:ident),*) -> ($($return_ty:ident),*) $label:ident: { $($inner:tt)* }) => {
+    (
+        fn $func:ident($($param_ty:ident),*) -> ($($return_ty:ident),*),
+        stack_space: $stack_space:expr,
+        $label:ident: { $($inner:tt)* }
+    ) => {
         struct FnBuilderCtx<'a> {
             insn_seqs: &'a mut typed_index_collections::TiVec<$crate::lir::InsnSeqId, typed_index_collections::TiVec<$crate::lir::InsnIdx, $crate::lir::InsnKind>>,
             curr_seq_id: $crate::lir::InsnSeqId,
@@ -309,6 +313,7 @@ macro_rules! lir_function {
                 body: $crate::lir::InsnSeqId(0),
             },
             insn_seqs,
+            stack_space: $stack_space,
         };
     }
 }

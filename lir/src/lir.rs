@@ -62,6 +62,8 @@ pub struct Function {
     pub parameter_types: Vec<ValType>,
     pub body: Block,
     pub insn_seqs: TiVec<InsnSeqId, TiVec<InsnIdx, InsnKind>>,
+    /// The number of bytes to allocate on the stack for this function.
+    pub stack_space: usize,
 }
 
 #[derive(Debug, PartialEq, Eq, Into, From)]
@@ -216,10 +218,12 @@ pub enum InsnKind {
     },
     CallImportedFunction {
         function: ImportedFunctionId,
+        output_type: InsnOutput,
         args: Box<[ValRef]>,
     },
     CallUserFunction {
         function: FunctionId,
+        output_type: InsnOutput,
         args: Box<[ValRef]>,
     },
     UnaryOp {
@@ -321,15 +325,15 @@ impl InsnKind {
             InsnKind::MemStore { .. } => 0,
             InsnKind::StackLoad { .. } => 1,
             InsnKind::StackStore { .. } => 0,
-            InsnKind::CallImportedFunction { .. } => todo!("function types not yet implemented"),
-            InsnKind::CallUserFunction { .. } => todo!("function types not yet implemented"),
             InsnKind::UnaryOp { .. } => 1,
             InsnKind::BinaryOp { .. } => 1,
             InsnKind::Break { .. } => 0,
             InsnKind::ConditionalBreak { .. } => 0,
-            InsnKind::Block(block) => block.output_type.as_ref().len(),
-            InsnKind::IfElse(if_else) => if_else.output_type.as_ref().len(),
-            InsnKind::Loop(loop_) => loop_.output_type.as_ref().len(),
+            InsnKind::Block(Block { output_type, .. })
+            | InsnKind::IfElse(IfElse { output_type, .. })
+            | InsnKind::Loop(Loop { output_type, .. })
+            | InsnKind::CallImportedFunction { output_type, .. }
+            | InsnKind::CallUserFunction { output_type, .. } => output_type.as_ref().len(),
         }
     }
 }

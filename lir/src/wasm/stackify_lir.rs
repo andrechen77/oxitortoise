@@ -35,11 +35,32 @@ fn factor_common_prefix<T: PartialEq, const N: usize>(mut sequences: [&mut Vec<T
     result
 }
 
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
+pub enum ValRefOrStackPtr {
+    ValRef(ValRef),
+    StackPtr,
+}
+
+impl From<ValRef> for ValRefOrStackPtr {
+    fn from(v: ValRef) -> Self {
+        ValRefOrStackPtr::ValRef(v)
+    }
+}
+
+impl ValRefOrStackPtr {
+    pub fn unwrap_val_ref(self) -> ValRef {
+        match self {
+            ValRefOrStackPtr::ValRef(v) => v,
+            ValRefOrStackPtr::StackPtr => panic!("expected a val ref, but got a stack ptr"),
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct CfgStackification {
     /// Maps each instruction sequence to the set of manipulators to be injected
     /// to get proper stack machine execution.
-    pub seqs: TiVec<InsnSeqId, InsnSeqStackification<ValRef, InsnIdx>>,
+    pub seqs: TiVec<InsnSeqId, InsnSeqStackification<ValRefOrStackPtr, InsnIdx>>,
 }
 
 pub fn stackify_cfg(function: &Function) -> CfgStackification {
@@ -48,7 +69,7 @@ pub fn stackify_cfg(function: &Function) -> CfgStackification {
     fn stackify_insn_seq(
         function: &Function,
         seq_id: InsnSeqId,
-        out: &mut TiVec<InsnSeqId, InsnSeqStackification<ValRef, InsnIdx>>,
+        out: &mut TiVec<InsnSeqId, InsnSeqStackification<ValRefOrStackPtr, InsnIdx>>,
     ) {
         // start the sequence with a fresh operand stack and no manipulators
         let mut op_stack = Vec::new();
@@ -71,7 +92,10 @@ pub fn stackify_cfg(function: &Function) -> CfgStackification {
 
         for (insn_idx, insn) in insns.iter_enumerated() {
             let pc = InsnPc(seq_id, insn_idx);
-            let (inputs, outputs): (SmallVec<[ValRef; 2]>, SmallVec<[ValRef; 1]>) = match insn {
+            let (inputs, outputs): (
+                SmallVec<[ValRefOrStackPtr; 2]>,
+                SmallVec<[ValRefOrStackPtr; 1]>,
+            ) = match insn {
                 InsnKind::FunctionArgs { .. } => {
                     // this doesn't actually output onto the stack. this is
                     // because arguments are just symbolic and don't translate
@@ -84,42 +108,55 @@ pub fn stackify_cfg(function: &Function) -> CfgStackification {
                     // to Wasm instructions
                     (smallvec![], smallvec![])
                 }
-                InsnKind::Const { .. } => (smallvec![], smallvec![ValRef(pc, 0)]),
-                InsnKind::DeriveField { ptr, .. } => (smallvec![*ptr], smallvec![ValRef(pc, 0)]),
+                InsnKind::Const { .. } => (smallvec![], smallvec![ValRef(pc, 0).into()]),
+                InsnKind::DeriveField { ptr, .. } => {
+                    (smallvec![(*ptr).into()], smallvec![ValRef(pc, 0).into()])
+                }
                 InsnKind::DeriveElement { ptr, index, .. } => {
-                    (smallvec![*ptr, *index], smallvec![ValRef(pc, 0)])
+                    (smallvec![(*ptr).into(), (*index).into()], smallvec![ValRef(pc, 0).into()])
                 }
-                InsnKind::MemLoad { ptr, .. } => (smallvec![*ptr], smallvec![ValRef(pc, 0)]),
-                InsnKind::MemStore { ptr, value, .. } => (smallvec![*ptr, *value], smallvec![]),
-                InsnKind::StackLoad { .. } => (smallvec![], smallvec![ValRef(pc, 0)]),
-                InsnKind::StackStore { value, .. } => (smallvec![*value], smallvec![]),
+                InsnKind::MemLoad { ptr, .. } => {
+                    (smallvec![(*ptr).into()], smallvec![ValRef(pc, 0).into()])
+                }
+                InsnKind::MemStore { ptr, value, .. } => {
+                    (smallvec![(*ptr).into(), (*value).into()], smallvec![])
+                }
+                InsnKind::StackLoad { .. } => {
+                    (smallvec![ValRefOrStackPtr::StackPtr], smallvec![ValRef(pc, 0).into()])
+                }
+                InsnKind::StackStore { value, .. } => {
+                    (smallvec![ValRefOrStackPtr::StackPtr, (*value).into()], smallvec![])
+                }
                 #[allow(unreachable_code)]
-                InsnKind::CallImportedFunction { args, .. } => {
-                    (args.iter().map(|v| *v).collect(), todo!("look up return type of function"))
-                }
+                InsnKind::CallImportedFunction { args, .. } => (
+                    args.iter().map(|v| (*v).into()).collect(),
+                    todo!("look up return type of function"),
+                ),
                 #[allow(unreachable_code)]
-                InsnKind::CallUserFunction { args, .. } => {
-                    (args.iter().map(|v| *v).collect(), todo!("look up return type of function"))
-                }
+                InsnKind::CallUserFunction { args, .. } => (
+                    args.iter().map(|v| (*v).into()).collect(),
+                    todo!("look up return type of function"),
+                ),
                 InsnKind::UnaryOp { operand, .. } => {
-                    (smallvec![*operand], smallvec![ValRef(pc, 0)])
+                    (smallvec![(*operand).into()], smallvec![ValRef(pc, 0).into()])
                 }
                 InsnKind::BinaryOp { lhs, rhs, .. } => {
-                    (smallvec![*lhs, *rhs], smallvec![ValRef(pc, 0)])
+                    (smallvec![(*lhs).into(), (*rhs).into()], smallvec![ValRef(pc, 0).into()])
                 }
                 InsnKind::Break { values, .. } => {
-                    (values.iter().map(|v| *v).collect(), smallvec![])
+                    (values.iter().map(|v| (*v).into()).collect(), smallvec![])
                 }
                 InsnKind::ConditionalBreak { condition, values, .. } => {
-                    let outputs: SmallVec<[ValRef; 1]> = values.iter().map(|v| *v).collect();
+                    let outputs: SmallVec<[ValRefOrStackPtr; 1]> =
+                        values.iter().map(|v| (*v).into()).collect();
                     let mut inputs = outputs.to_smallvec();
-                    inputs.push(*condition);
+                    inputs.push((*condition).into());
                     (inputs, outputs)
                 }
                 InsnKind::Block(Block { body, output_type }) => {
                     // generate val refs for the outputs
                     let outputs = (0..output_type.as_ref().len())
-                        .map(|i| ValRef(pc, i.try_into().unwrap()))
+                        .map(|i| ValRef(pc, i.try_into().unwrap()).into())
                         .collect();
 
                     // stackify the inner block
@@ -140,7 +177,7 @@ pub fn stackify_cfg(function: &Function) -> CfgStackification {
                 InsnKind::IfElse(IfElse { condition, output_type, then_body, else_body }) => {
                     // generate val refs for the outputs
                     let outputs = (0..output_type.as_ref().len())
-                        .map(|i| ValRef(pc, i.try_into().unwrap()))
+                        .map(|i| ValRef(pc, i.try_into().unwrap()).into())
                         .collect();
 
                     // stackify the inner blocks
@@ -159,7 +196,7 @@ pub fn stackify_cfg(function: &Function) -> CfgStackification {
                         &mut else_leading_getters,
                     ]);
                     let mut inputs = common_prefix.to_smallvec();
-                    inputs.push(*condition);
+                    inputs.push((*condition).into());
                     out[*then_body].inputs = common_prefix.clone();
                     out[*then_body].manips[InsnIdx(0)].getters = then_leading_getters;
                     out[*else_body].inputs = common_prefix;
@@ -170,13 +207,13 @@ pub fn stackify_cfg(function: &Function) -> CfgStackification {
                 InsnKind::Loop(Loop { inputs, output_type, body }) => {
                     // generate val refs for the outputs
                     let outputs = (0..output_type.as_ref().len())
-                        .map(|i| ValRef(pc, i.try_into().unwrap()))
+                        .map(|i| ValRef(pc, i.try_into().unwrap()).into())
                         .collect();
 
                     // stackify the inner block
                     stackify_insn_seq(function, *body, out);
 
-                    let inputs = inputs.to_smallvec();
+                    let inputs = inputs.iter().map(|v| (*v).into()).collect();
 
                     (inputs, outputs)
                 }
@@ -209,7 +246,9 @@ pub fn count_getters(stk: &CfgStackification) -> HashMap<ValRef, usize> {
     for seq in &stk.seqs {
         for manips in &seq.manips {
             for v in &manips.getters {
-                *result.entry(*v).or_insert(0) += 1;
+                if let ValRefOrStackPtr::ValRef(v) = v {
+                    *result.entry(*v).or_insert(0) += 1;
+                }
             }
         }
     }
@@ -227,7 +266,9 @@ mod tests {
     #[test]
     fn basic_sequence() {
         lir_function! {
-            fn block() -> (I32) main: {
+            fn block() -> (I32),
+            stack_space: 0,
+            main: {
                 %a = constant(I32, 0);
                 %b = constant(I32, 1);
                 %c = Add(a, b);
@@ -254,7 +295,9 @@ mod tests {
         // all leading getters in a block should be factored out and used as
         // inputs to the block instruction
         lir_function! {
-            fn block() -> (I32) main: {
+            fn block() -> (I32),
+            stack_space: 0,
+            main: {
                 %a = constant(I32, 10);
                 %b = constant(I32, 20);
                 %outer = block(-> (I32)) outer_block: {
@@ -276,23 +319,23 @@ mod tests {
             ti_vec![
                 stackification! {
                     inputs [];
-                    [InsnIdx(0)] cap(0) get[] [] => [a];
-                    [InsnIdx(1)] cap(0) get[] [] => [b];
-                    [InsnIdx(2)] cap(0) get[] [a, b] => [outer];
-                    [InsnIdx(3)] cap(0) get[] [outer] => [];
+                    [InsnIdx(0)] cap(0) get[] [] => [ValRefOrStackPtr::ValRef(a)];
+                    [InsnIdx(1)] cap(0) get[] [] => [ValRefOrStackPtr::ValRef(b)];
+                    [InsnIdx(2)] cap(0) get[] [ValRefOrStackPtr::ValRef(a), ValRefOrStackPtr::ValRef(b)] => [ValRefOrStackPtr::ValRef(outer)];
+                    [InsnIdx(3)] cap(0) get[] [ValRefOrStackPtr::ValRef(outer)] => [];
                     [InsnIdx(4)] cap(0) get[] [] => [];
                 },
                 stackification! {
-                    inputs [a, b];
-                    [InsnIdx(0)] cap(0) get[] [a, b] => [c];
-                    [InsnIdx(1)] cap(0) get[a] [c, a] => [inner];
-                    [InsnIdx(2)] cap(0) get[] [inner] => [];
+                    inputs [ValRefOrStackPtr::ValRef(a), ValRefOrStackPtr::ValRef(b)];
+                    [InsnIdx(0)] cap(0) get[] [ValRefOrStackPtr::ValRef(a), ValRefOrStackPtr::ValRef(b)] => [ValRefOrStackPtr::ValRef(c)];
+                    [InsnIdx(1)] cap(0) get[ValRefOrStackPtr::ValRef(a)] [ValRefOrStackPtr::ValRef(c), ValRefOrStackPtr::ValRef(a)] => [ValRefOrStackPtr::ValRef(inner)];
+                    [InsnIdx(2)] cap(0) get[] [ValRefOrStackPtr::ValRef(inner)] => [];
                     [InsnIdx(3)] cap(0) get[] [] => [];
                 },
                 stackification! {
-                    inputs [c, a];
-                    [InsnIdx(0)] cap(0) get[] [c, a] => [d];
-                    [InsnIdx(1)] cap(0) get[] [d] => [];
+                    inputs [ValRefOrStackPtr::ValRef(c), ValRefOrStackPtr::ValRef(a)];
+                    [InsnIdx(0)] cap(0) get[] [ValRefOrStackPtr::ValRef(c), ValRefOrStackPtr::ValRef(a)] => [ValRefOrStackPtr::ValRef(d)];
+                    [InsnIdx(1)] cap(0) get[] [ValRefOrStackPtr::ValRef(d)] => [];
                     [InsnIdx(2)] cap(0) get[] [] => [];
                 },
             ],
@@ -302,7 +345,9 @@ mod tests {
     #[test]
     fn includes_branches() {
         lir_function! {
-            fn block() -> (I32) main: {
+            fn block() -> (I32),
+            stack_space: 0,
+            main: {
                 %arg = arguments(-> (I32));
                 %a = constant(I32, 10);
                 %b = constant(I32, 20);
@@ -329,28 +374,28 @@ mod tests {
                 stackification! {
                     inputs [];
                     [InsnIdx(0)] cap(0) get[] [] => [];
-                    [InsnIdx(1)] cap(0) get[] [] => [a];
-                    [InsnIdx(2)] cap(0) get[] [] => [b];
-                    [InsnIdx(3)] cap(0) get[arg] [] => [c];
-                    [InsnIdx(4)] cap(1) get[] [] => [d];
-                    [InsnIdx(5)] cap(1) get[] [a, b, arg] => [branch];
-                    [InsnIdx(6)] cap(0) get[] [branch] => [];
+                    [InsnIdx(1)] cap(0) get[] [] => [ValRefOrStackPtr::ValRef(a)];
+                    [InsnIdx(2)] cap(0) get[] [] => [ValRefOrStackPtr::ValRef(b)];
+                    [InsnIdx(3)] cap(0) get[ValRefOrStackPtr::ValRef(arg)] [] => [ValRefOrStackPtr::ValRef(c)];
+                    [InsnIdx(4)] cap(1) get[] [] => [ValRefOrStackPtr::ValRef(d)];
+                    [InsnIdx(5)] cap(1) get[] [ValRefOrStackPtr::ValRef(a), ValRefOrStackPtr::ValRef(b), arg] => [ValRefOrStackPtr::ValRef(branch)];
+                    [InsnIdx(6)] cap(0) get[] [ValRefOrStackPtr::ValRef(branch)] => [];
                     [InsnIdx(7)] cap(0) get[] [] => [];
                 },
                 // then branch
                 stackification! {
-                    inputs [a, b];
-                    [InsnIdx(0)] cap(0) get[c] [b, c] => [ValRef(InsnPc(InsnSeqId(1), InsnIdx(0)), 0)];
-                    [InsnIdx(1)] cap(0) get[] [a, ValRef(InsnPc(InsnSeqId(1), InsnIdx(0)), 0)] => [res_0];
-                    [InsnIdx(2)] cap(0) get[] [res_0] => [];
+                    inputs [ValRefOrStackPtr::ValRef(a), ValRefOrStackPtr::ValRef(b)];
+                    [InsnIdx(0)] cap(0) get[ValRefOrStackPtr::ValRef(c)] [ValRefOrStackPtr::ValRef(b), ValRefOrStackPtr::ValRef(c)] => [ValRefOrStackPtr::ValRef(ValRef(InsnPc(InsnSeqId(1), InsnIdx(0)), 0))];
+                    [InsnIdx(1)] cap(0) get[] [ValRefOrStackPtr::ValRef(a), ValRefOrStackPtr::ValRef(ValRef(InsnPc(InsnSeqId(1), InsnIdx(0)), 0))] => [ValRefOrStackPtr::ValRef(res_0)];
+                    [InsnIdx(2)] cap(0) get[] [ValRefOrStackPtr::ValRef(res_0)] => [];
                     [InsnIdx(3)] cap(0) get[] [] => [];
                 },
                 // else branch
                 stackification! {
-                    inputs [a, b];
-                    [InsnIdx(0)] cap(0) get[d] [b, d] => [ValRef(InsnPc(InsnSeqId(2), InsnIdx(0)), 0)];
-                    [InsnIdx(1)] cap(0) get[] [a, ValRef(InsnPc(InsnSeqId(2), InsnIdx(0)), 0)] => [res_1];
-                    [InsnIdx(2)] cap(0) get[] [res_1] => [];
+                    inputs [ValRefOrStackPtr::ValRef(a), ValRefOrStackPtr::ValRef(b)];
+                    [InsnIdx(0)] cap(0) get[ValRefOrStackPtr::ValRef(d)] [ValRefOrStackPtr::ValRef(b), ValRefOrStackPtr::ValRef(d)] => [ValRefOrStackPtr::ValRef(ValRef(InsnPc(InsnSeqId(2), InsnIdx(0)), 0))];
+                    [InsnIdx(1)] cap(0) get[] [ValRefOrStackPtr::ValRef(a), ValRefOrStackPtr::ValRef(ValRef(InsnPc(InsnSeqId(2), InsnIdx(0)), 0))] => [ValRefOrStackPtr::ValRef(res_1)];
+                    [InsnIdx(2)] cap(0) get[] [ValRefOrStackPtr::ValRef(res_1)] => [];
                     [InsnIdx(3)] cap(0) get[] [] => [];
                 },
             ]

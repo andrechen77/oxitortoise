@@ -8,13 +8,15 @@ use std::{cell::RefCell, collections::HashMap};
 use typed_index_collections::TiVec;
 use walrus::ir as wir;
 
-use crate::{lir, stackify::StackManipulators};
+use crate::{lir, stackify::StackManipulators, wasm::stackify_lir::ValRefOrStackPtr};
 
 mod stackify_lir;
 
 pub struct CodegenModuleCtx<'a> {
     module: &'a mut walrus::Module,
     memory_id: walrus::MemoryId,
+    stack_ptr_id: walrus::GlobalId,
+    fn_table_id: walrus::TableId,
 }
 
 pub fn lir_to_wasm(lir: &lir::Program) -> walrus::Module {
@@ -35,9 +37,27 @@ pub fn lir_to_wasm(lir: &lir::Program) -> walrus::Module {
         None,
         None,
     );
-    // TODO also import stack pointer and indirect function table.
+    let (stack_ptr_id, _stack_ptr_import_id) = module.add_import_global(
+        "env",
+        "__stack_pointer",
+        translate_val_type(lir::ValType::Ptr),
+        true,
+        // not shared
+        false,
+    );
+    let (fn_table_id, _fn_table_import_id) = module.add_import_table(
+        "env",
+        "__indirect_function_table",
+        // table64
+        false,
+        // initial table size. I think 0 means any size above 0
+        0,
+        // max table
+        None,
+        walrus::RefType::Funcref,
+    );
 
-    let mut ctx = CodegenModuleCtx { module: &mut module, memory_id };
+    let mut ctx = CodegenModuleCtx { module: &mut module, memory_id, stack_ptr_id, fn_table_id };
 
     for function in &lir.functions {
         add_function(&mut ctx, function);
@@ -64,8 +84,8 @@ pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) {
     let mut remaining_getters = stackify_lir::count_getters(&stackification);
 
     // add stack pointer if needed
-    let needs_stack_ptr = true; // TODO should just check if we ever load/store to the stack
-    let stack_ptr: Option<walrus::LocalId> =
+    let needs_stack_ptr = func.stack_space > 0;
+    let stack_ptr_local: Option<walrus::LocalId> =
         needs_stack_ptr.then(|| mod_ctx.module.locals.add(translate_val_type(lir::ValType::Ptr)));
 
     // associates each InsnSeqId with its walrus InstrSeqId
@@ -85,22 +105,55 @@ pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) {
     // pull from when we need a new local variable without having to create a
     // new one every time.
 
-    write_code(
-        &mut CodegenFnCtx {
-            module: mod_ctx.module,
-            func,
-            compound_labels: &mut compound_labels,
-            local_ids: &mut local_ids,
-            arg_locals: &mut arg_locals,
-            remaining_getters: &mut remaining_getters,
-            memory: mod_ctx.memory_id,
-            stack_ptr,
-            types: &types,
-            stk: &stackification,
-        },
-        &mut function.func_body(),
-        func.body.body,
-    );
+    let mut ctx = CodegenFnCtx {
+        module: mod_ctx.module,
+        func,
+        compound_labels: &mut compound_labels,
+        local_ids: &mut local_ids,
+        arg_locals: &mut arg_locals,
+        remaining_getters: &mut remaining_getters,
+        memory: mod_ctx.memory_id,
+        stack_ptr_local,
+        stack_ptr_global: mod_ctx.stack_ptr_id,
+        types: &types,
+        stk: &stackification,
+    };
+
+    if let Some(stack_ptr_local) = stack_ptr_local {
+        // there is a stack pointer. generate a prologue and epilogue that
+        // initializes the stack pointer
+
+        let mut insn_builder = function.func_body();
+        // subtract from the stack pointer
+        insn_builder
+            .global_get(ctx.stack_ptr_global)
+            .const_(translate_usize(func.stack_space))
+            .binop(wir::BinaryOp::I32Sub)
+            .local_tee(stack_ptr_local)
+            .global_set(ctx.stack_ptr_global);
+
+        // put the function body in a block
+        insn_builder.block(
+            translate_instr_seq_type(
+                &mut ctx.module.types,
+                std::iter::empty(),
+                func.body.output_type.as_ref().iter().copied(),
+            ),
+            |inner_builder| {
+                write_code(&mut ctx, inner_builder, func.body.body);
+            },
+        );
+
+        // add to the stack pointer
+        insn_builder
+            .local_get(stack_ptr_local)
+            .const_(translate_usize(func.stack_space))
+            .binop(wir::BinaryOp::I32Add)
+            .global_set(ctx.stack_ptr_global);
+    } else {
+        // there is no stack pointer, so no need for prologue or epilogue
+        write_code(&mut ctx, &mut function.func_body(), func.body.body);
+    }
 
     /// Context for codegen that does not depend on the current instruction
     /// sequence being built, but applies to the entire function.
@@ -112,7 +165,8 @@ pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) {
         arg_locals: &'a mut Vec<wir::LocalId>,
         remaining_getters: &'a mut HashMap<lir::ValRef, usize>,
         memory: walrus::MemoryId,
-        stack_ptr: Option<walrus::LocalId>,
+        stack_ptr_local: Option<walrus::LocalId>,
+        stack_ptr_global: walrus::GlobalId,
         // remaining_uses: &'a mut TiVec<lir::ValRef, usize>,
         types: &'a HashMap<lir::ValRef, lir::ValType>,
         stk: &'a stackify_lir::CfgStackification,
@@ -127,7 +181,7 @@ pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) {
         // track the operand stack. this is used so that we know what values we
         // are capturing (if they need to be stored in a local or just dropped),
         // as well as for validation
-        let mut op_stack: Vec<lir::ValRef> = Vec::new();
+        let mut op_stack: Vec<ValRefOrStackPtr> = Vec::new();
 
         // the size of the prefix of the operand stack where all operands
         // needing saving are known to be saved
@@ -142,6 +196,9 @@ pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) {
             // instruction executes
             for _ in 0..*captures {
                 let captured = op_stack.pop().expect("stackification should be correct");
+                let ValRefOrStackPtr::ValRef(captured) = captured else {
+                    panic!("stackification should not cause stack ptr operand to be captured");
+                };
 
                 if !ctx.local_ids.contains_key(&captured)
                     && ctx.remaining_getters.contains_key(&captured)
@@ -171,7 +228,9 @@ pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) {
                     .take(op_stack.len() - known_saved) // stop when we reach known saved values
                     .enumerate() // topmost val is 0, second top is 1, etc.
                     .filter_map(|(i, v)| {
-                        (ctx.remaining_getters.contains_key(v) && !ctx.local_ids.contains_key(v))
+                        // stackification should not cause stack ptr to be part of a multivalue
+                        let v = v.unwrap_val_ref();
+                        (ctx.remaining_getters.contains_key(&v) && !ctx.local_ids.contains_key(&v))
                             .then(|| i)
                     })
                     .last(); // get the bottomost value needing saving
@@ -180,18 +239,21 @@ pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) {
                 if let Some(required_pops) = required_pops {
                     // add instructions to pop values from the stack
                     for i in 0..required_pops {
-                        let local_id = allocate_local(ctx, op_stack[op_stack.len() - i - 1]);
+                        let local_id =
+                            allocate_local(ctx, op_stack[op_stack.len() - i - 1].unwrap_val_ref());
                         insn_builder.local_set(local_id);
                     }
                     // the bottommost value needing saving is now on top of the
                     // stack
-                    let local_id =
-                        allocate_local(ctx, op_stack[op_stack.len() - required_pops - 1]);
+                    let local_id = allocate_local(
+                        ctx,
+                        op_stack[op_stack.len() - required_pops - 1].unwrap_val_ref(),
+                    );
                     insn_builder.local_tee(local_id);
                     // add instructions to push the saved values back onto the
                     // stack
                     for i in (op_stack.len() - required_pops)..op_stack.len() {
-                        insn_builder.local_get(ctx.local_ids[&op_stack[i]]);
+                        insn_builder.local_get(ctx.local_ids[&op_stack[i].unwrap_val_ref()]);
                     }
                 }
             }
@@ -200,18 +262,24 @@ pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) {
 
             // generate code to add required getters
             for v in getters {
-                // update bookkeeping on how many getters are left for this value
-                let num_remaining = ctx.remaining_getters.get_mut(v).unwrap();
-                *num_remaining -= 1;
-                if *num_remaining == 0 {
-                    ctx.remaining_getters.remove(v);
-                }
+                match v {
+                    ValRefOrStackPtr::ValRef(v) => {
+                        // update bookkeeping on how many getters are left for this value
+                        let num_remaining = ctx.remaining_getters.get_mut(v).unwrap();
+                        *num_remaining -= 1;
+                        if *num_remaining == 0 {
+                            ctx.remaining_getters.remove(v);
+                        }
 
+                        // generate code
+                        insn_builder.local_get(ctx.local_ids[v]);
+                    }
+                    ValRefOrStackPtr::StackPtr => {
+                        insn_builder.local_get(ctx.stack_ptr_local.expect("the presence of a StackLoad instruction means there must be a stack pointer local var"));
+                    }
+                }
                 // update op stack to reflect that the value is now available
                 op_stack.push(*v);
-
-                // generate code
-                insn_builder.local_get(ctx.local_ids[v]);
             }
 
             // generate code to execute the instruction
@@ -259,17 +327,13 @@ pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) {
                 I::StackLoad { r#type, offset } => {
                     let load_kind = infer_load_kind(*r#type);
                     let mem_arg = infer_mem_arg(*r#type, *offset);
-                    insn_builder
-                        .local_get(ctx.stack_ptr.expect("the presence of a StackLoad instruction means there must be a stack pointer local var"))
-                        .load(ctx.memory, load_kind, mem_arg);
+                    insn_builder.load(ctx.memory, load_kind, mem_arg);
                 }
                 I::StackStore { offset, value } => {
                     let r#type = ctx.types[value];
                     let store_kind = infer_store_kind(r#type);
                     let mem_arg = infer_mem_arg(r#type, *offset);
-                    insn_builder
-                        .local_get(ctx.stack_ptr.expect("the presence of a StackStore instruction means there must be a stack pointer local var"))
-                        .store(ctx.memory, store_kind, mem_arg);
+                    insn_builder.store(ctx.memory, store_kind, mem_arg);
                 }
                 I::CallImportedFunction { .. } => todo!(),
                 I::CallUserFunction { .. } => todo!(),
@@ -290,7 +354,7 @@ pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) {
                 I::Block(lir::Block { output_type, body }) => {
                     let seq_type = translate_instr_seq_type(
                         &mut ctx.module.types,
-                        ctx.stk.seqs[*body].inputs.iter().map(|v| ctx.types[v]),
+                        ctx.stk.seqs[*body].inputs.iter().map(|v| ctx.types[&v.unwrap_val_ref()]),
                         output_type.as_ref().iter().copied(),
                     );
 
@@ -301,7 +365,10 @@ pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) {
                 I::IfElse(lir::IfElse { condition: _, then_body, else_body, output_type }) => {
                     let seq_type = translate_instr_seq_type(
                         &mut ctx.module.types,
-                        ctx.stk.seqs[*then_body].inputs.iter().map(|v| ctx.types[v]),
+                        ctx.stk.seqs[*then_body]
+                            .inputs
+                            .iter()
+                            .map(|v| ctx.types[&v.unwrap_val_ref()]),
                         output_type.as_ref().iter().copied(),
                     );
 
@@ -489,7 +556,9 @@ mod tests {
     #[test]
     fn return_1() {
         lir_function! {
-            fn func() -> (I32) main: {
+            fn func() -> (I32),
+            stack_space: 0,
+            main: {
                 break_(main)(constant(I32, 10));
             }
         }
@@ -505,7 +574,9 @@ mod tests {
     #[test]
     fn add_one() {
         lir_function! {
-            fn add_one(I32) -> (I32) main: {
+            fn add_one(I32) -> (I32),
+            stack_space: 0,
+            main: {
                 %arg = arguments(-> (I32));
                 %res = Add(arg, constant(I32, 1));
                 break_(main)(res);
@@ -513,6 +584,28 @@ mod tests {
         }
         let mut lir = lir::Program::default();
         let func_id = lir.functions.push_and_get_key(add_one);
+        lir.entrypoints.push(func_id);
+
+        let mut module = lir_to_wasm(&lir);
+        let wasm = module.emit_wasm();
+        std::fs::write("test.wasm", wasm).unwrap();
+    }
+
+    #[test]
+    fn use_stack() {
+        lir_function! {
+            fn my_function(I32) -> (I32),
+            stack_space: 16,
+            main: {
+                %arg = arguments(-> (I32));
+                stack_store(8)(arg);
+                %res = stack_load(I16, 8);
+                break_(main)(res);
+            }
+        }
+
+        let mut lir = lir::Program::default();
+        let func_id = lir.functions.push_and_get_key(my_function);
         lir.entrypoints.push(func_id);
 
         let mut module = lir_to_wasm(&lir);

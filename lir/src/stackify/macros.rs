@@ -11,9 +11,9 @@ macro_rules! stackification {
 
             let manips = typed_index_collections::ti_vec![$({
                 let captures = $captures;
-                let getters = vec![$($getters),*];
-                let insn_inputs = smallvec![$($insn_inputs),*];
-                let insn_outputs = smallvec![$($insn_outputs),*];
+                let getters = vec![$($getters.into()),*];
+                let insn_inputs = smallvec![$($insn_inputs.into()),*];
+                let insn_outputs = smallvec![$($insn_outputs.into()),*];
 
                 $crate::stackify::StackManipulators {
                     captures,
