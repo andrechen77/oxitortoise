@@ -75,8 +75,9 @@ pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) {
     // output value, if one exists. using stackification, we are able to only
     // create local variables for instructions whose outputs are used
     // non-immediately.
-    // TODO add function arguments to the local_ids map
     let mut local_ids = HashMap::new();
+    // stores all local variables that are actually function arguments.
+    let mut arg_locals = Vec::new();
     // TODO we can make more efficient use of local variables by having the
     // ctx.uses become ctx.remaining_uses, which counts down each time a getter
     // for the value is taken. if a value is known to not be used again, we can
@@ -90,6 +91,7 @@ pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) {
             func,
             compound_labels: &mut compound_labels,
             local_ids: &mut local_ids,
+            arg_locals: &mut arg_locals,
             remaining_getters: &mut remaining_getters,
             memory: mod_ctx.memory_id,
             stack_ptr,
@@ -107,6 +109,7 @@ pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) {
         func: &'a lir::Function,
         compound_labels: &'a mut HashMap<lir::InsnSeqId, wir::InstrSeqId>,
         local_ids: &'a mut HashMap<lir::ValRef, wir::LocalId>,
+        arg_locals: &'a mut Vec<wir::LocalId>,
         remaining_getters: &'a mut HashMap<lir::ValRef, usize>,
         memory: walrus::MemoryId,
         stack_ptr: Option<walrus::LocalId>,
@@ -204,6 +207,9 @@ pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) {
                     ctx.remaining_getters.remove(v);
                 }
 
+                // update op stack to reflect that the value is now available
+                op_stack.push(*v);
+
                 // generate code
                 insn_builder.local_get(ctx.local_ids[v]);
             }
@@ -215,9 +221,11 @@ pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) {
                     // arguments do not show up in codegen. However, any future
                     // instructions that use this argument need to know that
                     // they can get it using a local getter.
+                    assert!(ctx.arg_locals.is_empty());
                     for i in 0..output_type.as_ref().len() {
                         let i: u8 = i.try_into().unwrap();
-                        allocate_local(ctx, lir::ValRef(pc, i));
+                        let local_id = allocate_local(ctx, lir::ValRef(pc, i));
+                        ctx.arg_locals.push(local_id);
                     }
                 }
                 I::LoopArg { initial_value: _ } => {
@@ -351,8 +359,7 @@ pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) {
         local_id
     }
 
-    // TODO add function arguments
-    function.finish(vec![], &mut mod_ctx.module.funcs);
+    function.finish(arg_locals, &mut mod_ctx.module.funcs);
 }
 
 /// Translate a LIR value type to a Wasm value type.
@@ -488,6 +495,24 @@ mod tests {
         }
         let mut lir = lir::Program::default();
         let func_id = lir.functions.push_and_get_key(func);
+        lir.entrypoints.push(func_id);
+
+        let mut module = lir_to_wasm(&lir);
+        let wasm = module.emit_wasm();
+        std::fs::write("test.wasm", wasm).unwrap();
+    }
+
+    #[test]
+    fn add_one() {
+        lir_function! {
+            fn add_one(I32) -> (I32) main: {
+                %arg = arguments(-> (I32));
+                %res = Add(arg, constant(I32, 1));
+                break_(main)(res);
+            }
+        }
+        let mut lir = lir::Program::default();
+        let func_id = lir.functions.push_and_get_key(add_one);
         lir.entrypoints.push(func_id);
 
         let mut module = lir_to_wasm(&lir);
