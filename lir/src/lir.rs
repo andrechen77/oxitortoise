@@ -45,7 +45,7 @@
 use std::{collections::HashMap, iter::Step};
 
 use derive_more::{From, Into};
-use typed_index_collections::{TiSlice, TiVec, ti_vec};
+use typed_index_collections::{TiSlice, TiVec};
 
 #[macro_use]
 mod macros;
@@ -54,7 +54,16 @@ pub use macros::lir_function;
 #[derive(Debug, PartialEq, Eq, Default)]
 pub struct Program {
     pub entrypoints: Vec<FunctionId>,
-    pub functions: TiVec<FunctionId, Function>,
+    pub user_functions: TiVec<FunctionId, Function>,
+    pub imported_functions: TiVec<ImportedFunctionId, ImportedFunction>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct ImportedFunction {
+    pub parameter_types: Vec<ValType>,
+    pub return_type: Vec<ValType>,
+    /// Import the function by this name in Wasm.
+    pub name: &'static str,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -66,7 +75,7 @@ pub struct Function {
     pub stack_space: usize,
 }
 
-#[derive(Debug, PartialEq, Eq, Into, From)]
+#[derive(Debug, PartialEq, Eq, Into, From, Hash)]
 pub struct FunctionId(pub usize);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Into, From)]
@@ -85,10 +94,8 @@ impl Step for InsnIdx {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub struct ImportedFunctionId {
-    name: &'static str,
-}
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, From, Into)]
+pub struct ImportedFunctionId(pub usize);
 
 /// A machine-level type. These are just numbers that have no higher-level
 /// semantic meaning.
@@ -103,6 +110,7 @@ pub enum ValType {
     FnPtr,
 }
 
+// TODO remove this and just use a SmallVec<[ValType; 1]>
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum InsnOutput {
     /// The instruction outputs a single value,
@@ -421,10 +429,6 @@ pub fn infer_output_types(function: &Function) -> HashMap<ValRef, ValType> {
                     self.types.insert(ValRef(pc, 0), *r#type);
                 }
                 InsnKind::StackStore { .. } => {}
-                InsnKind::CallImportedFunction { .. } => {
-                    todo!("function types not yet implemented")
-                }
-                InsnKind::CallUserFunction { .. } => todo!("function types not yet implemented"),
                 InsnKind::UnaryOp { op, operand } => {
                     self.types.insert(
                         ValRef(pc, 0),
@@ -442,7 +446,9 @@ pub fn infer_output_types(function: &Function) -> HashMap<ValRef, ValType> {
                 InsnKind::FunctionArgs { output_type, .. }
                 | InsnKind::Block(Block { output_type, .. })
                 | InsnKind::IfElse(IfElse { output_type, .. })
-                | InsnKind::Loop(Loop { output_type, .. }) => {
+                | InsnKind::Loop(Loop { output_type, .. })
+                | InsnKind::CallImportedFunction { output_type, .. }
+                | InsnKind::CallUserFunction { output_type, .. } => {
                     for (idx, ty) in output_type.as_ref().iter().enumerate() {
                         self.types.insert(ValRef(pc, idx.try_into().unwrap()), *ty);
                     }

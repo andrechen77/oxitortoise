@@ -127,15 +127,17 @@ pub fn stackify_cfg(function: &Function) -> CfgStackification {
                 InsnKind::StackStore { value, .. } => {
                     (smallvec![ValRefOrStackPtr::StackPtr, (*value).into()], smallvec![])
                 }
-                #[allow(unreachable_code)]
-                InsnKind::CallImportedFunction { args, .. } => (
+                InsnKind::CallImportedFunction { args, output_type, .. } => (
                     args.iter().map(|v| (*v).into()).collect(),
-                    todo!("look up return type of function"),
+                    (0..output_type.as_ref().len())
+                        .map(|i| ValRef(pc, i.try_into().unwrap()).into())
+                        .collect(),
                 ),
-                #[allow(unreachable_code)]
-                InsnKind::CallUserFunction { args, .. } => (
+                InsnKind::CallUserFunction { args, output_type, .. } => (
                     args.iter().map(|v| (*v).into()).collect(),
-                    todo!("look up return type of function"),
+                    (0..output_type.as_ref().len())
+                        .map(|i| ValRef(pc, i.try_into().unwrap()).into())
+                        .collect(),
                 ),
                 InsnKind::UnaryOp { operand, .. } => {
                     (smallvec![(*operand).into()], smallvec![ValRef(pc, 0).into()])

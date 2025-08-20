@@ -17,12 +17,16 @@ pub struct CodegenModuleCtx<'a> {
     memory_id: walrus::MemoryId,
     stack_ptr_id: walrus::GlobalId,
     fn_table_id: walrus::TableId,
+    user_function_ids: &'a mut HashMap<lir::FunctionId, walrus::FunctionId>,
+    imported_function_ids: &'a HashMap<lir::ImportedFunctionId, walrus::FunctionId>,
 }
 
 pub fn lir_to_wasm(lir: &lir::Program) -> walrus::Module {
+    // create the module
     let config = walrus::ModuleConfig::default();
-
     let mut module = walrus::Module::with_config(config);
+
+    // import memory, stack pointer, and function table
     #[rustfmt::skip]
     let (memory_id, _mem_import_id) = module.add_import_memory(
         "env",
@@ -57,10 +61,33 @@ pub fn lir_to_wasm(lir: &lir::Program) -> walrus::Module {
         walrus::RefType::Funcref,
     );
 
-    let mut ctx = CodegenModuleCtx { module: &mut module, memory_id, stack_ptr_id, fn_table_id };
+    // add imported functions
+    let mut imported_function_ids = HashMap::new();
+    for (imported_function_id, imported_function) in lir.imported_functions.iter_enumerated() {
+        let param_types: Vec<_> =
+            imported_function.parameter_types.iter().copied().map(translate_val_type).collect();
+        let return_types: Vec<_> =
+            imported_function.return_type.iter().copied().map(translate_val_type).collect();
+        let func_type = module.types.add(&param_types, &return_types);
+        let (w_func_id, _) = module.add_import_func("env", imported_function.name, func_type);
+        imported_function_ids.insert(imported_function_id, w_func_id);
+    }
 
-    for function in &lir.functions {
-        add_function(&mut ctx, function);
+    let mut user_function_ids = HashMap::new();
+
+    let mut ctx = CodegenModuleCtx {
+        module: &mut module,
+        memory_id,
+        stack_ptr_id,
+        fn_table_id,
+        user_function_ids: &mut user_function_ids,
+        imported_function_ids: &imported_function_ids,
+    };
+
+    // add user functions
+    for (lir_fid, function) in lir.user_functions.iter_enumerated() {
+        let wir_fid = add_function(&mut ctx, function);
+        ctx.user_function_ids.insert(lir_fid, wir_fid);
     }
 
     // TODO add export for entrypoint functions
@@ -68,7 +95,7 @@ pub fn lir_to_wasm(lir: &lir::Program) -> walrus::Module {
     module
 }
 
-pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) {
+pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) -> walrus::FunctionId {
     // create the function builder
     let parameter_types: Vec<_> =
         func.parameter_types.iter().copied().map(translate_val_type).collect();
@@ -107,6 +134,8 @@ pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) {
 
     let mut ctx = CodegenFnCtx {
         module: mod_ctx.module,
+        imported_function_ids: mod_ctx.imported_function_ids,
+        user_function_ids: &mut mod_ctx.user_function_ids,
         func,
         compound_labels: &mut compound_labels,
         local_ids: &mut local_ids,
@@ -159,6 +188,9 @@ pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) {
     /// sequence being built, but applies to the entire function.
     struct CodegenFnCtx<'a> {
         module: &'a mut walrus::Module,
+        imported_function_ids: &'a HashMap<lir::ImportedFunctionId, walrus::FunctionId>,
+        user_function_ids: &'a mut HashMap<lir::FunctionId, walrus::FunctionId>,
+        /// The function whose code is being generated.
         func: &'a lir::Function,
         compound_labels: &'a mut HashMap<lir::InsnSeqId, wir::InstrSeqId>,
         local_ids: &'a mut HashMap<lir::ValRef, wir::LocalId>,
@@ -335,8 +367,14 @@ pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) {
                     let mem_arg = infer_mem_arg(r#type, *offset);
                     insn_builder.store(ctx.memory, store_kind, mem_arg);
                 }
-                I::CallImportedFunction { .. } => todo!(),
-                I::CallUserFunction { .. } => todo!(),
+                I::CallImportedFunction { function, args: _, output_type: _ } => {
+                    let callee = ctx.imported_function_ids[function];
+                    insn_builder.call(callee);
+                }
+                I::CallUserFunction { function, args: _, output_type: _ } => {
+                    let callee = ctx.user_function_ids[function];
+                    insn_builder.call(callee);
+                }
                 I::UnaryOp { op, operand: _ } => {
                     insn_builder.unop(translate_unary_op(*op));
                 }
@@ -426,7 +464,7 @@ pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) {
         local_id
     }
 
-    function.finish(arg_locals, &mut mod_ctx.module.funcs);
+    function.finish(arg_locals, &mut mod_ctx.module.funcs)
 }
 
 /// Translate a LIR value type to a Wasm value type.
@@ -563,7 +601,7 @@ mod tests {
             }
         }
         let mut lir = lir::Program::default();
-        let func_id = lir.functions.push_and_get_key(func);
+        let func_id = lir.user_functions.push_and_get_key(func);
         lir.entrypoints.push(func_id);
 
         let mut module = lir_to_wasm(&lir);
@@ -583,7 +621,7 @@ mod tests {
             }
         }
         let mut lir = lir::Program::default();
-        let func_id = lir.functions.push_and_get_key(add_one);
+        let func_id = lir.user_functions.push_and_get_key(add_one);
         lir.entrypoints.push(func_id);
 
         let mut module = lir_to_wasm(&lir);
@@ -605,8 +643,63 @@ mod tests {
         }
 
         let mut lir = lir::Program::default();
-        let func_id = lir.functions.push_and_get_key(my_function);
+        let func_id = lir.user_functions.push_and_get_key(my_function);
         lir.entrypoints.push(func_id);
+
+        let mut module = lir_to_wasm(&lir);
+        let wasm = module.emit_wasm();
+        std::fs::write("test.wasm", wasm).unwrap();
+    }
+
+    #[test]
+    fn call_imported_function() {
+        let mut lir = lir::Program::default();
+        let imported_func_id = lir.imported_functions.push_and_get_key(lir::ImportedFunction {
+            name: "defined_elsewhere",
+            parameter_types: vec![lir::ValType::I32, lir::ValType::F64],
+            return_type: vec![lir::ValType::F64, lir::ValType::I32],
+        });
+
+        lir_function! {
+            fn my_function() -> (F64, I32),
+            stack_space: 0,
+            main: {
+                %(a, b) = call_imported_function(imported_func_id -> (F64, I32))(
+                    constant(I32, 10),
+                    constant(F64, 20)
+                );
+                break_(main)(a, b);
+            }
+        }
+        let func_id = lir.user_functions.push_and_get_key(my_function);
+        lir.entrypoints.push(func_id);
+
+        let mut module = lir_to_wasm(&lir);
+        let wasm = module.emit_wasm();
+        std::fs::write("test.wasm", wasm).unwrap();
+    }
+
+    #[test]
+    fn call_user_function() {
+        let mut lir = lir::Program::default();
+        lir_function! {
+            fn callee(F64) -> (I32),
+            stack_space: 0,
+            main: {
+                break_(main)(constant(I32, 10));
+            }
+        }
+        let callee_id = lir.user_functions.push_and_get_key(callee);
+        lir_function! {
+            fn caller() -> (I32),
+            stack_space: 0,
+            main: {
+                %a = call_user_function(callee_id -> (I32))(constant(F64, 1));
+                break_(main)(a);
+            }
+        }
+        let caller_id = lir.user_functions.push_and_get_key(caller);
+        lir.entrypoints.push(caller_id);
 
         let mut module = lir_to_wasm(&lir);
         let wasm = module.emit_wasm();
