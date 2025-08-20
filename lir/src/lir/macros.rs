@@ -17,7 +17,7 @@ macro_rules! push_node {
     ($ctx:expr; % $val_ref:pat = arguments(-> ($($return_ty:ident),*))) => {
         let insn_idx = $ctx.0[$ctx.1].push_and_get_key(
             $crate::lir::InsnKind::FunctionArgs {
-                output_type: $crate::lir::InsnOutput::from_types_array([$($crate::lir::ValType::$return_ty),*]),
+                output_type: smallvec::smallvec![$($crate::lir::ValType::$return_ty),*],
             }
         );
         let $val_ref = $crate::lir::ValRef($crate::lir::InsnPc($ctx.1, insn_idx), 0);
@@ -119,7 +119,7 @@ macro_rules! push_node {
         let insn_idx = $ctx.0[$ctx.1].push_and_get_key(
             $crate::lir::InsnKind::CallImportedFunction {
                 function: $function,
-                output_type: $crate::lir::InsnOutput::from_types_array([$($crate::lir::ValType::$return_ty),*]),
+                output_type: smallvec::smallvec![$($crate::lir::ValType::$return_ty),*],
                 args: args.into_boxed_slice(),
             }
         );
@@ -147,7 +147,7 @@ macro_rules! push_node {
         let insn_idx = $ctx.0[$ctx.1].push_and_get_key(
             $crate::lir::InsnKind::CallUserFunction {
                 function: $function,
-                output_type: $crate::lir::InsnOutput::from_types_array([$($crate::lir::ValType::$return_ty),*]),
+                output_type: smallvec::smallvec![$($crate::lir::ValType::$return_ty),*],
                 args: args.into_boxed_slice(),
             }
         );
@@ -230,7 +230,7 @@ macro_rules! push_node {
 
         let insn_idx = $ctx.0[$ctx.1].push_and_get_key(
             $crate::lir::InsnKind::Block($crate::lir::Block {
-                output_type: $crate::lir::InsnOutput::from_types_array([$($crate::lir::ValType::$return_ty),*]),
+                output_type: smallvec::smallvec![$($crate::lir::ValType::$return_ty),*],
                 body: $label,
             })
         );
@@ -255,7 +255,7 @@ macro_rules! push_node {
 
         let insn_idx = $ctx.0[$ctx.1].push_and_get_key(
             $crate::lir::InsnKind::IfElse($crate::lir::IfElse {
-                output_type: $crate::lir::InsnOutput::from_types_array([$($crate::lir::ValType::$return_ty),*]),
+                output_type: smallvec::smallvec![$($crate::lir::ValType::$return_ty),*],
                 condition,
                 then_body: $then_label,
                 else_body: $else_label,
@@ -301,7 +301,7 @@ macro_rules! lir_function {
         let $func = $crate::lir::Function {
             parameter_types: vec![$($crate::lir::ValType::$param_ty),*],
             body: $crate::lir::Block {
-                output_type: $crate::lir::InsnOutput::from_types_array([$($crate::lir::ValType::$return_ty),*]),
+                output_type: smallvec::smallvec![$($crate::lir::ValType::$return_ty),*],
                 body: $crate::lir::InsnSeqId(0),
             },
             insn_seqs,

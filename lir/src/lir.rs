@@ -45,6 +45,7 @@
 use std::{collections::HashMap, iter::Step};
 
 use derive_more::{From, Into};
+use smallvec::SmallVec;
 use typed_index_collections::{TiSlice, TiVec};
 
 #[macro_use]
@@ -110,39 +111,6 @@ pub enum ValType {
     FnPtr,
 }
 
-// TODO remove this and just use a SmallVec<[ValType; 1]>
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub enum InsnOutput {
-    /// The instruction outputs a single value,
-    Single(ValType),
-    /// The instruction outputs some other number of values. This may be zero.
-    Other(Vec<ValType>),
-}
-
-impl InsnOutput {
-    pub fn from_types_array<const N: usize>(types: [ValType; N]) -> Self {
-        if N == 1 { Self::Single(types[0]) } else { Self::Other(types.to_vec()) }
-    }
-
-    pub fn from_types_iter(types: impl IntoIterator<Item = ValType>) -> Self {
-        let types = types.into_iter().collect::<Vec<_>>();
-        if types.len() == 1 { Self::Single(types[0]) } else { Self::Other(types) }
-    }
-
-    pub fn index(&self, index: u8) -> ValType {
-        self.as_ref()[index as usize]
-    }
-}
-
-impl AsRef<[ValType]> for InsnOutput {
-    fn as_ref(&self) -> &[ValType] {
-        match self {
-            InsnOutput::Single(ty) => std::slice::from_ref(ty),
-            InsnOutput::Other(tys) => tys.as_slice(),
-        }
-    }
-}
-
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct InsnPc(pub InsnSeqId, pub InsnIdx);
 
@@ -161,7 +129,7 @@ pub struct InsnSeqId(pub usize);
 pub enum InsnKind {
     /// Outputs all arguments of the function.
     FunctionArgs {
-        output_type: InsnOutput,
+        output_type: SmallVec<[ValType; 1]>,
     },
     // TODO rethink loop args. first, they should output a multivalue, instead
     // of being a single value, since that's what it will look like on the stack
@@ -226,12 +194,12 @@ pub enum InsnKind {
     },
     CallImportedFunction {
         function: ImportedFunctionId,
-        output_type: InsnOutput,
+        output_type: SmallVec<[ValType; 1]>,
         args: Box<[ValRef]>,
     },
     CallUserFunction {
         function: FunctionId,
-        output_type: InsnOutput,
+        output_type: SmallVec<[ValType; 1]>,
         args: Box<[ValRef]>,
     },
     UnaryOp {
@@ -279,7 +247,7 @@ pub enum InsnKind {
 #[derive(Debug, PartialEq, Eq)]
 pub struct Block {
     /// The type of output of this block.
-    pub output_type: InsnOutput,
+    pub output_type: SmallVec<[ValType; 1]>,
     /// The instructions inside the block.
     pub body: InsnSeqId,
 }
@@ -287,7 +255,7 @@ pub struct Block {
 #[derive(Debug, PartialEq, Eq)]
 pub struct IfElse {
     /// The type of output of this if-else.
-    pub output_type: InsnOutput,
+    pub output_type: SmallVec<[ValType; 1]>,
     /// The condition of the if-else.
     pub condition: ValRef,
     /// The instructions inside the then branch.
@@ -301,7 +269,7 @@ pub struct Loop {
     /// The initial values of the loop body arguments.
     pub inputs: Vec<ValRef>,
     /// The type of output of this loop.
-    pub output_type: InsnOutput,
+    pub output_type: SmallVec<[ValType; 1]>,
     /// The instructions inside the loop.
     pub body: InsnSeqId,
 }
@@ -341,7 +309,7 @@ impl InsnKind {
             | InsnKind::IfElse(IfElse { output_type, .. })
             | InsnKind::Loop(Loop { output_type, .. })
             | InsnKind::CallImportedFunction { output_type, .. }
-            | InsnKind::CallUserFunction { output_type, .. } => output_type.as_ref().len(),
+            | InsnKind::CallUserFunction { output_type, .. } => output_type.len(),
         }
     }
 }
@@ -449,7 +417,7 @@ pub fn infer_output_types(function: &Function) -> HashMap<ValRef, ValType> {
                 | InsnKind::Loop(Loop { output_type, .. })
                 | InsnKind::CallImportedFunction { output_type, .. }
                 | InsnKind::CallUserFunction { output_type, .. } => {
-                    for (idx, ty) in output_type.as_ref().iter().enumerate() {
+                    for (idx, ty) in output_type.iter().enumerate() {
                         self.types.insert(ValRef(pc, idx.try_into().unwrap()), *ty);
                     }
                 }

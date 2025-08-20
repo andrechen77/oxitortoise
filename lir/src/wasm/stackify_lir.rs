@@ -129,13 +129,13 @@ pub fn stackify_cfg(function: &Function) -> CfgStackification {
                 }
                 InsnKind::CallImportedFunction { args, output_type, .. } => (
                     args.iter().map(|v| (*v).into()).collect(),
-                    (0..output_type.as_ref().len())
+                    (0..output_type.len())
                         .map(|i| ValRef(pc, i.try_into().unwrap()).into())
                         .collect(),
                 ),
                 InsnKind::CallUserFunction { args, output_type, .. } => (
                     args.iter().map(|v| (*v).into()).collect(),
-                    (0..output_type.as_ref().len())
+                    (0..output_type.len())
                         .map(|i| ValRef(pc, i.try_into().unwrap()).into())
                         .collect(),
                 ),
@@ -157,7 +157,7 @@ pub fn stackify_cfg(function: &Function) -> CfgStackification {
                 }
                 InsnKind::Block(Block { body, output_type }) => {
                     // generate val refs for the outputs
-                    let outputs = (0..output_type.as_ref().len())
+                    let outputs = (0..output_type.len())
                         .map(|i| ValRef(pc, i.try_into().unwrap()).into())
                         .collect();
 
@@ -178,7 +178,7 @@ pub fn stackify_cfg(function: &Function) -> CfgStackification {
                 }
                 InsnKind::IfElse(IfElse { condition, output_type, then_body, else_body }) => {
                     // generate val refs for the outputs
-                    let outputs = (0..output_type.as_ref().len())
+                    let outputs = (0..output_type.len())
                         .map(|i| ValRef(pc, i.try_into().unwrap()).into())
                         .collect();
 
@@ -208,7 +208,7 @@ pub fn stackify_cfg(function: &Function) -> CfgStackification {
                 }
                 InsnKind::Loop(Loop { inputs, output_type, body }) => {
                     // generate val refs for the outputs
-                    let outputs = (0..output_type.as_ref().len())
+                    let outputs = (0..output_type.len())
                         .map(|i| ValRef(pc, i.try_into().unwrap()).into())
                         .collect();
 

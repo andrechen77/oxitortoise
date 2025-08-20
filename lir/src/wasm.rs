@@ -100,7 +100,7 @@ pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) -> wal
     let parameter_types: Vec<_> =
         func.parameter_types.iter().copied().map(translate_val_type).collect();
     let return_types: Vec<_> =
-        func.body.output_type.as_ref().iter().copied().map(translate_val_type).collect();
+        func.body.output_type.iter().copied().map(translate_val_type).collect();
     let mut function =
         walrus::FunctionBuilder::new(&mut mod_ctx.module.types, &parameter_types, &return_types);
 
@@ -166,7 +166,7 @@ pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) -> wal
             translate_instr_seq_type(
                 &mut ctx.module.types,
                 std::iter::empty(),
-                func.body.output_type.as_ref().iter().copied(),
+                func.body.output_type.iter().copied(),
             ),
             |inner_builder| {
                 write_code(&mut ctx, inner_builder, func.body.body);
@@ -322,7 +322,7 @@ pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) -> wal
                     // instructions that use this argument need to know that
                     // they can get it using a local getter.
                     assert!(ctx.arg_locals.is_empty());
-                    for i in 0..output_type.as_ref().len() {
+                    for i in 0..output_type.len() {
                         let i: u8 = i.try_into().unwrap();
                         let local_id = allocate_local(ctx, lir::ValRef(pc, i));
                         ctx.arg_locals.push(local_id);
@@ -393,7 +393,7 @@ pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) -> wal
                     let seq_type = translate_instr_seq_type(
                         &mut ctx.module.types,
                         ctx.stk.seqs[*body].inputs.iter().map(|v| ctx.types[&v.unwrap_val_ref()]),
-                        output_type.as_ref().iter().copied(),
+                        output_type.iter().copied(),
                     );
 
                     insn_builder.block(seq_type, |inner_builder| {
@@ -407,7 +407,7 @@ pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) -> wal
                             .inputs
                             .iter()
                             .map(|v| ctx.types[&v.unwrap_val_ref()]),
-                        output_type.as_ref().iter().copied(),
+                        output_type.iter().copied(),
                     );
 
                     // put the &mut in a RefCell so we can borrow it twice in
@@ -435,7 +435,7 @@ pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) -> wal
                     let seq_type = translate_instr_seq_type(
                         &mut ctx.module.types,
                         inputs.iter().map(|v| ctx.types[v]),
-                        output_type.as_ref().iter().copied(),
+                        output_type.iter().copied(),
                     );
 
                     insn_builder.loop_(seq_type, |inner_builder| {
