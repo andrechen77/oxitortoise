@@ -1,4 +1,4 @@
-use std::{cell::Cell, collections::HashMap, iter::Step as _};
+use std::collections::HashMap;
 
 use smallvec::{SmallVec, ToSmallVec, smallvec};
 use typed_index_collections::{TiVec, ti_vec};
@@ -109,6 +109,7 @@ pub fn stackify_cfg(function: &Function) -> CfgStackification {
                     (smallvec![], smallvec![])
                 }
                 InsnKind::Const { .. } => (smallvec![], smallvec![ValRef(pc, 0).into()]),
+                InsnKind::UserFunctionPtr { .. } => (smallvec![], smallvec![ValRef(pc, 0).into()]),
                 InsnKind::DeriveField { ptr, .. } => {
                     (smallvec![(*ptr).into()], smallvec![ValRef(pc, 0).into()])
                 }

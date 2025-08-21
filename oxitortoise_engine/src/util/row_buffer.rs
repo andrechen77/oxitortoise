@@ -482,7 +482,7 @@ impl RowBuffer {
             );
         }
 
-        let start = self.bytes.as_mut().as_mut_ptr().cast::<T>();
+        let start = self.bytes.deref_mut().as_mut_ptr().cast::<T>();
         let len = self.num_rows();
         // SAFETY: the bytes are guaranteed to hold valid T values
         let slice = unsafe { std::slice::from_raw_parts_mut(start, len) };

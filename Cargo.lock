@@ -235,8 +235,8 @@ dependencies = [
  "derive_more 1.0.0",
  "either",
  "flagset",
+ "lir",
  "slotmap",
- "walrus",
 ]
 
 [[package]]

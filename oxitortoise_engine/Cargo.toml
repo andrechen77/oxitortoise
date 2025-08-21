@@ -8,7 +8,7 @@ derive_more = { version = "1.0.0", features = ["full"] }
 either = "1.15.0"
 flagset = "0.4.6"
 slotmap = "1.0.7"
-walrus = "0.23.3"
+lir = { path = "../lir" }
 
 [features]
 runtime-unsafety = []

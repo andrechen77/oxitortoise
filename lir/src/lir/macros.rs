@@ -17,7 +17,15 @@ macro_rules! push_node {
     ($ctx:expr; % $val_ref:pat = arguments(-> ($($return_ty:ident),*))) => {
         let insn_idx = $ctx.0[$ctx.1].push_and_get_key(
             $crate::lir::InsnKind::FunctionArgs {
-                output_type: smallvec::smallvec![$($crate::lir::ValType::$return_ty),*],
+                output_type: $crate::reexports::smallvec::smallvec![$($crate::lir::ValType::$return_ty),*],
+            }
+        );
+        let $val_ref = $crate::lir::ValRef($crate::lir::InsnPc($ctx.1, insn_idx), 0);
+    };
+    ($ctx:expr; % $val_ref:pat = user_fn_ptr($function:ident)) => {
+        let insn_idx = $ctx.0[$ctx.1].push_and_get_key(
+            $crate::lir::InsnKind::UserFunctionPtr {
+                function: $function,
             }
         );
         let $val_ref = $crate::lir::ValRef($crate::lir::InsnPc($ctx.1, insn_idx), 0);
@@ -38,7 +46,7 @@ macro_rules! push_node {
         let insn_idx = $ctx.0[$ctx.1].push_and_get_key(
             $crate::lir::InsnKind::DeriveField {
                 offset: $offset,
-                ptr: $ptr,
+                ptr,
             }
         );
         let $val_ref = $crate::lir::ValRef($crate::lir::InsnPc($ctx.1, insn_idx), 0);
@@ -123,7 +131,7 @@ macro_rules! push_node {
         let insn_idx = $ctx.0[$ctx.1].push_and_get_key(
             $crate::lir::InsnKind::CallImportedFunction {
                 function: $function,
-                output_type: smallvec::smallvec![$($crate::lir::ValType::$return_ty),*],
+                output_type: $crate::reexports::smallvec::smallvec![$($crate::lir::ValType::$return_ty),*],
                 args: args.into_boxed_slice(),
             }
         );
@@ -151,7 +159,7 @@ macro_rules! push_node {
         let insn_idx = $ctx.0[$ctx.1].push_and_get_key(
             $crate::lir::InsnKind::CallUserFunction {
                 function: $function,
-                output_type: smallvec::smallvec![$($crate::lir::ValType::$return_ty),*],
+                output_type: $crate::reexports::smallvec::smallvec![$($crate::lir::ValType::$return_ty),*],
                 args: args.into_boxed_slice(),
             }
         );
@@ -234,7 +242,7 @@ macro_rules! push_node {
 
         let insn_idx = $ctx.0[$ctx.1].push_and_get_key(
             $crate::lir::InsnKind::Block($crate::lir::Block {
-                output_type: smallvec::smallvec![$($crate::lir::ValType::$return_ty),*],
+                output_type: $crate::reexports::smallvec::smallvec![$($crate::lir::ValType::$return_ty),*],
                 body: $label,
             })
         );
@@ -259,7 +267,7 @@ macro_rules! push_node {
 
         let insn_idx = $ctx.0[$ctx.1].push_and_get_key(
             $crate::lir::InsnKind::IfElse($crate::lir::IfElse {
-                output_type: smallvec::smallvec![$($crate::lir::ValType::$return_ty),*],
+                output_type: $crate::reexports::smallvec::smallvec![$($crate::lir::ValType::$return_ty),*],
                 condition,
                 then_body: $then_label,
                 else_body: $else_label,
@@ -282,7 +290,7 @@ macro_rules! push_node {
 macro_rules! instruction_seq {
     ($ctx:expr; $label:ident: { $($(% $val_ref:pat =)? $node_ident:ident $(($($param:tt)*))* $($body_label:ident: {$($body:tt)*})*; )* }) => {
         let $label = $ctx.0.next_key();
-        $ctx.0.push(typed_index_collections::TiVec::new());
+        $ctx.0.push($crate::reexports::typed_index_collections::TiVec::new());
         let new_ctx = (&mut *$ctx.0, $label);
         $(
             $crate::push_node!(new_ctx; $(% $val_ref =)? $node_ident $(($($param)*))* $($body_label: {$($body)*})*);
@@ -297,7 +305,7 @@ macro_rules! lir_function {
         stack_space: $stack_space:expr,
         $label:ident: { $($inner:tt)* }
     ) => {
-        let mut insn_seqs: typed_index_collections::TiVec<$crate::lir::InsnSeqId, typed_index_collections::TiVec<$crate::lir::InsnIdx, $crate::lir::InsnKind>> = typed_index_collections::TiVec::new();
+        let mut insn_seqs: $crate::reexports::typed_index_collections::TiVec<$crate::lir::InsnSeqId, $crate::reexports::typed_index_collections::TiVec<$crate::lir::InsnIdx, $crate::lir::InsnKind>> = $crate::reexports::typed_index_collections::TiVec::new();
         let ctx = (&mut insn_seqs, $crate::lir::InsnSeqId(0));
 
         $crate::instruction_seq!(ctx; $label: { $($inner)* });
@@ -305,7 +313,7 @@ macro_rules! lir_function {
         let $func = $crate::lir::Function {
             parameter_types: vec![$($crate::lir::ValType::$param_ty),*],
             body: $crate::lir::Block {
-                output_type: smallvec::smallvec![$($crate::lir::ValType::$return_ty),*],
+                output_type: $crate::reexports::smallvec::smallvec![$($crate::lir::ValType::$return_ty),*],
                 body: $crate::lir::InsnSeqId(0),
             },
             insn_seqs,

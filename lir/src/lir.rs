@@ -76,7 +76,7 @@ pub struct Function {
     pub stack_space: usize,
 }
 
-#[derive(Debug, PartialEq, Eq, Into, From, Hash)]
+#[derive(Debug, PartialEq, Eq, Into, From, Hash, Clone, Copy)]
 pub struct FunctionId(pub usize);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Into, From)]
@@ -150,6 +150,9 @@ pub enum InsnKind {
         r#type: ValType,
         /// The bit pattern of the value to store.
         value: u64,
+    },
+    UserFunctionPtr {
+        function: FunctionId,
     },
     /// Add a compile-time offset to a pointer, producing a pointer to a
     /// subfield.
@@ -345,6 +348,9 @@ pub fn infer_output_types(function: &Function) -> HashMap<ValRef, ValType> {
             match insn {
                 InsnKind::Const { r#type, .. } => {
                     self.types.insert(ValRef(pc, 0), *r#type);
+                }
+                InsnKind::UserFunctionPtr { .. } => {
+                    self.types.insert(ValRef(pc, 0), ValType::FnPtr);
                 }
                 InsnKind::DeriveField { .. } => {
                     self.types.insert(ValRef(pc, 0), ValType::Ptr);

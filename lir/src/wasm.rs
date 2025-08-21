@@ -5,30 +5,50 @@
 
 use std::{cell::RefCell, collections::HashMap};
 
-use typed_index_collections::TiVec;
 use walrus::ir as wir;
 
 use crate::{lir, stackify::StackManipulators, wasm::stackify_lir::ValRefOrStackPtr};
 
 mod stackify_lir;
 
-pub struct CodegenModuleCtx<'a> {
-    module: &'a mut walrus::Module,
-    memory_id: walrus::MemoryId,
-    stack_ptr_id: walrus::GlobalId,
+pub struct CodegenModuleCtx<'a, A> {
+    /// The module being generated.
+    module: walrus::Module,
+    /// The id of the main memory of the module.
+    mem_id: walrus::MemoryId,
+    /// The id of the stack pointer global of the module.
+    sp_global_id: walrus::GlobalId,
+    /// The id of the main function table of the module.
     fn_table_id: walrus::TableId,
-    user_function_ids: &'a mut HashMap<lir::FunctionId, walrus::FunctionId>,
-    imported_function_ids: &'a HashMap<lir::ImportedFunctionId, walrus::FunctionId>,
+    /// An allocator that can be used to get new fn table slots.
+    fn_table_slot_allocator: &'a mut A,
+    /// A map from function ids to the slot in the function table that they
+    /// (will) take up.
+    fn_table_allocated_slots: HashMap<lir::FunctionId, usize>,
+    /// A map from LIR function ids to Walrus function ids.
+    user_fn_ids: HashMap<lir::FunctionId, walrus::FunctionId>,
+    /// A map from LIR imported function ids to Walrus function ids.
+    imported_fn_ids: HashMap<lir::ImportedFunctionId, walrus::FunctionId>,
 }
 
-pub fn lir_to_wasm(lir: &lir::Program) -> walrus::Module {
+pub trait FnTableSlotAllocator {
+    /// Return a free slot in the function table.
+    fn allocate_slot(&mut self) -> usize;
+}
+
+/// Translates a LIR program into a Walrus module. Returns the generated module
+/// as well as a map from the LIR function id to the slot in the function table.
+pub fn lir_to_wasm(
+    lir: &lir::Program,
+    fn_table_slot_allocator: &mut impl FnTableSlotAllocator,
+) -> (walrus::Module, HashMap<lir::FunctionId, usize>) {
     // create the module
     let config = walrus::ModuleConfig::default();
     let mut module = walrus::Module::with_config(config);
 
     // import memory, stack pointer, and function table
     #[rustfmt::skip]
-    let (memory_id, _mem_import_id) = module.add_import_memory(
+    let (mem_id, _mem_import_id) = module.add_import_memory(
         "env",
         "memory",
         // not shared. even though we are importing a memory, it's not shared because we are
@@ -41,7 +61,7 @@ pub fn lir_to_wasm(lir: &lir::Program) -> walrus::Module {
         None,
         None,
     );
-    let (stack_ptr_id, _stack_ptr_import_id) = module.add_import_global(
+    let (sp_global_id, _stack_ptr_import_id) = module.add_import_global(
         "env",
         "__stack_pointer",
         translate_val_type(lir::ValType::Ptr),
@@ -62,7 +82,7 @@ pub fn lir_to_wasm(lir: &lir::Program) -> walrus::Module {
     );
 
     // add imported functions
-    let mut imported_function_ids = HashMap::new();
+    let mut imported_fn_ids = HashMap::new();
     for (imported_function_id, imported_function) in lir.imported_functions.iter_enumerated() {
         let param_types: Vec<_> =
             imported_function.parameter_types.iter().copied().map(translate_val_type).collect();
@@ -70,32 +90,76 @@ pub fn lir_to_wasm(lir: &lir::Program) -> walrus::Module {
             imported_function.return_type.iter().copied().map(translate_val_type).collect();
         let func_type = module.types.add(&param_types, &return_types);
         let (w_func_id, _) = module.add_import_func("env", imported_function.name, func_type);
-        imported_function_ids.insert(imported_function_id, w_func_id);
+        imported_fn_ids.insert(imported_function_id, w_func_id);
     }
-
-    let mut user_function_ids = HashMap::new();
 
     let mut ctx = CodegenModuleCtx {
-        module: &mut module,
-        memory_id,
-        stack_ptr_id,
+        module,
+        mem_id,
+        sp_global_id,
         fn_table_id,
-        user_function_ids: &mut user_function_ids,
-        imported_function_ids: &imported_function_ids,
+        fn_table_slot_allocator,
+        fn_table_allocated_slots: HashMap::new(),
+        user_fn_ids: HashMap::new(),
+        imported_fn_ids,
     };
 
-    // add user functions
-    for (lir_fid, function) in lir.user_functions.iter_enumerated() {
-        let wir_fid = add_function(&mut ctx, function);
-        ctx.user_function_ids.insert(lir_fid, wir_fid);
+    // allocate slots in the function table for entrypoint functions
+    for entrypoint in &lir.entrypoints {
+        let slot = ctx.fn_table_slot_allocator.allocate_slot();
+        ctx.fn_table_allocated_slots.insert(*entrypoint, slot);
     }
 
-    // TODO add export for entrypoint functions
+    // add user functions. these may allocate additional slots in the function
+    // table for callbacks, every time the address of a function is taken.
+    for (lir_fid, function) in lir.user_functions.iter_enumerated() {
+        let wir_fid = add_function(&mut ctx, function);
+        ctx.user_fn_ids.insert(lir_fid, wir_fid);
+    }
 
-    module
+    // use element segments to install all functions for which fn table slots
+    // were allocated
+    for (lir_fn_id, slot) in &ctx.fn_table_allocated_slots {
+        let wir_fn_id = ctx.user_fn_ids[lir_fn_id];
+        ctx.module.elements.add(
+            walrus::ElementKind::Active {
+                table: ctx.fn_table_id,
+                offset: walrus::ConstExpr::Value(translate_usize(*slot)),
+            },
+            walrus::ElementItems::Functions(vec![wir_fn_id]),
+        );
+    }
+
+    (ctx.module, ctx.fn_table_allocated_slots)
 }
 
-pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) -> walrus::FunctionId {
+pub fn add_function<A: FnTableSlotAllocator>(
+    mod_ctx: &mut CodegenModuleCtx<A>,
+    func: &lir::Function,
+) -> walrus::FunctionId {
+    /// Context for codegen that applies to the entire function.
+    struct CodegenFnCtx<'a, 'b, A> {
+        /// The context of the module being generated.
+        mod_ctx: &'b mut CodegenModuleCtx<'a, A>,
+        /// The function whose code is being generated.
+        func: &'b lir::Function,
+        /// The types of each LIR value
+        types: &'b HashMap<lir::ValRef, lir::ValType>,
+        /// Metadata for stackifying the function.
+        stk: &'b stackify_lir::CfgStackification,
+        /// Associates each LIR insn seq id with the walrus insn seq id.
+        compound_labels: HashMap<lir::InsnSeqId, wir::InstrSeqId>,
+        /// Associates each LIR value with the walrus local variable, if one
+        /// exists.
+        local_ids: HashMap<lir::ValRef, wir::LocalId>,
+        /// The walrus local variable that holds the stack pointer.
+        sp_local_id: Option<wir::LocalId>,
+        /// The walrus local variables that hold the function arguments.
+        arg_locals: Vec<wir::LocalId>,
+        /// The number of getters remaining for each LIR value.
+        remaining_getters: HashMap<lir::ValRef, usize>,
+    }
+
     // create the function builder
     let parameter_types: Vec<_> =
         func.parameter_types.iter().copied().map(translate_val_type).collect();
@@ -104,27 +168,11 @@ pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) -> wal
     let mut function =
         walrus::FunctionBuilder::new(&mut mod_ctx.module.types, &parameter_types, &return_types);
 
-    // calculate stackification and other metadata about the instructions
-    // let mut remaining_uses = lir::count_uses(&func.body.body);
-    let types = lir::infer_output_types(func);
-    let stackification = stackify_lir::stackify_cfg(func);
-    let mut remaining_getters = stackify_lir::count_getters(&stackification);
-
     // add stack pointer if needed
     let needs_stack_ptr = func.stack_space > 0;
-    let stack_ptr_local: Option<walrus::LocalId> =
+    let sp_local_id: Option<walrus::LocalId> =
         needs_stack_ptr.then(|| mod_ctx.module.locals.add(translate_val_type(lir::ValType::Ptr)));
 
-    // associates each InsnSeqId with its walrus InstrSeqId
-    let mut compound_labels = HashMap::new();
-
-    // associates each instruction with the walrus local variable that holds its
-    // output value, if one exists. using stackification, we are able to only
-    // create local variables for instructions whose outputs are used
-    // non-immediately.
-    let mut local_ids = HashMap::new();
-    // stores all local variables that are actually function arguments.
-    let mut arg_locals = Vec::new();
     // TODO we can make more efficient use of local variables by having the
     // ctx.uses become ctx.remaining_uses, which counts down each time a getter
     // for the value is taken. if a value is known to not be used again, we can
@@ -132,39 +180,39 @@ pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) -> wal
     // pull from when we need a new local variable without having to create a
     // new one every time.
 
+    let types = lir::infer_output_types(func);
+    let stk = stackify_lir::stackify_cfg(func);
+
+    // create the context for generating the function's code
     let mut ctx = CodegenFnCtx {
-        module: mod_ctx.module,
-        imported_function_ids: mod_ctx.imported_function_ids,
-        user_function_ids: &mut mod_ctx.user_function_ids,
+        mod_ctx,
         func,
-        compound_labels: &mut compound_labels,
-        local_ids: &mut local_ids,
-        arg_locals: &mut arg_locals,
-        remaining_getters: &mut remaining_getters,
-        memory: mod_ctx.memory_id,
-        stack_ptr_local,
-        stack_ptr_global: mod_ctx.stack_ptr_id,
         types: &types,
-        stk: &stackification,
+        stk: &stk,
+        compound_labels: HashMap::new(),
+        local_ids: HashMap::new(),
+        sp_local_id,
+        arg_locals: Vec::new(),
+        remaining_getters: stackify_lir::count_getters(&stk),
     };
 
-    if let Some(stack_ptr_local) = stack_ptr_local {
+    if let Some(stack_ptr_local) = sp_local_id {
         // there is a stack pointer. generate a prologue and epilogue that
         // initializes the stack pointer
 
         let mut insn_builder = function.func_body();
         // subtract from the stack pointer
         insn_builder
-            .global_get(ctx.stack_ptr_global)
+            .global_get(ctx.mod_ctx.sp_global_id)
             .const_(translate_usize(func.stack_space))
             .binop(wir::BinaryOp::I32Sub)
             .local_tee(stack_ptr_local)
-            .global_set(ctx.stack_ptr_global);
+            .global_set(ctx.mod_ctx.sp_global_id);
 
         // put the function body in a block
         insn_builder.block(
             translate_instr_seq_type(
-                &mut ctx.module.types,
+                &mut ctx.mod_ctx.module.types,
                 std::iter::empty(),
                 func.body.output_type.iter().copied(),
             ),
@@ -178,33 +226,13 @@ pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) -> wal
             .local_get(stack_ptr_local)
             .const_(translate_usize(func.stack_space))
             .binop(wir::BinaryOp::I32Add)
-            .global_set(ctx.stack_ptr_global);
+            .global_set(ctx.mod_ctx.sp_global_id);
     } else {
         // there is no stack pointer, so no need for prologue or epilogue
         write_code(&mut ctx, &mut function.func_body(), func.body.body);
     }
-
-    /// Context for codegen that does not depend on the current instruction
-    /// sequence being built, but applies to the entire function.
-    struct CodegenFnCtx<'a> {
-        module: &'a mut walrus::Module,
-        imported_function_ids: &'a HashMap<lir::ImportedFunctionId, walrus::FunctionId>,
-        user_function_ids: &'a mut HashMap<lir::FunctionId, walrus::FunctionId>,
-        /// The function whose code is being generated.
-        func: &'a lir::Function,
-        compound_labels: &'a mut HashMap<lir::InsnSeqId, wir::InstrSeqId>,
-        local_ids: &'a mut HashMap<lir::ValRef, wir::LocalId>,
-        arg_locals: &'a mut Vec<wir::LocalId>,
-        remaining_getters: &'a mut HashMap<lir::ValRef, usize>,
-        memory: walrus::MemoryId,
-        stack_ptr_local: Option<walrus::LocalId>,
-        stack_ptr_global: walrus::GlobalId,
-        // remaining_uses: &'a mut TiVec<lir::ValRef, usize>,
-        types: &'a HashMap<lir::ValRef, lir::ValType>,
-        stk: &'a stackify_lir::CfgStackification,
-    }
-    fn write_code(
-        ctx: &mut CodegenFnCtx,
+    fn write_code<A: FnTableSlotAllocator>(
+        ctx: &mut CodegenFnCtx<A>,
         insn_builder: &mut walrus::InstrSeqBuilder,
         insn_seq_id: lir::InsnSeqId,
     ) {
@@ -307,7 +335,7 @@ pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) -> wal
                         insn_builder.local_get(ctx.local_ids[v]);
                     }
                     ValRefOrStackPtr::StackPtr => {
-                        insn_builder.local_get(ctx.stack_ptr_local.expect("the presence of a StackLoad instruction means there must be a stack pointer local var"));
+                        insn_builder.local_get(ctx.sp_local_id.expect("the presence of a StackLoad instruction means there must be a stack pointer local var"));
                     }
                 }
                 // update op stack to reflect that the value is now available
@@ -336,6 +364,10 @@ pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) -> wal
                 I::Const { r#type, value } => {
                     insn_builder.const_(translate_val(*r#type, *value));
                 }
+                I::UserFunctionPtr { function } => {
+                    let slot = addr_of_function(ctx, *function);
+                    insn_builder.const_(translate_usize(slot));
+                }
                 I::DeriveField { offset, ptr: _ } => {
                     insn_builder.const_(translate_usize(*offset)).binop(wir::BinaryOp::I32Add);
                 }
@@ -348,20 +380,20 @@ pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) -> wal
                 I::MemLoad { r#type, offset, ptr: _ } => {
                     let load_kind = infer_load_kind(*r#type);
                     let mem_arg = infer_mem_arg(*r#type, *offset);
-                    insn_builder.load(ctx.memory, load_kind, mem_arg);
+                    insn_builder.load(ctx.mod_ctx.mem_id, load_kind, mem_arg);
                 }
                 I::MemStore { offset, ptr: _, value } => {
                     let r#type = ctx.types[value];
                     let store_kind = infer_store_kind(r#type);
                     let mem_arg = infer_mem_arg(r#type, *offset);
-                    insn_builder.store(ctx.memory, store_kind, mem_arg);
+                    insn_builder.store(ctx.mod_ctx.mem_id, store_kind, mem_arg);
                 }
                 I::StackLoad { r#type, offset } => {
                     let load_kind = infer_load_kind(*r#type);
                     let mem_arg = infer_mem_arg(*r#type, *offset);
                     insn_builder
-                        .local_get(ctx.stack_ptr_local.expect("the presence of a StackAddr instruction means there must be a stack pointer local var"))
-                        .load(ctx.memory, load_kind, mem_arg);
+                        .local_get(ctx.sp_local_id.expect("the presence of a StackAddr instruction means there must be a stack pointer local var"))
+                        .load(ctx.mod_ctx.mem_id, load_kind, mem_arg);
                 }
                 I::StackStore { offset, value } => {
                     let r#type = ctx.types[value];
@@ -370,20 +402,20 @@ pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) -> wal
                     // stackification ensured that the stack pointer, followed
                     // by the value, are already on the operand stack. we just
                     // need to emit the store instruction.
-                    insn_builder.store(ctx.memory, store_kind, mem_arg);
+                    insn_builder.store(ctx.mod_ctx.mem_id, store_kind, mem_arg);
                 }
                 I::StackAddr { offset } => {
                     insn_builder
-                        .local_get(ctx.stack_ptr_local.expect("the presence of a StackAddr instruction means there must be a stack pointer local var"))
+                        .local_get(ctx.sp_local_id.expect("the presence of a StackAddr instruction means there must be a stack pointer local var"))
                         .const_(translate_usize(*offset))
                         .binop(wir::BinaryOp::I32Add);
                 }
                 I::CallImportedFunction { function, args: _, output_type: _ } => {
-                    let callee = ctx.imported_function_ids[function];
+                    let callee = ctx.mod_ctx.imported_fn_ids[function];
                     insn_builder.call(callee);
                 }
                 I::CallUserFunction { function, args: _, output_type: _ } => {
-                    let callee = ctx.user_function_ids[function];
+                    let callee = ctx.mod_ctx.user_fn_ids[function];
                     insn_builder.call(callee);
                 }
                 I::UnaryOp { op, operand: _ } => {
@@ -402,7 +434,7 @@ pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) -> wal
                 }
                 I::Block(lir::Block { output_type, body }) => {
                     let seq_type = translate_instr_seq_type(
-                        &mut ctx.module.types,
+                        &mut ctx.mod_ctx.module.types,
                         ctx.stk.seqs[*body].inputs.iter().map(|v| ctx.types[&v.unwrap_val_ref()]),
                         output_type.iter().copied(),
                     );
@@ -413,7 +445,7 @@ pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) -> wal
                 }
                 I::IfElse(lir::IfElse { condition: _, then_body, else_body, output_type }) => {
                     let seq_type = translate_instr_seq_type(
-                        &mut ctx.module.types,
+                        &mut ctx.mod_ctx.module.types,
                         ctx.stk.seqs[*then_body]
                             .inputs
                             .iter()
@@ -444,7 +476,7 @@ pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) -> wal
                 }
                 I::Loop(lir::Loop { body, inputs, output_type }) => {
                     let seq_type = translate_instr_seq_type(
-                        &mut ctx.module.types,
+                        &mut ctx.mod_ctx.module.types,
                         inputs.iter().map(|v| ctx.types[v]),
                         output_type.iter().copied(),
                     );
@@ -469,13 +501,27 @@ pub fn add_function(mod_ctx: &mut CodegenModuleCtx, func: &lir::Function) -> wal
         // TODO should we deliberately skip stack manipulators at the end? the
         // end idx won't show up because it's not a real instruction
     }
-    fn allocate_local(ctx: &mut CodegenFnCtx, val: lir::ValRef) -> wir::LocalId {
-        let local_id = ctx.module.locals.add(translate_val_type(ctx.types[&val]));
+    fn allocate_local<A>(ctx: &mut CodegenFnCtx<A>, val: lir::ValRef) -> wir::LocalId {
+        let local_id = ctx.mod_ctx.module.locals.add(translate_val_type(ctx.types[&val]));
         ctx.local_ids.insert(val, local_id);
         local_id
     }
+    fn addr_of_function<A: FnTableSlotAllocator>(
+        ctx: &mut CodegenFnCtx<A>,
+        function: lir::FunctionId,
+    ) -> usize {
+        use std::collections::hash_map::Entry;
+        match ctx.mod_ctx.fn_table_allocated_slots.entry(function) {
+            Entry::Occupied(entry) => *entry.get(),
+            Entry::Vacant(entry) => {
+                let new_slot = ctx.mod_ctx.fn_table_slot_allocator.allocate_slot();
+                entry.insert(new_slot);
+                new_slot
+            }
+        }
+    }
 
-    function.finish(arg_locals, &mut mod_ctx.module.funcs)
+    function.finish(ctx.arg_locals, &mut mod_ctx.module.funcs)
 }
 
 /// Translate a LIR value type to a Wasm value type.
@@ -594,10 +640,22 @@ mod tests {
     use super::*;
     use crate::lir::lir_function;
 
+    #[derive(Default)]
+    struct TestFnTableSlotAllocator {
+        next_slot: usize,
+    }
+    impl FnTableSlotAllocator for TestFnTableSlotAllocator {
+        fn allocate_slot(&mut self) -> usize {
+            let slot = self.next_slot;
+            self.next_slot += 1;
+            slot
+        }
+    }
+
     #[test]
     fn empty_module() {
         let lir = lir::Program::default();
-        let mut module = lir_to_wasm(&lir);
+        let (mut module, _) = lir_to_wasm(&lir, &mut TestFnTableSlotAllocator::default());
         let wasm = module.emit_wasm();
         std::fs::write("test.wasm", wasm).unwrap();
     }
@@ -615,7 +673,7 @@ mod tests {
         let func_id = lir.user_functions.push_and_get_key(func);
         lir.entrypoints.push(func_id);
 
-        let mut module = lir_to_wasm(&lir);
+        let (mut module, _) = lir_to_wasm(&lir, &mut TestFnTableSlotAllocator::default());
         let wasm = module.emit_wasm();
         std::fs::write("test.wasm", wasm).unwrap();
     }
@@ -635,7 +693,7 @@ mod tests {
         let func_id = lir.user_functions.push_and_get_key(add_one);
         lir.entrypoints.push(func_id);
 
-        let mut module = lir_to_wasm(&lir);
+        let (mut module, _) = lir_to_wasm(&lir, &mut TestFnTableSlotAllocator::default());
         let wasm = module.emit_wasm();
         std::fs::write("test.wasm", wasm).unwrap();
     }
@@ -657,7 +715,7 @@ mod tests {
         let func_id = lir.user_functions.push_and_get_key(my_function);
         lir.entrypoints.push(func_id);
 
-        let mut module = lir_to_wasm(&lir);
+        let (mut module, _) = lir_to_wasm(&lir, &mut TestFnTableSlotAllocator::default());
         let wasm = module.emit_wasm();
         std::fs::write("test.wasm", wasm).unwrap();
     }
@@ -685,7 +743,7 @@ mod tests {
         let func_id = lir.user_functions.push_and_get_key(my_function);
         lir.entrypoints.push(func_id);
 
-        let mut module = lir_to_wasm(&lir);
+        let (mut module, _) = lir_to_wasm(&lir, &mut TestFnTableSlotAllocator { next_slot: 0 });
         let wasm = module.emit_wasm();
         std::fs::write("test.wasm", wasm).unwrap();
     }
@@ -712,7 +770,7 @@ mod tests {
         let caller_id = lir.user_functions.push_and_get_key(caller);
         lir.entrypoints.push(caller_id);
 
-        let mut module = lir_to_wasm(&lir);
+        let (mut module, _) = lir_to_wasm(&lir, &mut TestFnTableSlotAllocator::default());
         let wasm = module.emit_wasm();
         std::fs::write("test.wasm", wasm).unwrap();
     }
