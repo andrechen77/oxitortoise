@@ -1,3 +1,3 @@
 [workspace]
 resolver = "3"
-members = [ "lir", "oxitortoise_engine"]
+members = ["lir", "main", "engine", "lir_to_wasm"]

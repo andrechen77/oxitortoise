@@ -4,7 +4,7 @@ use std::{
     sync::{LazyLock, Mutex},
 };
 
-use super::JitEntrypoint;
+use engine::{exec::jit::JitEntrypoint, lir};
 
 static FUNCTION_INSTALLER: LazyLock<Mutex<FunctionInstaller>> = LazyLock::new(|| {
     // SAFETY: the function installer is the only code that interacts with the
@@ -17,7 +17,7 @@ static FUNCTION_INSTALLER: LazyLock<Mutex<FunctionInstaller>> = LazyLock::new(||
 pub unsafe fn install_lir(
     lir: &lir::Program,
 ) -> Result<HashMap<lir::FunctionId, JitEntrypoint>, ()> {
-    FUNCTION_INSTALLER.lock().map_err(|_| ())?.install_lir(lir)
+    unsafe { FUNCTION_INSTALLER.lock().map_err(|_| ())?.install_lir(lir) }
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -99,7 +99,7 @@ impl FunctionInstaller {
         lir: &lir::Program,
     ) -> Result<HashMap<lir::FunctionId, JitEntrypoint>, ()> {
         struct A<'a>(&'a mut BinaryHeap<Reverse<usize>>);
-        impl<'a> lir::wasm::FnTableSlotAllocator for A<'a> {
+        impl<'a> lir_to_wasm::FnTableSlotAllocator for A<'a> {
             fn allocate_slot(&mut self) -> usize {
                 if let Some(Reverse(slot)) = self.0.pop() {
                     return slot;
@@ -121,7 +121,7 @@ impl FunctionInstaller {
         // if we indirectly call a function with the wrong signature.
 
         let (mut wasm_module, fn_table_allocated_slots) =
-            lir::wasm::lir_to_wasm(&lir, &mut A(&mut self.free_slots));
+            lir_to_wasm::lir_to_wasm(&lir, &mut A(&mut self.free_slots));
 
         let module_bytes = wasm_module.emit_wasm();
 
@@ -138,12 +138,12 @@ impl FunctionInstaller {
             HashMap::from_iter(fn_table_allocated_slots.into_iter().map(|(lir_fn_id, slot)| {
                 (
                     lir_fn_id,
-                    JitEntrypoint {
+                    JitEntrypoint::new(
                         // SAFETY: in the wasm32 target, a function pointer is
                         // represented by a i32 indicating the slot in the
                         // function table, so they literally have the same ABI
-                        fn_ptr: unsafe { std::mem::transmute(slot) },
-                    },
+                        unsafe { std::mem::transmute(slot) },
+                    ),
                 )
             }));
         Ok(jit_entries)

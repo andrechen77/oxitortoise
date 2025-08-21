@@ -1,0 +1,12 @@
+[package]
+name = "oxitortoise_main"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+engine = { path = "../engine", package = "oxitortoise_engine" }
+lir_to_wasm = { path = "../lir_to_wasm", package = "oxitortoise_lir_to_wasm" }
+
+[[bin]]
+name = "ants"
+path = "../bench/models/ants/run.rs"

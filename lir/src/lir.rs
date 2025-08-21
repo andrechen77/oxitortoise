@@ -48,9 +48,7 @@ use derive_more::{From, Into};
 use smallvec::SmallVec;
 use typed_index_collections::{TiSlice, TiVec};
 
-#[macro_use]
 mod macros;
-pub use macros::lir_function;
 
 #[derive(Debug, PartialEq, Eq, Default)]
 pub struct Program {

@@ -1,9 +1,10 @@
 use std::{collections::HashMap, hash::Hash, iter::Step};
 
 mod macros;
+use lir::smallvec::SmallVec;
+use lir::typed_index_collections::TiVec;
+#[allow(unused_imports)]
 pub use macros::stackification;
-use smallvec::SmallVec;
-use typed_index_collections::TiVec;
 
 /*
 stackification model
@@ -327,8 +328,8 @@ pub fn remove_excess_operands<V, Idx>(
 
 #[cfg(test)]
 mod tests {
-    use smallvec::{ToSmallVec as _, smallvec};
-    use typed_index_collections::ti_vec;
+    use lir::smallvec::{ToSmallVec as _, smallvec};
+    use lir::typed_index_collections::ti_vec;
 
     use super::*;
 

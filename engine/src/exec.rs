@@ -6,9 +6,7 @@ use crate::{
     workspace::Workspace,
 };
 
-pub mod dynamic_link;
-mod helpers;
-pub mod interp;
+pub mod helpers;
 pub mod jit;
 
 #[no_mangle]

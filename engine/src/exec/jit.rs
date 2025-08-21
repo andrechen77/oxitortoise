@@ -1,9 +1,12 @@
+use std::collections::HashMap;
+
 use crate::exec::CanonExecutionContext;
 
-// #[cfg(target_arch = "wasm32")]
-mod wasm;
-
-pub use wasm::install_lir;
+pub trait InstallLir {
+    unsafe fn install_lir(
+        lir: &lir::Program,
+    ) -> Result<HashMap<lir::FunctionId, JitEntrypoint>, ()>;
+}
 
 #[repr(transparent)]
 pub struct JitEntrypoint {
@@ -13,6 +16,10 @@ pub struct JitEntrypoint {
 }
 
 impl JitEntrypoint {
+    pub fn new(fn_ptr: extern "C" fn(&mut CanonExecutionContext, *mut u8)) -> Self {
+        Self { fn_ptr }
+    }
+
     pub fn call(&self, context: &mut CanonExecutionContext, args: *mut u8) {
         (self.fn_ptr)(context, args)
     }

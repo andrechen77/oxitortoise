@@ -7,11 +7,12 @@ use std::{cell::RefCell, collections::HashMap};
 
 use walrus::ir as wir;
 
-use crate::{lir, stackify::StackManipulators, wasm::stackify_lir::ValRefOrStackPtr};
+use crate::{
+    stackify_generic::StackManipulators,
+    stackify_lir::{self, ValRefOrStackPtr},
+};
 
-mod stackify_lir;
-
-pub struct CodegenModuleCtx<'a, A> {
+struct CodegenModuleCtx<'a, A> {
     /// The module being generated.
     module: walrus::Module,
     /// The id of the main memory of the module.
@@ -133,7 +134,7 @@ pub fn lir_to_wasm(
     (ctx.module, ctx.fn_table_allocated_slots)
 }
 
-pub fn add_function<A: FnTableSlotAllocator>(
+fn add_function<A: FnTableSlotAllocator>(
     mod_ctx: &mut CodegenModuleCtx<A>,
     func: &lir::Function,
 ) -> walrus::FunctionId {
@@ -525,7 +526,7 @@ pub fn add_function<A: FnTableSlotAllocator>(
 }
 
 /// Translate a LIR value type to a Wasm value type.
-pub fn translate_val_type(r#type: lir::ValType) -> walrus::ValType {
+fn translate_val_type(r#type: lir::ValType) -> walrus::ValType {
     match r#type {
         lir::ValType::I8 => walrus::ValType::I32,
         lir::ValType::I16 => walrus::ValType::I32,
@@ -538,7 +539,7 @@ pub fn translate_val_type(r#type: lir::ValType) -> walrus::ValType {
 }
 
 /// Translate a LIR value to a Wasm value.
-pub fn translate_val(r#type: lir::ValType, value: u64) -> walrus::ir::Value {
+fn translate_val(r#type: lir::ValType, value: u64) -> walrus::ir::Value {
     match r#type {
         lir::ValType::I8 => wir::Value::I32(value as i32),
         lir::ValType::I16 => wir::Value::I32(value as i32),
@@ -557,7 +558,7 @@ pub fn translate_val(r#type: lir::ValType, value: u64) -> walrus::ir::Value {
 // TODO this function depends on the fact that the pointer width is 32 bits, so
 // maybe annotate this with an attribute that fails compilation if this is not
 // true?
-pub fn translate_usize(x: usize) -> walrus::ir::Value {
+fn translate_usize(x: usize) -> walrus::ir::Value {
     wir::Value::I32(x as i32)
 }
 
@@ -637,8 +638,9 @@ fn translate_instr_seq_type(
 
 #[cfg(test)]
 mod tests {
+    use lir::lir_function;
+
     use super::*;
-    use crate::lir::lir_function;
 
     #[derive(Default)]
     struct TestFnTableSlotAllocator {

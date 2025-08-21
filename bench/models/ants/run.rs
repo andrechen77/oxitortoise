@@ -1,13 +1,12 @@
 use std::rc::Rc;
 
-use flagset::FlagSet;
-use lir::lir_function;
-use oxitortoise::{
+use engine::{
     exec::{
-        dynamic_link,
-        jit::{self, JitCallback},
         CanonExecutionContext,
+        jit::{InstallLir as _, JitCallback},
     },
+    flagset::FlagSet,
+    lir::{self, lir_function},
     sim::{
         agent_schema::{PatchSchema, TurtleSchema},
         patch::Patches,
@@ -18,11 +17,12 @@ use oxitortoise::{
         value::{Float, NetlogoInternalType},
         world::World,
     },
+    slotmap::SlotMap,
     updater::{DirtyAggregator, TurtleProp},
     util::{cell::RefCell, rng::CanonRng},
     workspace::Workspace,
 };
-use slotmap::SlotMap;
+use oxitortoise_main::LirInstaller;
 
 #[cfg(target_arch = "wasm32")]
 unsafe extern "C" {
@@ -73,7 +73,7 @@ pub fn main() {
 
     // dynamically load the model_code
     let lir = create_lir();
-    let entrypoints = unsafe { jit::install_lir(&lir).unwrap() };
+    let entrypoints = unsafe { LirInstaller::install_lir(&lir).unwrap() };
 
     // real_print("installed new functions");
     // // SAFETY: no one else has a reference to this variable since this is called

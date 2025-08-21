@@ -1,5 +1,5 @@
 [package]
-name = "oxitortoise"
+name = "oxitortoise_engine"
 version = "0.1.0"
 edition = "2021"
 
@@ -8,7 +8,7 @@ derive_more = { version = "1.0.0", features = ["full"] }
 either = "1.15.0"
 flagset = "0.4.6"
 slotmap = "1.0.7"
-lir = { path = "../lir" }
+lir = { path = "../lir", package = "oxitortoise_lir" }
 
 [features]
 runtime-unsafety = []
@@ -16,6 +16,3 @@ runtime-unsafety = []
 [profile.dev]
 opt-level = 0
 debug = "full"
-
-[[bin]]
-name = "basic_test"

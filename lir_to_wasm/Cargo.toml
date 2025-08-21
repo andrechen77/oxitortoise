@@ -1,0 +1,8 @@
+[package]
+name = "oxitortoise_lir_to_wasm"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+walrus = "0.23.3"
+lir = { path = "../lir", package = "oxitortoise_lir" }

@@ -9,13 +9,13 @@ macro_rules! stackification {
         {
             let inputs = vec![$($inputs),*];
 
-            let manips = typed_index_collections::ti_vec![$({
+            let manips = $crate::lir::typed_index_collections::ti_vec![$({
                 let captures = $captures;
                 let getters = vec![$($getters.into()),*];
                 let insn_inputs = smallvec![$($insn_inputs.into()),*];
                 let insn_outputs = smallvec![$($insn_outputs.into()),*];
 
-                $crate::stackify::StackManipulators {
+                $crate::stackify_generic::StackManipulators {
                     captures,
                     getters,
                     inputs: insn_inputs,
@@ -23,7 +23,7 @@ macro_rules! stackification {
                 }
             }),*];
 
-            $crate::stackify::InsnSeqStackification {
+            $crate::stackify_generic::InsnSeqStackification {
                 inputs,
                 manips,
             }

@@ -1,12 +1,10 @@
 use std::collections::HashMap;
 
-use smallvec::{SmallVec, ToSmallVec, smallvec};
-use typed_index_collections::{TiVec, ti_vec};
+use lir::smallvec::{SmallVec, ToSmallVec, smallvec};
+use lir::typed_index_collections::{TiVec, ti_vec};
+use lir::{Block, Function, IfElse, InsnIdx, InsnKind, InsnPc, InsnSeqId, Loop, ValRef};
 
-use crate::{
-    lir::{Block, Function, IfElse, InsnIdx, InsnKind, InsnPc, InsnSeqId, Loop, ValRef},
-    stackify::{self, InsnSeqStackification, StackManipulators},
-};
+use crate::stackify_generic::{self, InsnSeqStackification, StackManipulators};
 
 /// Factors out all elements that are equal at the beginning of all the
 /// sequences, and returns them in a vector in the same order.
@@ -220,7 +218,7 @@ pub fn stackify_cfg(function: &Function) -> CfgStackification {
                     (inputs, outputs)
                 }
             };
-            stackify::stackify_single(
+            stackify_generic::stackify_single(
                 &mut op_stack,
                 &mut getters,
                 &mut out[seq_id].manips,
@@ -231,7 +229,7 @@ pub fn stackify_cfg(function: &Function) -> CfgStackification {
         }
 
         // any excess operands on the stack should be eliminated
-        stackify::remove_excess_operands(
+        stackify_generic::remove_excess_operands(
             op_stack.drain(..).zip(std::iter::repeat(false)),
             &mut out[seq_id].manips,
             insns.next_key(),
@@ -259,11 +257,11 @@ pub fn count_getters(stk: &CfgStackification) -> HashMap<ValRef, usize> {
 
 #[cfg(test)]
 mod tests {
-    use typed_index_collections::ti_vec;
+    use lir::lir_function;
+    use lir::typed_index_collections::ti_vec;
 
     use super::*;
-    use crate::lir::lir_function;
-    use crate::stackify::stackification;
+    use crate::stackify_generic::stackification;
 
     #[test]
     fn basic_sequence() {
