@@ -13,8 +13,8 @@ pub struct GenIndex {
 }
 
 impl GenIndex {
-    pub const fn with_index_and_gen(index: u32, gen: u16) -> Self {
-        Self { index, r#gen: gen, _padding: 0 }
+    pub const fn with_index_and_gen(index: u32, r#gen: u16) -> Self {
+        Self { index, r#gen, _padding: 0 }
     }
 
     // TODO check that the to/from ffi functions are equivalent to transmutes.
@@ -115,11 +115,7 @@ impl GenSlotTracker {
     /// Iterates over all occupied slots.
     pub fn iter(&self) -> impl Iterator<Item = GenIndex> + '_ {
         self.generations.iter().enumerate().filter_map(|(i, &r#gen)| {
-            if r#gen & 1 == 1 {
-                Some(GenIndex::with_index_and_gen(i as u32, r#gen))
-            } else {
-                None
-            }
+            if r#gen & 1 == 1 { Some(GenIndex::with_index_and_gen(i as u32, r#gen)) } else { None }
         })
     }
 }

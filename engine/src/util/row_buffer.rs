@@ -6,7 +6,7 @@
 //! its memory is all zeros.
 //!
 use std::{
-    alloc::{alloc_zeroed, dealloc, Layout},
+    alloc::{Layout, alloc_zeroed, dealloc},
     any::TypeId,
     marker::PhantomData,
     ops::{Deref, DerefMut},
@@ -339,7 +339,7 @@ impl<'a, B: AsRef<[u8]> + AsMut<[u8]> + 'a> Row<'a, B> {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 static SIZE_OF_ROW_BUFFER: usize = size_of::<RowBuffer>();
 
 #[derive(Debug)]

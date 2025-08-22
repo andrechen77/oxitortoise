@@ -10,8 +10,8 @@ mod r#type;
 pub use boolean::Boolean;
 pub use dynbox::DynBox;
 pub use float::Float;
-pub use r#type::NetlogoInternalType;
 pub use string::String;
+pub use r#type::NetlogoInternalType;
 
 // TODO add other types such as link references, lists, reporters,
 // commmands

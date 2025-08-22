@@ -14,8 +14,8 @@ use slotmap::SlotMap;
 
 use crate::sim::agent_schema::{AgentFieldDescriptor, AgentSchemaField, TurtleSchema};
 use crate::sim::topology::Heading;
-use crate::sim::value::agentset::TurtleSet;
 use crate::sim::value::DynBox;
+use crate::sim::value::agentset::TurtleSet;
 use crate::util::gen_slot_tracker::{GenIndex, GenSlotTracker};
 use crate::util::row_buffer::RowBuffer;
 use crate::{

@@ -5,7 +5,7 @@ use crate::{
     util::{cell::RefCell, rng::CanonRng},
 };
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 static OFFSET_WORKSPACE_TO_WORLD: usize = offset_of!(Workspace, world);
 
 #[derive(Debug)]

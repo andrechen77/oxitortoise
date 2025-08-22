@@ -21,11 +21,7 @@ impl Tick {
     /// Returns the current tick number as a NetLogo float value. Returns `None`
     /// if the tick counter is in a clear state.
     pub fn get(&self) -> Option<value::Float> {
-        if self.is_clear() {
-            None
-        } else {
-            Some(value::Float::new(self.0))
-        }
+        if self.is_clear() { None } else { Some(value::Float::new(self.0)) }
     }
 
     /// Attempts to advance the tick counter by one. Errors if the counter is

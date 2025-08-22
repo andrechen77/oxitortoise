@@ -190,9 +190,5 @@ impl Rng for MersenneTwister {
 /// Helper function to apply the tempering matrix (MAG01 transformation)
 #[inline]
 fn apply_tempering_matrix(y: Wr<u32>) -> Wr<u32> {
-    if y.0 & 0x1 == 0 {
-        Wr(0)
-    } else {
-        TEMPERING_MATRIX_A
-    }
+    if y.0 & 0x1 == 0 { Wr(0) } else { TEMPERING_MATRIX_A }
 }
