@@ -35,8 +35,7 @@ impl Default for PatchId {
     }
 }
 
-#[no_mangle]
-static OFFSET_PATCHES_TO_DATA: usize = offset_of!(Patches, data);
+pub const OFFSET_PATCHES_TO_DATA: usize = offset_of!(Patches, data);
 
 #[derive(Debug)]
 pub struct Patches {

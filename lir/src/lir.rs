@@ -42,12 +42,13 @@
 //! will exit the current iteration of the loop body and re-enter the loop body
 //! with the loop iteration values set to the values that were broken with.
 
-use std::{collections::HashMap, iter::Step};
+use std::{collections::HashMap, fmt::Debug, iter::Step};
 
 use derive_more::{From, Into};
 use smallvec::SmallVec;
-use typed_index_collections::{TiSlice, TiVec};
+use typed_index_collections::TiVec;
 
+mod debug_impls;
 mod macros;
 
 #[derive(Debug, PartialEq, Eq, Default)]
@@ -77,7 +78,7 @@ pub struct Function {
 #[derive(Debug, PartialEq, Eq, Into, From, Hash, Clone, Copy)]
 pub struct FunctionId(pub usize);
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Into, From)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Into, From)]
 pub struct InsnIdx(pub usize);
 impl Step for InsnIdx {
     fn steps_between(start: &Self, end: &Self) -> (usize, Option<usize>) {
@@ -109,21 +110,19 @@ pub enum ValType {
     FnPtr,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(PartialEq, Eq, Hash, Clone, Copy)]
 pub struct InsnPc(pub InsnSeqId, pub InsnIdx);
 
 /// A reference to a value produced by an instruction. Starts from 0 and counts
 /// up for each value produced by an instruction in the function. Some
 /// instructions may produce multiple values, while others may produce zero.
-#[derive(Debug, PartialEq, Eq, /* PartialOrd, Ord, */ Hash, Clone, Copy)]
+#[derive(PartialEq, Eq, Hash, Clone, Copy)]
 pub struct ValRef(pub InsnPc, pub u8);
 
-pub type InsnSeq = TiSlice<InsnIdx, InsnKind>;
-
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, From, Into)]
+#[derive(PartialEq, Eq, Hash, Clone, Copy, From, Into)]
 pub struct InsnSeqId(pub usize);
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(PartialEq, Eq)]
 pub enum InsnKind {
     /// Outputs all arguments of the function.
     FunctionArgs {
@@ -250,7 +249,7 @@ pub enum InsnKind {
     Loop(Loop),
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(PartialEq, Eq)]
 pub struct Block {
     /// The type of output of this block.
     pub output_type: SmallVec<[ValType; 1]>,
@@ -258,7 +257,7 @@ pub struct Block {
     pub body: InsnSeqId,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(PartialEq, Eq)]
 pub struct IfElse {
     /// The type of output of this if-else.
     pub output_type: SmallVec<[ValType; 1]>,
@@ -270,7 +269,7 @@ pub struct IfElse {
     pub else_body: InsnSeqId,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(PartialEq, Eq)]
 pub struct Loop {
     /// The initial values of the loop body arguments.
     pub inputs: Vec<ValRef>,
@@ -289,7 +288,13 @@ pub enum UnaryOpcode {
 pub enum BinaryOpcode {
     Add,
     Sub,
-    Lt,
+    Mul,
+    LtSigned,
+    GtSigned,
+    LtUnsigned,
+    GtUnsigned,
+    LtFloat,
+    GtFloat,
     Eq,
 }
 
@@ -419,6 +424,17 @@ fn infer_binary_op_output_type(op: BinaryOpcode, lhs: ValType, rhs: ValType) -> 
 
     match (op, lhs, rhs) {
         (Add, I32, I32) => I32,
+        (Sub, I32, I32) => I32,
+        (Mul, I32, I32) => I32,
+        (LtSigned, I32, I32) => I32,
+        (Gt, I32, I32) => I32,
+        (Eq, I32, I32) => I32,
+        (LtSigned, F64, F64) => I32,
+        (Gt, F64, F64) => I32,
+        (Eq, F64, F64) => I32,
+        (Add, F64, F64) => F64,
+        (Sub, F64, F64) => F64,
+        (Mul, F64, F64) => F64,
         _ => todo!(),
     }
 }

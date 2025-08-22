@@ -18,7 +18,16 @@ macro_rules! push_node {
                 output_type: $crate::smallvec::smallvec![$($crate::ValType::$return_ty),*],
             }
         );
-        let $val_ref = $crate::ValRef($crate::InsnPc($ctx.1, insn_idx), 0);
+
+        let mut i = 0;
+        let $val_ref = ($({
+            // include the return type here to ensure we get the right number of
+            // repetitions
+            $crate::ValType::$return_ty;
+            let j = i;
+            i += 1;
+            $crate::ValRef($crate::InsnPc($ctx.1, insn_idx), j)
+        }),*);
     };
     ($ctx:expr; % $val_ref:pat = user_fn_ptr($function:ident)) => {
         let insn_idx = $ctx.0[$ctx.1].push_and_get_key(

@@ -616,7 +616,19 @@ fn translate_binary_op(
     use wir::BinaryOp as Wo;
     match (op, lhs_type, rhs_type) {
         (Add, I32, I32) => Wo::I32Add,
-        (Add, _, _) => panic!("unsupported binary op"),
+        (Add, F64, F64) => Wo::F64Add,
+        (Sub, I32, I32) => Wo::I32Sub,
+        (Sub, F64, F64) => Wo::F64Sub,
+        (Mul, I32, I32) => Wo::I32Mul,
+        (Mul, F64, F64) => Wo::F64Mul,
+        (LtSigned, I32, I32) => Wo::I32LtS,
+        (GtSigned, I32, I32) => Wo::I32GtS,
+        (LtUnsigned, I32, I32) => Wo::I32LtU,
+        (GtUnsigned, I32, I32) => Wo::I32GtU,
+        (LtFloat, F64, F64) => Wo::F64Lt,
+        (GtFloat, F64, F64) => Wo::F64Gt,
+        (Eq, I32, I32) => Wo::I32Eq,
+        (Eq, F64, F64) => Wo::F64Eq,
         _ => todo!(),
     }
 }

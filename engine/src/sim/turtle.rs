@@ -61,8 +61,7 @@ impl TurtleId {
     }
 }
 
-#[no_mangle]
-static OFFSET_TURTLES_TO_DATA: usize = offset_of!(Turtles, data);
+pub const OFFSET_TURTLES_TO_DATA: usize = offset_of!(Turtles, data);
 
 #[derive(Debug)]
 pub struct Turtles {

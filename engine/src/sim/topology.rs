@@ -104,11 +104,9 @@ impl TopologySpec {
     }
 }
 
-#[no_mangle]
-pub static OFFSET_TOPOLOGY_TO_MAX_PXCOR: usize = offset_of!(Topology, max_x);
+pub const OFFSET_TOPOLOGY_TO_MAX_PXCOR: usize = offset_of!(Topology, max_x);
 
-#[no_mangle]
-static OFFSET_TOPOLOGY_TO_MAX_PYCOR: usize = offset_of!(Topology, max_y);
+pub const OFFSET_TOPOLOGY_TO_MAX_PYCOR: usize = offset_of!(Topology, max_y);
 
 #[derive(Debug, Clone)]
 pub struct Topology {
