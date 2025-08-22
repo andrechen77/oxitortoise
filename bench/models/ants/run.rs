@@ -5,7 +5,6 @@ use engine::{
         CanonExecutionContext,
         jit::{InstallLir as _, JitCallback},
     },
-    flagset::FlagSet,
     lir::{self, lir_function},
     sim::{
         agent_schema::{PatchSchema, TurtleSchema},
@@ -17,11 +16,11 @@ use engine::{
             TopologySpec,
         },
         turtle::{Breed, BreedId, OFFSET_TURTLES_TO_DATA, TurtleBaseData, TurtleId, Turtles},
-        value::{Float, NetlogoInternalType},
+        value::NetlogoInternalType,
         world::World,
     },
     slotmap::{Key as _, SlotMap},
-    updater::{DirtyAggregator, TurtleProp},
+    updater::DirtyAggregator,
     util::{cell::RefCell, rng::CanonRng, row_buffer::RowBuffer},
     workspace::Workspace,
 };
@@ -30,10 +29,6 @@ use oxitortoise_main::LirInstaller;
 #[cfg(target_arch = "wasm32")]
 unsafe extern "C" {
     fn write_to_console(message: *const u8, length: usize);
-
-    safe fn get_model_code_size() -> usize;
-
-    fn write_model_code(buffer: *mut u8);
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -51,22 +46,6 @@ fn real_print(message: impl AsRef<str>) {
     println!("{}", message.as_ref());
 }
 
-#[cfg(not(target_arch = "wasm32"))]
-fn get_model_code_size() -> usize {
-    use std::fs;
-    let wasm_bytes = fs::read("bench/models/ants/model_code.wasm").unwrap();
-    wasm_bytes.len()
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn write_model_code(buffer: *mut u8) {
-    use std::fs;
-    let wasm_bytes = fs::read("bench/models/ants/model_code.wasm").unwrap();
-    unsafe {
-        std::ptr::copy_nonoverlapping(wasm_bytes.as_ptr(), buffer, wasm_bytes.len());
-    }
-}
-
 // static mut CONTEXT: Option<CanonExecutionContext> = None;
 // static mut SETUP_FN: Option<JitEntry> = None;
 // static mut GO_FN: Option<JitEntry> = None;
@@ -74,11 +53,11 @@ fn write_model_code(buffer: *mut u8) {
 pub fn main() {
     real_print("Hello, world!");
 
-    let (workspace, default_turtle_breed) = create_workspace();
+    let (_workspace, default_turtle_breed) = create_workspace();
 
     // dynamically load the model_code
     let lir = create_lir(default_turtle_breed);
-    let entrypoints = unsafe { LirInstaller::install_lir(&lir).unwrap() };
+    let _entrypoints = unsafe { LirInstaller::install_lir(&lir).unwrap() };
 
     // real_print("installed new functions");
     // // SAFETY: no one else has a reference to this variable since this is called
@@ -253,7 +232,7 @@ fn create_lir(default_turtle_breed: BreedId) -> lir::Program {
         fn setup_body_0(Ptr, Ptr, I64) -> (),
         stack_space: 0,
         main: {
-            %(env, ctx, next_turtle) = arguments(-> (Ptr, Ptr, I64));
+            %(_env, ctx, next_turtle) = arguments(-> (Ptr, Ptr, I64));
             %turtle_idx = I64ToI32(next_turtle);
 
             %workspace = mem_load(Ptr, offset_of!(CanonExecutionContext, workspace))(ctx);
@@ -276,7 +255,7 @@ fn create_lir(default_turtle_breed: BreedId) -> lir::Program {
         fn recolor_patch(Ptr, I32) -> (),
         stack_space: 0,
         main: {
-            %(ctx, next_patch) = arguments(-> (Ptr, I32));
+            %(_ctx, _next_patch) = arguments(-> (Ptr, I32));
         }
     }
     let recolor_patch = lir.user_functions.push_and_get_key(recolor_patch);
@@ -285,7 +264,7 @@ fn create_lir(default_turtle_breed: BreedId) -> lir::Program {
         fn setup_body_1(Ptr, Ptr, I32) -> (),
         stack_space: 0,
         main: {
-            %(env, ctx, next_patch) = arguments(-> (Ptr, Ptr, I32));
+            %(_env, ctx, next_patch) = arguments(-> (Ptr, Ptr, I32));
 
             // calculate distancexy 0 0
 

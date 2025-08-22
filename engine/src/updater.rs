@@ -121,7 +121,7 @@ pub struct DirtyAggregator {
     /// to accomodate all patches
     patches: Vec<FlagSet<PatchProp>>,
     /// Contains the who numbers of all the turtles that have died in the upcoming update.
-    dead_turtles: Vec<TurtleWho>,
+    _dead_turtles: Vec<TurtleWho>,
 }
 
 impl DirtyAggregator {
@@ -138,7 +138,7 @@ impl DirtyAggregator {
             patches_ffi,
             turtles,
             patches,
-            dead_turtles: Vec::new(),
+            _dead_turtles: Vec::new(),
         }
     }
 

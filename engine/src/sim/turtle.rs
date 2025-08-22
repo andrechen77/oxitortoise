@@ -106,7 +106,7 @@ impl Turtles {
         &self.breeds
     }
 
-    pub fn translate_who(&self, who: TurtleWho) -> TurtleId {
+    pub fn translate_who(&self, _who: TurtleWho) -> TurtleId {
         todo!()
     }
 

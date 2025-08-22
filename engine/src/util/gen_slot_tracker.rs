@@ -131,10 +131,6 @@ struct Entry<T> {
 }
 
 impl<T> Entry<T> {
-    fn new(generation: u16, value: T) -> Self {
-        Self { generation, value: Some(value) }
-    }
-
     fn empty(generation: u16) -> Self {
         Self { generation, value: None }
     }

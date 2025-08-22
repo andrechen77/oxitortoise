@@ -65,8 +65,11 @@ impl DynBox {
                 1 => UnpackedDynBox::Bool(true),
                 _ => unimplemented!("This is not a recognized special value for DynBox."),
             },
+            #[allow(unreachable_code)]
             0b100 => UnpackedDynBox::Turtle(todo!("reinterpret bits")),
+            #[allow(unreachable_code)]
             0b101 => UnpackedDynBox::Patch(todo!("reinterpret bits")),
+            #[allow(unreachable_code)]
             0b110 => UnpackedDynBox::Link(todo!("reinterpret bits")),
             0b111 => UnpackedDynBox::Other(value),
             _ => unimplemented!("This is not a recognized tag for DynBox."),
@@ -82,4 +85,4 @@ impl std::fmt::Debug for DynBox {
 
 // TODO implement links
 #[derive(Debug)]
-struct LinkId;
+pub struct LinkId;

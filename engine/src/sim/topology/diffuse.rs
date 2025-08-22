@@ -1,8 +1,7 @@
 use std::ops::{Index, IndexMut};
 
 use crate::sim::{
-    agent_schema::AgentFieldDescriptor, patch::PatchId, topology::TopologySpec, value::Float,
-    world::World,
+    agent_schema::AgentFieldDescriptor, topology::TopologySpec, value::Float, world::World,
 };
 
 /// Diffuses the value of the single variable in the specified buffer.
@@ -293,9 +292,7 @@ fn idiosyncratic_sum_4(nums: [Float; 4]) -> Float {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::sim::{
-        agent_schema::PatchSchema, topology::TopologySpec, value::NetlogoInternalType,
-    };
+    use crate::sim::topology::TopologySpec;
 
     /* // Creates a world where the patches have a custom float variable named
     // `my_var`. The parameter`separate_buffer` determines whether this custom
