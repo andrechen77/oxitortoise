@@ -1,6 +1,6 @@
 use std::{mem::offset_of, rc::Rc};
 
-use flagset::{flags, FlagSet};
+use flagset::{FlagSet, flags};
 
 use crate::sim::{
     color::Color,
@@ -82,12 +82,8 @@ pub struct AliveTurtleUpdate {
     pub position: Option<Point>,
 }
 
-#[no_mangle]
-static OFFSET_DIRTY_TO_TICK: usize = offset_of!(DirtyAggregator, tick);
-#[no_mangle]
-static OFFSET_DIRTY_TO_TURTLES: usize = offset_of!(DirtyAggregator, turtles_ffi);
-#[no_mangle]
-static OFFSET_DIRTY_TO_PATCHES: usize = offset_of!(DirtyAggregator, patches_ffi);
+pub const OFFSET_DIRTY_TO_TURTLES: usize = offset_of!(DirtyAggregator, turtles_ffi);
+pub const OFFSET_DIRTY_TO_PATCHES: usize = offset_of!(DirtyAggregator, patches_ffi);
 
 /// Tracks all the dirty state that needs to be included in the next update.
 #[derive(Debug)]

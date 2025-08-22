@@ -1,4 +1,4 @@
-use std::{mem::offset_of, rc::Rc};
+use std::rc::Rc;
 
 use crate::{
     updater::DirtyAggregator,
@@ -8,13 +8,6 @@ use crate::{
 
 pub mod helpers;
 pub mod jit;
-
-#[no_mangle]
-static OFFSET_CONTEXT_TO_WORKSPACE: usize = offset_of!(CanonExecutionContext, workspace);
-
-#[no_mangle]
-static OFFSET_CONTEXT_TO_DIRTY_AGGREGATOR: usize =
-    offset_of!(CanonExecutionContext, dirty_aggregator);
 
 #[repr(C)]
 pub struct ExecutionContext<'w> {

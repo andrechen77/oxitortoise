@@ -1,5 +1,3 @@
-use std::mem::offset_of;
-
 use slotmap::SlotMap;
 
 use super::shapes::Shapes;
@@ -11,18 +9,6 @@ use crate::sim::{
     topology::{Topology, TopologySpec},
     turtle::{Breed, BreedId, Turtles},
 };
-
-#[no_mangle]
-static OFFSET_WORLD_TO_TURTLES: usize = offset_of!(World, turtles);
-
-#[no_mangle]
-static OFFSET_WORLD_TO_PATCHES: usize = offset_of!(World, patches);
-
-#[no_mangle]
-static OFFSET_WORLD_TO_TOPOLOGY: usize = offset_of!(World, topology);
-
-#[no_mangle]
-static OFFSET_WORLD_TO_TICK_COUNTER: usize = offset_of!(World, tick_counter);
 
 #[derive(Debug)]
 pub struct World {
