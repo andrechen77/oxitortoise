@@ -563,10 +563,10 @@ fn translate_usize(x: usize) -> walrus::ir::Value {
 }
 
 fn infer_load_kind(r#type: lir::ValType) -> wir::LoadKind {
-    use wir::ExtendedLoad::*;
+    use wir::ExtendedLoad as L;
     match r#type {
-        lir::ValType::I8 => wir::LoadKind::I32_8 { kind: ZeroExtend },
-        lir::ValType::I16 => wir::LoadKind::I32_16 { kind: ZeroExtend },
+        lir::ValType::I8 => wir::LoadKind::I32_8 { kind: L::ZeroExtend },
+        lir::ValType::I16 => wir::LoadKind::I32_16 { kind: L::ZeroExtend },
         lir::ValType::I32 => wir::LoadKind::I32 { atomic: false },
         lir::ValType::I64 => wir::LoadKind::I64 { atomic: false },
         lir::ValType::F64 => wir::LoadKind::F64,
@@ -611,24 +611,24 @@ fn translate_binary_op(
     lhs_type: lir::ValType,
     rhs_type: lir::ValType,
 ) -> wir::BinaryOp {
-    use lir::BinaryOpcode::*;
-    use lir::ValType::*;
+    use lir::BinaryOpcode as O;
+    use lir::ValType as V;
     use wir::BinaryOp as Wo;
     match (op, lhs_type, rhs_type) {
-        (Add, I32, I32) => Wo::I32Add,
-        (Add, F64, F64) => Wo::F64Add,
-        (Sub, I32, I32) => Wo::I32Sub,
-        (Sub, F64, F64) => Wo::F64Sub,
-        (Mul, I32, I32) => Wo::I32Mul,
-        (Mul, F64, F64) => Wo::F64Mul,
-        (LtSigned, I32, I32) => Wo::I32LtS,
-        (GtSigned, I32, I32) => Wo::I32GtS,
-        (LtUnsigned, I32, I32) => Wo::I32LtU,
-        (GtUnsigned, I32, I32) => Wo::I32GtU,
-        (LtFloat, F64, F64) => Wo::F64Lt,
-        (GtFloat, F64, F64) => Wo::F64Gt,
-        (Eq, I32, I32) => Wo::I32Eq,
-        (Eq, F64, F64) => Wo::F64Eq,
+        (O::Add, V::I32, V::I32) => Wo::I32Add,
+        (O::Add, V::F64, V::F64) => Wo::F64Add,
+        (O::Sub, V::I32, V::I32) => Wo::I32Sub,
+        (O::Sub, V::F64, V::F64) => Wo::F64Sub,
+        (O::Mul, V::I32, V::I32) => Wo::I32Mul,
+        (O::Mul, V::F64, V::F64) => Wo::F64Mul,
+        (O::LtSigned, V::I32, V::I32) => Wo::I32LtS,
+        (O::GtSigned, V::I32, V::I32) => Wo::I32GtS,
+        (O::LtUnsigned, V::I32, V::I32) => Wo::I32LtU,
+        (O::GtUnsigned, V::I32, V::I32) => Wo::I32GtU,
+        (O::LtFloat, V::F64, V::F64) => Wo::F64Lt,
+        (O::GtFloat, V::F64, V::F64) => Wo::F64Gt,
+        (O::Eq, V::I32, V::I32) => Wo::I32Eq,
+        (O::Eq, V::F64, V::F64) => Wo::F64Eq,
         _ => todo!(),
     }
 }

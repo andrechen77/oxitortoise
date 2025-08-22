@@ -396,32 +396,32 @@ pub fn infer_output_types(function: &Function) -> HashMap<ValRef, ValType> {
 }
 
 fn infer_unary_op_output_type(op: UnaryOpcode, operand: ValType) -> ValType {
-    use UnaryOpcode::*;
-    use ValType::*;
+    use UnaryOpcode as O;
+    use ValType as V;
 
     match (op, operand) {
-        (I64ToI32, I64) => I32,
+        (O::I64ToI32, V::I64) => V::I32,
         _ => todo!(),
     }
 }
 
 fn infer_binary_op_output_type(op: BinaryOpcode, lhs: ValType, rhs: ValType) -> ValType {
-    use BinaryOpcode::*;
-    use ValType::*;
+    use BinaryOpcode as B;
+    use ValType as V;
 
     match (op, lhs, rhs) {
-        (Add, I32, I32) => I32,
-        (Sub, I32, I32) => I32,
-        (Mul, I32, I32) => I32,
-        (LtSigned, I32, I32) => I32,
-        (Gt, I32, I32) => I32,
-        (Eq, I32, I32) => I32,
-        (LtSigned, F64, F64) => I32,
-        (Gt, F64, F64) => I32,
-        (Eq, F64, F64) => I32,
-        (Add, F64, F64) => F64,
-        (Sub, F64, F64) => F64,
-        (Mul, F64, F64) => F64,
+        (B::Add, V::I32, V::I32) => V::I32,
+        (B::Sub, V::I32, V::I32) => V::I32,
+        (B::Mul, V::I32, V::I32) => V::I32,
+        (B::LtSigned, V::I32, V::I32) => V::I32,
+        (B::GtSigned, V::I32, V::I32) => V::I32,
+        (B::Eq, V::I32, V::I32) => V::I32,
+        (B::LtFloat, V::F64, V::F64) => V::I32,
+        (B::GtFloat, V::F64, V::F64) => V::I32,
+        (B::Eq, V::F64, V::F64) => V::I32,
+        (B::Add, V::F64, V::F64) => V::F64,
+        (B::Sub, V::F64, V::F64) => V::F64,
+        (B::Mul, V::F64, V::F64) => V::F64,
         _ => todo!(),
     }
 }
