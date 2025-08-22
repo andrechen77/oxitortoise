@@ -115,3 +115,17 @@ impl Debug for Loop {
         write!(f, "loop(-> {:?})({:?}) {{{:?}}}", output_type, inputs, body)
     }
 }
+
+impl Step for InsnIdx {
+    fn steps_between(start: &Self, end: &Self) -> (usize, Option<usize>) {
+        (end.0 - start.0, Some(end.0 - start.0))
+    }
+
+    fn forward_checked(start: Self, count: usize) -> Option<Self> {
+        Some(InsnIdx(start.0.checked_add(count)?))
+    }
+
+    fn backward_checked(start: Self, count: usize) -> Option<Self> {
+        Some(InsnIdx(start.0.checked_sub(count)?))
+    }
+}

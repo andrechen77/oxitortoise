@@ -48,7 +48,7 @@ use derive_more::{From, Into};
 use smallvec::SmallVec;
 use typed_index_collections::TiVec;
 
-mod debug_impls;
+mod boilerplate_impls;
 mod macros;
 
 #[derive(Debug, PartialEq, Eq, Default)]
@@ -57,6 +57,12 @@ pub struct Program {
     pub user_functions: TiVec<FunctionId, Function>,
     pub imported_functions: TiVec<ImportedFunctionId, ImportedFunction>,
 }
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, From, Into)]
+pub struct ImportedFunctionId(pub usize);
+
+#[derive(Debug, PartialEq, Eq, Into, From, Hash, Clone, Copy)]
+pub struct FunctionId(pub usize);
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct ImportedFunction {
@@ -75,40 +81,11 @@ pub struct Function {
     pub stack_space: usize,
 }
 
-#[derive(Debug, PartialEq, Eq, Into, From, Hash, Clone, Copy)]
-pub struct FunctionId(pub usize);
+#[derive(PartialEq, Eq, Hash, Clone, Copy, From, Into)]
+pub struct InsnSeqId(pub usize);
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Into, From)]
 pub struct InsnIdx(pub usize);
-impl Step for InsnIdx {
-    fn steps_between(start: &Self, end: &Self) -> (usize, Option<usize>) {
-        (end.0 - start.0, Some(end.0 - start.0))
-    }
-
-    fn forward_checked(start: Self, count: usize) -> Option<Self> {
-        Some(InsnIdx(start.0.checked_add(count)?))
-    }
-
-    fn backward_checked(start: Self, count: usize) -> Option<Self> {
-        Some(InsnIdx(start.0.checked_sub(count)?))
-    }
-}
-
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, From, Into)]
-pub struct ImportedFunctionId(pub usize);
-
-/// A machine-level type. These are just numbers that have no higher-level
-/// semantic meaning.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum ValType {
-    I8,
-    I16,
-    I32,
-    I64,
-    F64,
-    Ptr,
-    FnPtr,
-}
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy)]
 pub struct InsnPc(pub InsnSeqId, pub InsnIdx);
@@ -118,9 +95,6 @@ pub struct InsnPc(pub InsnSeqId, pub InsnIdx);
 /// instructions may produce multiple values, while others may produce zero.
 #[derive(PartialEq, Eq, Hash, Clone, Copy)]
 pub struct ValRef(pub InsnPc, pub u8);
-
-#[derive(PartialEq, Eq, Hash, Clone, Copy, From, Into)]
-pub struct InsnSeqId(pub usize);
 
 #[derive(PartialEq, Eq)]
 pub enum InsnKind {
@@ -296,6 +270,19 @@ pub enum BinaryOpcode {
     LtFloat,
     GtFloat,
     Eq,
+}
+
+/// A machine-level type. These are just numbers that have no higher-level
+/// semantic meaning.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum ValType {
+    I8,
+    I16,
+    I32,
+    I64,
+    F64,
+    Ptr,
+    FnPtr,
 }
 
 pub trait LirVisitor {
