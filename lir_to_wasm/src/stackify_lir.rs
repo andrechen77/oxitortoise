@@ -271,7 +271,7 @@ mod tests {
             main: {
                 %a = constant(I32, 0);
                 %b = constant(I32, 1);
-                %c = Add(a, b);
+                %c = IAdd(a, b);
                 break_(main)(c);
             }
         }
@@ -301,9 +301,9 @@ mod tests {
                 %a = constant(I32, 10);
                 %b = constant(I32, 20);
                 %outer = block(-> (I32)) outer_block: {
-                    %c = Add(a, b);
+                    %c = IAdd(a, b);
                     %inner = block(-> (I32)) inner_block: {
-                        %d = Add(c, a);
+                        %d = IAdd(c, a);
                         break_(inner_block)(d);
                     };
                     break_(outer_block)(inner);
@@ -355,11 +355,11 @@ mod tests {
                 %d = constant(I32, 40);
                 %branch = if_else(-> (I32))(arg) then: {
                     // get a, b, c
-                    %res_0 = Add(a, Add(b, c));
+                    %res_0 = IAdd(a, IAdd(b, c));
                     break_(then)(res_0);
                 } else_: {
                     // get a, b, d
-                    %res_1 = Sub(a, Sub(b, d));
+                    %res_1 = ISub(a, ISub(b, d));
                     break_(else_)(res_1);
                 };
                 break_(main)(branch);

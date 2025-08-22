@@ -308,10 +308,10 @@ fn create_lir(default_turtle_breed: BreedId) -> lir::Program {
             );
 
             // set nest? (distancexy 0 0) < 5
-            mem_store(offset_patch_to_nest)(base_data, LtFloat(distance, constant(F64, 5.0f64.to_bits())));
+            mem_store(offset_patch_to_nest)(base_data, FLt(distance, constant(F64, 5.0f64.to_bits())));
 
             // set next-scent 200 - distancexy 0 0
-            mem_store(offset_patch_to_nest_scent)(base_data, Sub(
+            mem_store(offset_patch_to_nest_scent)(base_data, FSub(
                 constant(F64, 200.0f64.to_bits()),
                 distance,
             ));
@@ -323,10 +323,10 @@ fn create_lir(default_turtle_breed: BreedId) -> lir::Program {
             %distance = call_imported_function(fn_distance_euclidean_no_wrap -> (F64))(
                 pos_x,
                 pos_y,
-                Mul(constant(F64, 0.6f64.to_bits()), max_pxcor),
+                FMul(constant(F64, 0.6f64.to_bits()), max_pxcor),
                 constant(F64, 0.0f64.to_bits()),
             );
-            %() = if_else(-> ())(LtFloat(distance, constant(F64, 5.0f64.to_bits()))) then: {
+            %() = if_else(-> ())(FLt(distance, constant(F64, 5.0f64.to_bits()))) then: {
                 mem_store(offset_patch_to_food_source_number)(base_data, constant(F64, 1.0f64.to_bits()));
             } else_: {};
 
@@ -334,10 +334,10 @@ fn create_lir(default_turtle_breed: BreedId) -> lir::Program {
             %distance = call_imported_function(fn_distance_euclidean_no_wrap -> (F64))(
                 pos_x,
                 pos_y,
-                Mul(constant(F64, (-0.6f64).to_bits()), max_pxcor),
-                Mul(constant(F64, (-0.6f64).to_bits()), max_pycor),
+                FMul(constant(F64, (-0.6f64).to_bits()), max_pxcor),
+                FMul(constant(F64, (-0.6f64).to_bits()), max_pycor),
             );
-            %() = if_else(-> ())(LtFloat(distance, constant(F64, 5.0f64.to_bits()))) then: {
+            %() = if_else(-> ())(FLt(distance, constant(F64, 5.0f64.to_bits()))) then: {
                 mem_store(offset_patch_to_food_source_number)(base_data, constant(F64, 2.0f64.to_bits()));
             } else_: {};
 
@@ -345,16 +345,16 @@ fn create_lir(default_turtle_breed: BreedId) -> lir::Program {
             %distance = call_imported_function(fn_distance_euclidean_no_wrap -> (F64))(
                 pos_x,
                 pos_y,
-                Mul(constant(F64, (-0.8f64).to_bits()), max_pxcor),
-                Mul(constant(F64, 0.8f64.to_bits()), max_pycor),
+                FMul(constant(F64, (-0.8f64).to_bits()), max_pxcor),
+                FMul(constant(F64, 0.8f64.to_bits()), max_pycor),
             );
-            %() = if_else(-> ())(LtFloat(distance, constant(F64, 5.0f64.to_bits()))) then: {
+            %() = if_else(-> ())(FLt(distance, constant(F64, 5.0f64.to_bits()))) then: {
                 mem_store(offset_patch_to_food_source_number)(base_data, constant(F64, 3.0f64.to_bits()));
             } else_: {};
 
             // if food-source-number > 0 [ set food one-of [1 2] ]
             %food_source_number = mem_load(F64, offset_patch_to_food_source_number)(base_data);
-            %() = if_else(-> ())(GtFloat(food_source_number, constant(F64, 0.0f64.to_bits()))) then_0: {
+            %() = if_else(-> ())(FGt(food_source_number, constant(F64, 0.0f64.to_bits()))) then_0: {
                 %rand_index = call_imported_function(fn_next_int -> (I32))(ctx, constant(I32, 2));
                 %food = if_else(-> (F64))(rand_index) then_1: {
                     break_(then_1)(constant(F64, 1.0f64.to_bits()));

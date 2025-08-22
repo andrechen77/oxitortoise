@@ -260,18 +260,29 @@ pub enum UnaryOpcode {
     I64ToI32,
 }
 
+/// The binary operations that can be performed. Variants are named according to
+/// a certain prefixing convention.
+/// - `I` operations apply to integer types.
+/// - `S` operations apply to signed integer types.
+/// - `U` operations apply to unsigned integer types.
+/// - `F` operations apply to floating point types.
+/// Pointers are considered unsigned integers at the LIR level.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum BinaryOpcode {
-    Add,
-    Sub,
-    Mul,
-    LtSigned,
-    GtSigned,
-    LtUnsigned,
-    GtUnsigned,
-    LtFloat,
-    GtFloat,
-    Eq,
+    IAdd,
+    ISub,
+    IMul,
+    SLt,
+    SGt,
+    ULt,
+    UGt,
+    IEq,
+    FAdd,
+    FSub,
+    FMul,
+    FLt,
+    FGt,
+    FEq,
 }
 
 /// A machine-level type. These are just numbers that have no higher-level
@@ -411,19 +422,37 @@ fn infer_binary_op_output_type(op: BinaryOpcode, lhs: ValType, rhs: ValType) -> 
     use BinaryOpcode as B;
     use ValType as V;
 
-    match (op, lhs, rhs) {
-        (B::Add, V::I32, V::I32) => V::I32,
-        (B::Sub, V::I32, V::I32) => V::I32,
-        (B::Mul, V::I32, V::I32) => V::I32,
-        (B::LtSigned, V::I32, V::I32) => V::I32,
-        (B::GtSigned, V::I32, V::I32) => V::I32,
-        (B::Eq, V::I32, V::I32) => V::I32,
-        (B::LtFloat, V::F64, V::F64) => V::I32,
-        (B::GtFloat, V::F64, V::F64) => V::I32,
-        (B::Eq, V::F64, V::F64) => V::I32,
-        (B::Add, V::F64, V::F64) => V::F64,
-        (B::Sub, V::F64, V::F64) => V::F64,
-        (B::Mul, V::F64, V::F64) => V::F64,
-        _ => todo!(),
+    match op {
+        B::IAdd | B::ISub | B::IMul => match (lhs, rhs) {
+            (V::I8, V::I8) => V::I8,
+            (V::I16, V::I16) => V::I16,
+            (V::I32, V::I32) => V::I32,
+            (V::I64, V::I64) => V::I64,
+            (V::Ptr, V::Ptr) => V::Ptr,
+            _ => panic!("Invalid operand types for operation {:?}: {:?} and {:?}", op, lhs, rhs),
+        },
+        B::ULt | B::UGt | B::IEq => match (lhs, rhs) {
+            (V::I8, V::I8) => V::I8,
+            (V::I16, V::I16) => V::I8,
+            (V::I32, V::I32) => V::I8,
+            (V::I64, V::I64) => V::I8,
+            (V::Ptr, V::Ptr) => V::I8,
+            _ => panic!("Invalid operand types for operation {:?}: {:?} and {:?}", op, lhs, rhs),
+        },
+        B::SLt | B::SGt => match (lhs, rhs) {
+            (V::I8, V::I8) => V::I8,
+            (V::I16, V::I16) => V::I8,
+            (V::I32, V::I32) => V::I8,
+            (V::I64, V::I64) => V::I8,
+            _ => panic!("Invalid operand types for operation {:?}: {:?} and {:?}", op, lhs, rhs),
+        },
+        B::FAdd | B::FSub | B::FMul => match (lhs, rhs) {
+            (V::F64, V::F64) => V::F64,
+            _ => panic!("Invalid operand types for operation {:?}: {:?} and {:?}", op, lhs, rhs),
+        },
+        B::FLt | B::FGt | B::FEq => match (lhs, rhs) {
+            (V::F64, V::F64) => V::I8,
+            _ => panic!("Invalid operand types for operation {:?}: {:?} and {:?}", op, lhs, rhs),
+        },
     }
 }

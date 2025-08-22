@@ -626,20 +626,20 @@ fn translate_binary_op(
     use lir::ValType as V;
     use wir::BinaryOp as Wo;
     match (op, lhs_type, rhs_type) {
-        (O::Add, V::I32, V::I32) => Wo::I32Add,
-        (O::Add, V::F64, V::F64) => Wo::F64Add,
-        (O::Sub, V::I32, V::I32) => Wo::I32Sub,
-        (O::Sub, V::F64, V::F64) => Wo::F64Sub,
-        (O::Mul, V::I32, V::I32) => Wo::I32Mul,
-        (O::Mul, V::F64, V::F64) => Wo::F64Mul,
-        (O::LtSigned, V::I32, V::I32) => Wo::I32LtS,
-        (O::GtSigned, V::I32, V::I32) => Wo::I32GtS,
-        (O::LtUnsigned, V::I32, V::I32) => Wo::I32LtU,
-        (O::GtUnsigned, V::I32, V::I32) => Wo::I32GtU,
-        (O::LtFloat, V::F64, V::F64) => Wo::F64Lt,
-        (O::GtFloat, V::F64, V::F64) => Wo::F64Gt,
-        (O::Eq, V::I32, V::I32) => Wo::I32Eq,
-        (O::Eq, V::F64, V::F64) => Wo::F64Eq,
+        (O::IAdd, V::I32, V::I32) => Wo::I32Add,
+        (O::ISub, V::I32, V::I32) => Wo::I32Sub,
+        (O::IMul, V::I32, V::I32) => Wo::I32Mul,
+        (O::SLt, V::I32, V::I32) => Wo::I32LtS,
+        (O::SGt, V::I32, V::I32) => Wo::I32GtS,
+        (O::ULt, V::I32, V::I32) => Wo::I32LtU,
+        (O::UGt, V::I32, V::I32) => Wo::I32GtU,
+        (O::IEq, V::I32, V::I32) => Wo::I32Eq,
+        (O::FAdd, V::F64, V::F64) => Wo::F64Add,
+        (O::FSub, V::F64, V::F64) => Wo::F64Sub,
+        (O::FMul, V::F64, V::F64) => Wo::F64Mul,
+        (O::FLt, V::F64, V::F64) => Wo::F64Lt,
+        (O::FGt, V::F64, V::F64) => Wo::F64Gt,
+        (O::FEq, V::F64, V::F64) => Wo::F64Eq,
         _ => todo!(),
     }
 }
@@ -710,7 +710,7 @@ mod tests {
             stack_space: 0,
             main: {
                 %arg = arguments(-> (I32));
-                %res = Add(arg, constant(I32, 1));
+                %res = IAdd(arg, constant(I32, 1));
                 break_(main)(res);
             }
         }
