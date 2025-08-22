@@ -12,7 +12,3 @@ lir = { path = "../lir", package = "oxitortoise_lir" }
 
 [features]
 runtime-unsafety = []
-
-[profile.dev]
-opt-level = 0
-debug = "full"
