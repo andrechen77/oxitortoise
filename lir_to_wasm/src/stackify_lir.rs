@@ -266,12 +266,12 @@ mod tests {
     #[test]
     fn basic_sequence() {
         lir_function! {
-            fn block() -> (I32),
+            fn block() -> [I32],
             stack_space: 0,
             main: {
-                %a = constant(I32, 0);
-                %b = constant(I32, 1);
-                %c = IAdd(a, b);
+                [a] = constant(I32, 0);
+                [b] = constant(I32, 1);
+                [c] = IAdd(a, b);
                 break_(main)(c);
             }
         }
@@ -295,15 +295,15 @@ mod tests {
         // all leading getters in a block should be factored out and used as
         // inputs to the block instruction
         lir_function! {
-            fn block() -> (I32),
+            fn block() -> [I32],
             stack_space: 0,
             main: {
-                %a = constant(I32, 10);
-                %b = constant(I32, 20);
-                %outer = block(-> (I32)) outer_block: {
-                    %c = IAdd(a, b);
-                    %inner = block(-> (I32)) inner_block: {
-                        %d = IAdd(c, a);
+                [a] = constant(I32, 10);
+                [b] = constant(I32, 20);
+                [outer] = block(-> [I32]) outer_block: {
+                    [c] = IAdd(a, b);
+                    [inner] = block(-> [I32]) inner_block: {
+                        [d] = IAdd(c, a);
                         break_(inner_block)(d);
                     };
                     break_(outer_block)(inner);
@@ -345,21 +345,21 @@ mod tests {
     #[test]
     fn includes_branches() {
         lir_function! {
-            fn block() -> (I32),
+            fn block() -> [I32],
             stack_space: 0,
             main: {
-                %arg = arguments(-> (I32));
-                %a = constant(I32, 10);
-                %b = constant(I32, 20);
-                %c = constant(I32, 30);
-                %d = constant(I32, 40);
-                %branch = if_else(-> (I32))(arg) then: {
+                [arg] = arguments(-> [I32]);
+                [a] = constant(I32, 10);
+                [b] = constant(I32, 20);
+                [c] = constant(I32, 30);
+                [d] = constant(I32, 40);
+                [branch] = if_else(-> [I32])(arg) then: {
                     // get a, b, c
-                    %res_0 = IAdd(a, IAdd(b, c));
+                    [res_0] = IAdd(a, IAdd(b, c));
                     break_(then)(res_0);
                 } else_: {
                     // get a, b, d
-                    %res_1 = ISub(a, ISub(b, d));
+                    [res_1] = ISub(a, ISub(b, d));
                     break_(else_)(res_1);
                 };
                 break_(main)(branch);

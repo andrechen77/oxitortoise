@@ -229,21 +229,21 @@ fn create_lir(default_turtle_breed: BreedId) -> lir::Program {
     let offset_patch_to_food = 0;
 
     lir_function! {
-        fn setup_body_0(Ptr, Ptr, I64) -> (),
+        fn setup_body_0(Ptr, Ptr, I64) -> [],
         stack_space: 0,
         main: {
-            %(_env, ctx, next_turtle) = arguments(-> (Ptr, Ptr, I64));
-            %turtle_idx = I64ToI32(next_turtle);
+            [_env, ctx, next_turtle] = arguments(-> [Ptr, Ptr, I64]);
+            [turtle_idx] = I64ToI32(next_turtle);
 
-            %workspace = mem_load(Ptr, offset_of!(CanonExecutionContext, workspace))(ctx);
-            %turtle_buffer = mem_load(
+            [workspace] = mem_load(Ptr, offset_of!(CanonExecutionContext, workspace))(ctx);
+            [turtle_buffer] = mem_load(
                 Ptr,
                 offset_of!(Workspace, world)
                     + offset_of!(World, turtles)
                     + OFFSET_TURTLES_TO_DATA
                     + 0 * size_of::<Option<RowBuffer>>()
             )(workspace);
-            %base_data = derive_element(stride_of_turtle_data)(turtle_buffer, turtle_idx);
+            [base_data] = derive_element(stride_of_turtle_data)(turtle_buffer, turtle_idx);
 
             mem_store(offset_of!(TurtleBaseData, size))(base_data, constant(F64, 2.0f64.to_bits()));
             mem_store(offset_of!(TurtleBaseData, color))(base_data, constant(F64, 15.0f64.to_bits()));
@@ -252,34 +252,34 @@ fn create_lir(default_turtle_breed: BreedId) -> lir::Program {
     let setup_body_0 = lir.user_functions.push_and_get_key(setup_body_0);
 
     lir_function! {
-        fn recolor_patch(Ptr, I32) -> (),
+        fn recolor_patch(Ptr, I32) -> [],
         stack_space: 0,
         main: {
-            %(_ctx, _next_patch) = arguments(-> (Ptr, I32));
+            [_ctx, _next_patch] = arguments(-> [Ptr, I32]);
         }
     }
     let recolor_patch = lir.user_functions.push_and_get_key(recolor_patch);
 
     lir_function! {
-        fn setup_body_1(Ptr, Ptr, I32) -> (),
+        fn setup_body_1(Ptr, Ptr, I32) -> [],
         stack_space: 0,
         main: {
-            %(_env, ctx, next_patch) = arguments(-> (Ptr, Ptr, I32));
+            [_env, ctx, next_patch] = arguments(-> [Ptr, Ptr, I32]);
 
             // calculate distancexy 0 0
 
-            %workspace = mem_load(Ptr, offset_of!(CanonExecutionContext, workspace))(ctx);
-            %patch_buffer = mem_load(
+            [workspace] = mem_load(Ptr, offset_of!(CanonExecutionContext, workspace))(ctx);
+            [patch_buffer] = mem_load(
                 Ptr,
                 offset_of!(Workspace, world)
                     + offset_of!(World, patches)
                     + OFFSET_PATCHES_TO_DATA
                     + 0 * size_of::<Option<RowBuffer>>()
             )(workspace);
-            %base_data = derive_element(stride_of_patch_data0)(patch_buffer, next_patch);
-            %pos_x = mem_load(F64, offset_of!(PatchBaseData, position) + offset_of!(Point, x))(base_data);
-            %pos_y = mem_load(F64, offset_of!(PatchBaseData, position) + offset_of!(Point, y))(base_data);
-            %distance = call_imported_function(fn_distance_euclidean_no_wrap -> (F64))(
+            [base_data] = derive_element(stride_of_patch_data0)(patch_buffer, next_patch);
+            [pos_x] = mem_load(F64, offset_of!(PatchBaseData, position) + offset_of!(Point, x))(base_data);
+            [pos_y] = mem_load(F64, offset_of!(PatchBaseData, position) + offset_of!(Point, y))(base_data);
+            [distance] = call_imported_function(fn_distance_euclidean_no_wrap -> [F64])(
                 pos_x,
                 pos_y,
                 constant(F64, 0.0f64.to_bits()),
@@ -295,47 +295,47 @@ fn create_lir(default_turtle_breed: BreedId) -> lir::Program {
                 distance,
             ));
 
-            %max_pxcor = mem_load(F64, offset_of!(Workspace, world) + offset_of!(World, topology) + OFFSET_TOPOLOGY_TO_MAX_PXCOR)(workspace);
-            %max_pycor = mem_load(F64, offset_of!(Workspace, world) + offset_of!(World, topology) + OFFSET_TOPOLOGY_TO_MAX_PYCOR)(workspace);
+            [max_pxcor] = mem_load(F64, offset_of!(Workspace, world) + offset_of!(World, topology) + OFFSET_TOPOLOGY_TO_MAX_PXCOR)(workspace);
+            [max_pycor] = mem_load(F64, offset_of!(Workspace, world) + offset_of!(World, topology) + OFFSET_TOPOLOGY_TO_MAX_PYCOR)(workspace);
 
             // if (distancexy (0.6 * max-pxcor) 0) < 5 [ set food-source-number 1 ]
-            %distance = call_imported_function(fn_distance_euclidean_no_wrap -> (F64))(
+            [distance] = call_imported_function(fn_distance_euclidean_no_wrap -> [F64])(
                 pos_x,
                 pos_y,
                 FMul(constant(F64, 0.6f64.to_bits()), max_pxcor),
                 constant(F64, 0.0f64.to_bits()),
             );
-            %() = if_else(-> ())(FLt(distance, constant(F64, 5.0f64.to_bits()))) then: {
+            [] = if_else(-> [])(FLt(distance, constant(F64, 5.0f64.to_bits()))) then: {
                 mem_store(offset_patch_to_food_source_number)(base_data, constant(F64, 1.0f64.to_bits()));
             } else_: {};
 
             // if (distancexy (-0.6 * max-pxcor) (-0.6 * max-pycor)) < 5 [ set food-source-number 2 ]
-            %distance = call_imported_function(fn_distance_euclidean_no_wrap -> (F64))(
+            [distance] = call_imported_function(fn_distance_euclidean_no_wrap -> [F64])(
                 pos_x,
                 pos_y,
                 FMul(constant(F64, (-0.6f64).to_bits()), max_pxcor),
                 FMul(constant(F64, (-0.6f64).to_bits()), max_pycor),
             );
-            %() = if_else(-> ())(FLt(distance, constant(F64, 5.0f64.to_bits()))) then: {
+            [] = if_else(-> [])(FLt(distance, constant(F64, 5.0f64.to_bits()))) then: {
                 mem_store(offset_patch_to_food_source_number)(base_data, constant(F64, 2.0f64.to_bits()));
             } else_: {};
 
             // if (distancexy (-0.8 * max-pxcor) (0.8 * max-pycor)) < 5 [ set food-source-number 3 ]
-            %distance = call_imported_function(fn_distance_euclidean_no_wrap -> (F64))(
+            [distance] = call_imported_function(fn_distance_euclidean_no_wrap -> [F64])(
                 pos_x,
                 pos_y,
                 FMul(constant(F64, (-0.8f64).to_bits()), max_pxcor),
                 FMul(constant(F64, 0.8f64.to_bits()), max_pycor),
             );
-            %() = if_else(-> ())(FLt(distance, constant(F64, 5.0f64.to_bits()))) then: {
+            [] = if_else(-> [])(FLt(distance, constant(F64, 5.0f64.to_bits()))) then: {
                 mem_store(offset_patch_to_food_source_number)(base_data, constant(F64, 3.0f64.to_bits()));
             } else_: {};
 
             // if food-source-number > 0 [ set food one-of [1 2] ]
-            %food_source_number = mem_load(F64, offset_patch_to_food_source_number)(base_data);
-            %() = if_else(-> ())(FGt(food_source_number, constant(F64, 0.0f64.to_bits()))) then_0: {
-                %rand_index = call_imported_function(fn_next_int -> (I32))(ctx, constant(I32, 2));
-                %food = if_else(-> (F64))(rand_index) then_1: {
+            [food_source_number] = mem_load(F64, offset_patch_to_food_source_number)(base_data);
+            [] = if_else(-> [])(FGt(food_source_number, constant(F64, 0.0f64.to_bits()))) then_0: {
+                [rand_index] = call_imported_function(fn_next_int -> [I32])(ctx, constant(I32, 2));
+                [food] = if_else(-> [F64])(rand_index) then_1: {
                     break_(then_1)(constant(F64, 1.0f64.to_bits()));
                 } else_1: {
                     break_(else_1)(constant(F64, 2.0f64.to_bits()));
@@ -344,33 +344,33 @@ fn create_lir(default_turtle_breed: BreedId) -> lir::Program {
             } else_0: {};
 
             // recolor-patch
-            %() = call_user_function(recolor_patch -> ())(ctx, next_patch);
+            [] = call_user_function(recolor_patch -> [])(ctx, next_patch);
         }
     }
     let setup_body_1 = lir.user_functions.push_and_get_key(setup_body_1);
 
     lir_function! {
-        fn setup(I32) -> (),
+        fn setup(I32) -> [],
         stack_space: 32,
         main: {
-            %context = arguments(-> (Ptr));
-            %workspace = mem_load(Ptr, offset_of!(CanonExecutionContext, workspace))(context);
-            %world = derive_field(offset_of!(Workspace, world))(workspace);
+            [context] = arguments(-> [Ptr]);
+            [workspace] = mem_load(Ptr, offset_of!(CanonExecutionContext, workspace))(context);
+            [world] = derive_field(offset_of!(Workspace, world))(workspace);
 
             // clear-all
 
-            %() = call_imported_function(fn_clear_all -> ())(context);
+            [] = call_imported_function(fn_clear_all -> [])(context);
 
             // create-turtles
 
-            %default_turtle_breed = constant(I32, default_turtle_breed.data().as_ffi());
+            [default_turtle_breed] = constant(I32, default_turtle_breed.data().as_ffi());
             // at stack offset 0, create a point (0, 0)
             stack_store(offset_of!(Point, x))(constant(F64, 0.0f64.to_bits()));
             stack_store(offset_of!(Point, y))(constant(F64, 0.0f64.to_bits()));
             // at stack offset 16, create a closure
             stack_store(16 + offset_of!(JitCallback<TurtleId, ()>, fn_ptr))(user_fn_ptr(setup_body_0));
             // don't bother storing anything in env since it's not used.
-            %() = call_imported_function(fn_create_turtles -> ())(
+            [] = call_imported_function(fn_create_turtles -> [])(
                 context,
                 default_turtle_breed,
                 constant(I32, 125),
@@ -383,14 +383,14 @@ fn create_lir(default_turtle_breed: BreedId) -> lir::Program {
             // at stack offset 16, create a closure
             stack_store(16 + offset_of!(JitCallback<PatchId, ()>, fn_ptr))(user_fn_ptr(setup_body_1));
             // don't bother storing anything in env since it's not used
-            %() = call_imported_function(fn_for_all_patches -> ())(
+            [] = call_imported_function(fn_for_all_patches -> [])(
                 context,
                 stack_addr(16),
             );
 
-            %() = call_imported_function(fn_reset_ticks -> ())(world);
+            [] = call_imported_function(fn_reset_ticks -> [])(world);
 
-            %ticks = call_imported_function(fn_get_ticks -> (F64))(world);
+            [ticks] = call_imported_function(fn_get_ticks -> [F64])(world);
             mem_store(
                 offset_of!(CanonExecutionContext, dirty_aggregator)
                 + offset_of!(DirtyAggregator, tick)

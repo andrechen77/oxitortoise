@@ -1,9 +1,9 @@
 #[macro_export]
 macro_rules! push_node {
-    ($ctx:expr; % $val_ref:pat = $name:ident) => {
+    ($ctx:expr; [$val_ref:ident] = $name:ident) => {
         let $val_ref = $name;
     };
-    ($ctx:expr; % $val_ref:pat = constant($ty:ident, $value:expr)) => {
+    ($ctx:expr; [$val_ref:ident] = constant($ty:ident, $value:expr)) => {
         let insn_idx = $ctx.0[$ctx.1].push_and_get_key(
             $crate::InsnKind::Const {
                 r#type: $crate::ValType::$ty,
@@ -12,7 +12,7 @@ macro_rules! push_node {
         );
         let $val_ref = $crate::ValRef($crate::InsnPc($ctx.1, insn_idx), 0);
     };
-    ($ctx:expr; % $val_ref:pat = arguments(-> ($($return_ty:ident),*))) => {
+    ($ctx:expr; [$($val_ref:ident),*] = arguments(-> [$($return_ty:ident),*])) => {
         let insn_idx = $ctx.0[$ctx.1].push_and_get_key(
             $crate::InsnKind::FunctionArgs {
                 output_type: $crate::smallvec::smallvec![$($crate::ValType::$return_ty),*],
@@ -20,7 +20,7 @@ macro_rules! push_node {
         );
 
         let mut i = 0;
-        let $val_ref = ($({
+        let ($($val_ref),*) = ($({
             // include the return type here to ensure we get the right number of
             // repetitions
             $crate::ValType::$return_ty;
@@ -29,7 +29,7 @@ macro_rules! push_node {
             $crate::ValRef($crate::InsnPc($ctx.1, insn_idx), j)
         }),*);
     };
-    ($ctx:expr; % $val_ref:pat = user_fn_ptr($function:ident)) => {
+    ($ctx:expr; [$val_ref:ident] = user_fn_ptr($function:ident)) => {
         let insn_idx = $ctx.0[$ctx.1].push_and_get_key(
             $crate::InsnKind::UserFunctionPtr {
                 function: $function,
@@ -37,7 +37,7 @@ macro_rules! push_node {
         );
         let $val_ref = $crate::ValRef($crate::InsnPc($ctx.1, insn_idx), 0);
     };
-    ($ctx:expr; % $val_ref:pat = loop_argument($initial_value:ident)) => {
+    ($ctx:expr; [$val_ref:ident] = loop_argument($initial_value:ident)) => {
         let insn_idx = $ctx.0[$ctx.1].push_and_get_key(
             $crate::InsnKind::LoopArgument {
                 initial_value: $initial_value,
@@ -45,10 +45,10 @@ macro_rules! push_node {
         );
         let $val_ref = $crate::ValRef($crate::InsnPc($ctx.1, insn_idx), 0);
     };
-    ($ctx:expr; % $val_ref:pat = derive_field($offset:expr)(
+    ($ctx:expr; [$val_ref:ident] = derive_field($offset:expr)(
         $ptr_ident:ident $(($($ptr_param:tt)*))* $(,)?
     )) => {
-        $crate::push_node!($ctx; %ptr = $ptr_ident $(($($ptr_param)*))*);
+        $crate::push_node!($ctx; [ptr] = $ptr_ident $(($($ptr_param)*))*);
 
         let insn_idx = $ctx.0[$ctx.1].push_and_get_key(
             $crate::InsnKind::DeriveField {
@@ -58,12 +58,12 @@ macro_rules! push_node {
         );
         let $val_ref = $crate::ValRef($crate::InsnPc($ctx.1, insn_idx), 0);
     };
-    ($ctx:expr; % $val_ref:pat = derive_element($element_size:expr)(
+    ($ctx:expr; [$val_ref:ident] = derive_element($element_size:expr)(
         $ptr_ident:ident $(($($ptr_param:tt)*))*,
         $index_ident:ident $(($($index_param:tt)*))* $(,)?
     )) => {
-        $crate::push_node!($ctx; %ptr = $ptr_ident $(($($ptr_param)*))*);
-        $crate::push_node!($ctx; %index = $index_ident $(($($index_param)*))*);
+        $crate::push_node!($ctx; [ptr] = $ptr_ident $(($($ptr_param)*))*);
+        $crate::push_node!($ctx; [index] = $index_ident $(($($index_param)*))*);
 
         let insn_idx = $ctx.0[$ctx.1].push_and_get_key(
             $crate::InsnKind::DeriveElement {
@@ -74,10 +74,10 @@ macro_rules! push_node {
         );
         let $val_ref = $crate::ValRef($crate::InsnPc($ctx.1, insn_idx), 0);
     };
-    ($ctx:expr; % $val_ref:pat = mem_load($ty:ident, $offset:expr)(
+    ($ctx:expr; [$val_ref:ident] = mem_load($ty:ident, $offset:expr)(
         $ptr_ident:ident $(($($ptr_param:tt)*))* $(,)?
     )) => {
-        $crate::push_node!($ctx; %ptr = $ptr_ident $(($($ptr_param)*))*);
+        $crate::push_node!($ctx; [ptr] = $ptr_ident $(($($ptr_param)*))*);
 
         let insn_idx = $ctx.0[$ctx.1].push_and_get_key(
             $crate::InsnKind::MemLoad {
@@ -92,8 +92,8 @@ macro_rules! push_node {
         $ptr_ident:ident $(($($ptr_param:tt)*))*,
         $value_ident:ident $(($($value_param:tt)*))* $(,)?
     )) => {
-        $crate::push_node!($ctx; %ptr = $ptr_ident $(($($ptr_param)*))*);
-        $crate::push_node!($ctx; %value = $value_ident $(($($value_param)*))*);
+        $crate::push_node!($ctx; [ptr] = $ptr_ident $(($($ptr_param)*))*);
+        $crate::push_node!($ctx; [value] = $value_ident $(($($value_param)*))*);
 
         $ctx.0[$ctx.1].push($crate::InsnKind::MemStore {
             offset: $offset,
@@ -101,7 +101,7 @@ macro_rules! push_node {
             value,
         });
     };
-    ($ctx:expr; % $val_ref:pat = stack_load($ty:ident, $offset:expr)) => {
+    ($ctx:expr; [$val_ref:ident] = stack_load($ty:ident, $offset:expr)) => {
         let insn_idx = $ctx.0[$ctx.1].push_and_get_key(
             $crate::InsnKind::StackLoad {
                 r#type: $crate::ValType::$ty,
@@ -113,25 +113,25 @@ macro_rules! push_node {
     ($ctx:expr; stack_store($offset:expr)(
         $value_ident:ident $(($($value_param:tt)*))* $(,)?
     )) => {
-        $crate::push_node!($ctx; %value = $value_ident $(($($value_param)*))*);
+        $crate::push_node!($ctx; [value] = $value_ident $(($($value_param)*))*);
 
         $ctx.0[$ctx.1].push($crate::InsnKind::StackStore {
             offset: $offset,
             value,
         });
     };
-    ($ctx:expr; % $val_ref:pat = stack_addr($offset:expr)) => {
+    ($ctx:expr; [$val_ref:ident] = stack_addr($offset:expr)) => {
         let insn_idx = $ctx.0[$ctx.1].push_and_get_key($crate::InsnKind::StackAddr { offset: $offset });
         let $val_ref = $crate::ValRef($crate::InsnPc($ctx.1, insn_idx), 0);
     };
-    ($ctx:expr; % $val_ref:pat = call_imported_function($function:ident -> ($($return_ty:ident),*))(
+    ($ctx:expr; [$($val_ref:ident),*] = call_imported_function($function:ident -> [$($return_ty:ident),*])(
         $(
             $arg_ident:ident $(($($arg_param:tt)*))*
         ),* $(,)?
     )) => {
         let mut args = Vec::new();
         $(
-            $crate::push_node!($ctx; %arg = $arg_ident $(($($arg_param)*))*);
+            $crate::push_node!($ctx; [arg] = $arg_ident $(($($arg_param)*))*);
             args.push(arg);
         )*
 
@@ -144,7 +144,7 @@ macro_rules! push_node {
         );
 
         let mut i = 0;
-        let $val_ref = ($({
+        let ($($val_ref),*) = ($({
             // include the return type here to ensure we get the right number of
             // repetitions
             $crate::ValType::$return_ty;
@@ -153,14 +153,14 @@ macro_rules! push_node {
             $crate::ValRef($crate::InsnPc($ctx.1, insn_idx), j)
         }),*);
     };
-    ($ctx:expr; % $val_ref:pat = call_user_function($function:ident -> ($($return_ty:ident),*))(
+    ($ctx:expr; [$($val_ref:ident),*] = call_user_function($function:ident -> [$($return_ty:ident),*])(
         $(
             $arg_ident:ident $(($($arg_param:tt)*))*
         ),* $(,)?
     )) => {
         let mut args = Vec::new();
         $(
-            $crate::push_node!($ctx; %arg = $arg_ident $(($($arg_param)*))*);
+            $crate::push_node!($ctx; [arg] = $arg_ident $(($($arg_param)*))*);
             args.push(arg);
         )*
         let insn_idx = $ctx.0[$ctx.1].push_and_get_key(
@@ -172,7 +172,7 @@ macro_rules! push_node {
         );
 
         let mut i = 0;
-        let $val_ref = ($({
+        let ($($val_ref),*) = ($({
             // include the return type here to ensure we get the right number of
             // repetitions
             $crate::ValType::$return_ty;
@@ -181,10 +181,10 @@ macro_rules! push_node {
             $crate::ValRef($crate::InsnPc($ctx.1, insn_idx), j)
         }),*);
     };
-    ($ctx:expr; % $val_ref:pat = $unary_op:ident(
+    ($ctx:expr; [$val_ref:ident] = $unary_op:ident(
         $operand_ident:ident $(($($operand_param:tt)*))* $(,)?
     )) => {
-        $crate::push_node!($ctx; %operand = $operand_ident $(($($operand_param)*))*);
+        $crate::push_node!($ctx; [operand] = $operand_ident $(($($operand_param)*))*);
 
         let insn_idx = $ctx.0[$ctx.1].push_and_get_key(
             $crate::InsnKind::UnaryOp {
@@ -195,12 +195,12 @@ macro_rules! push_node {
 
         let $val_ref = $crate::ValRef($crate::InsnPc($ctx.1, insn_idx), 0);
     };
-    ($ctx:expr; % $val_ref:pat = $binary_op:ident(
+    ($ctx:expr; [$val_ref:ident] = $binary_op:ident(
         $lhs_ident:ident $(($($lhs_param:tt)*))*,
         $rhs_ident:ident $(($($rhs_param:tt)*))* $(,)?
     )) => {
-        $crate::push_node!($ctx; %lhs = $lhs_ident $(($($lhs_param)*))*);
-        $crate::push_node!($ctx; %rhs = $rhs_ident $(($($rhs_param)*))*);
+        $crate::push_node!($ctx; [lhs] = $lhs_ident $(($($lhs_param)*))*);
+        $crate::push_node!($ctx; [rhs] = $rhs_ident $(($($rhs_param)*))*);
 
         let insn_idx = $ctx.0[$ctx.1].push_and_get_key(
             $crate::InsnKind::BinaryOp {
@@ -217,7 +217,7 @@ macro_rules! push_node {
     )) => {
         let mut values = Vec::new();
         $(
-            $crate::push_node!($ctx; %value = $value_ident $(($($value_param)*))*);
+            $crate::push_node!($ctx; [value] = $value_ident $(($($value_param)*))*);
             values.push(value);
         )*
 
@@ -230,11 +230,11 @@ macro_rules! push_node {
         $condition_ident:ident $(($($condition_param:tt)*))*,
         $($value_ident:ident $(($($value_param:tt)*))*),* $(,)?
     )) => {
-        $crate::push_node!($ctx; %condition = $condition_ident $(($($condition_param)*))*);
+        $crate::push_node!($ctx; [condition] = $condition_ident $(($($condition_param)*))*);
 
         let mut values = Vec::new();
         $(
-            $crate::push_node!($ctx; %value = $value_ident $(($($value_param)*))*);
+            $crate::push_node!($ctx; [value] = $value_ident $(($($value_param)*))*);
             values.push(value);
         )*
 
@@ -244,7 +244,7 @@ macro_rules! push_node {
             values: values.into_boxed_slice(),
         });
     };
-    ($ctx:expr; % $val_ref:pat = block(-> ($($return_ty:ident),*)) $label:ident: {$($inner:tt)*}) => {
+    ($ctx:expr; [$($val_ref:ident),*] = block(-> [$($return_ty:ident),*]) $label:ident: {$($inner:tt)*}) => {
         $crate::instruction_seq!($ctx; $label: { $($inner)* });
 
         let insn_idx = $ctx.0[$ctx.1].push_and_get_key(
@@ -255,19 +255,19 @@ macro_rules! push_node {
         );
 
         let mut i = 0;
-        let $val_ref = ($({
+        let [$($val_ref),*] = [$({
             // include the return type here to ensure we get the right number of
             // repetitions
             $crate::ValType::$return_ty;
             let j = i;
             i += 1;
             $crate::ValRef($crate::InsnPc($ctx.1, insn_idx), j)
-        }),*);
+        }),*];
     };
-    ($ctx:expr; % $val_ref:pat = if_else(-> ($($return_ty:ident),*))(
+    ($ctx:expr; [$($val_ref:ident),*] = if_else(-> [$($return_ty:ident),*])(
         $condition_ident:ident $(($($condition_param:tt)*))*
     ) $then_label:ident: {$($then_inner:tt)*} $else_label:ident: {$($else_inner:tt)*}) => {
-        $crate::push_node!($ctx; %condition = $condition_ident $(($($condition_param)*))*);
+        $crate::push_node!($ctx; [condition] = $condition_ident $(($($condition_param)*))*);
 
         $crate::instruction_seq!($ctx; $then_label: { $($then_inner)* });
         $crate::instruction_seq!($ctx; $else_label: { $($else_inner)* });
@@ -282,7 +282,7 @@ macro_rules! push_node {
         );
 
         let mut i = 0;
-        let $val_ref = ($({
+        let ($($val_ref),*) = ($({
             // include the return type here to ensure we get the right number of
             // repetitions
             $crate::ValType::$return_ty;
@@ -295,12 +295,12 @@ macro_rules! push_node {
 
 #[macro_export]
 macro_rules! instruction_seq {
-    ($ctx:expr; $label:ident: { $($(% $val_ref:pat =)? $node_ident:ident $(($($param:tt)*))* $($body_label:ident: {$($body:tt)*})*; )* }) => {
+    ($ctx:expr; $label:ident: { $($([$($val_ref:ident),*] =)? $node_ident:ident $(($($param:tt)*))* $($body_label:ident: {$($body:tt)*})*; )* }) => {
         let $label = $ctx.0.next_key();
         $ctx.0.push($crate::typed_index_collections::TiVec::new());
         let new_ctx = (&mut *$ctx.0, $label);
         $(
-            $crate::push_node!(new_ctx; $(% $val_ref =)? $node_ident $(($($param)*))* $($body_label: {$($body)*})*);
+            $crate::push_node!(new_ctx; $([$($val_ref),*] =)? $node_ident $(($($param)*))* $($body_label: {$($body)*})*);
         )*
     }
 }
@@ -308,7 +308,7 @@ macro_rules! instruction_seq {
 #[macro_export]
 macro_rules! lir_function {
     (
-        fn $func:ident($($param_ty:ident),*) -> ($($return_ty:ident),*),
+        fn $func:ident($($param_ty:ident),*) -> [$($return_ty:ident),*],
         stack_space: $stack_space:expr,
         $label:ident: { $($inner:tt)* }
     ) => {

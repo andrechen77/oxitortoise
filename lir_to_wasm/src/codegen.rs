@@ -688,7 +688,7 @@ mod tests {
     #[test]
     fn return_1() {
         lir_function! {
-            fn func() -> (I32),
+            fn func() -> [I32],
             stack_space: 0,
             main: {
                 break_(main)(constant(I32, 10));
@@ -706,11 +706,11 @@ mod tests {
     #[test]
     fn add_one() {
         lir_function! {
-            fn add_one(I32) -> (I32),
+            fn add_one(I32) -> [I32],
             stack_space: 0,
             main: {
-                %arg = arguments(-> (I32));
-                %res = IAdd(arg, constant(I32, 1));
+                [arg] = arguments(-> [I32]);
+                [res] = IAdd(arg, constant(I32, 1));
                 break_(main)(res);
             }
         }
@@ -726,12 +726,12 @@ mod tests {
     #[test]
     fn use_stack() {
         lir_function! {
-            fn my_function(I32) -> (I32),
+            fn my_function(I32) -> [I32],
             stack_space: 16,
             main: {
-                %arg = arguments(-> (I32));
+                [arg] = arguments(-> [I32]);
                 stack_store(8)(arg);
-                %_res = stack_load(I16, 8);
+                [_res] = stack_load(I16, 8);
                 break_(main)(stack_addr(8));
             }
         }
@@ -755,10 +755,10 @@ mod tests {
         });
 
         lir_function! {
-            fn my_function() -> (F64, I32),
+            fn my_function() -> [F64, I32],
             stack_space: 0,
             main: {
-                %(a, b) = call_imported_function(imported_func_id -> (F64, I32))(
+                [a, b] = call_imported_function(imported_func_id -> [F64, I32])(
                     constant(I32, 10),
                     constant(F64, 20)
                 );
@@ -777,7 +777,7 @@ mod tests {
     fn call_user_function() {
         let mut lir = lir::Program::default();
         lir_function! {
-            fn callee(F64) -> (I32),
+            fn callee(F64) -> [I32],
             stack_space: 0,
             main: {
                 break_(main)(constant(I32, 10));
@@ -785,10 +785,10 @@ mod tests {
         }
         let callee_id = lir.user_functions.push_and_get_key(callee);
         lir_function! {
-            fn caller() -> (I32),
+            fn caller() -> [I32],
             stack_space: 0,
             main: {
-                %a = call_user_function(callee_id -> (I32))(constant(F64, 1));
+                [a] = call_user_function(callee_id -> [I32])(constant(F64, 1));
                 break_(main)(a);
             }
         }
