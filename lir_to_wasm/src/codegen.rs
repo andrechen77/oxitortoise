@@ -70,6 +70,7 @@ pub fn lir_to_wasm(
         // not shared
         false,
     );
+    module.globals.get_mut(sp_global_id).name = Some("global_sp".to_string());
     let (fn_table_id, _fn_table_import_id) = module.add_import_table(
         "env",
         "__indirect_function_table",
@@ -91,6 +92,7 @@ pub fn lir_to_wasm(
             imported_function.return_type.iter().copied().map(translate_val_type).collect();
         let func_type = module.types.add(&param_types, &return_types);
         let (w_func_id, _) = module.add_import_func("env", imported_function.name, func_type);
+        module.funcs.get_mut(w_func_id).name = Some(imported_function.name.to_string());
         imported_fn_ids.insert(imported_function_id, w_func_id);
     }
 
@@ -168,11 +170,17 @@ fn add_function<A: FnTableSlotAllocator>(
         func.body.output_type.iter().copied().map(translate_val_type).collect();
     let mut function =
         walrus::FunctionBuilder::new(&mut mod_ctx.module.types, &parameter_types, &return_types);
+    if let Some(debug_fn_name) = &func.debug_fn_name {
+        function.name(debug_fn_name.clone());
+    }
 
     // add stack pointer if needed
     let needs_stack_ptr = func.stack_space > 0;
-    let sp_local_id: Option<walrus::LocalId> =
-        needs_stack_ptr.then(|| mod_ctx.module.locals.add(translate_val_type(lir::ValType::Ptr)));
+    let sp_local_id: Option<walrus::LocalId> = needs_stack_ptr.then(|| {
+        let local_id = mod_ctx.module.locals.add(translate_val_type(lir::ValType::Ptr));
+        mod_ctx.module.locals.get_mut(local_id).name = Some("local_sp".to_string());
+        local_id
+    });
 
     // TODO we can make more efficient use of local variables by having the
     // ctx.uses become ctx.remaining_uses, which counts down each time a getter
@@ -504,6 +512,9 @@ fn add_function<A: FnTableSlotAllocator>(
     }
     fn allocate_local<A>(ctx: &mut CodegenFnCtx<A>, val: lir::ValRef) -> wir::LocalId {
         let local_id = ctx.mod_ctx.module.locals.add(translate_val_type(ctx.types[&val]));
+        if let Some(name) = ctx.func.debug_val_names.get(&val) {
+            ctx.mod_ctx.module.locals.get_mut(local_id).name = Some(name.clone());
+        }
         ctx.local_ids.insert(val, local_id);
         local_id
     }

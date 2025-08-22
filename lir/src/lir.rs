@@ -79,6 +79,8 @@ pub struct Function {
     pub insn_seqs: TiVec<InsnSeqId, TiVec<InsnIdx, InsnKind>>,
     /// The number of bytes to allocate on the stack for this function.
     pub stack_space: usize,
+    pub debug_fn_name: Option<String>,
+    pub debug_val_names: HashMap<ValRef, String>,
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy, From, Into)]

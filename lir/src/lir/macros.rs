@@ -325,6 +325,8 @@ macro_rules! lir_function {
             },
             insn_seqs,
             stack_space: $stack_space,
+            debug_fn_name: Some(stringify!($func).to_string()),
+            debug_val_names: std::collections::HashMap::new(), // FUTURE infer val names from the patterns
         };
     }
 }
