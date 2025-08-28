@@ -29,7 +29,7 @@ struct CodegenModuleCtx<'a, A> {
     /// A map from LIR function ids to Walrus function ids.
     user_fn_ids: HashMap<lir::FunctionId, walrus::FunctionId>,
     /// A map from LIR imported function ids to Walrus function ids.
-    imported_fn_ids: HashMap<lir::ImportedFunctionId, walrus::FunctionId>,
+    imported_fn_ids: HashMap<lir::HostFunctionId, walrus::FunctionId>,
 }
 
 pub trait FnTableSlotAllocator {
@@ -85,7 +85,7 @@ pub fn lir_to_wasm(
 
     // add imported functions
     let mut imported_fn_ids = HashMap::new();
-    for (imported_function_id, imported_function) in lir.imported_functions.iter_enumerated() {
+    for (imported_function_id, imported_function) in lir.host_functions.iter_enumerated() {
         let param_types: Vec<_> =
             imported_function.parameter_types.iter().copied().map(translate_val_type).collect();
         let return_types: Vec<_> =
@@ -115,7 +115,7 @@ pub fn lir_to_wasm(
 
     // add user functions. these may allocate additional slots in the function
     // table for callbacks, every time the address of a function is taken.
-    for (lir_fid, function) in lir.user_functions.iter_enumerated() {
+    for (lir_fid, function) in lir.user_functions.iter() {
         let wir_fid = add_function(&mut ctx, function);
         ctx.user_fn_ids.insert(lir_fid, wir_fid);
     }
@@ -370,7 +370,7 @@ fn add_function<A: FnTableSlotAllocator>(
                     // args, however, loop args do output values onto the
                     // operand stack, so things are automatically handled.
                 }
-                I::Const { r#type, value } => {
+                I::Const(lir::Const { r#type, value }) => {
                     insn_builder.const_(translate_val(*r#type, *value));
                 }
                 I::UserFunctionPtr { function } => {
@@ -419,7 +419,7 @@ fn add_function<A: FnTableSlotAllocator>(
                         .const_(translate_usize(*offset))
                         .binop(wir::BinaryOp::I32Add);
                 }
-                I::CallImportedFunction { function, args: _, output_type: _ } => {
+                I::CallHostFunction { function, args: _, output_type: _ } => {
                     let callee = ctx.mod_ctx.imported_fn_ids[function];
                     insn_builder.call(callee);
                 }
@@ -661,7 +661,7 @@ fn translate_instr_seq_type(
 
 #[cfg(test)]
 mod tests {
-    use lir::lir_function;
+    use lir::{lir_function, slotmap::SlotMap};
 
     use super::*;
 
@@ -695,7 +695,9 @@ mod tests {
             }
         }
         let mut lir = lir::Program::default();
-        let func_id = lir.user_functions.push_and_get_key(func);
+        let mut functions: SlotMap<lir::FunctionId, ()> = SlotMap::with_key();
+        let func_id = functions.insert(());
+        lir.user_functions.insert(func_id, func);
         lir.entrypoints.push(func_id);
 
         let (mut module, _) = lir_to_wasm(&lir, &mut TestFnTableSlotAllocator::default());
@@ -715,7 +717,9 @@ mod tests {
             }
         }
         let mut lir = lir::Program::default();
-        let func_id = lir.user_functions.push_and_get_key(add_one);
+        let mut functions: SlotMap<lir::FunctionId, ()> = SlotMap::with_key();
+        let func_id = functions.insert(());
+        lir.user_functions.insert(func_id, add_one);
         lir.entrypoints.push(func_id);
 
         let (mut module, _) = lir_to_wasm(&lir, &mut TestFnTableSlotAllocator::default());
@@ -737,7 +741,9 @@ mod tests {
         }
 
         let mut lir = lir::Program::default();
-        let func_id = lir.user_functions.push_and_get_key(my_function);
+        let mut functions: SlotMap<lir::FunctionId, ()> = SlotMap::with_key();
+        let func_id = functions.insert(());
+        lir.user_functions.insert(func_id, my_function);
         lir.entrypoints.push(func_id);
 
         let (mut module, _) = lir_to_wasm(&lir, &mut TestFnTableSlotAllocator::default());
@@ -746,9 +752,9 @@ mod tests {
     }
 
     #[test]
-    fn call_imported_function() {
+    fn call_host_function() {
         let mut lir = lir::Program::default();
-        let imported_func_id = lir.imported_functions.push_and_get_key(lir::ImportedFunction {
+        let imported_func_id = lir.host_functions.push_and_get_key(lir::HostFunction {
             name: "defined_elsewhere",
             parameter_types: vec![lir::ValType::I32, lir::ValType::F64],
             return_type: vec![lir::ValType::F64, lir::ValType::I32],
@@ -758,14 +764,16 @@ mod tests {
             fn my_function() -> [F64, I32],
             stack_space: 0,
             main: {
-                [a, b] = call_imported_function(imported_func_id -> [F64, I32])(
+                [a, b] = call_host_fn(imported_func_id -> [F64, I32])(
                     constant(I32, 10),
                     constant(F64, 20)
                 );
                 break_(main)(a, b);
             }
         }
-        let func_id = lir.user_functions.push_and_get_key(my_function);
+        let mut functions: SlotMap<lir::FunctionId, ()> = SlotMap::with_key();
+        let func_id = functions.insert(());
+        lir.user_functions.insert(func_id, my_function);
         lir.entrypoints.push(func_id);
 
         let (mut module, _) = lir_to_wasm(&lir, &mut TestFnTableSlotAllocator { next_slot: 0 });
@@ -775,6 +783,8 @@ mod tests {
 
     #[test]
     fn call_user_function() {
+        let mut functions: SlotMap<lir::FunctionId, ()> = SlotMap::with_key();
+
         let mut lir = lir::Program::default();
         lir_function! {
             fn callee(F64) -> [I32],
@@ -783,7 +793,8 @@ mod tests {
                 break_(main)(constant(I32, 10));
             }
         }
-        let callee_id = lir.user_functions.push_and_get_key(callee);
+        let callee_id = functions.insert(());
+        lir.user_functions.insert(callee_id, callee);
         lir_function! {
             fn caller() -> [I32],
             stack_space: 0,
@@ -792,7 +803,8 @@ mod tests {
                 break_(main)(a);
             }
         }
-        let caller_id = lir.user_functions.push_and_get_key(caller);
+        let caller_id = functions.insert(());
+        lir.user_functions.insert(caller_id, caller);
         lir.entrypoints.push(caller_id);
 
         let (mut module, _) = lir_to_wasm(&lir, &mut TestFnTableSlotAllocator::default());

@@ -6,6 +6,7 @@ use engine::{
         jit::{InstallLir as _, JitCallback},
     },
     lir::{self, lir_function},
+    mir::{self, Operation},
     sim::{
         agent_schema::{PatchSchema, TurtleSchema},
         patch::{OFFSET_PATCHES_TO_DATA, PatchBaseData, PatchId, Patches},
@@ -16,7 +17,7 @@ use engine::{
             TopologySpec,
         },
         turtle::{Breed, BreedId, OFFSET_TURTLES_TO_DATA, TurtleBaseData, TurtleId, Turtles},
-        value::NetlogoInternalType,
+        value::{NetlogoInternalType, UnpackedDynBox},
         world::World,
     },
     slotmap::{Key as _, SlotMap},
@@ -172,12 +173,13 @@ fn create_lir(default_turtle_breed: BreedId) -> lir::Program {
     use std::mem::offset_of;
 
     let mut lir = lir::Program::default();
-    let fn_clear_all = lir.imported_functions.push_and_get_key(lir::ImportedFunction {
+    let lir_fn_tracker = SlotMap::with_key();
+    let fn_clear_all = lir.host_functions.push_and_get_key(lir::HostFunction {
         name: "oxitortoise_clear_all",
         parameter_types: vec![lir::ValType::Ptr],
         return_type: vec![],
     });
-    let fn_create_turtles = lir.imported_functions.push_and_get_key(lir::ImportedFunction {
+    let fn_create_turtles = lir.host_functions.push_and_get_key(lir::HostFunction {
         name: "oxitortoise_create_turtles",
         parameter_types: vec![
             lir::ValType::Ptr,
@@ -188,33 +190,32 @@ fn create_lir(default_turtle_breed: BreedId) -> lir::Program {
         ],
         return_type: vec![],
     });
-    let fn_for_all_patches = lir.imported_functions.push_and_get_key(lir::ImportedFunction {
+    let fn_for_all_patches = lir.host_functions.push_and_get_key(lir::HostFunction {
         name: "oxitortoise_for_all_patches",
         parameter_types: vec![lir::ValType::Ptr, lir::ValType::Ptr],
         return_type: vec![],
     });
-    let fn_distance_euclidean_no_wrap =
-        lir.imported_functions.push_and_get_key(lir::ImportedFunction {
-            name: "oxitortoise_distance_euclidean_no_wrap",
-            parameter_types: vec![
-                lir::ValType::F64,
-                lir::ValType::F64,
-                lir::ValType::F64,
-                lir::ValType::F64,
-            ],
-            return_type: vec![lir::ValType::F64],
-        });
-    let fn_next_int = lir.imported_functions.push_and_get_key(lir::ImportedFunction {
+    let fn_distance_euclidean_no_wrap = lir.host_functions.push_and_get_key(lir::HostFunction {
+        name: "oxitortoise_distance_euclidean_no_wrap",
+        parameter_types: vec![
+            lir::ValType::F64,
+            lir::ValType::F64,
+            lir::ValType::F64,
+            lir::ValType::F64,
+        ],
+        return_type: vec![lir::ValType::F64],
+    });
+    let fn_next_int = lir.host_functions.push_and_get_key(lir::HostFunction {
         name: "oxitortoise_next_int",
         parameter_types: vec![lir::ValType::I32, lir::ValType::I32],
         return_type: vec![lir::ValType::I32],
     });
-    let fn_reset_ticks = lir.imported_functions.push_and_get_key(lir::ImportedFunction {
+    let fn_reset_ticks = lir.host_functions.push_and_get_key(lir::HostFunction {
         name: "oxitortoise_reset_ticks",
         parameter_types: vec![lir::ValType::Ptr],
         return_type: vec![],
     });
-    let fn_get_ticks = lir.imported_functions.push_and_get_key(lir::ImportedFunction {
+    let fn_get_ticks = lir.host_functions.push_and_get_key(lir::HostFunction {
         name: "oxitortoise_get_ticks",
         parameter_types: vec![lir::ValType::Ptr],
         return_type: vec![lir::ValType::F64],
@@ -249,7 +250,8 @@ fn create_lir(default_turtle_breed: BreedId) -> lir::Program {
             mem_store(offset_of!(TurtleBaseData, color))(base_data, constant(F64, 15.0f64.to_bits()));
         }
     }
-    let setup_body_0 = lir.user_functions.push_and_get_key(setup_body_0);
+    let setup_body_0_key = lir_fn_tracker.insert(());
+    lir.user_functions.insert(setup_body_0_key, setup_body_0);
 
     lir_function! {
         fn recolor_patch(Ptr, I32) -> [],
@@ -258,7 +260,8 @@ fn create_lir(default_turtle_breed: BreedId) -> lir::Program {
             [_ctx, _next_patch] = arguments(-> [Ptr, I32]);
         }
     }
-    let recolor_patch = lir.user_functions.push_and_get_key(recolor_patch);
+    let recolor_patch_key = lir_fn_tracker.insert(());
+    lir.user_functions.insert(recolor_patch_key, recolor_patch);
 
     lir_function! {
         fn setup_body_1(Ptr, Ptr, I32) -> [],
@@ -279,7 +282,7 @@ fn create_lir(default_turtle_breed: BreedId) -> lir::Program {
             [base_data] = derive_element(stride_of_patch_data0)(patch_buffer, next_patch);
             [pos_x] = mem_load(F64, offset_of!(PatchBaseData, position) + offset_of!(Point, x))(base_data);
             [pos_y] = mem_load(F64, offset_of!(PatchBaseData, position) + offset_of!(Point, y))(base_data);
-            [distance] = call_imported_function(fn_distance_euclidean_no_wrap -> [F64])(
+            [distance] = call_host_fn(fn_distance_euclidean_no_wrap -> [F64])(
                 pos_x,
                 pos_y,
                 constant(F64, 0.0f64.to_bits()),
@@ -299,7 +302,7 @@ fn create_lir(default_turtle_breed: BreedId) -> lir::Program {
             [max_pycor] = mem_load(F64, offset_of!(Workspace, world) + offset_of!(World, topology) + OFFSET_TOPOLOGY_TO_MAX_PYCOR)(workspace);
 
             // if (distancexy (0.6 * max-pxcor) 0) < 5 [ set food-source-number 1 ]
-            [distance] = call_imported_function(fn_distance_euclidean_no_wrap -> [F64])(
+            [distance] = call_host_fn(fn_distance_euclidean_no_wrap -> [F64])(
                 pos_x,
                 pos_y,
                 FMul(constant(F64, 0.6f64.to_bits()), max_pxcor),
@@ -310,7 +313,7 @@ fn create_lir(default_turtle_breed: BreedId) -> lir::Program {
             } else_: {};
 
             // if (distancexy (-0.6 * max-pxcor) (-0.6 * max-pycor)) < 5 [ set food-source-number 2 ]
-            [distance] = call_imported_function(fn_distance_euclidean_no_wrap -> [F64])(
+            [distance] = call_host_fn(fn_distance_euclidean_no_wrap -> [F64])(
                 pos_x,
                 pos_y,
                 FMul(constant(F64, (-0.6f64).to_bits()), max_pxcor),
@@ -321,7 +324,7 @@ fn create_lir(default_turtle_breed: BreedId) -> lir::Program {
             } else_: {};
 
             // if (distancexy (-0.8 * max-pxcor) (0.8 * max-pycor)) < 5 [ set food-source-number 3 ]
-            [distance] = call_imported_function(fn_distance_euclidean_no_wrap -> [F64])(
+            [distance] = call_host_fn(fn_distance_euclidean_no_wrap -> [F64])(
                 pos_x,
                 pos_y,
                 FMul(constant(F64, (-0.8f64).to_bits()), max_pxcor),
@@ -334,7 +337,7 @@ fn create_lir(default_turtle_breed: BreedId) -> lir::Program {
             // if food-source-number > 0 [ set food one-of [1 2] ]
             [food_source_number] = mem_load(F64, offset_patch_to_food_source_number)(base_data);
             [] = if_else(-> [])(FGt(food_source_number, constant(F64, 0.0f64.to_bits()))) then_0: {
-                [rand_index] = call_imported_function(fn_next_int -> [I32])(ctx, constant(I32, 2));
+                [rand_index] = call_host_fn(fn_next_int -> [I32])(ctx, constant(I32, 2));
                 [food] = if_else(-> [F64])(rand_index) then_1: {
                     break_(then_1)(constant(F64, 1.0f64.to_bits()));
                 } else_1: {
@@ -347,7 +350,8 @@ fn create_lir(default_turtle_breed: BreedId) -> lir::Program {
             [] = call_user_function(recolor_patch -> [])(ctx, next_patch);
         }
     }
-    let setup_body_1 = lir.user_functions.push_and_get_key(setup_body_1);
+    let setup_body_1_key = lir_fn_tracker.insert(());
+    lir.user_functions.insert(setup_body_1_key, setup_body_1);
 
     lir_function! {
         fn setup(I32) -> [],
@@ -359,7 +363,7 @@ fn create_lir(default_turtle_breed: BreedId) -> lir::Program {
 
             // clear-all
 
-            [] = call_imported_function(fn_clear_all -> [])(context);
+            [] = call_host_fn(fn_clear_all -> [])(context);
 
             // create-turtles
 
@@ -370,7 +374,7 @@ fn create_lir(default_turtle_breed: BreedId) -> lir::Program {
             // at stack offset 16, create a closure
             stack_store(16 + offset_of!(JitCallback<TurtleId, ()>, fn_ptr))(user_fn_ptr(setup_body_0));
             // don't bother storing anything in env since it's not used.
-            [] = call_imported_function(fn_create_turtles -> [])(
+            [] = call_host_fn(fn_create_turtles -> [])(
                 context,
                 default_turtle_breed,
                 constant(I32, 125),
@@ -383,22 +387,103 @@ fn create_lir(default_turtle_breed: BreedId) -> lir::Program {
             // at stack offset 16, create a closure
             stack_store(16 + offset_of!(JitCallback<PatchId, ()>, fn_ptr))(user_fn_ptr(setup_body_1));
             // don't bother storing anything in env since it's not used
-            [] = call_imported_function(fn_for_all_patches -> [])(
+            [] = call_host_fn(fn_for_all_patches -> [])(
                 context,
                 stack_addr(16),
             );
 
-            [] = call_imported_function(fn_reset_ticks -> [])(world);
+            [] = call_host_fn(fn_reset_ticks -> [])(world);
 
-            [ticks] = call_imported_function(fn_get_ticks -> [F64])(world);
+            [ticks] = call_host_fn(fn_get_ticks -> [F64])(world);
             mem_store(
                 offset_of!(CanonExecutionContext, dirty_aggregator)
                 + offset_of!(DirtyAggregator, tick)
             )(context, ticks);
         }
     }
-    let setup = lir.user_functions.push_and_get_key(setup);
-    lir.entrypoints.push(setup);
+    let setup_key = lir_fn_tracker.insert(());
+    lir.user_functions.insert(setup_key, setup);
+    lir.entrypoints.push(setup_key);
 
     lir
+}
+
+fn create_mir() -> mir::Program {
+    let mut program = mir::Program::default();
+
+    let setup_body_0 = {
+        let mut locals = SlotMap::with_key();
+        // let local_context = locals.insert(mir::LocalDeclaration {
+        //     debug_name: Some("context".to_string()),
+        //     mutable: false,
+        // })
+        let local_self = locals.insert(mir::LocalDeclaration {
+            debug_name: Some("self".to_string()),
+            mutable: false,
+            ty: NetlogoInternalType::TURTLE_ID,
+        });
+        mir::Function {
+            debug_name: Some("setup/body_0".to_string()),
+            takes_env: true,
+            takes_context: true,
+            parameters: vec![local_self],
+            return_value: None,
+            locals,
+            statements: mir::StatementBlock {
+                statements: vec![
+                    mir::StatementKind::Op(Operation {
+                        local_id: None,
+                        operator: mir::Operator::SetTurtleField { field: mir::AgentField::Size },
+                        args: vec![
+                            mir::Operand::LocalVar(local_self),
+                            mir::Operand::Constant(mir::Constant {
+                                value: UnpackedDynBox::Float(2.0),
+                            }),
+                        ],
+                    }),
+                    mir::StatementKind::Op(Operation {
+                        local_id: None,
+                        operator: mir::Operator::SetTurtleField { field: mir::AgentField::Color },
+                        args: vec![mir::Operand::Constant(mir::Constant {
+                            value: UnpackedDynBox::Float(15.0),
+                        })],
+                    }),
+                ],
+            },
+        }
+    };
+    let setup_body_0 = program.functions.insert(setup_body_0);
+
+    let setup = mir::Function {
+        debug_name: Some("setup".to_string()),
+        takes_env: false,
+        takes_context: true,
+        parameters: vec![],
+        return_value: None,
+        locals: SlotMap::with_key(),
+        statements: mir::StatementBlock {
+            statements: vec![
+                mir::StatementKind::Op(Operation {
+                    local_id: None,
+                    operator: mir::Operator::HostFunctionCall { name: "clear_all" },
+                    args: vec![],
+                }),
+                mir::StatementKind::Op(Operation {
+                    local_id: None,
+                    operator: mir::Operator::HostFunctionCall { name: "create_turtles" },
+                    args: vec![
+                        // TODO make this use a global variable
+                        mir::Operand::Constant(mir::Constant { value: UnpackedDynBox::Int(125) }),
+                        mir::Operand::ImmClosure(mir::ImmClosure {
+                            captures: vec![],
+                            body: setup_body_0,
+                        }),
+                    ],
+                }),
+            ],
+        },
+    };
+    let setup = program.functions.insert(setup);
+
+    program
 }

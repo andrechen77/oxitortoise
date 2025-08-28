@@ -9,6 +9,7 @@ mod r#type;
 
 pub use boolean::Boolean;
 pub use dynbox::DynBox;
+pub use dynbox::UnpackedDynBox;
 pub use float::Float;
 pub use string::String;
 pub use r#type::NetlogoInternalType;

@@ -189,6 +189,16 @@ impl Turtles {
         self.slot_tracker.iter().map(|id| TurtleId(id))
     }
 
+    pub fn turtle_schema(&self) -> &TurtleSchema {
+        &self.turtle_schema
+    }
+
+    /// Get an immutable reference to the row buffers. Useful for getting access
+    /// to the row schema for calculating offsets.
+    pub fn row_buffers(&self) -> &[Option<RowBuffer>] {
+        &self.data
+    }
+
     /// Get a reference to a field of a turtle. Returns `None` if the
     /// turtle does not exist.
     pub fn get_turtle_field<T: 'static>(

@@ -99,9 +99,9 @@ pub struct RowSchema {
 // For safety this must be correct at all times.
 #[derive(Debug)]
 pub struct RowSchemaField {
-    offset: usize,
-    r#type: TypeId,
-    size: usize,
+    pub offset: usize,
+    pub r#type: TypeId,
+    pub size: usize,
 }
 
 impl RowSchema {
@@ -155,6 +155,14 @@ impl RowSchema {
         // overall layout must match T's layout
         let t_layout = Layout::new::<T>();
         self.layout == t_layout
+    }
+
+    pub fn field(&self, field_idx: usize) -> &RowSchemaField {
+        &self.fields[field_idx]
+    }
+
+    pub fn stride(&self) -> usize {
+        self.layout.size()
     }
 }
 
@@ -397,6 +405,10 @@ impl RowBuffer {
 
     pub fn num_rows(&self) -> usize {
         self.bytes.len() / self.schema.layout.size()
+    }
+
+    pub fn schema(&self) -> &RowSchema {
+        &self.schema
     }
 
     /// # Panics

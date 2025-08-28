@@ -33,11 +33,11 @@ impl Debug for InsnKind {
             InsnKind::LoopArg { initial_value } => {
                 write!(f, "loop_args(-> {:?})", initial_value)
             }
-            InsnKind::Const { r#type, value } => {
+            InsnKind::Const(Const { r#type, value }) => {
                 write!(f, "constant({:?}, {:?})", r#type, value)
             }
             InsnKind::UserFunctionPtr { function } => {
-                write!(f, "call_user_function({:?})", function)
+                write!(f, "user_fn_ptr({:?})", function)
             }
             InsnKind::DeriveField { offset, ptr } => {
                 write!(f, "derive_field({:?}, {:?})", offset, ptr)
@@ -60,8 +60,8 @@ impl Debug for InsnKind {
             InsnKind::StackAddr { offset } => {
                 write!(f, "stack_addr({:?})", offset)
             }
-            InsnKind::CallImportedFunction { function, output_type, args } => {
-                write!(f, "call_imported_function({:?}, {:?}, {:?})", function, output_type, args)
+            InsnKind::CallHostFunction { function, output_type, args } => {
+                write!(f, "call_host_fn({:?}, {:?}, {:?})", function, output_type, args)
             }
             InsnKind::CallUserFunction { function, output_type, args } => {
                 write!(f, "call_user_function({:?}, {:?}, {:?})", function, output_type, args)

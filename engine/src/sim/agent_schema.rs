@@ -96,6 +96,10 @@ impl TurtleSchema {
         make_row_buffers_impl::<TurtleBaseData, N>(&self.field_groups)
     }
 
+    pub fn base_data(&self) -> AgentFieldDescriptor {
+        AgentFieldDescriptor { buffer_idx: 0, field_idx: 0 }
+    }
+
     pub fn heading(&self) -> AgentFieldDescriptor {
         self.heading
     }

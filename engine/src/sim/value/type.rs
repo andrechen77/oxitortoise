@@ -1,5 +1,7 @@
 use std::any::TypeId;
 
+use lir::smallvec::{SmallVec, smallvec};
+
 /// A concrete type representation in the NetLogo engine. The same NetLogo
 /// language type may have multiple concrete type representation.
 #[derive(Debug, PartialEq, Clone)]
@@ -23,6 +25,19 @@ impl NetlogoInternalType {
         match self {
             &Self::FLOAT | &Self::INTEGER | &Self::POINT | &Self::COLOR => true,
             _ => false,
+        }
+    }
+
+    pub fn to_lir_type(&self) -> SmallVec<[lir::ValType; 1]> {
+        match self {
+            &Self::FLOAT => smallvec![lir::ValType::F64],
+            &Self::INTEGER => smallvec![lir::ValType::I64],
+            &Self::BOOLEAN => smallvec![lir::ValType::I8],
+            &Self::TURTLE_ID => smallvec![lir::ValType::I64],
+            &Self::PATCH_ID => smallvec![lir::ValType::I32],
+            &Self::POINT => smallvec![lir::ValType::F64, lir::ValType::F64],
+            &Self::HEADING => smallvec![lir::ValType::F64],
+            _ => todo!(),
         }
     }
 }

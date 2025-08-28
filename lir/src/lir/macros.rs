@@ -5,10 +5,10 @@ macro_rules! push_node {
     };
     ($ctx:expr; [$val_ref:ident] = constant($ty:ident, $value:expr)) => {
         let insn_idx = $ctx.0[$ctx.1].push_and_get_key(
-            $crate::InsnKind::Const {
+            $crate::InsnKind::Const($crate::Const {
                 r#type: $crate::ValType::$ty,
                 value: $value,
-            }
+            })
         );
         let $val_ref = $crate::ValRef($crate::InsnPc($ctx.1, insn_idx), 0);
         $ctx.2.insert($val_ref, stringify!($val_ref).to_string());
@@ -134,7 +134,7 @@ macro_rules! push_node {
         let $val_ref = $crate::ValRef($crate::InsnPc($ctx.1, insn_idx), 0);
         $ctx.2.insert($val_ref, stringify!($val_ref).to_string());
     };
-    ($ctx:expr; [$($val_ref:ident),*] = call_imported_function($function:ident -> [$($return_ty:ident),*])(
+    ($ctx:expr; [$($val_ref:ident),*] = call_host_fn($function:ident -> [$($return_ty:ident),*])(
         $(
             $arg_ident:ident $(($($arg_param:tt)*))*
         ),* $(,)?
@@ -146,7 +146,7 @@ macro_rules! push_node {
         )*
 
         let insn_idx = $ctx.0[$ctx.1].push_and_get_key(
-            $crate::InsnKind::CallImportedFunction {
+            $crate::InsnKind::CallHostFunction {
                 function: $function,
                 output_type: $crate::smallvec::smallvec![$($crate::ValType::$return_ty),*],
                 args: args.into_boxed_slice(),

@@ -234,6 +234,7 @@ name = "oxitortoise_lir"
 version = "0.1.0"
 dependencies = [
  "derive_more 2.0.1",
+ "slotmap",
  "smallvec",
  "typed-index-collections",
 ]

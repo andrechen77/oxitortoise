@@ -125,7 +125,7 @@ pub fn stackify_cfg(function: &Function) -> CfgStackification {
                     (smallvec![ValRefOrStackPtr::StackPtr, (*value).into()], smallvec![])
                 }
                 InsnKind::StackAddr { .. } => (smallvec![], smallvec![ValRef(pc, 0).into()]),
-                InsnKind::CallImportedFunction { args, output_type, .. } => (
+                InsnKind::CallHostFunction { args, output_type, .. } => (
                     args.iter().map(|v| (*v).into()).collect(),
                     (0..output_type.len())
                         .map(|i| ValRef(pc, i.try_into().unwrap()).into())

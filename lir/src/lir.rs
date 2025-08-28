@@ -45,6 +45,7 @@
 use std::{collections::HashMap, fmt::Debug, iter::Step};
 
 use derive_more::{From, Into};
+use slotmap::{SecondaryMap, new_key_type};
 use smallvec::SmallVec;
 use typed_index_collections::TiVec;
 
@@ -54,18 +55,20 @@ mod macros;
 #[derive(Debug, PartialEq, Eq, Default)]
 pub struct Program {
     pub entrypoints: Vec<FunctionId>,
-    pub user_functions: TiVec<FunctionId, Function>,
-    pub imported_functions: TiVec<ImportedFunctionId, ImportedFunction>,
+    pub user_functions: SecondaryMap<FunctionId, Function>,
+    pub host_functions: TiVec<HostFunctionId, HostFunction>,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, From, Into)]
-pub struct ImportedFunctionId(pub usize);
+pub struct HostFunctionId(pub usize);
 
-#[derive(Debug, PartialEq, Eq, Into, From, Hash, Clone, Copy)]
-pub struct FunctionId(pub usize);
+// #[derive(Debug, PartialEq, Eq, Into, From, Hash, Clone, Copy)]
+new_key_type! {
+    pub struct FunctionId;
+}
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct ImportedFunction {
+pub struct HostFunction {
     pub parameter_types: Vec<ValType>,
     pub return_type: Vec<ValType>,
     /// Import the function by this name in Wasm.
@@ -119,11 +122,7 @@ pub enum InsnKind {
         /// This is not considered an input to this instruction.
         initial_value: ValRef,
     },
-    Const {
-        r#type: ValType,
-        /// The bit pattern of the value to store.
-        value: u64,
-    },
+    Const(Const),
     UserFunctionPtr {
         function: FunctionId,
     },
@@ -173,8 +172,8 @@ pub enum InsnKind {
         /// The offset from the top of the stack.
         offset: usize,
     },
-    CallImportedFunction {
-        function: ImportedFunctionId,
+    CallHostFunction {
+        function: HostFunctionId,
         output_type: SmallVec<[ValType; 1]>,
         args: Box<[ValRef]>,
     },
@@ -223,6 +222,17 @@ pub enum InsnKind {
     Block(Block),
     IfElse(IfElse),
     Loop(Loop),
+}
+
+#[derive(PartialEq, Eq)]
+pub struct Const {
+    pub r#type: ValType,
+    /// The bit pattern of the value to store.
+    pub value: u64,
+}
+
+impl Const {
+    pub const NULL: Self = Self { r#type: ValType::Ptr, value: 0 };
 }
 
 #[derive(PartialEq, Eq)]
@@ -349,7 +359,7 @@ pub fn infer_output_types(function: &Function) -> HashMap<ValRef, ValType> {
 
         fn visit_insn(&mut self, insn: &InsnKind, pc: InsnPc) {
             match insn {
-                InsnKind::Const { r#type, .. } => {
+                InsnKind::Const(Const { r#type, .. }) => {
                     self.types.insert(ValRef(pc, 0), *r#type);
                 }
                 InsnKind::UserFunctionPtr { .. } => {
@@ -390,7 +400,7 @@ pub fn infer_output_types(function: &Function) -> HashMap<ValRef, ValType> {
                 | InsnKind::Block(Block { output_type, .. })
                 | InsnKind::IfElse(IfElse { output_type, .. })
                 | InsnKind::Loop(Loop { output_type, .. })
-                | InsnKind::CallImportedFunction { output_type, .. }
+                | InsnKind::CallHostFunction { output_type, .. }
                 | InsnKind::CallUserFunction { output_type, .. } => {
                     for (idx, ty) in output_type.iter().enumerate() {
                         self.types.insert(ValRef(pc, idx.try_into().unwrap()), *ty);
