@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, marker::PhantomData};
 
 use crate::exec::CanonExecutionContext;
 
@@ -26,12 +26,13 @@ impl JitEntrypoint {
 }
 
 #[repr(C)]
-pub struct JitCallback<Arg, Ret> {
+pub struct JitCallback<'env, Arg, Ret> {
     pub fn_ptr: extern "C" fn(*mut u8, &mut CanonExecutionContext, Arg) -> Ret,
     pub env: *mut u8,
+    pub _phantom: PhantomData<&'env ()>,
 }
 
-impl<Arg, Ret> JitCallback<Arg, Ret> {
+impl<'env, Arg, Ret> JitCallback<'env, Arg, Ret> {
     pub fn call_mut(&mut self, context: &mut CanonExecutionContext, arg: Arg) -> Ret {
         (self.fn_ptr)(self.env, context, arg)
     }
