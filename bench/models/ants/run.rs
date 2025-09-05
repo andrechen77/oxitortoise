@@ -6,7 +6,7 @@ use engine::{
         jit::{InstallLir as _, JitCallback},
     },
     lir::{self, lir_function},
-    mir::{self, Operation},
+    mir,
     sim::{
         agent_schema::{PatchSchema, TurtleSchema},
         patch::{OFFSET_PATCHES_TO_DATA, PatchBaseData, PatchId, Patches},
@@ -16,7 +16,10 @@ use engine::{
             OFFSET_TOPOLOGY_TO_MAX_PXCOR, OFFSET_TOPOLOGY_TO_MAX_PYCOR, Point, Topology,
             TopologySpec,
         },
-        turtle::{Breed, BreedId, OFFSET_TURTLES_TO_DATA, TurtleBaseData, TurtleId, Turtles},
+        turtle::{
+            Breed, BreedId, OFFSET_TURTLES_TO_DATA, TurtleBaseData, TurtleId, TurtleVarDesc,
+            Turtles,
+        },
         value::{NetlogoInternalType, UnpackedDynBox},
         world::World,
     },
@@ -173,7 +176,7 @@ fn create_lir(default_turtle_breed: BreedId) -> lir::Program {
     use std::mem::offset_of;
 
     let mut lir = lir::Program::default();
-    let lir_fn_tracker = SlotMap::with_key();
+    let mut lir_fn_tracker = SlotMap::with_key();
     let fn_clear_all = lir.host_functions.push_and_get_key(lir::HostFunction {
         name: "oxitortoise_clear_all",
         parameter_types: vec![lir::ValType::Ptr],
@@ -230,13 +233,13 @@ fn create_lir(default_turtle_breed: BreedId) -> lir::Program {
     let offset_patch_to_food = 0;
 
     lir_function! {
-        fn setup_body_0(Ptr, Ptr, I64) -> [],
+        fn setup_body_0(Ptr _env, Ptr ctx, I64 next_turtle) -> [],
+        vars: [],
         stack_space: 0,
         main: {
-            [_env, ctx, next_turtle] = arguments(-> [Ptr, Ptr, I64]);
-            [turtle_idx] = I64ToI32(next_turtle);
+            [turtle_idx] = I64ToI32(var_load(next_turtle));
 
-            [workspace] = mem_load(Ptr, offset_of!(CanonExecutionContext, workspace))(ctx);
+            [workspace] = mem_load(Ptr, offset_of!(CanonExecutionContext, workspace))(var_load(ctx));
             [turtle_buffer] = mem_load(
                 Ptr,
                 offset_of!(Workspace, world)
@@ -254,24 +257,23 @@ fn create_lir(default_turtle_breed: BreedId) -> lir::Program {
     lir.user_functions.insert(setup_body_0_key, setup_body_0);
 
     lir_function! {
-        fn recolor_patch(Ptr, I32) -> [],
+        fn recolor_patch(Ptr _env, I32 _next_patch) -> [],
+        vars: [],
         stack_space: 0,
         main: {
-            [_ctx, _next_patch] = arguments(-> [Ptr, I32]);
         }
     }
     let recolor_patch_key = lir_fn_tracker.insert(());
     lir.user_functions.insert(recolor_patch_key, recolor_patch);
 
     lir_function! {
-        fn setup_body_1(Ptr, Ptr, I32) -> [],
+        fn setup_body_1(Ptr _env, Ptr ctx, I32 next_patch) -> [],
+        vars: [],
         stack_space: 0,
         main: {
-            [_env, ctx, next_patch] = arguments(-> [Ptr, Ptr, I32]);
-
             // calculate distancexy 0 0
 
-            [workspace] = mem_load(Ptr, offset_of!(CanonExecutionContext, workspace))(ctx);
+            [workspace] = mem_load(Ptr, offset_of!(CanonExecutionContext, workspace))(var_load(ctx));
             [patch_buffer] = mem_load(
                 Ptr,
                 offset_of!(Workspace, world)
@@ -279,7 +281,7 @@ fn create_lir(default_turtle_breed: BreedId) -> lir::Program {
                     + OFFSET_PATCHES_TO_DATA
                     + 0 * size_of::<Option<RowBuffer>>()
             )(workspace);
-            [base_data] = derive_element(stride_of_patch_data0)(patch_buffer, next_patch);
+            [base_data] = derive_element(stride_of_patch_data0)(patch_buffer, var_load(next_patch));
             [pos_x] = mem_load(F64, offset_of!(PatchBaseData, position) + offset_of!(Point, x))(base_data);
             [pos_y] = mem_load(F64, offset_of!(PatchBaseData, position) + offset_of!(Point, y))(base_data);
             [distance] = call_host_fn(fn_distance_euclidean_no_wrap -> [F64])(
@@ -337,7 +339,7 @@ fn create_lir(default_turtle_breed: BreedId) -> lir::Program {
             // if food-source-number > 0 [ set food one-of [1 2] ]
             [food_source_number] = mem_load(F64, offset_patch_to_food_source_number)(base_data);
             [] = if_else(-> [])(FGt(food_source_number, constant(F64, 0.0f64.to_bits()))) then_0: {
-                [rand_index] = call_host_fn(fn_next_int -> [I32])(ctx, constant(I32, 2));
+                [rand_index] = call_host_fn(fn_next_int -> [I32])(var_load(ctx), constant(I32, 2));
                 [food] = if_else(-> [F64])(rand_index) then_1: {
                     break_(then_1)(constant(F64, 1.0f64.to_bits()));
                 } else_1: {
@@ -347,23 +349,23 @@ fn create_lir(default_turtle_breed: BreedId) -> lir::Program {
             } else_0: {};
 
             // recolor-patch
-            [] = call_user_function(recolor_patch -> [])(ctx, next_patch);
+            [] = call_user_function(recolor_patch_key -> [])(var_load(ctx), var_load(next_patch));
         }
     }
     let setup_body_1_key = lir_fn_tracker.insert(());
     lir.user_functions.insert(setup_body_1_key, setup_body_1);
 
     lir_function! {
-        fn setup(I32) -> [],
+        fn setup(I32 ctx) -> [],
+        vars: [],
         stack_space: 32,
         main: {
-            [context] = arguments(-> [Ptr]);
-            [workspace] = mem_load(Ptr, offset_of!(CanonExecutionContext, workspace))(context);
+            [workspace] = mem_load(Ptr, offset_of!(CanonExecutionContext, workspace))(var_load(ctx));
             [world] = derive_field(offset_of!(Workspace, world))(workspace);
 
             // clear-all
 
-            [] = call_host_fn(fn_clear_all -> [])(context);
+            [] = call_host_fn(fn_clear_all -> [])(var_load(ctx));
 
             // create-turtles
 
@@ -372,10 +374,10 @@ fn create_lir(default_turtle_breed: BreedId) -> lir::Program {
             stack_store(offset_of!(Point, x))(constant(F64, 0.0f64.to_bits()));
             stack_store(offset_of!(Point, y))(constant(F64, 0.0f64.to_bits()));
             // at stack offset 16, create a closure
-            stack_store(16 + offset_of!(JitCallback<TurtleId, ()>, fn_ptr))(user_fn_ptr(setup_body_0));
+            stack_store(16 + offset_of!(JitCallback<TurtleId, ()>, fn_ptr))(user_fn_ptr(setup_body_0_key));
             // don't bother storing anything in env since it's not used.
             [] = call_host_fn(fn_create_turtles -> [])(
-                context,
+                var_load(ctx),
                 default_turtle_breed,
                 constant(I32, 125),
                 stack_addr(0),
@@ -385,10 +387,10 @@ fn create_lir(default_turtle_breed: BreedId) -> lir::Program {
             // setup-patches
 
             // at stack offset 16, create a closure
-            stack_store(16 + offset_of!(JitCallback<PatchId, ()>, fn_ptr))(user_fn_ptr(setup_body_1));
+            stack_store(16 + offset_of!(JitCallback<PatchId, ()>, fn_ptr))(user_fn_ptr(setup_body_1_key));
             // don't bother storing anything in env since it's not used
             [] = call_host_fn(fn_for_all_patches -> [])(
-                context,
+                var_load(ctx),
                 stack_addr(16),
             );
 
@@ -398,7 +400,7 @@ fn create_lir(default_turtle_breed: BreedId) -> lir::Program {
             mem_store(
                 offset_of!(CanonExecutionContext, dirty_aggregator)
                 + offset_of!(DirtyAggregator, tick)
-            )(context, ticks);
+            )(var_load(ctx), ticks);
         }
     }
     let setup_key = lir_fn_tracker.insert(());
@@ -408,82 +410,142 @@ fn create_lir(default_turtle_breed: BreedId) -> lir::Program {
     lir
 }
 
-fn create_mir() -> mir::Program {
+fn create_mir(default_turtle_breed: BreedId) -> mir::Program {
     let mut program = mir::Program::default();
+    use mir::node;
 
     let setup_body_0 = {
         let mut locals = SlotMap::with_key();
-        // let local_context = locals.insert(mir::LocalDeclaration {
-        //     debug_name: Some("context".to_string()),
-        //     mutable: false,
-        // })
+        let local_env = locals.insert(mir::LocalDeclaration {
+            debug_name: Some("env".to_string()),
+            ty: NetlogoInternalType::UNTYPED_PTR,
+            storage: mir::LocalStorage::Register,
+        });
+        let local_context = locals.insert(mir::LocalDeclaration {
+            debug_name: Some("context".to_string()),
+            ty: NetlogoInternalType::UNTYPED_PTR,
+            storage: mir::LocalStorage::Register,
+        });
         let local_self = locals.insert(mir::LocalDeclaration {
             debug_name: Some("self".to_string()),
-            mutable: false,
             ty: NetlogoInternalType::TURTLE_ID,
+            storage: mir::LocalStorage::Register,
         });
+        let mut nodes: SlotMap<mir::NodeId, Box<dyn mir::EffectfulNode>> = SlotMap::with_key();
+        let statements = vec![
+            mir::StatementKind::Node({
+                let context = nodes.insert(Box::new(node::GetLocalVar { local_id: local_context }));
+                let turtle = nodes.insert(Box::new(node::GetLocalVar { local_id: local_self }));
+                let value =
+                    nodes.insert(Box::new(node::Constant { value: UnpackedDynBox::Float(2.0) }));
+                nodes.insert(Box::new(node::SetTurtleVar {
+                    context,
+                    turtle,
+                    var: TurtleVarDesc::Size,
+                    value,
+                }))
+            }),
+            mir::StatementKind::Node({
+                let context = nodes.insert(Box::new(node::GetLocalVar { local_id: local_context }));
+                let turtle = nodes.insert(Box::new(node::GetLocalVar { local_id: local_self }));
+                let value =
+                    nodes.insert(Box::new(node::Constant { value: UnpackedDynBox::Float(15.0) }));
+                nodes.insert(Box::new(node::SetTurtleVar {
+                    context,
+                    turtle,
+                    var: TurtleVarDesc::Color,
+                    value,
+                }))
+            }),
+        ];
         mir::Function {
             debug_name: Some("setup/body_0".to_string()),
-            takes_env: true,
-            takes_context: true,
-            parameters: vec![local_self],
-            return_value: None,
+            parameters: vec![local_env, local_context, local_self],
+            return_ty: None,
             locals,
-            statements: mir::StatementBlock {
-                statements: vec![
-                    mir::StatementKind::Op(Operation {
-                        local_id: None,
-                        operator: mir::Operator::SetTurtleField { field: mir::AgentField::Size },
-                        args: vec![
-                            mir::Operand::LocalVar(local_self),
-                            mir::Operand::Constant(mir::Constant {
-                                value: UnpackedDynBox::Float(2.0),
-                            }),
-                        ],
-                    }),
-                    mir::StatementKind::Op(Operation {
-                        local_id: None,
-                        operator: mir::Operator::SetTurtleField { field: mir::AgentField::Color },
-                        args: vec![mir::Operand::Constant(mir::Constant {
-                            value: UnpackedDynBox::Float(15.0),
-                        })],
-                    }),
-                ],
-            },
+            nodes,
+            cfg: mir::StatementBlock { statements },
         }
     };
     let setup_body_0 = program.functions.insert(setup_body_0);
 
-    let setup = mir::Function {
-        debug_name: Some("setup".to_string()),
-        takes_env: false,
-        takes_context: true,
-        parameters: vec![],
-        return_value: None,
-        locals: SlotMap::with_key(),
-        statements: mir::StatementBlock {
-            statements: vec![
-                mir::StatementKind::Op(Operation {
-                    local_id: None,
-                    operator: mir::Operator::HostFunctionCall { name: "clear_all" },
-                    args: vec![],
-                }),
-                mir::StatementKind::Op(Operation {
-                    local_id: None,
-                    operator: mir::Operator::HostFunctionCall { name: "create_turtles" },
-                    args: vec![
-                        // TODO make this use a global variable
-                        mir::Operand::Constant(mir::Constant { value: UnpackedDynBox::Int(125) }),
-                        mir::Operand::ImmClosure(mir::ImmClosure {
-                            captures: vec![],
-                            body: setup_body_0,
-                        }),
-                    ],
-                }),
-            ],
-        },
+    let setup = {
+        let mut locals = SlotMap::with_key();
+        let local_context = locals.insert(mir::LocalDeclaration {
+            debug_name: Some("context".to_string()),
+            ty: NetlogoInternalType::UNTYPED_PTR,
+            storage: mir::LocalStorage::Register,
+        });
+        let mut nodes: SlotMap<mir::NodeId, Box<dyn mir::EffectfulNode>> = SlotMap::with_key();
+        let statements = vec![
+            mir::StatementKind::Node({
+                let ctx = nodes.insert(Box::new(node::GetLocalVar { local_id: local_context }));
+                nodes.insert(Box::new(node::ClearAll { context: ctx }))
+            }),
+            mir::StatementKind::Node({
+                let ctx = nodes.insert(Box::new(node::GetLocalVar { local_id: local_context }));
+                let num_turtles =
+                    nodes.insert(Box::new(node::Constant { value: UnpackedDynBox::Int(125) }));
+                let body =
+                    nodes.insert(Box::new(node::Closure { captures: vec![], body: setup_body_0 }));
+                nodes.insert(Box::new(node::CreateTurtles {
+                    context: ctx,
+                    breed: default_turtle_breed,
+                    num_turtles,
+                    body,
+                }))
+            }),
+        ];
+        mir::Function {
+            debug_name: Some("setup".to_string()),
+            parameters: vec![local_context],
+            return_ty: None,
+            locals,
+            nodes,
+            cfg: mir::StatementBlock { statements },
+        }
     };
     let setup = program.functions.insert(setup);
 
     program
+}
+
+#[cfg(test)]
+mod tests {
+    use engine::mir::lowering::lower;
+
+    use super::*;
+
+    #[test]
+    fn lower_mir() {
+        let (workspace, default_turtle_breed) = create_workspace();
+        let mut mir = create_mir(default_turtle_breed);
+
+        let (_, setup_body_0) = mir
+            .functions
+            .iter_mut()
+            .find(|(k, v)| v.debug_name == Some("setup/body_0".to_string()))
+            .unwrap();
+        let dot_string = setup_body_0.to_dot_string();
+        std::fs::write("setup_body_0.dot", dot_string).expect("Failed to write dot file");
+        lower(setup_body_0, &workspace);
+        let dot_string = setup_body_0.to_dot_string();
+        std::fs::write("setup_body_0_lowered.dot", dot_string).expect("Failed to write dot file");
+
+        let (_, setup) = mir
+            .functions
+            .iter_mut()
+            .find(|(k, v)| v.debug_name == Some("setup".to_string()))
+            .unwrap();
+        let dot_string = setup.to_dot_string();
+        std::fs::write("setup.dot", dot_string).expect("Failed to write dot file");
+        lower(setup, &workspace);
+        let dot_string = setup.to_dot_string();
+        std::fs::write("setup_lowered.dot", dot_string).expect("Failed to write dot file");
+
+        let lir = mir::mir_to_lir(&mir, &workspace);
+        std::fs::write("lir", format!("{}", lir)).expect("Failed to write lir file");
+
+        let _entrypoints = unsafe { LirInstaller::install_lir(&lir).unwrap() };
+    }
 }

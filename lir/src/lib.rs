@@ -1,4 +1,4 @@
-#![feature(step_trait)]
+#![feature(step_trait, debug_closure_helpers)]
 
 pub extern crate slotmap;
 pub extern crate smallvec;

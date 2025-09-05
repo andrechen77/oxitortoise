@@ -8,14 +8,14 @@ use std::fmt::{self, Debug};
 use std::mem::offset_of;
 use std::rc::Rc;
 
-use derive_more::derive::{From, Into};
+use derive_more::derive::{Display, From, Into};
 use either::Either;
 use slotmap::SlotMap;
 
 use crate::sim::agent_schema::{AgentFieldDescriptor, AgentSchemaField, TurtleSchema};
 use crate::sim::topology::Heading;
-use crate::sim::value::DynBox;
 use crate::sim::value::agentset::TurtleSet;
+use crate::sim::value::{DynBox, NetlogoInternalType};
 use crate::util::gen_slot_tracker::{GenIndex, GenSlotTracker};
 use crate::util::row_buffer::RowBuffer;
 use crate::{
@@ -189,16 +189,6 @@ impl Turtles {
         self.slot_tracker.iter().map(|id| TurtleId(id))
     }
 
-    pub fn turtle_schema(&self) -> &TurtleSchema {
-        &self.turtle_schema
-    }
-
-    /// Get an immutable reference to the row buffers. Useful for getting access
-    /// to the row schema for calculating offsets.
-    pub fn row_buffers(&self) -> &[Option<RowBuffer>] {
-        &self.data
-    }
-
     /// Get a reference to a field of a turtle. Returns `None` if the
     /// turtle does not exist.
     pub fn get_turtle_field<T: 'static>(
@@ -311,6 +301,69 @@ pub struct Breed {
     pub singular_name: Rc<str>,
     /// Which fields of the turtle record are active for this breed.
     pub active_custom_fields: Vec<AgentFieldDescriptor>,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum TurtleVarDesc {
+    Size,
+    Color,
+    Custom(AgentFieldDescriptor),
+    // TODO add other builtin variables
+}
+
+/// Returns a tuple indicating how to access a given variable given a pointer
+/// to [`Turtles`]. The first element is the byte offset from the start of the
+/// [`Turtles`] struct to the pointer to row buffer containing the variable.
+/// The second element is the stride of the each row in that buffer; each agent
+/// gets one row. The third element is the byte offset from the start of the
+/// row to the required field.
+///
+/// ```ignore
+/// let turtles: &Turtles;
+/// let var_desc: TurtleVarDesc;
+/// let (buffer_offset, stride, field_offset) = calc_turtle_var_offset(turtles, var_desc);
+/// let ptr_turtles = turtles as *const u8;
+/// let field = *(*ptr_turtles.byte_add(buffer_offset).cast::<*const *const u8>()).byte_add(stride * agent_idx + field_offset);
+/// ```
+pub fn calc_turtle_var_offsets(turtles: &Turtles, var: TurtleVarDesc) -> (usize, usize, usize) {
+    fn stride_and_field_offset(turtles: &Turtles, field: AgentFieldDescriptor) -> (usize, usize) {
+        let row_schema = turtles.data[usize::from(field.buffer_idx)].as_ref().unwrap().schema();
+        let field_offset = row_schema.field(usize::from(field.field_idx)).offset;
+        let stride = row_schema.stride();
+        (stride, field_offset)
+    }
+    let (buffer_idx, stride, field_offset) = match var {
+        TurtleVarDesc::Custom(field_desc) => {
+            let (stride, field_offset) = stride_and_field_offset(turtles, field_desc);
+            (field_desc.buffer_idx, stride, field_offset)
+        }
+        _ => {
+            let base_data_desc = turtles.turtle_schema.base_data();
+            let (stride, field_offset) = stride_and_field_offset(turtles, base_data_desc);
+            let additional_offset = match var {
+                TurtleVarDesc::Size => offset_of!(TurtleBaseData, size),
+                TurtleVarDesc::Color => offset_of!(TurtleBaseData, color),
+                TurtleVarDesc::Custom(_) => unreachable!("custom fields are handled separately"),
+            };
+            (base_data_desc.buffer_idx, stride, field_offset + additional_offset)
+        }
+    };
+    let buffer_offset =
+        offset_of!(Turtles, data) + (usize::from(buffer_idx) * size_of::<Option<RowBuffer>>());
+    (buffer_offset, stride, field_offset)
+}
+
+pub fn turtle_var_type(turtles: &Turtles, var: TurtleVarDesc) -> NetlogoInternalType {
+    match var {
+        TurtleVarDesc::Color => NetlogoInternalType::COLOR,
+        TurtleVarDesc::Size => NetlogoInternalType::FLOAT,
+        TurtleVarDesc::Custom(field) => {
+            let AgentSchemaField::Other(ty) = &turtles.turtle_schema[field] else {
+                unreachable!("this is a custom field, so it cannot be part of the base data");
+            };
+            ty.clone()
+        }
+    }
 }
 
 // TODO write tests for turtle initialization and access

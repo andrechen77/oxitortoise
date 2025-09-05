@@ -17,6 +17,10 @@ impl NetlogoInternalType {
     pub const POINT: Self = Self(7);
     pub const HEADING: Self = Self(8);
     pub const COLOR: Self = Self(9);
+    pub const UNTYPED_PTR: Self = Self(10);
+    pub const AGENT_INDEX: Self = Self(11);
+    /// A closure that can be passed to `ask`, `create-turtles`, etc.
+    pub const ASK_CLOSURE: Self = Self(12);
 
     /// Returns whether this type is valid and represents the numeric value 0.0
     /// at the all-zero bit pattern, i.e. whether the all-zero bit pattern
@@ -37,6 +41,7 @@ impl NetlogoInternalType {
             &Self::PATCH_ID => smallvec![lir::ValType::I32],
             &Self::POINT => smallvec![lir::ValType::F64, lir::ValType::F64],
             &Self::HEADING => smallvec![lir::ValType::F64],
+            &Self::UNTYPED_PTR => smallvec![lir::ValType::Ptr],
             _ => todo!(),
         }
     }

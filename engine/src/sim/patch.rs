@@ -248,3 +248,7 @@ pub struct PatchBaseData {
     pub plabel_color: Color,
     // TODO some way of tracking what turtles are on this patch.
 }
+
+// TODO add fields
+#[derive(Debug)]
+pub struct PatchVarDesc;

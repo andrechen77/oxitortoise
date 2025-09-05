@@ -6,31 +6,12 @@ macro_rules! push_node {
     ($ctx:expr; [$val_ref:ident] = constant($ty:ident, $value:expr)) => {
         let insn_idx = $ctx.0[$ctx.1].push_and_get_key(
             $crate::InsnKind::Const($crate::Const {
-                r#type: $crate::ValType::$ty,
+                ty: $crate::ValType::$ty,
                 value: $value,
             })
         );
         let $val_ref = $crate::ValRef($crate::InsnPc($ctx.1, insn_idx), 0);
         $ctx.2.insert($val_ref, stringify!($val_ref).to_string());
-    };
-    ($ctx:expr; [$($val_ref:ident),*] = arguments(-> [$($return_ty:ident),*])) => {
-        let insn_idx = $ctx.0[$ctx.1].push_and_get_key(
-            $crate::InsnKind::FunctionArgs {
-                output_type: $crate::smallvec::smallvec![$($crate::ValType::$return_ty),*],
-            }
-        );
-
-        let mut i = 0;
-        let ($($val_ref),*) = ($({
-            // include the return type here to ensure we get the right number of
-            // repetitions
-            $crate::ValType::$return_ty;
-            let j = i;
-            i += 1;
-            let v = $crate::ValRef($crate::InsnPc($ctx.1, insn_idx), j);
-            $ctx.2.insert(v, stringify!($val_ref).to_string());
-            v
-        }),*);
     };
     ($ctx:expr; [$val_ref:ident] = user_fn_ptr($function:ident)) => {
         let insn_idx = $ctx.0[$ctx.1].push_and_get_key(
@@ -80,6 +61,25 @@ macro_rules! push_node {
         );
         let $val_ref = $crate::ValRef($crate::InsnPc($ctx.1, insn_idx), 0);
         $ctx.2.insert($val_ref, stringify!($val_ref).to_string());
+    };
+    ($ctx:expr; [$val_ref:ident] = var_load($var_id:expr)) => {
+        let insn_idx = $ctx.0[$ctx.1].push_and_get_key(
+            $crate::InsnKind::VarLoad {
+                var_id: $var_id,
+            },
+        );
+        let $val_ref = $crate::ValRef($crate::InsnPc($ctx.1, insn_idx), 0);
+        $ctx.2.insert($val_ref, stringify!($val_ref).to_string());
+    };
+    ($ctx:expr; var_store($var_id:expr)(
+        $value_ident:ident $(($($value_param:tt)*))*
+    )) => {
+        $crate::push_node!($ctx; [value] = $value_ident $(($($value_param)*))*);
+
+        $ctx.0[$ctx.1].push($crate::InsnKind::VarStore {
+            var_id: $var_id,
+            value,
+        });
     };
     ($ctx:expr; [$val_ref:ident] = mem_load($ty:ident, $offset:expr)(
         $ptr_ident:ident $(($($ptr_param:tt)*))* $(,)?
@@ -325,29 +325,53 @@ macro_rules! instruction_seq {
     }
 }
 
+// TODO fix macro to work with new function parameter passing (i.e. they are
+// used to initialize first X local variables rather than coming from some
+// "arguments" instruction)
 #[macro_export]
 macro_rules! lir_function {
     (
-        fn $func:ident($($param_ty:ident),*) -> [$($return_ty:ident),*],
+        fn $func:ident($($param_ty:ident $param_name:ident),*) -> [$($return_ty:ident),*],
+        vars: [$($var_ty:ident $var_name:ident),*],
         stack_space: $stack_space:expr,
         $label:ident: { $($inner:tt)* }
     ) => {
+        let mut i = 0;
+        let mut debug_var_names: std::collections::HashMap<$crate::VarId, String> = std::collections::HashMap::new();
+        $(
+            let $param_name: $crate::VarId = i.into();
+            debug_var_names.insert($param_name, stringify!($param_name).to_string());
+            i += 1;
+        )*
+        let num_parameters = i;
+        $(
+            let $var_name: $crate::VarId = i.into();
+            debug_var_names.insert($var_name, stringify!($var_name).to_string());
+            i += 1;
+        )*
+
         let mut insn_seqs: $crate::typed_index_collections::TiVec<$crate::InsnSeqId, $crate::typed_index_collections::TiVec<$crate::InsnIdx, $crate::InsnKind>> = $crate::typed_index_collections::TiVec::new();
         let mut debug_val_names = std::collections::HashMap::new();
         let ctx = (&mut insn_seqs, $crate::InsnSeqId(0), &mut debug_val_names);
 
+
         $crate::instruction_seq!(ctx; $label: { $($inner)* });
 
         let $func = $crate::Function {
-            parameter_types: vec![$($crate::ValType::$param_ty),*],
+            local_vars: $crate::typed_index_collections::ti_vec![
+                $($crate::ValType::$param_ty,)*
+                $($crate::ValType::$var_ty,)*
+            ],
+            num_parameters,
+            stack_space: $stack_space,
             body: $crate::Block {
                 output_type: $crate::smallvec::smallvec![$($crate::ValType::$return_ty),*],
                 body: $crate::InsnSeqId(0),
             },
             insn_seqs,
-            stack_space: $stack_space,
             debug_fn_name: Some(stringify!($func).to_string()),
             debug_val_names,
+            debug_var_names,
         };
     }
 }

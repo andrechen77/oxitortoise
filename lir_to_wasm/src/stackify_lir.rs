@@ -94,12 +94,6 @@ pub fn stackify_cfg(function: &Function) -> CfgStackification {
                 SmallVec<[ValRefOrStackPtr; 2]>,
                 SmallVec<[ValRefOrStackPtr; 1]>,
             ) = match insn {
-                InsnKind::FunctionArgs { .. } => {
-                    // this doesn't actually output onto the stack. this is
-                    // because arguments are just symbolic and don't translate
-                    // to Wasm instructions
-                    (smallvec![], smallvec![])
-                }
                 InsnKind::LoopArg { .. } => {
                     // this doesn't actually output onto the stack. this is
                     // because arguments are just symbolic and don't translate
@@ -124,6 +118,8 @@ pub fn stackify_cfg(function: &Function) -> CfgStackification {
                 InsnKind::StackStore { value, .. } => {
                     (smallvec![ValRefOrStackPtr::StackPtr, (*value).into()], smallvec![])
                 }
+                InsnKind::VarLoad { .. } => (smallvec![], smallvec![ValRef(pc, 0).into()]),
+                InsnKind::VarStore { value, .. } => (smallvec![(*value).into()], smallvec![]),
                 InsnKind::StackAddr { .. } => (smallvec![], smallvec![ValRef(pc, 0).into()]),
                 InsnKind::CallHostFunction { args, output_type, .. } => (
                     args.iter().map(|v| (*v).into()).collect(),
@@ -267,6 +263,7 @@ mod tests {
     fn basic_sequence() {
         lir_function! {
             fn block() -> [I32],
+            vars: [],
             stack_space: 0,
             main: {
                 [a] = constant(I32, 0);
@@ -296,6 +293,7 @@ mod tests {
         // inputs to the block instruction
         lir_function! {
             fn block() -> [I32],
+            vars: [],
             stack_space: 0,
             main: {
                 [a] = constant(I32, 10);
@@ -345,15 +343,16 @@ mod tests {
     #[test]
     fn includes_branches() {
         lir_function! {
-            fn block() -> [I32],
+            fn block(I32 arg) -> [I32],
+            vars: [],
             stack_space: 0,
             main: {
-                [arg] = arguments(-> [I32]);
                 [a] = constant(I32, 10);
                 [b] = constant(I32, 20);
                 [c] = constant(I32, 30);
                 [d] = constant(I32, 40);
-                [branch] = if_else(-> [I32])(arg) then: {
+                [arg_val] = var_load(arg);
+                [branch] = if_else(-> [I32])(arg_val) then: {
                     // get a, b, c
                     [res_0] = IAdd(a, IAdd(b, c));
                     break_(then)(res_0);
@@ -373,12 +372,12 @@ mod tests {
             ti_vec![
                 stackification! {
                     inputs [];
-                    [InsnIdx(0)] cap(0) get[] [] => [];
-                    [InsnIdx(1)] cap(0) get[] [] => [ValRefOrStackPtr::ValRef(a)];
-                    [InsnIdx(2)] cap(0) get[] [] => [ValRefOrStackPtr::ValRef(b)];
-                    [InsnIdx(3)] cap(0) get[ValRefOrStackPtr::ValRef(arg)] [] => [ValRefOrStackPtr::ValRef(c)];
-                    [InsnIdx(4)] cap(1) get[] [] => [ValRefOrStackPtr::ValRef(d)];
-                    [InsnIdx(5)] cap(1) get[] [ValRefOrStackPtr::ValRef(a), ValRefOrStackPtr::ValRef(b), arg] => [ValRefOrStackPtr::ValRef(branch)];
+                    [InsnIdx(0)] cap(0) get[] [] => [ValRefOrStackPtr::ValRef(a)];
+                    [InsnIdx(1)] cap(0) get[] [] => [ValRefOrStackPtr::ValRef(b)];
+                    [InsnIdx(2)] cap(0) get[] [] => [ValRefOrStackPtr::ValRef(c)];
+                    [InsnIdx(3)] cap(1) get[] [] => [ValRefOrStackPtr::ValRef(d)];
+                    [InsnIdx(4)] cap(1) get[] [] => [ValRefOrStackPtr::ValRef(arg_val)];
+                    [InsnIdx(5)] cap(0) get[] [ValRefOrStackPtr::ValRef(a), ValRefOrStackPtr::ValRef(b), arg_val] => [ValRefOrStackPtr::ValRef(branch)];
                     [InsnIdx(6)] cap(0) get[] [ValRefOrStackPtr::ValRef(branch)] => [];
                     [InsnIdx(7)] cap(0) get[] [] => [];
                 },

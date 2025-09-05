@@ -154,18 +154,21 @@ fn add_function<A: FnTableSlotAllocator>(
         compound_labels: HashMap<lir::InsnSeqId, wir::InstrSeqId>,
         /// Associates each LIR value with the walrus local variable, if one
         /// exists.
-        local_ids: HashMap<lir::ValRef, wir::LocalId>,
+        val_local_ids: HashMap<lir::ValRef, wir::LocalId>,
+        /// Associates each LIR local variable the walrus local variable.
+        var_local_ids: HashMap<lir::VarId, wir::LocalId>,
         /// The walrus local variable that holds the stack pointer.
         sp_local_id: Option<wir::LocalId>,
-        /// The walrus local variables that hold the function arguments.
-        arg_locals: Vec<wir::LocalId>,
         /// The number of getters remaining for each LIR value.
         remaining_getters: HashMap<lir::ValRef, usize>,
     }
 
     // create the function builder
-    let parameter_types: Vec<_> =
-        func.parameter_types.iter().copied().map(translate_val_type).collect();
+    let parameter_types: Vec<_> = func.local_vars[..func.num_parameters.into()]
+        .iter()
+        .copied()
+        .map(translate_val_type)
+        .collect();
     let return_types: Vec<_> =
         func.body.output_type.iter().copied().map(translate_val_type).collect();
     let mut function =
@@ -199,12 +202,21 @@ fn add_function<A: FnTableSlotAllocator>(
         types: &types,
         stk: &stk,
         compound_labels: HashMap::new(),
-        local_ids: HashMap::new(),
+        val_local_ids: HashMap::new(),
+        var_local_ids: HashMap::new(),
         sp_local_id,
-        arg_locals: Vec::new(),
         remaining_getters: stackify_lir::count_getters(&stk),
     };
 
+    // allocate local variables for the function parameters
+    let mut arg_locals = Vec::new();
+    for (var_id, _) in func.local_vars[..func.num_parameters.into()].iter_enumerated() {
+        let wir_local_id = allocate_local_for_var(&mut ctx, var_id);
+        ctx.var_local_ids.insert(var_id, wir_local_id);
+        arg_locals.push(wir_local_id);
+    }
+
+    // generate code, with or without a prologue/epilogue
     if let Some(stack_ptr_local) = sp_local_id {
         // there is a stack pointer. generate a prologue and epilogue that
         // initializes the stack pointer
@@ -240,6 +252,7 @@ fn add_function<A: FnTableSlotAllocator>(
         // there is no stack pointer, so no need for prologue or epilogue
         write_code(&mut ctx, &mut function.func_body(), func.body.body);
     }
+
     fn write_code<A: FnTableSlotAllocator>(
         ctx: &mut CodegenFnCtx<A>,
         insn_builder: &mut walrus::InstrSeqBuilder,
@@ -269,10 +282,10 @@ fn add_function<A: FnTableSlotAllocator>(
                     panic!("stackification should not cause stack ptr operand to be captured");
                 };
 
-                if !ctx.local_ids.contains_key(&captured)
+                if !ctx.val_local_ids.contains_key(&captured)
                     && ctx.remaining_getters.contains_key(&captured)
                 {
-                    let local_id = allocate_local(ctx, captured);
+                    let local_id = allocate_local_for_val(ctx, captured);
 
                     // add an instruction to store the captured value into a
                     // local variable
@@ -299,8 +312,9 @@ fn add_function<A: FnTableSlotAllocator>(
                     .filter_map(|(i, v)| {
                         // stackification should not cause stack ptr to be part of a multivalue
                         let v = v.unwrap_val_ref();
-                        (ctx.remaining_getters.contains_key(&v) && !ctx.local_ids.contains_key(&v))
-                            .then(|| i)
+                        (ctx.remaining_getters.contains_key(&v)
+                            && !ctx.val_local_ids.contains_key(&v))
+                        .then(|| i)
                     })
                     .last(); // get the bottomost value needing saving
                 // if required_pops is None, that means we did not find any
@@ -308,13 +322,15 @@ fn add_function<A: FnTableSlotAllocator>(
                 if let Some(required_pops) = required_pops {
                     // add instructions to pop values from the stack
                     for i in 0..required_pops {
-                        let local_id =
-                            allocate_local(ctx, op_stack[op_stack.len() - i - 1].unwrap_val_ref());
+                        let local_id = allocate_local_for_val(
+                            ctx,
+                            op_stack[op_stack.len() - i - 1].unwrap_val_ref(),
+                        );
                         insn_builder.local_set(local_id);
                     }
                     // the bottommost value needing saving is now on top of the
                     // stack
-                    let local_id = allocate_local(
+                    let local_id = allocate_local_for_val(
                         ctx,
                         op_stack[op_stack.len() - required_pops - 1].unwrap_val_ref(),
                     );
@@ -322,7 +338,7 @@ fn add_function<A: FnTableSlotAllocator>(
                     // add instructions to push the saved values back onto the
                     // stack
                     for i in (op_stack.len() - required_pops)..op_stack.len() {
-                        insn_builder.local_get(ctx.local_ids[&op_stack[i].unwrap_val_ref()]);
+                        insn_builder.local_get(ctx.val_local_ids[&op_stack[i].unwrap_val_ref()]);
                     }
                 }
             }
@@ -341,7 +357,7 @@ fn add_function<A: FnTableSlotAllocator>(
                         }
 
                         // generate code
-                        insn_builder.local_get(ctx.local_ids[v]);
+                        insn_builder.local_get(ctx.val_local_ids[v]);
                     }
                     ValRefOrStackPtr::StackPtr => {
                         insn_builder.local_get(ctx.sp_local_id.expect("the presence of a StackLoad instruction means there must be a stack pointer local var"));
@@ -354,23 +370,12 @@ fn add_function<A: FnTableSlotAllocator>(
             // generate code to execute the instruction
             use lir::InsnKind as I;
             match insn {
-                I::FunctionArgs { output_type } => {
-                    // arguments do not show up in codegen. However, any future
-                    // instructions that use this argument need to know that
-                    // they can get it using a local getter.
-                    assert!(ctx.arg_locals.is_empty());
-                    for i in 0..output_type.len() {
-                        let i: u8 = i.try_into().unwrap();
-                        let local_id = allocate_local(ctx, lir::ValRef(pc, i));
-                        ctx.arg_locals.push(local_id);
-                    }
-                }
                 I::LoopArg { initial_value: _ } => {
                     // arguments do not show up in codegen. Unlike function
                     // args, however, loop args do output values onto the
                     // operand stack, so things are automatically handled.
                 }
-                I::Const(lir::Const { r#type, value }) => {
+                I::Const(lir::Const { ty: r#type, value }) => {
                     insn_builder.const_(translate_val(*r#type, *value));
                 }
                 I::UserFunctionPtr { function } => {
@@ -412,6 +417,19 @@ fn add_function<A: FnTableSlotAllocator>(
                     // by the value, are already on the operand stack. we just
                     // need to emit the store instruction.
                     insn_builder.store(ctx.mod_ctx.mem_id, store_kind, mem_arg);
+                }
+                I::VarLoad { var_id } => {
+                    insn_builder.local_get(ctx.var_local_ids[var_id]);
+                }
+                I::VarStore { var_id, value: _ } => {
+                    // allocate a local for the value, if one doesn't already
+                    // exist
+                    let wir_local_id = ctx
+                        .var_local_ids
+                        .get(var_id)
+                        .copied()
+                        .unwrap_or_else(|| allocate_local_for_var(ctx, *var_id));
+                    insn_builder.local_set(wir_local_id);
                 }
                 I::StackAddr { offset } => {
                     insn_builder
@@ -510,12 +528,21 @@ fn add_function<A: FnTableSlotAllocator>(
         // TODO should we deliberately skip stack manipulators at the end? the
         // end idx won't show up because it's not a real instruction
     }
-    fn allocate_local<A>(ctx: &mut CodegenFnCtx<A>, val: lir::ValRef) -> wir::LocalId {
+    fn allocate_local_for_val<A>(ctx: &mut CodegenFnCtx<A>, val: lir::ValRef) -> wir::LocalId {
         let local_id = ctx.mod_ctx.module.locals.add(translate_val_type(ctx.types[&val]));
         if let Some(name) = ctx.func.debug_val_names.get(&val) {
             ctx.mod_ctx.module.locals.get_mut(local_id).name = Some(name.clone());
         }
-        ctx.local_ids.insert(val, local_id);
+        ctx.val_local_ids.insert(val, local_id);
+        local_id
+    }
+    fn allocate_local_for_var<A>(ctx: &mut CodegenFnCtx<A>, var_id: lir::VarId) -> wir::LocalId {
+        let local_id =
+            ctx.mod_ctx.module.locals.add(translate_val_type(ctx.func.local_vars[var_id]));
+        if let Some(name) = ctx.func.debug_var_names.get(&var_id) {
+            ctx.mod_ctx.module.locals.get_mut(local_id).name = Some(name.clone());
+        }
+        ctx.var_local_ids.insert(var_id, local_id);
         local_id
     }
     fn addr_of_function<A: FnTableSlotAllocator>(
@@ -533,7 +560,7 @@ fn add_function<A: FnTableSlotAllocator>(
         }
     }
 
-    function.finish(ctx.arg_locals, &mut mod_ctx.module.funcs)
+    function.finish(arg_locals, &mut mod_ctx.module.funcs)
 }
 
 /// Translate a LIR value type to a Wasm value type.
@@ -689,6 +716,7 @@ mod tests {
     fn return_1() {
         lir_function! {
             fn func() -> [I32],
+            vars: [],
             stack_space: 0,
             main: {
                 break_(main)(constant(I32, 10));
@@ -708,11 +736,11 @@ mod tests {
     #[test]
     fn add_one() {
         lir_function! {
-            fn add_one(I32) -> [I32],
+            fn add_one(I32 arg) -> [I32],
+            vars: [],
             stack_space: 0,
             main: {
-                [arg] = arguments(-> [I32]);
-                [res] = IAdd(arg, constant(I32, 1));
+                [res] = IAdd(var_load(arg), constant(I32, 1));
                 break_(main)(res);
             }
         }
@@ -728,13 +756,39 @@ mod tests {
     }
 
     #[test]
+    fn use_args_and_local_vars() {
+        lir_function! {
+            fn use_args(I32 a, I32 b) -> [I32],
+            vars: [I32 c, I32 d],
+            stack_space: 0,
+            main: {
+                [sum] = IAdd(var_load(a), var_load(b));
+                var_store(d)(sum);
+                var_store(c)(var_load(d));
+            }
+        }
+
+        println!("{:?}", use_args);
+
+        let mut lir = lir::Program::default();
+        let mut functions: SlotMap<lir::FunctionId, ()> = SlotMap::with_key();
+        let func_id = functions.insert(());
+        lir.user_functions.insert(func_id, use_args);
+        lir.entrypoints.push(func_id);
+
+        let (mut module, _) = lir_to_wasm(&lir, &mut TestFnTableSlotAllocator::default());
+        let wasm = module.emit_wasm();
+        std::fs::write("test.wasm", wasm).unwrap();
+    }
+
+    #[test]
     fn use_stack() {
         lir_function! {
-            fn my_function(I32) -> [I32],
+            fn my_function(I32 arg) -> [I32],
+            vars: [],
             stack_space: 16,
             main: {
-                [arg] = arguments(-> [I32]);
-                stack_store(8)(arg);
+                stack_store(8)(var_load(arg));
                 [_res] = stack_load(I16, 8);
                 break_(main)(stack_addr(8));
             }
@@ -762,6 +816,7 @@ mod tests {
 
         lir_function! {
             fn my_function() -> [F64, I32],
+            vars: [],
             stack_space: 0,
             main: {
                 [a, b] = call_host_fn(imported_func_id -> [F64, I32])(
@@ -787,7 +842,8 @@ mod tests {
 
         let mut lir = lir::Program::default();
         lir_function! {
-            fn callee(F64) -> [I32],
+            fn callee(F64 arg) -> [I32],
+            vars: [],
             stack_space: 0,
             main: {
                 break_(main)(constant(I32, 10));
@@ -797,6 +853,7 @@ mod tests {
         lir.user_functions.insert(callee_id, callee);
         lir_function! {
             fn caller() -> [I32],
+            vars: [],
             stack_space: 0,
             main: {
                 [a] = call_user_function(callee_id -> [I32])(constant(F64, 1));

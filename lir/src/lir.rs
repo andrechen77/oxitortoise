@@ -44,7 +44,7 @@
 
 use std::{collections::HashMap, fmt::Debug, iter::Step};
 
-use derive_more::{From, Into};
+use derive_more::{Display, From, Into};
 use slotmap::{SecondaryMap, new_key_type};
 use smallvec::SmallVec;
 use typed_index_collections::TiVec;
@@ -62,12 +62,11 @@ pub struct Program {
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, From, Into)]
 pub struct HostFunctionId(pub usize);
 
-// #[derive(Debug, PartialEq, Eq, Into, From, Hash, Clone, Copy)]
 new_key_type! {
     pub struct FunctionId;
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct HostFunction {
     pub parameter_types: Vec<ValType>,
     pub return_type: Vec<ValType>,
@@ -77,36 +76,44 @@ pub struct HostFunction {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Function {
-    pub parameter_types: Vec<ValType>,
-    pub body: Block,
-    pub insn_seqs: TiVec<InsnSeqId, TiVec<InsnIdx, InsnKind>>,
+    /// The non-stack local variables in this function. These is distinct from
+    /// bytes stored on the stack. Function arguments are stored in the local
+    /// variables upon entering the function.
+    pub local_vars: TiVec<VarId, ValType>,
+    /// The first `num_parameters` local variables are the function arguments.
+    pub num_parameters: usize,
     /// The number of bytes to allocate on the stack for this function.
     pub stack_space: usize,
+    pub body: Block,
+    pub insn_seqs: TiVec<InsnSeqId, TiVec<InsnIdx, InsnKind>>,
     pub debug_fn_name: Option<String>,
     pub debug_val_names: HashMap<ValRef, String>,
+    pub debug_var_names: HashMap<VarId, String>,
 }
 
-#[derive(PartialEq, Eq, Hash, Clone, Copy, From, Into)]
+#[derive(PartialEq, Eq, Hash, Clone, Copy, From, Into, Debug, Display)]
 pub struct InsnSeqId(pub usize);
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Into, From)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Into, From, Debug, Display)]
 pub struct InsnIdx(pub usize);
 
-#[derive(PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(PartialEq, Eq, Hash, Clone, Copy, Debug, Display)]
+#[display("{_0}:{_1}")]
 pub struct InsnPc(pub InsnSeqId, pub InsnIdx);
 
 /// A reference to a value produced by an instruction. Starts from 0 and counts
 /// up for each value produced by an instruction in the function. Some
 /// instructions may produce multiple values, while others may produce zero.
-#[derive(PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(PartialEq, Eq, Hash, Clone, Copy, Debug, Display)]
+#[display("{_0}:{_1}")]
 pub struct ValRef(pub InsnPc, pub u8);
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Hash, Clone, Copy, From, Into, Debug, Display)]
+#[display("{self:?}")]
+pub struct VarId(pub usize);
+
+#[derive(PartialEq, Eq, Debug, Display)]
 pub enum InsnKind {
-    /// Outputs all arguments of the function.
-    FunctionArgs {
-        output_type: SmallVec<[ValType; 1]>,
-    },
     // TODO rethink loop args. first, they should output a multivalue, instead
     // of being a single value, since that's what it will look like on the stack
     // machine. In addition, should the loop args instruction be considered to
@@ -117,23 +124,28 @@ pub enum InsnKind {
     // with the fact that every loop body must start with a loop args
     // instruction.
     /// Outputs all arguments of a loop body.
+    #[display("loop_args(-> {})", initial_value)]
     LoopArg {
         /// The initial value of the arguments when the loop is entered.
         /// This is not considered an input to this instruction.
         initial_value: ValRef,
     },
+    #[display("constant(ty={}, value={})", _0.ty, _0.value)]
     Const(Const),
+    #[display("user_fn_ptr({:?})", function)]
     UserFunctionPtr {
         function: FunctionId,
     },
     /// Add a compile-time offset to a pointer, producing a pointer to a
     /// subfield.
+    #[display("derive_field(offset={})({})", offset, ptr)]
     DeriveField {
         offset: usize,
         ptr: ValRef,
     },
     /// Add a dynamic offset to a pointer, producing a pointer to an element of
     /// an array.
+    #[display("derive_element(stride={})(ptr={}, index={})", element_size, ptr, index)]
     DeriveElement {
         element_size: usize,
         ptr: ValRef,
@@ -142,6 +154,7 @@ pub enum InsnKind {
     /// Load a value from memory.
     ///
     /// For loading values from the current function's stack frame, use [`InstructionKind::StackLoad`]
+    #[display("mem_load(ty={}, offset={})({})", r#type, offset, ptr)]
     MemLoad {
         r#type: ValType,
         offset: usize,
@@ -150,42 +163,61 @@ pub enum InsnKind {
     /// Store a value into memory.
     ///
     /// For storing values onto the current function's stack frame, use [`InstructionKind::StackStore`]
+    #[display("mem_store(offset={})(ptr={}, value={})", offset, ptr, value)]
     MemStore {
         offset: usize,
         ptr: ValRef,
         value: ValRef,
     },
     /// Load a value from the stack.
+    #[display("stack_load(ty={}, offset={})", r#type, offset)]
     StackLoad {
         r#type: ValType,
         /// The offset from the top of the stack at which to load the value.
         offset: usize,
     },
     /// Store a value onto the stack.
+    #[display("stack_store(offset={})(value={})", offset, value)]
     StackStore {
         /// The offset from the top of the stack at which to store the value.
         offset: usize,
         value: ValRef,
     },
+    /// Store a value into a possibly mutable local variable.
+    #[display("var_store({})(value={})", var_id, value)]
+    VarStore {
+        var_id: VarId,
+        value: ValRef,
+    },
+    /// Load a value from a possibly mutable local variable.
+    #[display("var_load({})", var_id)]
+    VarLoad {
+        var_id: VarId,
+    },
     /// Get the address of a value on the stack
+    #[display("stack_addr({})", offset)]
     StackAddr {
         /// The offset from the top of the stack.
         offset: usize,
     },
+    #[display("call_host_fn({:?}, -> {:?})({:?})", function, output_type, args)]
     CallHostFunction {
         function: HostFunctionId,
         output_type: SmallVec<[ValType; 1]>,
         args: Box<[ValRef]>,
     },
+    #[display("call_user_fn({:?}, -> {:?})({:?})", function, output_type, args)]
     CallUserFunction {
         function: FunctionId,
         output_type: SmallVec<[ValType; 1]>,
         args: Box<[ValRef]>,
     },
+    #[display("unary_op({})({})", op, operand)]
     UnaryOp {
         op: UnaryOpcode,
         operand: ValRef,
     },
+    #[display("binary_op({})({}, {})", op, lhs, rhs)]
     BinaryOp {
         /// The operation to perform. This also determines the types of the
         /// inputs and outputs.
@@ -206,12 +238,14 @@ pub enum InsnKind {
     /// the loop body with the new loop arguments. Since `InsnSeqId(0)` is
     /// always the entire function, that targt can be used to implement early
     /// returns.
+    #[display("break({})({:?})", target, values)]
     Break {
         target: InsnSeqId,
         values: Box<[ValRef]>,
     },
     /// Conditionally break out of control flow constructs. See
     /// [`InsnKind::Break`] for more information.
+    #[display("conditional_break({})(cond={}, {:?})", target, condition, values)]
     ConditionalBreak {
         target: InsnSeqId,
         condition: ValRef,
@@ -224,18 +258,19 @@ pub enum InsnKind {
     Loop(Loop),
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Debug)]
 pub struct Const {
-    pub r#type: ValType,
+    pub ty: ValType,
     /// The bit pattern of the value to store.
     pub value: u64,
 }
 
 impl Const {
-    pub const NULL: Self = Self { r#type: ValType::Ptr, value: 0 };
+    pub const NULL: Self = Self { ty: ValType::Ptr, value: 0 };
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Debug, Display)]
+#[display("block(-> {:?}) {{{}}}", output_type, body)]
 pub struct Block {
     /// The type of output of this block.
     pub output_type: SmallVec<[ValType; 1]>,
@@ -243,7 +278,8 @@ pub struct Block {
     pub body: InsnSeqId,
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Debug, Display)]
+#[display("if_else(-> {:?})({}) {{{}}} {{{}}}", output_type, condition, then_body, else_body)]
 pub struct IfElse {
     /// The type of output of this if-else.
     pub output_type: SmallVec<[ValType; 1]>,
@@ -255,7 +291,8 @@ pub struct IfElse {
     pub else_body: InsnSeqId,
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Debug, Display)]
+#[display("loop(-> {:?}) {{{}}}", output_type, body)]
 pub struct Loop {
     /// The initial values of the loop body arguments.
     pub inputs: Vec<ValRef>,
@@ -265,7 +302,7 @@ pub struct Loop {
     pub body: InsnSeqId,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Display)]
 pub enum UnaryOpcode {
     I64ToI32,
 }
@@ -277,7 +314,7 @@ pub enum UnaryOpcode {
 /// - `U` operations apply to unsigned integer types.
 /// - `F` operations apply to floating point types.
 /// Pointers are considered unsigned integers at the LIR level.
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Display)]
 pub enum BinaryOpcode {
     IAdd,
     ISub,
@@ -297,7 +334,7 @@ pub enum BinaryOpcode {
 
 /// A machine-level type. These are just numbers that have no higher-level
 /// semantic meaning.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Display)]
 pub enum ValType {
     I8,
     I16,
@@ -349,17 +386,18 @@ pub fn visit_insn_seq<V: LirVisitor>(visitor: &mut V, function: &Function) {
 }
 
 pub fn infer_output_types(function: &Function) -> HashMap<ValRef, ValType> {
-    struct InferOutputTypesVisitor {
+    struct InferOutputTypesVisitor<'a> {
         types: HashMap<ValRef, ValType>,
+        var_types: &'a TiVec<VarId, ValType>,
     }
-    impl LirVisitor for InferOutputTypesVisitor {
+    impl<'a> LirVisitor for InferOutputTypesVisitor<'a> {
         fn start_insn_seq(&mut self, _id: InsnSeqId) {}
 
         fn end_insn_seq(&mut self, _id: InsnSeqId) {}
 
         fn visit_insn(&mut self, insn: &InsnKind, pc: InsnPc) {
             match insn {
-                InsnKind::Const(Const { r#type, .. }) => {
+                InsnKind::Const(Const { ty: r#type, .. }) => {
                     self.types.insert(ValRef(pc, 0), *r#type);
                 }
                 InsnKind::UserFunctionPtr { .. } => {
@@ -382,6 +420,10 @@ pub fn infer_output_types(function: &Function) -> HashMap<ValRef, ValType> {
                 InsnKind::StackAddr { .. } => {
                     self.types.insert(ValRef(pc, 0), ValType::Ptr);
                 }
+                InsnKind::VarStore { .. } => {}
+                InsnKind::VarLoad { var_id } => {
+                    self.types.insert(ValRef(pc, 0), self.var_types[*var_id]);
+                }
                 InsnKind::UnaryOp { op, operand } => {
                     self.types.insert(
                         ValRef(pc, 0),
@@ -396,8 +438,7 @@ pub fn infer_output_types(function: &Function) -> HashMap<ValRef, ValType> {
                 }
                 InsnKind::Break { .. } => {}
                 InsnKind::ConditionalBreak { .. } => {}
-                InsnKind::FunctionArgs { output_type, .. }
-                | InsnKind::Block(Block { output_type, .. })
+                InsnKind::Block(Block { output_type, .. })
                 | InsnKind::IfElse(IfElse { output_type, .. })
                 | InsnKind::Loop(Loop { output_type, .. })
                 | InsnKind::CallHostFunction { output_type, .. }
@@ -413,7 +454,8 @@ pub fn infer_output_types(function: &Function) -> HashMap<ValRef, ValType> {
         }
     }
 
-    let mut visitor = InferOutputTypesVisitor { types: HashMap::new() };
+    let mut visitor =
+        InferOutputTypesVisitor { types: HashMap::new(), var_types: &function.local_vars };
     visit_insn_seq(&mut visitor, function);
     visitor.types
 }
