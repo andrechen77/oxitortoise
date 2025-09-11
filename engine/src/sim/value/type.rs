@@ -21,6 +21,7 @@ impl NetlogoInternalType {
     pub const AGENT_INDEX: Self = Self(11);
     /// A closure that can be passed to `ask`, `create-turtles`, etc.
     pub const ASK_CLOSURE: Self = Self(12);
+    pub const DYN_BOX: Self = Self(13);
 
     /// Returns whether this type is valid and represents the numeric value 0.0
     /// at the all-zero bit pattern, i.e. whether the all-zero bit pattern

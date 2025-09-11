@@ -121,6 +121,7 @@ impl<'a> LirInsnBuilder<'a> {
 #[derive(Debug, Clone, Copy)]
 pub struct HostFunctionIds {
     pub clear_all: lir::HostFunctionId,
+    pub reset_ticks: lir::HostFunctionId,
     pub create_turtles: lir::HostFunctionId,
     pub ask_all_turtles: lir::HostFunctionId,
 }

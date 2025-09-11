@@ -15,14 +15,16 @@ pub enum BinaryOpcode {
     Gt,
     Gte,
     Eq,
+    And,
+    Or,
 }
 
 #[derive(Debug, Display)]
 #[display("{op:?}")]
 pub struct BinaryOperation {
-    op: BinaryOpcode,
-    lhs: NodeId,
-    rhs: NodeId,
+    pub op: BinaryOpcode,
+    pub lhs: NodeId,
+    pub rhs: NodeId,
 }
 
 impl EffectfulNode for BinaryOperation {

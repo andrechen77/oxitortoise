@@ -23,6 +23,7 @@ pub struct TurtleSchema {
     position: AgentFieldDescriptor,
     heading: AgentFieldDescriptor,
     field_groups: Vec<AgentSchemaFieldGroup>,
+    custom_fields: Vec<AgentFieldDescriptor>,
 }
 
 impl TurtleSchema {
@@ -59,10 +60,15 @@ impl TurtleSchema {
         position_group.fields.push(AgentSchemaField::Other(NetlogoInternalType::POINT));
 
         // add custom fields
+        let mut custom_field_descriptors = Vec::new();
         for (field_type, buffer_idx) in custom_fields {
-            field_groups[*buffer_idx as usize]
-                .fields
-                .push(AgentSchemaField::Other(field_type.clone()));
+            let field_group = &mut field_groups[usize::from(*buffer_idx)];
+            let idx_within_buffer = field_group.fields.len();
+            field_group.fields.push(AgentSchemaField::Other(field_type.clone()));
+            custom_field_descriptors.push(AgentFieldDescriptor {
+                buffer_idx: *buffer_idx,
+                field_idx: idx_within_buffer as u8,
+            });
         }
 
         // set avoid_occupancy_bitfield flags
@@ -89,6 +95,7 @@ impl TurtleSchema {
                 field_idx: position_field_idx,
             },
             field_groups,
+            custom_fields: custom_field_descriptors,
         }
     }
 
@@ -106,6 +113,10 @@ impl TurtleSchema {
 
     pub fn position(&self) -> AgentFieldDescriptor {
         self.position
+    }
+
+    pub fn custom_fields(&self) -> &[AgentFieldDescriptor] {
+        &self.custom_fields
     }
 }
 
@@ -194,12 +205,16 @@ impl PatchSchema {
         make_row_buffers_impl::<PatchBaseData, N>(&self.field_groups)
     }
 
+    pub fn base_data(&self) -> AgentFieldDescriptor {
+        AgentFieldDescriptor { buffer_idx: 0, field_idx: 0 }
+    }
+
     pub fn pcolor(&self) -> AgentFieldDescriptor {
         self.pcolor
     }
 
-    pub fn custom_fields(&self) -> impl Iterator<Item = &AgentFieldDescriptor> {
-        self.custom_fields.iter()
+    pub fn custom_fields(&self) -> &[AgentFieldDescriptor] {
+        &self.custom_fields
     }
 }
 

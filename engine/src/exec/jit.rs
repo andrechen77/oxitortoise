@@ -53,6 +53,11 @@ pub static HOST_FUNCTIONS: LazyLock<(
         parameter_types: vec![lir::ValType::Ptr],
         return_type: vec![],
     });
+    let reset_ticks = host_functions.push_and_get_key(lir::HostFunction {
+        name: "reset_ticks",
+        parameter_types: vec![lir::ValType::Ptr],
+        return_type: vec![],
+    });
     let create_turtles = host_functions.push_and_get_key(lir::HostFunction {
         name: "create_turtles",
         parameter_types: vec![
@@ -70,5 +75,5 @@ pub static HOST_FUNCTIONS: LazyLock<(
         parameter_types: vec![lir::ValType::Ptr, lir::ValType::Ptr, lir::ValType::FnPtr],
         return_type: vec![],
     });
-    (host_functions, HostFunctionIds { clear_all, create_turtles, ask_all_turtles })
+    (host_functions, HostFunctionIds { clear_all, reset_ticks, create_turtles, ask_all_turtles })
 });

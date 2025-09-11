@@ -5,7 +5,7 @@ use slotmap::SlotMap;
 use crate::mir::{EffectfulNode, LocalDeclaration, LocalId, NodeId, build_lir::LirInsnBuilder};
 
 #[derive(Debug, Display)]
-enum AgentSet {
+pub enum Agentset {
     #[display("AllTurtles")]
     AllTurtles,
     #[display("AllPatches")]
@@ -21,19 +21,19 @@ enum AgentSet {
     // TODO add links
 }
 
-impl EffectfulNode for AgentSet {
+impl EffectfulNode for Agentset {
     fn has_side_effects(&self) -> bool {
         false
     }
 
     fn dependencies(&self) -> Vec<NodeId> {
         match self {
-            AgentSet::AllTurtles => vec![],
-            AgentSet::AllPatches => vec![],
-            AgentSet::TurtleAgentset(id) => vec![*id],
-            AgentSet::PatchAgentset(id) => vec![*id],
-            AgentSet::SingleTurtle(id) => vec![*id],
-            AgentSet::SinglePatch(id) => vec![*id],
+            Agentset::AllTurtles => vec![],
+            Agentset::AllPatches => vec![],
+            Agentset::TurtleAgentset(id) => vec![*id],
+            Agentset::PatchAgentset(id) => vec![*id],
+            Agentset::SingleTurtle(id) => vec![*id],
+            Agentset::SinglePatch(id) => vec![*id],
         }
     }
 

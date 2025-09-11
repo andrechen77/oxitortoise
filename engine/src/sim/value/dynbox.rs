@@ -97,6 +97,18 @@ impl UnpackedDynBox {
     }
 }
 
+impl Clone for UnpackedDynBox {
+    fn clone(&self) -> Self {
+        match self {
+            UnpackedDynBox::Float(value) => UnpackedDynBox::Float(*value),
+            UnpackedDynBox::Int(value) => UnpackedDynBox::Int(*value),
+            UnpackedDynBox::Bool(value) => UnpackedDynBox::Bool(*value),
+            UnpackedDynBox::Turtle(value) => UnpackedDynBox::Turtle(*value),
+            _ => unimplemented!(),
+        }
+    }
+}
+
 // TODO implement links
 #[derive(Debug)]
 pub struct LinkId;

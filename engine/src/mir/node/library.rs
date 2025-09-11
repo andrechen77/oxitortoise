@@ -4,10 +4,7 @@
 //! functions.
 
 use derive_more::derive::Display;
-use lir::{
-    ValRef,
-    smallvec::{SmallVec, smallvec},
-};
+use lir::{ValRef, smallvec::smallvec};
 use slotmap::{Key, SlotMap};
 
 use crate::{
@@ -86,13 +83,65 @@ impl EffectfulNode for Diffuse {
     ) -> Option<crate::sim::value::NetlogoInternalType> {
         None
     }
+
+    fn write_lir_execution(
+        &self,
+        my_node_id: NodeId,
+        nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
+        lir_builder: &mut LirInsnBuilder,
+    ) -> Result<(), ()> {
+        todo!()
+    }
+}
+
+#[derive(Debug, Display)]
+#[display("ResetTicks {context:?}")]
+pub struct ResetTicks {
+    /// The execution context to use.
+    pub context: NodeId,
+}
+
+impl EffectfulNode for ResetTicks {
+    fn has_side_effects(&self) -> bool {
+        true
+    }
+
+    fn dependencies(&self) -> Vec<NodeId> {
+        vec![self.context]
+    }
+
+    fn output_type(
+        &self,
+        _workspace: &crate::workspace::Workspace,
+        _nodes: &slotmap::SlotMap<NodeId, Box<dyn EffectfulNode>>,
+        _locals: &SlotMap<LocalId, LocalDeclaration>,
+    ) -> Option<crate::sim::value::NetlogoInternalType> {
+        None
+    }
+
+    fn write_lir_execution(
+        &self,
+        my_node_id: NodeId,
+        nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
+        lir_builder: &mut LirInsnBuilder,
+    ) -> Result<(), ()> {
+        let &[ctx_ptr] = lir_builder.get_node_results(nodes, self.context) else {
+            panic!("expected node outputting context pointer to be a single LIR value")
+        };
+        lir_builder.push_lir_insn(lir::InsnKind::CallHostFunction {
+            function: lir_builder.program_builder.host_function_ids.reset_ticks,
+            output_type: smallvec![],
+            args: Box::new([ctx_ptr]),
+        });
+        Ok(())
+    }
 }
 
 #[derive(Debug, Display)]
 #[display("AdvanceTick")]
 pub struct AdvanceTick {
-    /// The workspace whose tick is being advanced.
-    pub workspace: NodeId,
+    /// The context whose tick is being advanced.
+    pub context: NodeId,
 }
 
 impl EffectfulNode for AdvanceTick {
@@ -101,7 +150,7 @@ impl EffectfulNode for AdvanceTick {
     }
 
     fn dependencies(&self) -> Vec<NodeId> {
-        vec![self.workspace]
+        vec![self.context]
     }
 
     fn output_type(
@@ -117,8 +166,8 @@ impl EffectfulNode for AdvanceTick {
 #[derive(Debug, Display)]
 #[display("GetTick")]
 pub struct GetTick {
-    /// The workspace whose tick is being gotten.
-    pub workspace: NodeId,
+    /// The context whose tick is being gotten.
+    pub context: NodeId,
 }
 
 impl EffectfulNode for GetTick {
@@ -127,7 +176,7 @@ impl EffectfulNode for GetTick {
     }
 
     fn dependencies(&self) -> Vec<NodeId> {
-        vec![self.workspace]
+        vec![self.context]
     }
 
     fn output_type(
@@ -308,8 +357,12 @@ impl EffectfulNode for AskAllTurtles {
 #[derive(Debug, Display)]
 #[display("TurtleRotate")]
 pub struct TurtleRotate {
+    /// The execution context to use.
+    pub context: NodeId,
+    /// The turtle to rotate.
+    pub turtle: NodeId,
     /// The amount to rotate.
-    pub amt: NodeId,
+    pub angle: NodeId,
 }
 
 impl EffectfulNode for TurtleRotate {
@@ -318,7 +371,7 @@ impl EffectfulNode for TurtleRotate {
     }
 
     fn dependencies(&self) -> Vec<NodeId> {
-        vec![self.amt]
+        vec![self.angle]
     }
 
     fn output_type(
@@ -343,8 +396,12 @@ impl EffectfulNode for TurtleRotate {
 #[derive(Debug, Display)]
 #[display("TurtleForward")]
 pub struct TurtleForward {
+    /// The execution context to use.
+    pub context: NodeId,
+    /// The turtle to move.
+    pub turtle: NodeId,
     /// The distance to move.
-    pub amt: NodeId,
+    pub distance: NodeId,
 }
 
 impl EffectfulNode for TurtleForward {
@@ -353,7 +410,7 @@ impl EffectfulNode for TurtleForward {
     }
 
     fn dependencies(&self) -> Vec<NodeId> {
-        vec![self.amt]
+        vec![self.distance]
     }
 
     fn output_type(
@@ -411,5 +468,116 @@ impl EffectfulNode for OffsetDistanceByHeading {
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), ()> {
         todo!()
+    }
+}
+
+#[derive(Debug, Display)]
+#[display("Distancexy {x:?} {y:?}")]
+pub struct Distancexy {
+    /// The agent to get the distance from.
+    pub agent: NodeId,
+    /// The x coordinate.
+    pub x: NodeId,
+    /// The y coordinate.
+    pub y: NodeId,
+}
+
+impl EffectfulNode for Distancexy {
+    fn has_side_effects(&self) -> bool {
+        false
+    }
+
+    fn dependencies(&self) -> Vec<NodeId> {
+        vec![self.agent, self.x, self.y]
+    }
+
+    fn output_type(
+        &self,
+        workspace: &crate::workspace::Workspace,
+        nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
+        locals: &SlotMap<LocalId, LocalDeclaration>,
+    ) -> Option<NetlogoInternalType> {
+        Some(NetlogoInternalType::FLOAT)
+    }
+}
+
+#[derive(Debug, Display)]
+#[display("MaxPxcor")]
+pub struct MaxPxcor {
+    /// The execution context to use.
+    pub context: NodeId,
+}
+
+impl EffectfulNode for MaxPxcor {
+    fn has_side_effects(&self) -> bool {
+        false
+    }
+
+    fn dependencies(&self) -> Vec<NodeId> {
+        vec![self.context]
+    }
+
+    fn output_type(
+        &self,
+        _workspace: &crate::workspace::Workspace,
+        _nodes: &slotmap::SlotMap<NodeId, Box<dyn EffectfulNode>>,
+        _locals: &SlotMap<LocalId, LocalDeclaration>,
+    ) -> Option<crate::sim::value::NetlogoInternalType> {
+        Some(NetlogoInternalType::FLOAT)
+    }
+}
+
+#[derive(Debug, Display)]
+#[display("MaxPycor")]
+pub struct MaxPycor {
+    /// The execution context to use.
+    pub context: NodeId,
+}
+
+impl EffectfulNode for MaxPycor {
+    fn has_side_effects(&self) -> bool {
+        false
+    }
+
+    fn dependencies(&self) -> Vec<NodeId> {
+        vec![self.context]
+    }
+
+    fn output_type(
+        &self,
+        _workspace: &crate::workspace::Workspace,
+        _nodes: &slotmap::SlotMap<NodeId, Box<dyn EffectfulNode>>,
+        _locals: &SlotMap<LocalId, LocalDeclaration>,
+    ) -> Option<crate::sim::value::NetlogoInternalType> {
+        Some(NetlogoInternalType::FLOAT)
+    }
+}
+
+/// https://docs.netlogo.org/dict/scale-color.html
+#[derive(Debug, Display)]
+#[display("ScaleColor")]
+pub struct ScaleColor {
+    pub color: NodeId,
+    pub number: NodeId,
+    pub range1: NodeId,
+    pub range2: NodeId,
+}
+
+impl EffectfulNode for ScaleColor {
+    fn has_side_effects(&self) -> bool {
+        false
+    }
+
+    fn dependencies(&self) -> Vec<NodeId> {
+        vec![self.color, self.number, self.range1, self.range2]
+    }
+
+    fn output_type(
+        &self,
+        _workspace: &crate::workspace::Workspace,
+        _nodes: &slotmap::SlotMap<NodeId, Box<dyn EffectfulNode>>,
+        _locals: &SlotMap<LocalId, LocalDeclaration>,
+    ) -> Option<crate::sim::value::NetlogoInternalType> {
+        Some(NetlogoInternalType::FLOAT)
     }
 }

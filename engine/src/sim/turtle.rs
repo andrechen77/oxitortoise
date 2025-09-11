@@ -81,6 +81,7 @@ pub struct Turtles {
     turtle_schema: TurtleSchema,
     /// The number of turtles in the world.
     num_turtles: u64,
+    // TODO this should be a secondary map, using the breed ids generated during MIR creation
     /// The breeds of turtles.
     breeds: SlotMap<BreedId, Breed>,
 }
@@ -96,6 +97,10 @@ impl Turtles {
             num_turtles: 0,
             breeds,
         }
+    }
+
+    pub fn schema(&self) -> &TurtleSchema {
+        &self.turtle_schema
     }
 
     pub fn get_breed(&self, id: BreedId) -> &Breed {
@@ -305,9 +310,11 @@ pub struct Breed {
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum TurtleVarDesc {
+    Who,
     Size,
     Color,
-    Custom(AgentFieldDescriptor),
+    /// The nth custom field of the turtle.
+    Custom(usize),
     // TODO add other builtin variables
 }
 
@@ -333,7 +340,8 @@ pub fn calc_turtle_var_offsets(turtles: &Turtles, var: TurtleVarDesc) -> (usize,
         (stride, field_offset)
     }
     let (buffer_idx, stride, field_offset) = match var {
-        TurtleVarDesc::Custom(field_desc) => {
+        TurtleVarDesc::Custom(field_id) => {
+            let field_desc = turtles.turtle_schema.custom_fields()[field_id];
             let (stride, field_offset) = stride_and_field_offset(turtles, field_desc);
             (field_desc.buffer_idx, stride, field_offset)
         }
@@ -341,6 +349,7 @@ pub fn calc_turtle_var_offsets(turtles: &Turtles, var: TurtleVarDesc) -> (usize,
             let base_data_desc = turtles.turtle_schema.base_data();
             let (stride, field_offset) = stride_and_field_offset(turtles, base_data_desc);
             let additional_offset = match var {
+                TurtleVarDesc::Who => offset_of!(TurtleBaseData, who),
                 TurtleVarDesc::Size => offset_of!(TurtleBaseData, size),
                 TurtleVarDesc::Color => offset_of!(TurtleBaseData, color),
                 TurtleVarDesc::Custom(_) => unreachable!("custom fields are handled separately"),
@@ -353,12 +362,13 @@ pub fn calc_turtle_var_offsets(turtles: &Turtles, var: TurtleVarDesc) -> (usize,
     (buffer_offset, stride, field_offset)
 }
 
-pub fn turtle_var_type(turtles: &Turtles, var: TurtleVarDesc) -> NetlogoInternalType {
+pub fn turtle_var_type(schema: &TurtleSchema, var: TurtleVarDesc) -> NetlogoInternalType {
     match var {
+        TurtleVarDesc::Who => NetlogoInternalType::INTEGER,
         TurtleVarDesc::Color => NetlogoInternalType::COLOR,
         TurtleVarDesc::Size => NetlogoInternalType::FLOAT,
         TurtleVarDesc::Custom(field) => {
-            let AgentSchemaField::Other(ty) = &turtles.turtle_schema[field] else {
+            let AgentSchemaField::Other(ty) = &schema[schema.custom_fields()[field]] else {
                 unreachable!("this is a custom field, so it cannot be part of the base data");
             };
             ty.clone()

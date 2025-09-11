@@ -9,7 +9,7 @@ use crate::{
         agent_schema::{AgentFieldDescriptor, AgentSchemaField, PatchSchema},
         color::Color,
         topology::{CoordFloat, PointInt, TopologySpec},
-        value::{DynBox, Float},
+        value::{DynBox, Float, NetlogoInternalType},
     },
     util::row_buffer::{self, RowBuffer},
 };
@@ -249,6 +249,44 @@ pub struct PatchBaseData {
     // TODO some way of tracking what turtles are on this patch.
 }
 
-// TODO add fields
-#[derive(Debug)]
-pub struct PatchVarDesc;
+#[derive(Debug, Clone, Copy)]
+pub enum PatchVarDesc {
+    Pcolor,
+    Custom(usize),
+}
+
+pub fn calc_patch_var_offsets(patches: &Patches, var: PatchVarDesc) -> (usize, usize, usize) {
+    fn stride_and_field_offset(patches: &Patches, field: AgentFieldDescriptor) -> (usize, usize) {
+        let row_schema = patches.data[usize::from(field.buffer_idx)].as_ref().unwrap().schema();
+        let field_offset = row_schema.field(usize::from(field.field_idx)).offset;
+        let stride = row_schema.stride();
+        (stride, field_offset)
+    }
+    let (buffer_idx, stride, field_offset) = match var {
+        PatchVarDesc::Custom(field_id) => {
+            let field_desc = patches.patch_schema.custom_fields()[field_id];
+            let (stride, field_offset) = stride_and_field_offset(patches, field_desc);
+            (field_desc.buffer_idx, stride, field_offset)
+        }
+        PatchVarDesc::Pcolor => {
+            let base_data_desc = patches.patch_schema.base_data();
+            let (stride, field_offset) = stride_and_field_offset(patches, base_data_desc);
+            (base_data_desc.buffer_idx, stride, field_offset)
+        }
+    };
+    let buffer_offset =
+        offset_of!(Patches, data) + (usize::from(buffer_idx) * size_of::<Option<RowBuffer>>());
+    (buffer_offset, stride, field_offset)
+}
+
+pub fn patch_var_type(schema: &PatchSchema, var: PatchVarDesc) -> NetlogoInternalType {
+    match var {
+        PatchVarDesc::Pcolor => NetlogoInternalType::COLOR,
+        PatchVarDesc::Custom(field) => {
+            let AgentSchemaField::Other(ty) = &schema[schema.custom_fields()[field]] else {
+                unreachable!("this is a custom field, so it cannot be part of the base data");
+            };
+            ty.clone()
+        }
+    }
+}
