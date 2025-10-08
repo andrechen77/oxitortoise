@@ -27,7 +27,7 @@ new_key_type! {
 
 // TODO this should work with local variables too
 #[derive(Debug)]
-struct NameScope {
+struct GlobalNames {
     constants: HashMap<&'static str, fn() -> Box<dyn EffectfulNode>>,
     globals: HashMap<Rc<str>, GlobalId>,
     patch_vars: HashMap<Rc<str>, PatchVarDesc>,
@@ -47,7 +47,7 @@ enum NameReferent {
     UserProc(FunctionId),
 }
 
-impl NameScope {
+impl GlobalNames {
     fn with_builtins(default_turtle_breed: BreedId) -> Self {
         Self {
             constants: HashMap::from([
@@ -115,7 +115,7 @@ struct MirBuilder {
     turtle_breeds: SlotMap<BreedId, ()>,
     functions: SlotMap<FunctionId, Function>,
     fn_info: SecondaryMap<FunctionId, FnInfo>,
-    name_scope: NameScope,
+    global_names: GlobalNames,
 }
 
 pub fn ast_to_mir(ast: &JsonValue) -> anyhow::Result<mir::Program> {
@@ -127,7 +127,7 @@ pub fn ast_to_mir(ast: &JsonValue) -> anyhow::Result<mir::Program> {
     let mut turtle_breeds: SlotMap<BreedId, ()> = SlotMap::with_key();
     let default_turtle_breed = turtle_breeds.insert(());
 
-    let mut name_scope = NameScope::with_builtins(default_turtle_breed);
+    let mut name_scope = GlobalNames::with_builtins(default_turtle_breed);
     trace!("Initialized name scope with builtins");
 
     let meta_vars = root["metaVars"].as_object().unwrap();
@@ -179,7 +179,8 @@ pub fn ast_to_mir(ast: &JsonValue) -> anyhow::Result<mir::Program> {
         functions_to_build.insert(fn_id, procedure_json);
     }
 
-    let mut mir_builder = MirBuilder { globals, turtle_breeds, functions, fn_info, name_scope };
+    let mut mir_builder =
+        MirBuilder { globals, turtle_breeds, functions, fn_info, global_names: name_scope };
 
     // then go through each procedure and build out the bodies
     for (function_id, procedure_json) in functions_to_build {
@@ -358,27 +359,76 @@ fn build_body(
     // the nodes for this function
     let mut nodes: SlotMap<NodeId, Box<dyn EffectfulNode>> = SlotMap::with_key();
 
-    // The statements of the current control flow construct
+    // the local variables of the function
+    let mut local_names = HashMap::new();
+
+    // the statements of the current control flow construct
     let statements: Vec<StatementKind> = statements_json
         .iter()
         .filter_map(|stmt_json| {
             let statement_json = stmt_json.as_object().unwrap();
-            eval_command(statement_json, fn_id, mir_builder, &mut nodes)
+            let ctx = FnBodyBuilderCtx {
+                mir: mir_builder,
+                fn_id,
+                nodes: &mut nodes,
+                local_names: &mut local_names,
+            };
+            match statement_json["type"].as_str().unwrap() {
+                "let-binding" => eval_let_binding(statement_json, ctx),
+                "command-app" => eval_command(statement_json, ctx),
+                _ => todo!(),
+            }
         })
         .collect();
+
+    // TODO we still need to do something with the statements and the nodes
+    // that have been built out
 
     trace!("finished building body");
     Ok(())
 }
 
+struct FnBodyBuilderCtx<'a> {
+    mir: &'a mut MirBuilder,
+    fn_id: FunctionId,
+    nodes: &'a mut SlotMap<NodeId, Box<dyn EffectfulNode>>,
+    local_names: &'a mut HashMap<Rc<str>, LocalId>,
+}
+
+impl<'a> FnBodyBuilderCtx<'a> {
+    fn reborrow<'s>(&'s mut self) -> FnBodyBuilderCtx<'s> {
+        FnBodyBuilderCtx {
+            mir: self.mir,
+            fn_id: self.fn_id,
+            nodes: self.nodes,
+            local_names: self.local_names,
+        }
+    }
+}
+
 #[instrument(skip_all, fields(cmd_name))]
-fn eval_command(
-    expr_json: &JsonObj,
-    containing_fn: FunctionId,
-    mir_builder: &mut MirBuilder,
-    nodes: &mut SlotMap<NodeId, Box<dyn EffectfulNode>>,
-    // locals: &mut SlotMap<LocalId, LocalDeclaration>,
-) -> Option<StatementKind> {
+fn eval_let_binding(expr_json: &JsonObj, mut ctx: FnBodyBuilderCtx<'_>) -> Option<StatementKind> {
+    trace!("Evaluating let binding json: {:?}", expr_json);
+    assert_eq!(expr_json["type"].as_str().unwrap(), "let-binding");
+
+    // create a new local variable with the given name
+    let var_name = expr_json["varName"].as_str().unwrap();
+    let local_id = ctx.mir.functions[ctx.fn_id].locals.insert(LocalDeclaration {
+        debug_name: Some(var_name.to_string()),
+        ty: NetlogoInternalType::DYN_BOX,
+        storage: LocalStorage::Register,
+    });
+    ctx.local_names.insert(Rc::from(var_name), local_id);
+
+    let value = expr_json["value"].as_object().unwrap();
+    let value = eval_reporter(value, ctx.reborrow());
+
+    let let_stmt = ctx.nodes.insert(Box::new(node::SetLocalVar { local_id, value }));
+    Some(StatementKind::Node(let_stmt))
+}
+
+#[instrument(skip_all, fields(cmd_name))]
+fn eval_command(expr_json: &JsonObj, mut ctx: FnBodyBuilderCtx<'_>) -> Option<StatementKind> {
     trace!("Evaluating command json: {:?}", expr_json);
     assert_eq!(expr_json["type"].as_str().unwrap(), "command-app");
 
@@ -391,10 +441,10 @@ fn eval_command(
     match cmd_name {
         "STOP" => Some(StatementKind::Stop),
         "CLEAR-ALL" => {
-            let context = nodes.insert(Box::new(node::GetLocalVar {
-                local_id: mir_builder.fn_info[containing_fn].context_param.unwrap(),
+            let context = ctx.nodes.insert(Box::new(node::GetLocalVar {
+                local_id: ctx.mir.fn_info[ctx.fn_id].context_param.unwrap(),
             }));
-            let clear_all = nodes.insert(Box::new(node::ClearAll { context }));
+            let clear_all = ctx.nodes.insert(Box::new(node::ClearAll { context }));
             Some(StatementKind::Node(clear_all))
         }
         "SET-DEFAULT-SHAPE" => {
@@ -405,65 +455,45 @@ fn eval_command(
             let &[population, body] = args.as_slice() else {
                 panic!("expected two arguments for CREATE-TURTLES");
             };
-            let context = nodes.insert(Box::new(node::GetLocalVar {
-                local_id: mir_builder.fn_info[containing_fn].context_param.unwrap(),
+            let context = ctx.nodes.insert(Box::new(node::GetLocalVar {
+                local_id: ctx.mir.fn_info[ctx.fn_id].context_param.unwrap(),
             }));
 
-            let population = eval_reporter(population, containing_fn, mir_builder, nodes);
-            let body =
-                eval_ephemeral_closure(body, containing_fn, AgentClass::Turtle, mir_builder, nodes);
+            let population = eval_reporter(population, ctx.reborrow());
+            let body = eval_ephemeral_closure(body, ctx.fn_id, AgentClass::Turtle, ctx.reborrow());
 
-            let create_turtles = nodes.insert(Box::new(node::CreateTurtles {
+            let create_turtles = ctx.nodes.insert(Box::new(node::CreateTurtles {
                 context,
-                breed: mir_builder.name_scope.turtle_breeds[&None],
+                breed: ctx.mir.global_names.turtle_breeds[&None],
                 num_turtles: population,
                 body,
             }));
             Some(StatementKind::Node(create_turtles))
         }
-        // "LET" => {
-        //     let &[var_name, value] = args.as_slice() else {
-        //         panic!("expected two arguments for LET");
-        //     };
-
-        //     // create a new local variable with the given name
-        //     let var_name = var_name["reporter"].as_object().unwrap()["name"].as_str().unwrap();
-        //     let local_id = locals.insert(LocalDeclaration {
-        //         debug_name: Some(var_name.to_string()),
-        //         ty: NetlogoInternalType::DYN_BOX,
-        //         storage: LocalStorage::Register,
-        //     });
-
-        //     let value = eval_reporter(value, containing_fn, mir_builder, nodes);
-
-        //     let let_stmt = nodes.insert(Box::new(node::SetLocalVar { local_id, value }));
-        //     Some(StatementKind::Node(let_stmt))
-        // }
         "SET" => {
             let &[var, value] = args.as_slice() else {
                 panic!("expected two arguments for SET");
             };
 
-            let context = nodes.insert(Box::new(node::GetLocalVar {
-                local_id: mir_builder.fn_info[containing_fn].context_param.unwrap(),
+            let context = ctx.nodes.insert(Box::new(node::GetLocalVar {
+                local_id: ctx.mir.fn_info[ctx.fn_id].context_param.unwrap(),
             }));
 
             assert!(var["type"].as_str().unwrap() == "reporter-call");
             assert!(var["args"].as_array().unwrap().is_empty());
             let var_name = var["name"].as_str().unwrap();
-            let var_desc = mir_builder.name_scope.lookup(var_name).unwrap();
-            let value = eval_reporter(value, containing_fn, mir_builder, nodes);
+            let var_desc = ctx.mir.global_names.lookup(var_name).unwrap();
+            let value = eval_reporter(value, ctx.reborrow());
 
             // TODO this should also be able to work for local variables
             // the type of the variable being assigned determines which node to use
             match var_desc {
                 NameReferent::TurtleVar(var_desc) => {
-                    let (agent_class, self_param) =
-                        mir_builder.fn_info[containing_fn].self_param.unwrap();
+                    let (agent_class, self_param) = ctx.mir.fn_info[ctx.fn_id].self_param.unwrap();
                     assert!(agent_class.is_turtle());
                     let turtle_id =
-                        nodes.insert(Box::new(node::GetLocalVar { local_id: self_param }));
-                    let set_turtle_var = nodes.insert(Box::new(node::SetTurtleVar {
+                        ctx.nodes.insert(Box::new(node::GetLocalVar { local_id: self_param }));
+                    let set_turtle_var = ctx.nodes.insert(Box::new(node::SetTurtleVar {
                         context,
                         turtle: turtle_id,
                         var: var_desc,
@@ -472,17 +502,17 @@ fn eval_command(
                     Some(StatementKind::Node(set_turtle_var))
                 }
                 NameReferent::PatchVar(var_desc) => {
-                    let (agent_class, self_param) =
-                        mir_builder.fn_info[containing_fn].self_param.unwrap();
+                    let (agent_class, self_param) = ctx.mir.fn_info[ctx.fn_id].self_param.unwrap();
                     assert!(agent_class.is_patch() || agent_class.is_turtle());
                     let agent_id =
-                        nodes.insert(Box::new(node::GetLocalVar { local_id: self_param }));
-                    let set_patch_var = nodes.insert(Box::new(node::SetPatchVarAsTurtleOrPatch {
-                        context,
-                        agent: agent_id,
-                        var: var_desc,
-                        value,
-                    }));
+                        ctx.nodes.insert(Box::new(node::GetLocalVar { local_id: self_param }));
+                    let set_patch_var =
+                        ctx.nodes.insert(Box::new(node::SetPatchVarAsTurtleOrPatch {
+                            context,
+                            agent: agent_id,
+                            var: var_desc,
+                            value,
+                        }));
                     Some(StatementKind::Node(set_patch_var))
                 }
                 _ => todo!(),
@@ -492,56 +522,55 @@ fn eval_command(
             let &[distance] = args.as_slice() else {
                 panic!("expected one argument for FD");
             };
-            let context = nodes.insert(Box::new(node::GetLocalVar {
-                local_id: mir_builder.fn_info[containing_fn].context_param.unwrap(),
+            let context = ctx.nodes.insert(Box::new(node::GetLocalVar {
+                local_id: ctx.mir.fn_info[ctx.fn_id].context_param.unwrap(),
             }));
-            let (agent_class, self_param) = mir_builder.fn_info[containing_fn].self_param.unwrap();
+            let (agent_class, self_param) = ctx.mir.fn_info[ctx.fn_id].self_param.unwrap();
             assert!(agent_class.is_turtle());
-            let turtle = nodes.insert(Box::new(node::GetLocalVar { local_id: self_param }));
-            let distance = eval_reporter(distance, containing_fn, mir_builder, nodes);
-            let fd = nodes.insert(Box::new(node::TurtleForward { context, turtle, distance }));
+            let turtle = ctx.nodes.insert(Box::new(node::GetLocalVar { local_id: self_param }));
+            let distance = eval_reporter(distance, ctx.reborrow());
+            let fd = ctx.nodes.insert(Box::new(node::TurtleForward { context, turtle, distance }));
             Some(StatementKind::Node(fd))
         }
         "RT" => {
             let &[heading] = args.as_slice() else {
                 panic!("expected one argument for RT");
             };
-            let context = nodes.insert(Box::new(node::GetLocalVar {
-                local_id: mir_builder.fn_info[containing_fn].context_param.unwrap(),
+            let context = ctx.nodes.insert(Box::new(node::GetLocalVar {
+                local_id: ctx.mir.fn_info[ctx.fn_id].context_param.unwrap(),
             }));
-            let (agent_class, self_param) = mir_builder.fn_info[containing_fn].self_param.unwrap();
+            let (agent_class, self_param) = ctx.mir.fn_info[ctx.fn_id].self_param.unwrap();
             assert!(agent_class.is_turtle());
-            let turtle = nodes.insert(Box::new(node::GetLocalVar { local_id: self_param }));
-            let angle = eval_reporter(heading, containing_fn, mir_builder, nodes);
-            let rt = nodes.insert(Box::new(node::TurtleRotate { context, turtle, angle }));
+            let turtle = ctx.nodes.insert(Box::new(node::GetLocalVar { local_id: self_param }));
+            let angle = eval_reporter(heading, ctx.reborrow());
+            let rt = ctx.nodes.insert(Box::new(node::TurtleRotate { context, turtle, angle }));
             Some(StatementKind::Node(rt))
         }
         "RESET-TICKS" => {
             let &[] = args.as_slice() else {
                 panic!("expected no arguments for RESET-TICKS");
             };
-            let context = nodes.insert(Box::new(node::GetLocalVar {
-                local_id: mir_builder.fn_info[containing_fn].context_param.unwrap(),
+            let context = ctx.nodes.insert(Box::new(node::GetLocalVar {
+                local_id: ctx.mir.fn_info[ctx.fn_id].context_param.unwrap(),
             }));
-            let reset_ticks = nodes.insert(Box::new(node::ResetTicks { context }));
+            let reset_ticks = ctx.nodes.insert(Box::new(node::ResetTicks { context }));
             Some(StatementKind::Node(reset_ticks))
         }
         "ASK" => {
             let &[recipients, body] = args.as_slice() else {
                 panic!("expected two arguments for ASK");
             };
-            let context = nodes.insert(Box::new(node::GetLocalVar {
-                local_id: mir_builder.fn_info[containing_fn].context_param.unwrap(),
+            let context = ctx.nodes.insert(Box::new(node::GetLocalVar {
+                local_id: ctx.mir.fn_info[ctx.fn_id].context_param.unwrap(),
             }));
-            let recipients = eval_reporter(recipients, containing_fn, mir_builder, nodes);
-            let body =
-                eval_ephemeral_closure(body, containing_fn, AgentClass::Any, mir_builder, nodes);
-            let ask = nodes.insert(Box::new(node::Ask { context, recipients, body }));
+            let recipients = eval_reporter(recipients, ctx.reborrow());
+            let body = eval_ephemeral_closure(body, ctx.fn_id, AgentClass::Any, ctx.reborrow());
+            let ask = ctx.nodes.insert(Box::new(node::Ask { context, recipients, body }));
             Some(StatementKind::Node(ask))
         }
         "IF" | "IFELSE" => {
             // eagerly evaluate the condition
-            let condition = eval_reporter(args[0], containing_fn, mir_builder, nodes);
+            let condition = eval_reporter(args[0], ctx.reborrow());
 
             // translate the inner statements
             let then_stmts = args[1]["statements"]
@@ -550,7 +579,7 @@ fn eval_command(
                 .iter()
                 .filter_map(|stmt_json| {
                     let stmt_json = stmt_json.as_object().unwrap();
-                    eval_command(stmt_json, containing_fn, mir_builder, nodes)
+                    eval_command(stmt_json, ctx.reborrow())
                 })
                 .collect();
             let else_stmts = if cmd_name == "IFELSE" {
@@ -560,7 +589,7 @@ fn eval_command(
                     .iter()
                     .filter_map(|stmt_json| {
                         let stmt_json = stmt_json.as_object().unwrap();
-                        eval_command(stmt_json, containing_fn, mir_builder, nodes)
+                        eval_command(stmt_json, ctx.reborrow())
                     })
                     .collect()
             } else {
@@ -582,42 +611,41 @@ fn eval_command(
             assert!(var_name["args"].as_array().unwrap().is_empty());
             let var_name = var_name["name"].as_str().unwrap();
 
-            let Some(NameReferent::PatchVar(var_desc)) = mir_builder.name_scope.lookup(var_name)
+            let Some(NameReferent::PatchVar(var_desc)) = ctx.mir.global_names.lookup(var_name)
             else {
                 panic!("expected patch variable for DIFFUSE");
             };
-            let context = nodes.insert(Box::new(node::GetLocalVar {
-                local_id: mir_builder.fn_info[containing_fn].context_param.unwrap(),
+            let context = ctx.nodes.insert(Box::new(node::GetLocalVar {
+                local_id: ctx.mir.fn_info[ctx.fn_id].context_param.unwrap(),
             }));
-            let amt = eval_reporter(amt, containing_fn, mir_builder, nodes);
+            let amt = eval_reporter(amt, ctx.reborrow());
 
             let diffuse =
-                nodes.insert(Box::new(node::Diffuse { context, variable: var_desc, amt }));
+                ctx.nodes.insert(Box::new(node::Diffuse { context, variable: var_desc, amt }));
             Some(StatementKind::Node(diffuse))
         }
         "TICK" => {
             let &[] = args.as_slice() else {
                 panic!("expected no arguments for TICK");
             };
-            let context = nodes.insert(Box::new(node::GetLocalVar {
-                local_id: mir_builder.fn_info[containing_fn].context_param.unwrap(),
+            let context = ctx.nodes.insert(Box::new(node::GetLocalVar {
+                local_id: ctx.mir.fn_info[ctx.fn_id].context_param.unwrap(),
             }));
-            let tick = nodes.insert(Box::new(node::AdvanceTick { context }));
+            let tick = ctx.nodes.insert(Box::new(node::AdvanceTick { context }));
             Some(StatementKind::Node(tick))
         }
         cmd_name => {
             // at this point, assume that the command is a user-defined
             // procedure call
-            let target_fn = mir_builder.name_scope.lookup(cmd_name).unwrap();
+            let target_fn = ctx.mir.global_names.lookup(cmd_name).unwrap();
             if let NameReferent::UserProc(fn_id) = target_fn {
                 // eagerly evaluate all arguments
-                let evaled_args = args
-                    .iter()
-                    .map(|&arg| eval_reporter(arg, containing_fn, mir_builder, nodes))
-                    .collect::<Vec<_>>();
+                let evaled_args =
+                    args.iter().map(|&arg| eval_reporter(arg, ctx.reborrow())).collect::<Vec<_>>();
 
-                let call_user_fn =
-                    nodes.insert(Box::new(node::CallUserFn { target: fn_id, args: evaled_args }));
+                let call_user_fn = ctx
+                    .nodes
+                    .insert(Box::new(node::CallUserFn { target: fn_id, args: evaled_args }));
                 Some(StatementKind::Node(call_user_fn))
             } else {
                 unimplemented!();
@@ -627,14 +655,9 @@ fn eval_command(
 }
 
 #[instrument(skip_all, fields(name))]
-fn eval_reporter(
-    expr_json: &JsonObj,
-    containing_fn: FunctionId,
-    mir_builder: &mut MirBuilder,
-    nodes: &mut SlotMap<NodeId, Box<dyn EffectfulNode>>,
-) -> NodeId {
+fn eval_reporter(expr_json: &JsonObj, mut ctx: FnBodyBuilderCtx<'_>) -> NodeId {
     match expr_json["type"].as_str().unwrap() {
-        "reporter-call" => {
+        "reporter-call" | "reporter-proc-call" => {
             let reporter_name = expr_json["name"].as_str().unwrap();
             Span::current().record("name", reporter_name);
             trace!("Handling reporter call `{}`", reporter_name);
@@ -651,8 +674,8 @@ fn eval_reporter(
                     let &[lhs, rhs] = args.as_slice() else {
                         panic!("expected two arguments for `{}`", reporter_name);
                     };
-                    let lhs = eval_reporter(lhs, containing_fn, mir_builder, nodes);
-                    let rhs = eval_reporter(rhs, containing_fn, mir_builder, nodes);
+                    let lhs = eval_reporter(lhs, ctx.reborrow());
+                    let rhs = eval_reporter(rhs, ctx.reborrow());
                     let op = match reporter_name {
                         "<" => BinaryOpcode::Lt,
                         ">" => BinaryOpcode::Gt,
@@ -667,106 +690,120 @@ fn eval_reporter(
                         "OR" => BinaryOpcode::Or,
                         _ => unreachable!(),
                     };
-                    let less_than = nodes.insert(Box::new(node::BinaryOperation { op, lhs, rhs }));
+                    let less_than =
+                        ctx.nodes.insert(Box::new(node::BinaryOperation { op, lhs, rhs }));
                     less_than
                 }
                 "DISTANCEXY" => {
                     let &[x, y] = args.as_slice() else {
                         panic!("expected two arguments for `DISTANCEXY`");
                     };
-                    let (agent_class, self_param) =
-                        mir_builder.fn_info[containing_fn].self_param.unwrap();
+                    let (agent_class, self_param) = ctx.mir.fn_info[ctx.fn_id].self_param.unwrap();
                     assert!(agent_class.is_turtle() || agent_class.is_patch());
-                    let agent = nodes.insert(Box::new(node::GetLocalVar { local_id: self_param }));
-                    let x = eval_reporter(x, containing_fn, mir_builder, nodes);
-                    let y = eval_reporter(y, containing_fn, mir_builder, nodes);
-                    nodes.insert(Box::new(node::Distancexy { agent, x, y }))
+                    let agent =
+                        ctx.nodes.insert(Box::new(node::GetLocalVar { local_id: self_param }));
+                    let x = eval_reporter(x, ctx.reborrow());
+                    let y = eval_reporter(y, ctx.reborrow());
+                    ctx.nodes.insert(Box::new(node::Distancexy { agent, x, y }))
                 }
                 "MAX-PXCOR" => {
                     let &[] = args.as_slice() else {
                         panic!("expected no arguments for `MAX-PXCOR`");
                     };
-                    let context = nodes.insert(Box::new(node::GetLocalVar {
-                        local_id: mir_builder.fn_info[containing_fn].context_param.unwrap(),
+                    let context = ctx.nodes.insert(Box::new(node::GetLocalVar {
+                        local_id: ctx.mir.fn_info[ctx.fn_id].context_param.unwrap(),
                     }));
-                    nodes.insert(Box::new(node::MaxPxcor { context }))
+                    ctx.nodes.insert(Box::new(node::MaxPxcor { context }))
                 }
                 "MAX-PYCOR" => {
                     let &[] = args.as_slice() else {
                         panic!("expected no arguments for `MAX-PYCOR`");
                     };
-                    let context = nodes.insert(Box::new(node::GetLocalVar {
-                        local_id: mir_builder.fn_info[containing_fn].context_param.unwrap(),
+                    let context = ctx.nodes.insert(Box::new(node::GetLocalVar {
+                        local_id: ctx.mir.fn_info[ctx.fn_id].context_param.unwrap(),
                     }));
-                    nodes.insert(Box::new(node::MaxPycor { context }))
+                    ctx.nodes.insert(Box::new(node::MaxPycor { context }))
                 }
                 "ONE-OF" => {
                     // TODO actually implement this
-                    nodes.insert(Box::new(node::Constant { value: UnpackedDynBox::Float(1.0) }))
+                    ctx.nodes.insert(Box::new(node::Constant { value: UnpackedDynBox::Float(1.0) }))
                 }
                 "SCALE-COLOR" => {
                     let &[color, number, range1, range2] = args.as_slice() else {
                         panic!("expected four arguments for `SCALE-COLOR`");
                     };
-                    let color = eval_reporter(color, containing_fn, mir_builder, nodes);
-                    let number = eval_reporter(number, containing_fn, mir_builder, nodes);
-                    let range1 = eval_reporter(range1, containing_fn, mir_builder, nodes);
-                    let range2 = eval_reporter(range2, containing_fn, mir_builder, nodes);
-                    nodes.insert(Box::new(node::ScaleColor { color, number, range1, range2 }))
+                    let color = eval_reporter(color, ctx.reborrow());
+                    let number = eval_reporter(number, ctx.reborrow());
+                    let range1 = eval_reporter(range1, ctx.reborrow());
+                    let range2 = eval_reporter(range2, ctx.reborrow());
+                    ctx.nodes.insert(Box::new(node::ScaleColor { color, number, range1, range2 }))
                 }
                 "TICKS" => {
                     let &[] = args.as_slice() else {
                         panic!("expected no arguments for `TICKS`");
                     };
-                    let context = nodes.insert(Box::new(node::GetLocalVar {
-                        local_id: mir_builder.fn_info[containing_fn].context_param.unwrap(),
+                    let context = ctx.nodes.insert(Box::new(node::GetLocalVar {
+                        local_id: ctx.mir.fn_info[ctx.fn_id].context_param.unwrap(),
                     }));
-                    nodes.insert(Box::new(node::GetTick { context }))
+                    ctx.nodes.insert(Box::new(node::GetTick { context }))
                 }
-                other if let Some(val) = mir_builder.name_scope.lookup(other) => match val {
-                    NameReferent::Constant(mk_node) => nodes.insert(mk_node()),
+                other if let Some(val) = ctx.mir.global_names.lookup(other) => match val {
+                    NameReferent::Constant(mk_node) => ctx.nodes.insert(mk_node()),
                     NameReferent::PatchVar(var_desc) => {
-                        let context = nodes.insert(Box::new(node::GetLocalVar {
-                            local_id: mir_builder.fn_info[containing_fn].context_param.unwrap(),
+                        let context = ctx.nodes.insert(Box::new(node::GetLocalVar {
+                            local_id: ctx.mir.fn_info[ctx.fn_id].context_param.unwrap(),
                         }));
                         let (agent_class, self_param) =
-                            mir_builder.fn_info[containing_fn].self_param.unwrap();
+                            ctx.mir.fn_info[ctx.fn_id].self_param.unwrap();
                         assert!(agent_class.is_patch() || agent_class.is_turtle());
                         let self_id =
-                            nodes.insert(Box::new(node::GetLocalVar { local_id: self_param }));
-                        nodes.insert(Box::new(node::GetPatchVarAsTurtleOrPatch {
+                            ctx.nodes.insert(Box::new(node::GetLocalVar { local_id: self_param }));
+                        ctx.nodes.insert(Box::new(node::GetPatchVarAsTurtleOrPatch {
                             context,
                             agent: self_id,
                             var: var_desc,
                         }))
                     }
                     NameReferent::TurtleVar(var_desc) => {
-                        let context = nodes.insert(Box::new(node::GetLocalVar {
-                            local_id: mir_builder.fn_info[containing_fn].context_param.unwrap(),
+                        let context = ctx.nodes.insert(Box::new(node::GetLocalVar {
+                            local_id: ctx.mir.fn_info[ctx.fn_id].context_param.unwrap(),
                         }));
                         let (agent_class, self_param) =
-                            mir_builder.fn_info[containing_fn].self_param.unwrap();
+                            ctx.mir.fn_info[ctx.fn_id].self_param.unwrap();
                         assert!(agent_class.is_turtle());
                         let self_id =
-                            nodes.insert(Box::new(node::GetLocalVar { local_id: self_param }));
-                        nodes.insert(Box::new(node::GetTurtleVar {
+                            ctx.nodes.insert(Box::new(node::GetLocalVar { local_id: self_param }));
+                        ctx.nodes.insert(Box::new(node::GetTurtleVar {
                             context,
                             turtle: self_id,
                             var: var_desc,
                         }))
+                    }
+                    NameReferent::UserProc(fn_id) => {
+                        // eagerly evaluate all arguments
+                        let evaled_args = args
+                            .iter()
+                            .map(|&arg| eval_reporter(arg, ctx.reborrow()))
+                            .collect::<Vec<_>>();
+
+                        ctx.nodes
+                            .insert(Box::new(node::CallUserFn { target: fn_id, args: evaled_args }))
                     }
                     referent => {
                         error!("reporter has referent: {:?}", referent);
                         todo!("reporter has referent: {:?}", referent);
                     }
                 },
+                other if let Some(local_id) = ctx.local_names.get(other) => {
+                    ctx.nodes.insert(Box::new(node::GetLocalVar { local_id: *local_id }))
+                }
                 _ => unreachable!("unknown reporter: {}", reporter_name),
             }
         }
         "string" => todo!(),
         "number" => {
             let val = expr_json["value"].as_f64().unwrap();
-            nodes.insert(Box::new(node::Constant { value: UnpackedDynBox::Float(val) }))
+            ctx.nodes.insert(Box::new(node::Constant { value: UnpackedDynBox::Float(val) }))
         }
         r#type => {
             error!("unknown reporter type: {}", r#type);
@@ -780,14 +817,13 @@ fn eval_ephemeral_closure(
     expr_json: &JsonObj,
     parent_fn_id: FunctionId,
     agent_class: AgentClass,
-    mir_builder: &mut MirBuilder,
-    nodes: &mut SlotMap<NodeId, Box<dyn EffectfulNode>>,
+    ctx: FnBodyBuilderCtx<'_>,
 ) -> NodeId {
     trace!("Evaluating ephemeral closure");
     assert_eq!(expr_json["type"].as_str().unwrap(), "command-block");
 
     // generate a proc name
-    let parent_debug_name = mir_builder.fn_info[parent_fn_id].debug_name.as_ref();
+    let parent_debug_name = ctx.mir.fn_info[parent_fn_id].debug_name.as_ref();
     let proc_name = format!("{}/body", parent_debug_name);
 
     // calculate the function parameters
@@ -858,14 +894,14 @@ fn eval_ephemeral_closure(
         cfg: StatementBlock { statements: vec![] },
         nodes: SlotMap::with_key(),
     };
-    let fn_id = mir_builder.functions.insert(function);
-    mir_builder.fn_info.insert(fn_id, this_fn_info);
+    let fn_id = ctx.mir.functions.insert(function);
+    ctx.mir.fn_info.insert(fn_id, this_fn_info);
 
     // build the function body
-    build_body(expr_json["statements"].as_array().unwrap(), fn_id, mir_builder).unwrap();
+    build_body(expr_json["statements"].as_array().unwrap(), fn_id, ctx.mir).unwrap();
 
     // return a closure object
-    let closure = nodes.insert(Box::new(node::Closure {
+    let closure = ctx.nodes.insert(Box::new(node::Closure {
         captures: vec![], // TODO add captures
         body: fn_id,
     }));
