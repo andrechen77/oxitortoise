@@ -355,6 +355,36 @@ impl EffectfulNode for AskAllTurtles {
 }
 
 #[derive(Debug, Display)]
+#[display("Of")]
+pub struct Of {
+    /// The execution context to use for the ask.
+    pub context: NodeId,
+    /// The recipients to ask.
+    pub recipients: NodeId,
+    /// A closure representing the reporter to run for each recipient.
+    pub body: NodeId,
+}
+
+impl EffectfulNode for Of {
+    fn has_side_effects(&self) -> bool {
+        true
+    }
+
+    fn dependencies(&self) -> Vec<NodeId> {
+        vec![self.context, self.recipients, self.body]
+    }
+
+    fn output_type(
+        &self,
+        _workspace: &crate::workspace::Workspace,
+        _nodes: &slotmap::SlotMap<NodeId, Box<dyn EffectfulNode>>,
+        _locals: &SlotMap<LocalId, LocalDeclaration>,
+    ) -> Option<crate::sim::value::NetlogoInternalType> {
+        todo!()
+    }
+}
+
+#[derive(Debug, Display)]
 #[display("TurtleRotate")]
 pub struct TurtleRotate {
     /// The execution context to use.
@@ -371,7 +401,7 @@ impl EffectfulNode for TurtleRotate {
     }
 
     fn dependencies(&self) -> Vec<NodeId> {
-        vec![self.angle]
+        vec![self.context, self.turtle, self.angle]
     }
 
     fn output_type(
@@ -410,7 +440,7 @@ impl EffectfulNode for TurtleForward {
     }
 
     fn dependencies(&self) -> Vec<NodeId> {
-        vec![self.distance]
+        vec![self.context, self.turtle, self.distance]
     }
 
     fn output_type(
@@ -429,6 +459,81 @@ impl EffectfulNode for TurtleForward {
         nodes: &mut SlotMap<NodeId, Box<dyn EffectfulNode>>,
     ) -> bool {
         todo!()
+    }
+}
+
+#[derive(Debug, Display)]
+#[display("CanMove")]
+pub struct CanMove {
+    /// The turtle to check movement for
+    pub turtle: NodeId,
+    /// The distance to check
+    pub distance: NodeId,
+}
+
+impl EffectfulNode for CanMove {
+    fn has_side_effects(&self) -> bool {
+        false
+    }
+
+    fn dependencies(&self) -> Vec<NodeId> {
+        vec![self.turtle, self.distance]
+    }
+
+    fn output_type(
+        &self,
+        _workspace: &crate::workspace::Workspace,
+        _nodes: &slotmap::SlotMap<NodeId, Box<dyn EffectfulNode>>,
+        _locals: &SlotMap<LocalId, LocalDeclaration>,
+    ) -> Option<crate::sim::value::NetlogoInternalType> {
+        Some(NetlogoInternalType::BOOLEAN)
+    }
+
+    fn write_lir_execution(
+        &self,
+        my_node_id: NodeId,
+        nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
+        lir_builder: &mut LirInsnBuilder,
+    ) -> Result<(), ()> {
+        todo!()
+    }
+}
+
+#[derive(Debug, Display)]
+pub enum PatchLocRelation {
+    LeftAhead,
+    RightAhead,
+}
+
+#[derive(Debug, Display)]
+#[display("PatchNearby {relative_loc:?}")]
+pub struct PatchRelative {
+    /// The location to check relative to the patch
+    pub relative_loc: PatchLocRelation,
+    /// The turtle to check from
+    pub turtle: NodeId,
+    /// The distance to check
+    pub distance: NodeId,
+    /// The heading to check
+    pub heading: NodeId,
+}
+
+impl EffectfulNode for PatchRelative {
+    fn has_side_effects(&self) -> bool {
+        false
+    }
+
+    fn dependencies(&self) -> Vec<NodeId> {
+        vec![self.turtle, self.distance, self.heading]
+    }
+
+    fn output_type(
+        &self,
+        _workspace: &crate::workspace::Workspace,
+        _nodes: &slotmap::SlotMap<NodeId, Box<dyn EffectfulNode>>,
+        _locals: &SlotMap<LocalId, LocalDeclaration>,
+    ) -> Option<crate::sim::value::NetlogoInternalType> {
+        Some(NetlogoInternalType::PATCH_ID)
     }
 }
 
@@ -570,6 +675,32 @@ impl EffectfulNode for ScaleColor {
 
     fn dependencies(&self) -> Vec<NodeId> {
         vec![self.color, self.number, self.range1, self.range2]
+    }
+
+    fn output_type(
+        &self,
+        _workspace: &crate::workspace::Workspace,
+        _nodes: &slotmap::SlotMap<NodeId, Box<dyn EffectfulNode>>,
+        _locals: &SlotMap<LocalId, LocalDeclaration>,
+    ) -> Option<crate::sim::value::NetlogoInternalType> {
+        Some(NetlogoInternalType::FLOAT)
+    }
+}
+
+/// Returns a random integer between 0 (inclusive) and bound (exclusive)
+#[derive(Debug, Display)]
+#[display("RandomInt")]
+pub struct RandomInt {
+    pub bound: NodeId,
+}
+
+impl EffectfulNode for RandomInt {
+    fn has_side_effects(&self) -> bool {
+        true
+    }
+
+    fn dependencies(&self) -> Vec<NodeId> {
+        vec![self.bound]
     }
 
     fn output_type(

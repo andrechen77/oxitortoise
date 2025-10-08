@@ -11,6 +11,7 @@
 
 use std::fmt::{Debug, Display};
 
+use derive_more::derive::Display;
 use slotmap::{SlotMap, new_key_type};
 
 use crate::{
@@ -25,6 +26,8 @@ pub mod node;
 pub use build_lir::{HostFunctionIds, LirProgramBuilder, mir_to_lir};
 
 new_key_type! {
+    #[derive(Display)]
+    #[display("{_0:?}")]
     pub struct FunctionId;
 }
 
@@ -33,7 +36,7 @@ pub struct Program {
     pub functions: SlotMap<FunctionId, Function>,
 }
 
-#[derive(Debug)]
+#[derive(derive_more::Debug)]
 pub struct Function {
     pub debug_name: Option<String>,
     /// A list of local variables which are parameters to the function. This
@@ -44,9 +47,11 @@ pub struct Function {
     /// The set of all local variables used by the function.
     pub locals: SlotMap<LocalId, LocalDeclaration>,
     /// The structured control flow of the function
+    #[debug(skip)]
     pub cfg: StatementBlock,
     /// The set of all nodes in the function, where a "node" is some kind of
     /// computation, as in sea-of-nodes.
+    #[debug(skip)]
     pub nodes: SlotMap<NodeId, Box<dyn EffectfulNode>>,
 }
 

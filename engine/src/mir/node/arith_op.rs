@@ -54,3 +54,45 @@ impl EffectfulNode for BinaryOperation {
         todo!()
     }
 }
+
+#[derive(Debug, Display)]
+#[display("{op:?}")]
+pub enum UnaryOpcode {
+    Neg,
+    Not,
+}
+
+#[derive(Debug, Display)]
+#[display("{op:?}")]
+pub struct UnaryOp {
+    pub op: UnaryOpcode,
+    pub operand: NodeId,
+}
+
+impl EffectfulNode for UnaryOp {
+    fn has_side_effects(&self) -> bool {
+        false
+    }
+
+    fn dependencies(&self) -> Vec<NodeId> {
+        vec![self.operand]
+    }
+
+    fn output_type(
+        &self,
+        _workspace: &crate::workspace::Workspace,
+        _nodes: &slotmap::SlotMap<crate::mir::NodeId, Box<dyn EffectfulNode>>,
+        _locals: &SlotMap<LocalId, LocalDeclaration>,
+    ) -> Option<crate::sim::value::NetlogoInternalType> {
+        todo!("check operand type and return numeric type")
+    }
+
+    fn write_lir_execution(
+        &self,
+        my_node_id: NodeId,
+        nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
+        lir_builder: &mut crate::mir::build_lir::LirInsnBuilder,
+    ) -> Result<(), ()> {
+        todo!()
+    }
+}
