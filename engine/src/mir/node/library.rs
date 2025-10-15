@@ -8,8 +8,11 @@ use lir::{ValRef, smallvec::smallvec};
 use slotmap::{Key, SlotMap};
 
 use crate::{
-    mir::{EffectfulNode, LocalDeclaration, LocalId, NodeId, build_lir::LirInsnBuilder},
-    sim::{patch::PatchVarDesc, turtle::BreedId, value::NetlogoInternalType},
+    mir::{
+        EffectfulNode, Function, NetlogoAbstractAbstractType, NetlogoAbstractType, NodeId, Nodes,
+        Program, build_lir::LirInsnBuilder,
+    },
+    sim::{patch::PatchVarDesc, turtle::BreedId},
 };
 
 #[derive(Debug, Display)]
@@ -30,11 +33,11 @@ impl EffectfulNode for ClearAll {
 
     fn output_type(
         &self,
-        _workspace: &crate::workspace::Workspace,
-        _nodes: &slotmap::SlotMap<NodeId, Box<dyn EffectfulNode>>,
-        _locals: &SlotMap<LocalId, LocalDeclaration>,
-    ) -> Option<crate::sim::value::NetlogoInternalType> {
-        None
+        _program: &Program,
+        _function: &Function,
+        _nodes: &Nodes,
+    ) -> NetlogoAbstractAbstractType {
+        NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Unit)
     }
 
     fn write_lir_execution(
@@ -77,18 +80,18 @@ impl EffectfulNode for Diffuse {
 
     fn output_type(
         &self,
-        _workspace: &crate::workspace::Workspace,
-        _nodes: &slotmap::SlotMap<NodeId, Box<dyn EffectfulNode>>,
-        _locals: &SlotMap<LocalId, LocalDeclaration>,
-    ) -> Option<crate::sim::value::NetlogoInternalType> {
-        None
+        _program: &crate::mir::Program,
+        _function: &crate::mir::Function,
+        _nodes: &crate::mir::Nodes,
+    ) -> NetlogoAbstractAbstractType {
+        NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Unit)
     }
 
     fn write_lir_execution(
         &self,
-        my_node_id: NodeId,
-        nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
-        lir_builder: &mut LirInsnBuilder,
+        _my_node_id: NodeId,
+        _nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
+        _lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), ()> {
         todo!()
     }
@@ -112,16 +115,16 @@ impl EffectfulNode for ResetTicks {
 
     fn output_type(
         &self,
-        _workspace: &crate::workspace::Workspace,
-        _nodes: &slotmap::SlotMap<NodeId, Box<dyn EffectfulNode>>,
-        _locals: &SlotMap<LocalId, LocalDeclaration>,
-    ) -> Option<crate::sim::value::NetlogoInternalType> {
-        None
+        _program: &crate::mir::Program,
+        _function: &crate::mir::Function,
+        _nodes: &crate::mir::Nodes,
+    ) -> NetlogoAbstractAbstractType {
+        NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Unit)
     }
 
     fn write_lir_execution(
         &self,
-        my_node_id: NodeId,
+        _my_node_id: NodeId,
         nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), ()> {
@@ -155,11 +158,11 @@ impl EffectfulNode for AdvanceTick {
 
     fn output_type(
         &self,
-        _workspace: &crate::workspace::Workspace,
-        _nodes: &slotmap::SlotMap<NodeId, Box<dyn EffectfulNode>>,
-        _locals: &SlotMap<LocalId, LocalDeclaration>,
-    ) -> Option<crate::sim::value::NetlogoInternalType> {
-        None
+        _program: &crate::mir::Program,
+        _function: &crate::mir::Function,
+        _nodes: &crate::mir::Nodes,
+    ) -> NetlogoAbstractAbstractType {
+        NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Unit)
     }
 }
 
@@ -181,11 +184,11 @@ impl EffectfulNode for GetTick {
 
     fn output_type(
         &self,
-        _workspace: &crate::workspace::Workspace,
-        _nodes: &slotmap::SlotMap<NodeId, Box<dyn EffectfulNode>>,
-        _locals: &SlotMap<LocalId, LocalDeclaration>,
-    ) -> Option<crate::sim::value::NetlogoInternalType> {
-        Some(NetlogoInternalType::FLOAT)
+        _program: &crate::mir::Program,
+        _function: &crate::mir::Function,
+        _nodes: &crate::mir::Nodes,
+    ) -> NetlogoAbstractAbstractType {
+        NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Float)
     }
 }
 
@@ -213,11 +216,11 @@ impl EffectfulNode for CreateTurtles {
 
     fn output_type(
         &self,
-        _workspace: &crate::workspace::Workspace,
-        _nodes: &slotmap::SlotMap<NodeId, Box<dyn EffectfulNode>>,
-        _locals: &SlotMap<LocalId, LocalDeclaration>,
-    ) -> Option<crate::sim::value::NetlogoInternalType> {
-        None
+        _program: &crate::mir::Program,
+        _function: &crate::mir::Function,
+        _nodes: &crate::mir::Nodes,
+    ) -> NetlogoAbstractAbstractType {
+        NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Unit)
     }
 
     fn write_lir_execution(
@@ -284,25 +287,16 @@ impl EffectfulNode for Ask {
 
     fn output_type(
         &self,
-        _workspace: &crate::workspace::Workspace,
-        _nodes: &slotmap::SlotMap<NodeId, Box<dyn EffectfulNode>>,
-        _locals: &SlotMap<LocalId, LocalDeclaration>,
-    ) -> Option<crate::sim::value::NetlogoInternalType> {
-        None
+        _program: &crate::mir::Program,
+        _function: &crate::mir::Function,
+        _nodes: &crate::mir::Nodes,
+    ) -> NetlogoAbstractAbstractType {
+        NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Unit)
     }
 
     // TODO if possible this node should be optimized into AskAllTurtles, etc.
     // maybe we can hijack lowering expand for this? or repurpose that function
     // as one that checks for all optimizations?
-
-    fn write_lir_execution(
-        &self,
-        my_node_id: NodeId,
-        nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
-        lir_builder: &mut LirInsnBuilder,
-    ) -> Result<(), ()> {
-        todo!()
-    }
 }
 
 #[derive(Debug, Display)]
@@ -325,11 +319,11 @@ impl EffectfulNode for AskAllTurtles {
 
     fn output_type(
         &self,
-        _workspace: &crate::workspace::Workspace,
-        _nodes: &slotmap::SlotMap<NodeId, Box<dyn EffectfulNode>>,
-        _locals: &SlotMap<LocalId, LocalDeclaration>,
-    ) -> Option<crate::sim::value::NetlogoInternalType> {
-        None
+        _program: &crate::mir::Program,
+        _function: &crate::mir::Function,
+        _nodes: &crate::mir::Nodes,
+    ) -> NetlogoAbstractAbstractType {
+        NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Unit)
     }
 
     fn write_lir_execution(
@@ -376,11 +370,17 @@ impl EffectfulNode for Of {
 
     fn output_type(
         &self,
-        _workspace: &crate::workspace::Workspace,
-        _nodes: &slotmap::SlotMap<NodeId, Box<dyn EffectfulNode>>,
-        _locals: &SlotMap<LocalId, LocalDeclaration>,
-    ) -> Option<crate::sim::value::NetlogoInternalType> {
-        todo!()
+        program: &crate::mir::Program,
+        function: &crate::mir::Function,
+        nodes: &crate::mir::Nodes,
+    ) -> NetlogoAbstractAbstractType {
+        let NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Closure { return_ty }) =
+            nodes[self.body].output_type(program, function, nodes)
+        else {
+            panic!("expected node outputting closure body to be a closure")
+        };
+
+        NetlogoAbstractAbstractType::AbstractType(*return_ty)
     }
 }
 
@@ -406,20 +406,11 @@ impl EffectfulNode for TurtleRotate {
 
     fn output_type(
         &self,
-        _workspace: &crate::workspace::Workspace,
-        _nodes: &slotmap::SlotMap<NodeId, Box<dyn EffectfulNode>>,
-        _locals: &SlotMap<LocalId, LocalDeclaration>,
-    ) -> Option<crate::sim::value::NetlogoInternalType> {
-        None
-    }
-
-    fn lowering_expand(
-        &self,
-        my_node_id: NodeId,
-        workspace: &crate::workspace::Workspace,
-        nodes: &mut SlotMap<NodeId, Box<dyn EffectfulNode>>,
-    ) -> bool {
-        todo!()
+        _program: &crate::mir::Program,
+        _function: &crate::mir::Function,
+        _nodes: &crate::mir::Nodes,
+    ) -> NetlogoAbstractAbstractType {
+        NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Unit)
     }
 }
 
@@ -445,20 +436,11 @@ impl EffectfulNode for TurtleForward {
 
     fn output_type(
         &self,
-        _workspace: &crate::workspace::Workspace,
-        _nodes: &slotmap::SlotMap<NodeId, Box<dyn EffectfulNode>>,
-        _locals: &SlotMap<LocalId, LocalDeclaration>,
-    ) -> Option<crate::sim::value::NetlogoInternalType> {
-        None
-    }
-
-    fn lowering_expand(
-        &self,
-        my_node_id: NodeId,
-        workspace: &crate::workspace::Workspace,
-        nodes: &mut SlotMap<NodeId, Box<dyn EffectfulNode>>,
-    ) -> bool {
-        todo!()
+        _program: &crate::mir::Program,
+        _function: &crate::mir::Function,
+        _nodes: &crate::mir::Nodes,
+    ) -> NetlogoAbstractAbstractType {
+        NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Unit)
     }
 }
 
@@ -482,18 +464,18 @@ impl EffectfulNode for CanMove {
 
     fn output_type(
         &self,
-        _workspace: &crate::workspace::Workspace,
-        _nodes: &slotmap::SlotMap<NodeId, Box<dyn EffectfulNode>>,
-        _locals: &SlotMap<LocalId, LocalDeclaration>,
-    ) -> Option<crate::sim::value::NetlogoInternalType> {
-        Some(NetlogoInternalType::BOOLEAN)
+        _program: &crate::mir::Program,
+        _function: &crate::mir::Function,
+        _nodes: &crate::mir::Nodes,
+    ) -> NetlogoAbstractAbstractType {
+        NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Boolean)
     }
 
     fn write_lir_execution(
         &self,
-        my_node_id: NodeId,
-        nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
-        lir_builder: &mut LirInsnBuilder,
+        _my_node_id: NodeId,
+        _nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
+        _lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), ()> {
         todo!()
     }
@@ -529,11 +511,11 @@ impl EffectfulNode for PatchRelative {
 
     fn output_type(
         &self,
-        _workspace: &crate::workspace::Workspace,
-        _nodes: &slotmap::SlotMap<NodeId, Box<dyn EffectfulNode>>,
-        _locals: &SlotMap<LocalId, LocalDeclaration>,
-    ) -> Option<crate::sim::value::NetlogoInternalType> {
-        Some(NetlogoInternalType::PATCH_ID)
+        _program: &crate::mir::Program,
+        _function: &crate::mir::Function,
+        _nodes: &crate::mir::Nodes,
+    ) -> NetlogoAbstractAbstractType {
+        NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Patch)
     }
 }
 
@@ -559,18 +541,18 @@ impl EffectfulNode for OffsetDistanceByHeading {
 
     fn output_type(
         &self,
-        _workspace: &crate::workspace::Workspace,
-        _nodes: &slotmap::SlotMap<NodeId, Box<dyn EffectfulNode>>,
-        _locals: &SlotMap<LocalId, LocalDeclaration>,
-    ) -> Option<crate::sim::value::NetlogoInternalType> {
-        Some(NetlogoInternalType::POINT)
+        _program: &crate::mir::Program,
+        _function: &crate::mir::Function,
+        _nodes: &crate::mir::Nodes,
+    ) -> NetlogoAbstractAbstractType {
+        todo!()
     }
 
     fn write_lir_execution(
         &self,
-        my_node_id: NodeId,
-        nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
-        lir_builder: &mut LirInsnBuilder,
+        _my_node_id: NodeId,
+        _nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
+        _lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), ()> {
         todo!()
     }
@@ -598,11 +580,11 @@ impl EffectfulNode for Distancexy {
 
     fn output_type(
         &self,
-        workspace: &crate::workspace::Workspace,
-        nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
-        locals: &SlotMap<LocalId, LocalDeclaration>,
-    ) -> Option<NetlogoInternalType> {
-        Some(NetlogoInternalType::FLOAT)
+        _program: &crate::mir::Program,
+        _function: &crate::mir::Function,
+        _nodes: &crate::mir::Nodes,
+    ) -> NetlogoAbstractAbstractType {
+        NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Float)
     }
 }
 
@@ -624,11 +606,11 @@ impl EffectfulNode for MaxPxcor {
 
     fn output_type(
         &self,
-        _workspace: &crate::workspace::Workspace,
-        _nodes: &slotmap::SlotMap<NodeId, Box<dyn EffectfulNode>>,
-        _locals: &SlotMap<LocalId, LocalDeclaration>,
-    ) -> Option<crate::sim::value::NetlogoInternalType> {
-        Some(NetlogoInternalType::FLOAT)
+        _program: &crate::mir::Program,
+        _function: &crate::mir::Function,
+        _nodes: &crate::mir::Nodes,
+    ) -> NetlogoAbstractAbstractType {
+        NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Integer)
     }
 }
 
@@ -650,11 +632,11 @@ impl EffectfulNode for MaxPycor {
 
     fn output_type(
         &self,
-        _workspace: &crate::workspace::Workspace,
-        _nodes: &slotmap::SlotMap<NodeId, Box<dyn EffectfulNode>>,
-        _locals: &SlotMap<LocalId, LocalDeclaration>,
-    ) -> Option<crate::sim::value::NetlogoInternalType> {
-        Some(NetlogoInternalType::FLOAT)
+        _program: &crate::mir::Program,
+        _function: &crate::mir::Function,
+        _nodes: &crate::mir::Nodes,
+    ) -> NetlogoAbstractAbstractType {
+        NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Integer)
     }
 }
 
@@ -679,11 +661,11 @@ impl EffectfulNode for ScaleColor {
 
     fn output_type(
         &self,
-        _workspace: &crate::workspace::Workspace,
-        _nodes: &slotmap::SlotMap<NodeId, Box<dyn EffectfulNode>>,
-        _locals: &SlotMap<LocalId, LocalDeclaration>,
-    ) -> Option<crate::sim::value::NetlogoInternalType> {
-        Some(NetlogoInternalType::FLOAT)
+        _program: &crate::mir::Program,
+        _function: &crate::mir::Function,
+        _nodes: &crate::mir::Nodes,
+    ) -> NetlogoAbstractAbstractType {
+        NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Color)
     }
 }
 
@@ -705,10 +687,10 @@ impl EffectfulNode for RandomInt {
 
     fn output_type(
         &self,
-        _workspace: &crate::workspace::Workspace,
-        _nodes: &slotmap::SlotMap<NodeId, Box<dyn EffectfulNode>>,
-        _locals: &SlotMap<LocalId, LocalDeclaration>,
-    ) -> Option<crate::sim::value::NetlogoInternalType> {
-        Some(NetlogoInternalType::FLOAT)
+        _program: &crate::mir::Program,
+        _function: &crate::mir::Function,
+        _nodes: &crate::mir::Nodes,
+    ) -> NetlogoAbstractAbstractType {
+        NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Integer)
     }
 }

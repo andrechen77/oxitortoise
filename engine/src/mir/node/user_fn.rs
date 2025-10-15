@@ -2,7 +2,7 @@
 
 use derive_more::derive::Display;
 
-use crate::mir::{EffectfulNode, FunctionId, NodeId};
+use crate::mir::{EffectfulNode, FunctionId, NetlogoAbstractAbstractType, NodeId};
 
 #[derive(Debug, Display)]
 #[display("CallUserFn {target:?}")]
@@ -24,10 +24,12 @@ impl EffectfulNode for CallUserFn {
 
     fn output_type(
         &self,
-        _workspace: &crate::workspace::Workspace,
-        _nodes: &slotmap::SlotMap<NodeId, Box<dyn EffectfulNode>>,
-        _locals: &slotmap::SlotMap<crate::mir::LocalId, crate::mir::LocalDeclaration>,
-    ) -> Option<crate::sim::value::NetlogoInternalType> {
-        todo!("somehow look up the return type of the function")
+        program: &crate::mir::Program,
+        _function: &crate::mir::Function,
+        _nodes: &crate::mir::Nodes,
+    ) -> NetlogoAbstractAbstractType {
+        NetlogoAbstractAbstractType::AbstractType(
+            program.functions[self.target].borrow().return_ty.clone(),
+        )
     }
 }

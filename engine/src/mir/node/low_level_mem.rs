@@ -7,7 +7,7 @@ use lir::smallvec::smallvec;
 use slotmap::SlotMap;
 
 use crate::{
-    mir::{EffectfulNode, NodeId},
+    mir::{EffectfulNode, NetlogoAbstractAbstractType, NodeId},
     sim::value::NetlogoInternalType,
 };
 
@@ -33,13 +33,11 @@ impl EffectfulNode for MemLoad {
 
     fn output_type(
         &self,
-        _workspace: &crate::workspace::Workspace,
-        _nodes: &slotmap::SlotMap<NodeId, Box<dyn EffectfulNode>>,
-        _locals: &slotmap::SlotMap<crate::mir::LocalId, crate::mir::LocalDeclaration>,
-    ) -> Option<crate::sim::value::NetlogoInternalType> {
-        // this returns None not because it doesn't have an output, but
-        // because we don't know the type
-        None
+        _program: &crate::mir::Program,
+        _function: &crate::mir::Function,
+        _nodes: &crate::mir::Nodes,
+    ) -> crate::mir::NetlogoAbstractAbstractType {
+        NetlogoAbstractAbstractType::Other
     }
 
     fn write_lir_execution(
@@ -89,11 +87,11 @@ impl EffectfulNode for MemStore {
 
     fn output_type(
         &self,
-        _workspace: &crate::workspace::Workspace,
-        _nodes: &slotmap::SlotMap<NodeId, Box<dyn EffectfulNode>>,
-        _locals: &slotmap::SlotMap<crate::mir::LocalId, crate::mir::LocalDeclaration>,
-    ) -> Option<crate::sim::value::NetlogoInternalType> {
-        None
+        _program: &crate::mir::Program,
+        _function: &crate::mir::Function,
+        _nodes: &crate::mir::Nodes,
+    ) -> crate::mir::NetlogoAbstractAbstractType {
+        NetlogoAbstractAbstractType::Other
     }
 
     fn write_lir_execution(
@@ -135,11 +133,11 @@ impl EffectfulNode for DeriveField {
 
     fn output_type(
         &self,
-        _workspace: &crate::workspace::Workspace,
-        _nodes: &slotmap::SlotMap<NodeId, Box<dyn EffectfulNode>>,
-        _locals: &slotmap::SlotMap<crate::mir::LocalId, crate::mir::LocalDeclaration>,
-    ) -> Option<crate::sim::value::NetlogoInternalType> {
-        Some(NetlogoInternalType::UNTYPED_PTR)
+        _program: &crate::mir::Program,
+        _function: &crate::mir::Function,
+        _nodes: &crate::mir::Nodes,
+    ) -> crate::mir::NetlogoAbstractAbstractType {
+        NetlogoAbstractAbstractType::LowLevelType(NetlogoInternalType::UNTYPED_PTR)
     }
 
     fn write_lir_execution(
@@ -179,11 +177,11 @@ impl EffectfulNode for DeriveElement {
 
     fn output_type(
         &self,
-        _workspace: &crate::workspace::Workspace,
-        _nodes: &slotmap::SlotMap<NodeId, Box<dyn EffectfulNode>>,
-        _locals: &slotmap::SlotMap<crate::mir::LocalId, crate::mir::LocalDeclaration>,
-    ) -> Option<NetlogoInternalType> {
-        Some(NetlogoInternalType::UNTYPED_PTR)
+        _program: &crate::mir::Program,
+        _function: &crate::mir::Function,
+        _nodes: &crate::mir::Nodes,
+    ) -> crate::mir::NetlogoAbstractAbstractType {
+        NetlogoAbstractAbstractType::LowLevelType(NetlogoInternalType::UNTYPED_PTR)
     }
 
     fn write_lir_execution(

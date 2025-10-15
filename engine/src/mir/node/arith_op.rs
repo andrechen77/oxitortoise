@@ -1,7 +1,10 @@
 use derive_more::derive::Display;
 use slotmap::SlotMap;
 
-use crate::mir::{EffectfulNode, LocalDeclaration, LocalId, NodeId};
+use crate::mir::{
+    EffectfulNode, Function, NetlogoAbstractAbstractType, NetlogoAbstractType, NodeId, Nodes,
+    Program,
+};
 
 #[derive(Debug, Display)]
 #[display("{_0:?}")]
@@ -38,18 +41,31 @@ impl EffectfulNode for BinaryOperation {
 
     fn output_type(
         &self,
-        _workspace: &crate::workspace::Workspace,
-        _nodes: &slotmap::SlotMap<crate::mir::NodeId, Box<dyn EffectfulNode>>,
-        _locals: &SlotMap<LocalId, LocalDeclaration>,
-    ) -> Option<crate::sim::value::NetlogoInternalType> {
-        todo!("match on internal variant and operand types")
+        _program: &Program,
+        _function: &Function,
+        _nodes: &Nodes,
+    ) -> NetlogoAbstractAbstractType {
+        // TODO int + int should be int
+        NetlogoAbstractAbstractType::AbstractType(match self.op {
+            BinaryOpcode::Add => NetlogoAbstractType::Numeric,
+            BinaryOpcode::Sub => NetlogoAbstractType::Numeric,
+            BinaryOpcode::Mul => NetlogoAbstractType::Numeric,
+            BinaryOpcode::Div => NetlogoAbstractType::Numeric,
+            BinaryOpcode::Lt => NetlogoAbstractType::Boolean,
+            BinaryOpcode::Lte => NetlogoAbstractType::Boolean,
+            BinaryOpcode::Gt => NetlogoAbstractType::Boolean,
+            BinaryOpcode::Gte => NetlogoAbstractType::Boolean,
+            BinaryOpcode::Eq => NetlogoAbstractType::Boolean,
+            BinaryOpcode::And => NetlogoAbstractType::Boolean,
+            BinaryOpcode::Or => NetlogoAbstractType::Boolean,
+        })
     }
 
     fn write_lir_execution(
         &self,
-        my_node_id: NodeId,
-        nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
-        lir_builder: &mut crate::mir::build_lir::LirInsnBuilder,
+        _my_node_id: NodeId,
+        _nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
+        _lir_builder: &mut crate::mir::build_lir::LirInsnBuilder,
     ) -> Result<(), ()> {
         todo!()
     }
@@ -80,18 +96,21 @@ impl EffectfulNode for UnaryOp {
 
     fn output_type(
         &self,
-        _workspace: &crate::workspace::Workspace,
-        _nodes: &slotmap::SlotMap<crate::mir::NodeId, Box<dyn EffectfulNode>>,
-        _locals: &SlotMap<LocalId, LocalDeclaration>,
-    ) -> Option<crate::sim::value::NetlogoInternalType> {
-        todo!("check operand type and return numeric type")
+        _program: &Program,
+        _function: &Function,
+        _nodes: &Nodes,
+    ) -> NetlogoAbstractAbstractType {
+        NetlogoAbstractAbstractType::AbstractType(match self.op {
+            UnaryOpcode::Neg => NetlogoAbstractType::Numeric,
+            UnaryOpcode::Not => NetlogoAbstractType::Boolean,
+        })
     }
 
     fn write_lir_execution(
         &self,
-        my_node_id: NodeId,
-        nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
-        lir_builder: &mut crate::mir::build_lir::LirInsnBuilder,
+        _my_node_id: NodeId,
+        _nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
+        _lir_builder: &mut crate::mir::build_lir::LirInsnBuilder,
     ) -> Result<(), ()> {
         todo!()
     }

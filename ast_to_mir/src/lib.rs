@@ -4,7 +4,8 @@ use std::{collections::HashMap, rc::Rc};
 
 use engine::{
     mir::{
-        self, EffectfulNode, Function, FunctionId, LocalDeclaration, LocalId, LocalStorage, NodeId,
+        self, CustomVarDecl, EffectfulNode, Function, FunctionId, GlobalId, LocalDeclaration,
+        LocalId, LocalStorage, NetlogoAbstractAbstractType, NetlogoAbstractType, NodeId,
         StatementBlock, StatementKind,
         node::{self, BinaryOpcode, PatchLocRelation, UnaryOpcode},
     },
@@ -13,17 +14,15 @@ use engine::{
         turtle::{BreedId, TurtleVarDesc},
         value::{NetlogoInternalType, UnpackedDynBox},
     },
-    slotmap::{SecondaryMap, SlotMap, new_key_type},
+    slotmap::{SecondaryMap, SlotMap},
+    util::cell::RefCell,
 };
 use serde_json::{Value as JsonValue, json};
 use tracing::{Span, error, instrument, trace};
 
-type JsonObj = serde_json::Map<String, JsonValue>;
+pub extern crate serde_json;
 
-// TODO this should be a part of MIR
-new_key_type! {
-    pub struct GlobalId;
-}
+type JsonObj = serde_json::Map<String, JsonValue>;
 
 // TODO this should work with local variables too
 #[derive(Debug)]
@@ -123,6 +122,8 @@ pub fn ast_to_mir(ast: &JsonValue) -> anyhow::Result<mir::Program> {
     let root = ast.as_object().unwrap();
 
     let mut globals: SlotMap<GlobalId, ()> = SlotMap::with_key();
+    let mut custom_patch_vars = Vec::new();
+    let mut custom_turtle_vars = Vec::new();
 
     let mut turtle_breeds: SlotMap<BreedId, ()> = SlotMap::with_key();
     let default_turtle_breed = turtle_breeds.insert(());
@@ -138,12 +139,23 @@ pub fn ast_to_mir(ast: &JsonValue) -> anyhow::Result<mir::Program> {
         name_scope.globals.insert(Rc::from(global_name), global_id);
         trace!("Added global variable `{}` with id {:?}", global_name, global_id);
     }
-    // add patch variables
+    // add custom patch variables
     for (i, patch_var) in meta_vars["patchVars"].as_array().unwrap().iter().enumerate() {
         let patch_var_name = patch_var.as_str().unwrap();
         let patch_var_id = PatchVarDesc::Custom(i);
         name_scope.patch_vars.insert(Rc::from(patch_var_name), patch_var_id);
+        custom_patch_vars
+            .push(CustomVarDecl { name: Rc::from(patch_var_name), ty: NetlogoAbstractType::Top });
         trace!("Added patch variable `{}` with id {:?}", patch_var_name, patch_var_id);
+    }
+    // add custom turtle variables
+    for (i, turtle_var) in meta_vars["turtleVars"].as_array().unwrap().iter().enumerate() {
+        let turtle_var_name = turtle_var.as_str().unwrap();
+        let turtle_var_id = TurtleVarDesc::Custom(i);
+        name_scope.turtle_vars.insert(Rc::from(turtle_var_name), turtle_var_id);
+        custom_turtle_vars
+            .push(CustomVarDecl { name: Rc::from(turtle_var_name), ty: NetlogoAbstractType::Top });
+        trace!("Added turtle variable `{}` with id {:?}", turtle_var_name, turtle_var_id);
     }
 
     let mut functions: SlotMap<FunctionId, Function> = SlotMap::with_key();
@@ -194,21 +206,18 @@ pub fn ast_to_mir(ast: &JsonValue) -> anyhow::Result<mir::Program> {
         trace!("Completed body building for procedure: {}", proc_name);
     }
 
-    trace!("end of procedure so far. {:?}", mir_builder);
-
-    // Write MIR to debug file
-    let debug_output = format!("{:#?}", mir_builder);
-    std::fs::write("mir_debug.txt", debug_output).expect("Failed to write MIR debug output");
-
-    for (fn_id, function) in mir_builder.functions {
-        let dot_string = function.to_dot_string_with_options(false);
-        let filename =
-            format!("{}-{:?}.dot", fn_id, function.debug_name.as_deref().unwrap_or("unnamed"));
-        trace!("Writing DOT file for function {:?}: {}", fn_id, filename);
-        std::fs::write(filename, dot_string).expect("Failed to write DOT file");
-    }
-
-    todo!()
+    Ok(mir::Program {
+        globals: mir_builder.globals,
+        turtle_breeds: mir_builder.turtle_breeds,
+        custom_turtle_vars,
+        custom_patch_vars,
+        turtle_schema: None,
+        functions: mir_builder
+            .functions
+            .into_iter()
+            .map(|(id, function)| (id, RefCell::new(function)))
+            .collect(),
+    })
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -289,7 +298,7 @@ fn create_procedure_skeleton(
     // always add the context parameter TODO this shouldn't be always
     let context_param = locals.insert(LocalDeclaration {
         debug_name: Some("context".to_string()),
-        ty: NetlogoInternalType::UNTYPED_PTR,
+        ty: NetlogoAbstractAbstractType::LowLevelType(NetlogoInternalType::UNTYPED_PTR),
         storage: LocalStorage::Register,
     });
     parameter_locals.push(context_param);
@@ -302,7 +311,7 @@ fn create_procedure_skeleton(
         AgentClass::Turtle => {
             let local_id = locals.insert(LocalDeclaration {
                 debug_name: Some("self_turtle_id".to_string()),
-                ty: NetlogoInternalType::TURTLE_ID,
+                ty: NetlogoAbstractAbstractType::LowLevelType(NetlogoInternalType::TURTLE_ID),
                 storage: LocalStorage::Register,
             });
             parameter_locals.push(local_id);
@@ -312,7 +321,7 @@ fn create_procedure_skeleton(
         AgentClass::Patch => {
             let local_id = locals.insert(LocalDeclaration {
                 debug_name: Some("self_patch_id".to_string()),
-                ty: NetlogoInternalType::PATCH_ID,
+                ty: NetlogoAbstractAbstractType::LowLevelType(NetlogoInternalType::PATCH_ID),
                 storage: LocalStorage::Register,
             });
             parameter_locals.push(local_id);
@@ -325,7 +334,7 @@ fn create_procedure_skeleton(
     for arg in procedure["args"].as_array().unwrap().iter().map(|arg| arg.as_str().unwrap()) {
         let local_id = locals.insert(LocalDeclaration {
             debug_name: Some(arg.to_string()),
-            ty: NetlogoInternalType::DYN_BOX,
+            ty: NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Top),
             storage: LocalStorage::Register,
         });
         fn_info.local_names.insert(Rc::from(arg), local_id);
@@ -336,8 +345,8 @@ fn create_procedure_skeleton(
 
     // calculate the function return type
     let return_ty = match procedure["returnType"].as_str().unwrap() {
-        "unit" => None,
-        "wildcard" => Some(NetlogoInternalType::DYN_BOX),
+        "unit" => NetlogoAbstractType::Unit,
+        "wildcard" => NetlogoAbstractType::Top,
         _ => todo!(),
     };
     trace!("calculated return type: {:?}", return_ty);
@@ -350,7 +359,7 @@ fn create_procedure_skeleton(
         locals,
         // cfg and nodes are defaulted values and will be filled in later
         cfg: StatementBlock { statements: vec![] },
-        nodes: SlotMap::with_key(),
+        nodes: RefCell::new(SlotMap::with_key()),
     };
     trace!(
         "Created function skeleton for {} with {} parameters",
@@ -391,7 +400,7 @@ fn build_body(
 
     let function = &mut mir_builder.functions[fn_id];
     function.cfg = StatementBlock { statements };
-    function.nodes = nodes;
+    function.nodes = RefCell::new(nodes);
 
     trace!("finished building body");
     Ok(())
@@ -462,7 +471,7 @@ fn eval_let_binding(expr_json: &JsonObj, mut ctx: FnBodyBuilderCtx<'_>) -> Optio
     let var_name = expr_json["varName"].as_str().unwrap();
     let local_id = ctx.mir.functions[ctx.fn_id].locals.insert(LocalDeclaration {
         debug_name: Some(var_name.to_string()),
-        ty: NetlogoInternalType::DYN_BOX,
+        ty: NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Top),
         storage: LocalStorage::Register,
     });
     ctx.mir.fn_info[ctx.fn_id].local_names.insert(Rc::from(var_name), local_id);
@@ -889,7 +898,7 @@ fn eval_ephemeral_closure(
     expr_json: &JsonObj,
     parent_fn_id: FunctionId,
     agent_class: AgentClass,
-    mut ctx: FnBodyBuilderCtx<'_>,
+    ctx: FnBodyBuilderCtx<'_>,
 ) -> NodeId {
     trace!("Evaluating ephemeral closure");
 
@@ -915,7 +924,7 @@ fn eval_ephemeral_closure(
     // add the environment pointer
     let env_param = locals.insert(LocalDeclaration {
         debug_name: Some("env".to_string()),
-        ty: NetlogoInternalType::UNTYPED_PTR,
+        ty: NetlogoAbstractAbstractType::LowLevelType(NetlogoInternalType::UNTYPED_PTR),
         storage: LocalStorage::Register,
     });
     parameter_locals.push(env_param);
@@ -923,7 +932,7 @@ fn eval_ephemeral_closure(
     // add the context parameter
     let context_param = locals.insert(LocalDeclaration {
         debug_name: Some("context".to_string()),
-        ty: NetlogoInternalType::UNTYPED_PTR,
+        ty: NetlogoAbstractAbstractType::LowLevelType(NetlogoInternalType::UNTYPED_PTR),
         storage: LocalStorage::Register,
     });
     parameter_locals.push(context_param);
@@ -936,7 +945,7 @@ fn eval_ephemeral_closure(
         AgentClass::Turtle => {
             let local_id = locals.insert(LocalDeclaration {
                 debug_name: Some("self_turtle_id".to_string()),
-                ty: NetlogoInternalType::TURTLE_ID,
+                ty: NetlogoAbstractAbstractType::LowLevelType(NetlogoInternalType::TURTLE_ID),
                 storage: LocalStorage::Register,
             });
             parameter_locals.push(local_id);
@@ -946,7 +955,7 @@ fn eval_ephemeral_closure(
         AgentClass::Patch => {
             let local_id = locals.insert(LocalDeclaration {
                 debug_name: Some("self_patch_id".to_string()),
-                ty: NetlogoInternalType::PATCH_ID,
+                ty: NetlogoAbstractAbstractType::LowLevelType(NetlogoInternalType::PATCH_ID),
                 storage: LocalStorage::Register,
             });
             parameter_locals.push(local_id);
@@ -957,7 +966,7 @@ fn eval_ephemeral_closure(
         AgentClass::Any => {
             let local_id = locals.insert(LocalDeclaration {
                 debug_name: Some("self_any".to_string()),
-                ty: NetlogoInternalType::DYN_BOX,
+                ty: NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Top),
                 storage: LocalStorage::Register,
             });
             parameter_locals.push(local_id);
@@ -967,8 +976,8 @@ fn eval_ephemeral_closure(
     }
 
     let return_ty = match closure_type {
-        ClosureType::CommandBlock => None,
-        ClosureType::ReporterBlock => Some(NetlogoInternalType::DYN_BOX),
+        ClosureType::CommandBlock => NetlogoAbstractType::Unit,
+        ClosureType::ReporterBlock => NetlogoAbstractType::Top,
     };
 
     // create the function skeleton
@@ -979,7 +988,7 @@ fn eval_ephemeral_closure(
         locals,
         // cfg and nodes are defaulted and will be filled in after
         cfg: StatementBlock { statements: vec![] },
-        nodes: SlotMap::with_key(),
+        nodes: RefCell::new(SlotMap::with_key()),
     };
     let fn_id = ctx.mir.functions.insert(function);
     ctx.mir.fn_info.insert(fn_id, this_fn_info);
@@ -1022,6 +1031,18 @@ mod tests {
 
         let json = include_str!("../../bench/models/ants/ast.json");
         let json: JsonValue = serde_json::from_str(json).unwrap();
-        let mir = ast_to_mir(&json);
+        let mir = ast_to_mir(&json).unwrap();
+
+        let debug_output = format!("{:#?}", mir);
+        std::fs::write("mir_debug.txt", debug_output).expect("Failed to write MIR debug output");
+
+        for (fn_id, function) in mir.functions {
+            let function = function.borrow();
+            let dot_string = function.to_dot_string_with_options(false);
+            let filename =
+                format!("{}-{:?}.dot", fn_id, function.debug_name.as_deref().unwrap_or("unnamed"));
+            trace!("Writing DOT file for function {:?}: {}", fn_id, filename);
+            std::fs::write(filename, dot_string).expect("Failed to write DOT file");
+        }
     }
 }

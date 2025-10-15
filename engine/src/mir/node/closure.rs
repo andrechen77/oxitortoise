@@ -1,17 +1,10 @@
-use std::cell::Cell;
-
 use derive_more::derive::Display;
-use lir::{
-    ValRef,
-    smallvec::{SmallVec, smallvec},
-};
+use lir::smallvec::smallvec;
 use slotmap::SlotMap;
 
-use crate::{
-    mir::{
-        EffectfulNode, FunctionId, LocalDeclaration, LocalId, NodeId, build_lir::LirInsnBuilder,
-    },
-    sim::value::NetlogoInternalType,
+use crate::mir::{
+    EffectfulNode, FunctionId, LocalId, NetlogoAbstractAbstractType, NetlogoAbstractType, NodeId,
+    build_lir::LirInsnBuilder,
 };
 
 #[derive(Debug, Display)]
@@ -58,17 +51,20 @@ impl EffectfulNode for Closure {
 
     fn output_type(
         &self,
-        _workspace: &crate::workspace::Workspace,
-        _nodes: &slotmap::SlotMap<crate::mir::NodeId, Box<dyn EffectfulNode>>,
-        _locals: &SlotMap<LocalId, LocalDeclaration>,
-    ) -> Option<crate::sim::value::NetlogoInternalType> {
-        todo!("match on the argument and return type of the function")
+        program: &crate::mir::Program,
+        _function: &crate::mir::Function,
+        _nodes: &crate::mir::Nodes,
+    ) -> crate::mir::NetlogoAbstractAbstractType {
+        let return_ty = program.functions[self.body].borrow().return_ty.clone();
+        NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Closure {
+            return_ty: Box::new(return_ty),
+        })
     }
 
     fn write_lir_execution(
         &self,
         my_node_id: NodeId,
-        nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
+        _nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), ()> {
         // insert an instruction to create the env pointer

@@ -9,13 +9,18 @@
 // Nodes do not necessarily need to appear in the cfg. Some nodes may be
 // "floating", and they will be scheduled for execution when they need to be.
 
-use std::fmt::{Debug, Display};
+use std::{
+    fmt::{Debug, Display},
+    rc::Rc,
+};
 
 use derive_more::derive::Display;
-use slotmap::{SlotMap, new_key_type};
+use slotmap::{SecondaryMap, SlotMap, new_key_type};
 
 use crate::{
-    mir::build_lir::LirInsnBuilder, sim::value::NetlogoInternalType, workspace::Workspace,
+    mir::build_lir::LirInsnBuilder,
+    sim::{agent_schema::TurtleSchema, turtle::BreedId, value::NetlogoInternalType},
+    util::cell::RefCell,
 };
 
 mod build_lir;
@@ -28,13 +33,33 @@ pub use build_lir::{HostFunctionIds, LirProgramBuilder, mir_to_lir};
 new_key_type! {
     #[derive(Display)]
     #[display("{_0:?}")]
+    pub struct GlobalId;
+}
+
+new_key_type! {
+    #[derive(Display)]
+    #[display("{_0:?}")]
     pub struct FunctionId;
 }
 
 #[derive(Default, Debug)]
 pub struct Program {
-    pub functions: SlotMap<FunctionId, Function>,
+    pub globals: SlotMap<GlobalId, ()>,
+    pub turtle_breeds: SlotMap<BreedId, ()>,
+    pub custom_turtle_vars: Vec<CustomVarDecl>,
+    /// None if the turtle schema has not been calculated yet.
+    pub turtle_schema: Option<TurtleSchema>,
+    pub custom_patch_vars: Vec<CustomVarDecl>,
+    pub functions: SecondaryMap<FunctionId, RefCell<Function>>,
 }
+
+#[derive(Debug)]
+pub struct CustomVarDecl {
+    pub name: Rc<str>,
+    pub ty: NetlogoAbstractType,
+}
+
+pub type Nodes = SlotMap<NodeId, Box<dyn EffectfulNode>>;
 
 #[derive(derive_more::Debug)]
 pub struct Function {
@@ -43,7 +68,7 @@ pub struct Function {
     /// includes implicit parameters such as the closure environment, the
     /// context pointer, and the executing agent.
     pub parameters: Vec<LocalId>,
-    pub return_ty: Option<NetlogoInternalType>,
+    pub return_ty: NetlogoAbstractType,
     /// The set of all local variables used by the function.
     pub locals: SlotMap<LocalId, LocalDeclaration>,
     /// The structured control flow of the function
@@ -52,7 +77,7 @@ pub struct Function {
     /// The set of all nodes in the function, where a "node" is some kind of
     /// computation, as in sea-of-nodes.
     #[debug(skip)]
-    pub nodes: SlotMap<NodeId, Box<dyn EffectfulNode>>,
+    pub nodes: RefCell<Nodes>,
 }
 
 new_key_type! {
@@ -66,7 +91,7 @@ new_key_type! {
 #[derive(Debug)]
 pub struct LocalDeclaration {
     pub debug_name: Option<String>,
-    pub ty: NetlogoInternalType,
+    pub ty: NetlogoAbstractAbstractType,
     pub storage: LocalStorage,
 }
 
@@ -102,12 +127,14 @@ pub trait EffectfulNode: Debug + Display {
 
     fn dependencies(&self) -> Vec<NodeId>;
 
+    /// For certain low level nodes it doesn't make sense to have an abstract
+    /// output type; those should return `None`.
     fn output_type(
         &self,
-        workspace: &Workspace,
-        nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
-        locals: &SlotMap<LocalId, LocalDeclaration>,
-    ) -> Option<NetlogoInternalType>;
+        program: &Program,
+        function: &Function,
+        nodes: &Nodes,
+    ) -> NetlogoAbstractAbstractType;
 
     /// Attempt to expand the node into a lower level representation, and
     /// performs the replacement in the nodes arena. Incoming connections to the
@@ -116,11 +143,13 @@ pub trait EffectfulNode: Debug + Display {
     fn lowering_expand(
         &self,
         my_node_id: NodeId,
-        workspace: &Workspace,
-        nodes: &mut SlotMap<NodeId, Box<dyn EffectfulNode>>,
+        program: &Program,
+        function: &Function,
+        nodes: &RefCell<Nodes>,
     ) -> bool {
         let _ = my_node_id;
-        let _ = workspace;
+        let _ = program;
+        let _ = function;
         let _ = nodes;
         false
     }
@@ -138,11 +167,80 @@ pub trait EffectfulNode: Debug + Display {
     fn write_lir_execution(
         &self,
         my_node_id: NodeId,
-        nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
+        nodes: &Nodes,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), ()> {
         let _ = my_node_id;
         let _ = lir_builder;
+        let _ = nodes;
         Err(())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum NetlogoAbstractAbstractType {
+    AbstractType(NetlogoAbstractType),
+    LowLevelType(NetlogoInternalType),
+    /// The "no one cares what type this is" value
+    Other,
+}
+
+impl NetlogoAbstractAbstractType {
+    pub fn repr(&self) -> NetlogoInternalType {
+        match self {
+            NetlogoAbstractAbstractType::AbstractType(ty) => ty.repr(),
+            NetlogoAbstractAbstractType::LowLevelType(ty) => ty.clone(),
+            NetlogoAbstractAbstractType::Other => unimplemented!(),
+        }
+    }
+}
+
+/// A representation of an element of the lattice making up all NetLogo types.
+#[derive(derive_more::Debug)]
+pub enum NetlogoAbstractType {
+    Unit,
+    /// Top doesn't actually include everything
+    Top,
+    Bottom,
+    Numeric,
+    Color,
+    Integer,
+    Float,
+    Boolean,
+    String,
+    Agent,
+    Patch,
+    Turtle,
+    Link,
+    Agentset,
+    Nobody,
+    Closure {
+        return_ty: Box<NetlogoAbstractType>,
+    },
+    List {
+        element_ty: Box<NetlogoAbstractType>,
+    },
+    // TODO add more
+}
+
+impl NetlogoAbstractType {
+    fn join(&self, other: &NetlogoAbstractType) -> NetlogoAbstractType {
+        let _ = other;
+        todo!()
+    }
+
+    fn meet(&self, other: &NetlogoAbstractType) -> NetlogoAbstractType {
+        let _ = other;
+        todo!()
+    }
+
+    fn repr(&self) -> NetlogoInternalType {
+        todo!()
+    }
+}
+
+impl Clone for NetlogoAbstractType {
+    fn clone(&self) -> Self {
+        todo!()
     }
 }

@@ -1,9 +1,12 @@
 use derive_more::derive::Display;
-use lir::smallvec::{SmallVec, smallvec};
+use lir::smallvec::smallvec;
 use slotmap::SlotMap;
 
 use crate::{
-    mir::{EffectfulNode, LocalDeclaration, LocalId, NodeId, build_lir::LirInsnBuilder},
+    mir::{
+        EffectfulNode, Function, NetlogoAbstractAbstractType, NetlogoAbstractType, NodeId, Nodes,
+        Program, build_lir::LirInsnBuilder,
+    },
     sim::value::UnpackedDynBox,
 };
 
@@ -24,17 +27,21 @@ impl EffectfulNode for Constant {
 
     fn output_type(
         &self,
-        _workspace: &crate::workspace::Workspace,
-        _nodes: &slotmap::SlotMap<crate::mir::NodeId, Box<dyn EffectfulNode>>,
-        _locals: &SlotMap<LocalId, LocalDeclaration>,
-    ) -> Option<crate::sim::value::NetlogoInternalType> {
-        Some(self.value.ty())
+        _program: &Program,
+        _function: &Function,
+        _nodes: &Nodes,
+    ) -> NetlogoAbstractAbstractType {
+        NetlogoAbstractAbstractType::AbstractType(match self.value {
+            UnpackedDynBox::Int(_) => NetlogoAbstractType::Integer,
+            UnpackedDynBox::Float(_) => NetlogoAbstractType::Float,
+            _ => todo!(),
+        })
     }
 
     fn write_lir_execution(
         &self,
         my_node_id: NodeId,
-        nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
+        _nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), ()> {
         let _ = my_node_id;

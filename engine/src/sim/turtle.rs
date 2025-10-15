@@ -8,7 +8,7 @@ use std::fmt::{self, Debug};
 use std::mem::offset_of;
 use std::rc::Rc;
 
-use derive_more::derive::{Display, From, Into};
+use derive_more::derive::{From, Into};
 use either::Either;
 use slotmap::SlotMap;
 

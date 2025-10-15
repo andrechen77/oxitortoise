@@ -9,6 +9,7 @@ either = "1.15.0"
 flagset = "0.4.6"
 slotmap = "1.0.7"
 lir = { path = "../lir", package = "oxitortoise_lir" }
+tracing = "0.1.41"
 
 [features]
 runtime-unsafety = []

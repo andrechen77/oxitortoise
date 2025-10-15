@@ -271,7 +271,7 @@ fn add_function<A: FnTableSlotAllocator>(
 
         let seq_stk = &ctx.stk.seqs[insn_seq_id];
         for (idx, insn) in ctx.func.insn_seqs[insn_seq_id].iter_enumerated() {
-            let pc = lir::InsnPc(insn_seq_id, idx);
+            // let pc = lir::InsnPc(insn_seq_id, idx);
             let StackManipulators { captures, getters, inputs, outputs } = &seq_stk.manips[idx];
 
             // generate code to handle capturing and saving before this

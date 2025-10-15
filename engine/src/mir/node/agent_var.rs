@@ -1,17 +1,17 @@
 use std::mem::offset_of;
 
 use derive_more::derive::Display;
-use lir::smallvec::{SmallVec, smallvec};
+use lir::smallvec::smallvec;
 use slotmap::SlotMap;
 
 use crate::{
     exec::CanonExecutionContext,
-    mir::{EffectfulNode, LocalDeclaration, LocalId, NodeId, build_lir::LirInsnBuilder, node},
-    sim::{
-        patch::{self, PatchVarDesc},
-        turtle::{self, TurtleVarDesc, calc_turtle_var_offsets},
-        value::NetlogoInternalType,
+    mir::{
+        EffectfulNode, Function, NetlogoAbstractAbstractType, NetlogoAbstractType, NodeId, Nodes,
+        Program, build_lir::LirInsnBuilder, node,
     },
+    sim::{patch::PatchVarDesc, turtle::TurtleVarDesc, value::NetlogoInternalType},
+    util::cell::RefCell,
     workspace::Workspace,
 };
 
@@ -37,29 +37,41 @@ impl EffectfulNode for GetTurtleVar {
 
     fn output_type(
         &self,
-        workspace: &Workspace,
-        _nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
-        _locals: &SlotMap<LocalId, LocalDeclaration>,
-    ) -> Option<NetlogoInternalType> {
-        Some(turtle::turtle_var_type(&workspace.world.turtles.schema(), self.var))
+        program: &Program,
+        _function: &Function,
+        _nodes: &Nodes,
+    ) -> NetlogoAbstractAbstractType {
+        // TODO this should probably be refactored into a function
+        NetlogoAbstractAbstractType::AbstractType(match self.var {
+            TurtleVarDesc::Who => NetlogoAbstractType::Integer,
+            TurtleVarDesc::Color => NetlogoAbstractType::Color,
+            TurtleVarDesc::Size => NetlogoAbstractType::Float,
+            TurtleVarDesc::Custom(field) => program.custom_turtle_vars[field].ty.clone(),
+        })
     }
 
     fn lowering_expand(
         &self,
         my_node_id: NodeId,
-        workspace: &Workspace,
-        nodes: &mut SlotMap<NodeId, Box<dyn EffectfulNode>>,
+        program: &Program,
+        function: &Function,
+        nodes: &RefCell<SlotMap<NodeId, Box<dyn EffectfulNode>>>,
     ) -> bool {
-        let (data_row, field_offset) =
-            context_to_turtle_data(nodes, workspace, self.context, self.turtle, self.var);
+        let (data_row, field_offset) = context_to_turtle_data(
+            &mut *nodes.borrow_mut(),
+            program,
+            self.context,
+            self.turtle,
+            self.var,
+        );
 
         // create a node to get the field
         let field = Box::new(node::MemLoad {
             ptr: data_row,
             offset: field_offset,
-            ty: turtle::turtle_var_type(&workspace.world.turtles.schema(), self.var),
+            ty: self.output_type(program, function, &*nodes.borrow()).repr(),
         });
-        nodes[my_node_id] = field;
+        nodes.borrow_mut()[my_node_id] = field;
         true
     }
 }
@@ -85,29 +97,34 @@ impl EffectfulNode for SetTurtleVar {
     fn dependencies(&self) -> Vec<NodeId> {
         vec![self.context, self.turtle, self.value]
     }
-
     fn output_type(
         &self,
-        _workspace: &Workspace,
-        _nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
-        _locals: &SlotMap<LocalId, LocalDeclaration>,
-    ) -> Option<NetlogoInternalType> {
-        None
+        _program: &Program,
+        _function: &Function,
+        _nodes: &Nodes,
+    ) -> NetlogoAbstractAbstractType {
+        NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Unit)
     }
 
     fn lowering_expand(
         &self,
         my_node_id: NodeId,
-        workspace: &Workspace,
-        nodes: &mut SlotMap<NodeId, Box<dyn EffectfulNode>>,
+        program: &Program,
+        _function: &Function,
+        nodes: &RefCell<SlotMap<NodeId, Box<dyn EffectfulNode>>>,
     ) -> bool {
-        let (data_row, field_offset) =
-            context_to_turtle_data(nodes, workspace, self.context, self.turtle, self.var);
+        let (data_row, field_offset) = context_to_turtle_data(
+            &mut *nodes.borrow_mut(),
+            program,
+            self.context,
+            self.turtle,
+            self.var,
+        );
 
         // create a node to set the field
         let field =
             Box::new(node::MemStore { ptr: data_row, offset: field_offset, value: self.value });
-        nodes[my_node_id] = field;
+        nodes.borrow_mut()[my_node_id] = field;
         true
     }
 }
@@ -118,13 +135,16 @@ impl EffectfulNode for SetTurtleVar {
 /// loads and stores.
 fn context_to_turtle_data(
     nodes: &mut SlotMap<NodeId, Box<dyn EffectfulNode>>,
-    workspace: &Workspace,
+    program: &Program,
     context: NodeId,
     turtle_id: NodeId,
     var: TurtleVarDesc,
 ) -> (NodeId, usize) {
-    let (buffer_offset, stride, field_offset) =
-        calc_turtle_var_offsets(&workspace.world.turtles, var);
+    fn calc_turtle_var_offset(mir: &Program, var: TurtleVarDesc) -> (usize, usize, usize) {
+        todo!("calculate turtle var offset from program");
+    }
+    let (buffer_offset, stride, field_offset): (usize, usize, usize) =
+        calc_turtle_var_offset(program, var);
 
     // insert a node that gets the workspace pointer
     let workspace_ptr = nodes.insert(Box::new(node::MemLoad {
@@ -168,11 +188,11 @@ impl EffectfulNode for TurtleIdToIndex {
 
     fn output_type(
         &self,
-        _workspace: &Workspace,
-        _nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
-        _locals: &SlotMap<LocalId, LocalDeclaration>,
-    ) -> Option<NetlogoInternalType> {
-        Some(NetlogoInternalType::AGENT_INDEX)
+        _program: &Program,
+        _function: &Function,
+        _nodes: &Nodes,
+    ) -> NetlogoAbstractAbstractType {
+        NetlogoAbstractAbstractType::LowLevelType(NetlogoInternalType::AGENT_INDEX)
     }
 
     fn write_lir_execution(
@@ -215,30 +235,28 @@ impl EffectfulNode for GetPatchVar {
 
     fn output_type(
         &self,
-        workspace: &Workspace,
-        _nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
-        _locals: &SlotMap<LocalId, LocalDeclaration>,
-    ) -> Option<NetlogoInternalType> {
-        Some(patch::patch_var_type(&workspace.world.patches.schema(), self.var))
+        program: &Program,
+        _function: &Function,
+        _nodes: &Nodes,
+    ) -> NetlogoAbstractAbstractType {
+        match self.var {
+            PatchVarDesc::Pcolor => {
+                NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Color)
+            }
+            PatchVarDesc::Custom(field) => NetlogoAbstractAbstractType::AbstractType(
+                program.custom_patch_vars[field].ty.clone(),
+            ),
+        }
     }
 
     fn lowering_expand(
         &self,
-        my_node_id: NodeId,
-        workspace: &Workspace,
-        nodes: &mut SlotMap<NodeId, Box<dyn EffectfulNode>>,
+        _my_node_id: NodeId,
+        _program: &Program,
+        _function: &Function,
+        _nodes: &RefCell<Nodes>,
     ) -> bool {
-        let (data_row, field_offset) =
-            context_to_patch_data(nodes, workspace, self.context, self.patch, self.var);
-
-        // create a node to get the field
-        let field = Box::new(node::MemLoad {
-            ptr: data_row,
-            offset: field_offset,
-            ty: patch::patch_var_type(&workspace.world.patches.schema(), self.var),
-        });
-        nodes[my_node_id] = field;
-        true
+        todo!()
     }
 }
 
@@ -266,26 +284,27 @@ impl EffectfulNode for SetPatchVar {
 
     fn output_type(
         &self,
-        _workspace: &Workspace,
-        _nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
-        _locals: &SlotMap<LocalId, LocalDeclaration>,
-    ) -> Option<NetlogoInternalType> {
-        None
+        _program: &Program,
+        _function: &Function,
+        _nodes: &Nodes,
+    ) -> NetlogoAbstractAbstractType {
+        NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Unit)
     }
 
     fn lowering_expand(
         &self,
         my_node_id: NodeId,
-        workspace: &Workspace,
-        nodes: &mut SlotMap<NodeId, Box<dyn EffectfulNode>>,
+        program: &Program,
+        _function: &Function,
+        nodes: &RefCell<Nodes>,
     ) -> bool {
         let (data_row, field_offset) =
-            context_to_patch_data(nodes, workspace, self.context, self.patch, self.var);
+            context_to_patch_data(nodes, program, self.context, self.patch, self.var);
 
         // create a node to set the field
         let field =
             Box::new(node::MemStore { ptr: data_row, offset: field_offset, value: self.value });
-        nodes[my_node_id] = field;
+        nodes.borrow_mut()[my_node_id] = field;
         true
     }
 }
@@ -294,34 +313,13 @@ impl EffectfulNode for SetPatchVar {
 /// the NodeId of the node that outputs the pointer to data row, as well as the byte
 /// offset of the field within the data row. This is used by both loads and stores.
 fn context_to_patch_data(
-    nodes: &mut SlotMap<NodeId, Box<dyn EffectfulNode>>,
-    workspace: &Workspace,
-    context: NodeId,
-    patch_id: NodeId,
-    var: PatchVarDesc,
+    _nodes: &RefCell<SlotMap<NodeId, Box<dyn EffectfulNode>>>,
+    _mir: &Program,
+    _context: NodeId,
+    _patch_id: NodeId,
+    _var: PatchVarDesc,
 ) -> (NodeId, usize) {
-    let (buffer_offset, stride, field_offset) =
-        patch::calc_patch_var_offsets(&workspace.world.patches, var);
-
-    // insert a node that gets the workspace pointer
-    let workspace_ptr = nodes.insert(Box::new(node::MemLoad {
-        ptr: context,
-        offset: offset_of!(CanonExecutionContext, workspace),
-        ty: NetlogoInternalType::UNTYPED_PTR,
-    }));
-
-    // insert a node that gets the row buffer
-    let row_buffer = nodes.insert(Box::new(node::MemLoad {
-        ptr: workspace_ptr,
-        offset: offset_of!(Workspace, world) + buffer_offset,
-        ty: NetlogoInternalType::UNTYPED_PTR,
-    }));
-
-    // insert a node that gets the right data row
-    let data_row =
-        nodes.insert(Box::new(node::DeriveElement { ptr: row_buffer, index: patch_id, stride }));
-
-    (data_row, field_offset)
+    todo!("requires workspace access; not refactored here")
 }
 
 /// A node for getting an patch variable when the type of the agent is unknown.
@@ -348,11 +346,19 @@ impl EffectfulNode for GetPatchVarAsTurtleOrPatch {
 
     fn output_type(
         &self,
-        workspace: &Workspace,
-        _nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
-        _locals: &SlotMap<LocalId, LocalDeclaration>,
-    ) -> Option<NetlogoInternalType> {
-        Some(patch::patch_var_type(&workspace.world.patches.schema(), self.var))
+        program: &Program,
+        _function: &Function,
+        _nodes: &Nodes,
+    ) -> NetlogoAbstractAbstractType {
+        // TODO refactor to deduplicate with GetPatchVar
+        match self.var {
+            PatchVarDesc::Custom(field) => NetlogoAbstractAbstractType::AbstractType(
+                program.custom_patch_vars[field].ty.clone(),
+            ),
+            PatchVarDesc::Pcolor => {
+                NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Color)
+            }
+        }
     }
 }
 
@@ -381,10 +387,10 @@ impl EffectfulNode for SetPatchVarAsTurtleOrPatch {
 
     fn output_type(
         &self,
-        _workspace: &Workspace,
-        _nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
-        _locals: &SlotMap<LocalId, LocalDeclaration>,
-    ) -> Option<NetlogoInternalType> {
-        None
+        _program: &Program,
+        _function: &Function,
+        _nodes: &Nodes,
+    ) -> NetlogoAbstractAbstractType {
+        NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Unit)
     }
 }

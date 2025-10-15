@@ -1,12 +1,12 @@
 use std::mem;
 
 use derive_more::derive::Display;
-use slotmap::SlotMap;
 
 use crate::{
-    mir::{EffectfulNode, Function, LocalDeclaration, LocalId, NodeId, StatementKind},
-    sim::value::NetlogoInternalType,
-    workspace::Workspace,
+    mir::{
+        EffectfulNode, Function, NetlogoAbstractAbstractType, NodeId, Nodes, Program, StatementKind,
+    },
+    util::cell::RefCell,
 };
 
 #[derive(Debug, Display)]
@@ -24,29 +24,30 @@ impl EffectfulNode for Placeholder {
 
     fn output_type(
         &self,
-        _workspace: &Workspace,
-        _nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
-        _locals: &SlotMap<LocalId, LocalDeclaration>,
-    ) -> Option<NetlogoInternalType> {
+        _program: &Program,
+        _function: &Function,
+        _nodes: &Nodes,
+    ) -> NetlogoAbstractAbstractType {
         panic!()
     }
 
     fn lowering_expand(
         &self,
         _my_node_id: NodeId,
-        _workspace: &Workspace,
-        _nodes: &mut SlotMap<NodeId, Box<dyn EffectfulNode>>,
+        _program: &Program,
+        _function: &Function,
+        _nodes: &RefCell<Nodes>,
     ) -> bool {
         panic!()
     }
 }
 
-pub fn lower(function: &mut Function, workspace: &Workspace) {
+pub fn lower(function: &mut Function, program: &Program) {
     let statement_block = &function.cfg;
     for statement in &statement_block.statements {
         match statement {
             StatementKind::Node(node_id) => {
-                lower_node_recursive(*node_id, workspace, &mut function.nodes)
+                lower_node_recursive(*node_id, program, function, &function.nodes)
             }
             _ => todo!(),
         }
@@ -55,18 +56,23 @@ pub fn lower(function: &mut Function, workspace: &Workspace) {
 
 fn lower_node_recursive(
     node_id: NodeId,
-    workspace: &Workspace,
-    nodes: &mut SlotMap<NodeId, Box<dyn EffectfulNode>>,
+    program: &Program,
+    function: &Function,
+    nodes: &RefCell<Nodes>,
 ) {
-    let node = mem::replace(&mut nodes[node_id], Box::new(Placeholder {}));
-    let expanded = node.lowering_expand(node_id, workspace, nodes);
+    let node = {
+        let mut nodes_borrow = nodes.borrow_mut();
+        mem::replace(&mut nodes_borrow[node_id], Box::new(Placeholder {}))
+    };
+    let expanded = node.lowering_expand(node_id, program, function, nodes);
     if !expanded {
         // lowering couldn't be done, to put the original node back
-        nodes[node_id] = node;
+        nodes.borrow_mut()[node_id] = node;
     };
 
     // try to expand its children
-    for dependency in nodes[node_id].dependencies() {
-        lower_node_recursive(dependency, workspace, nodes);
+    let dependencies = nodes.borrow()[node_id].dependencies();
+    for dependency in dependencies {
+        lower_node_recursive(dependency, program, function, nodes);
     }
 }

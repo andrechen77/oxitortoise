@@ -1,9 +1,10 @@
 use derive_more::derive::Display;
-use lir::smallvec::{SmallVec, smallvec};
+use lir::smallvec::smallvec;
 use slotmap::SlotMap;
 
 use crate::mir::{
-    EffectfulNode, LocalDeclaration, LocalId, NodeId,
+    EffectfulNode, Function, LocalId, NetlogoAbstractAbstractType, NetlogoAbstractType, NodeId,
+    Nodes, Program,
     build_lir::{LirInsnBuilder, LocalLocation},
 };
 
@@ -25,21 +26,24 @@ impl EffectfulNode for GetLocalVar {
 
     fn output_type(
         &self,
-        _workspace: &crate::workspace::Workspace,
-        _nodes: &slotmap::SlotMap<NodeId, Box<dyn EffectfulNode>>,
-        locals: &SlotMap<LocalId, LocalDeclaration>,
-    ) -> Option<crate::sim::value::NetlogoInternalType> {
-        Some(locals[self.local_id].ty.clone())
+        _program: &Program,
+        function: &Function,
+        _nodes: &Nodes,
+    ) -> NetlogoAbstractAbstractType {
+        function.locals[self.local_id].ty.clone()
     }
 
     fn write_lir_execution(
         &self,
         my_node_id: NodeId,
-        nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
+        _nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), ()> {
         match lir_builder.local_to_lir[&self.local_id] {
-            LocalLocation::Stack { offset } => todo!(),
+            LocalLocation::Stack { offset } => {
+                let _ = offset;
+                todo!()
+            }
             LocalLocation::Var { var_id } => {
                 // TODO this should be done in a loop in case the MIR value
                 // spans multiple LIR values
@@ -71,10 +75,10 @@ impl EffectfulNode for SetLocalVar {
 
     fn output_type(
         &self,
-        _workspace: &crate::workspace::Workspace,
-        _nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
-        _locals: &SlotMap<LocalId, LocalDeclaration>,
-    ) -> Option<crate::sim::value::NetlogoInternalType> {
-        None
+        _program: &Program,
+        _function: &Function,
+        _nodes: &Nodes,
+    ) -> NetlogoAbstractAbstractType {
+        NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Unit)
     }
 }

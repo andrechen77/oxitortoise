@@ -12,7 +12,7 @@ impl Function {
         dot.push_str("digraph {\n");
 
         // Add all nodes as vertices
-        for (node_id, node) in &self.nodes {
+        for (node_id, node) in &*self.nodes.borrow() {
             let node_label = format!("{}", node).replacen(' ', "\n", 1);
 
             // Format the label with newline after node type and optionally include node ID
@@ -34,11 +34,11 @@ impl Function {
         }
 
         // Add edges based on dependencies
-        for (node_id, node) in &self.nodes {
+        for (node_id, node) in &*self.nodes.borrow() {
             let dependencies = node.dependencies();
             for dep_id in dependencies {
                 // Only add edge if the dependency node exists in the function
-                if self.nodes.contains_key(dep_id) {
+                if self.nodes.borrow().contains_key(dep_id) {
                     dot.push_str(&format!(
                         "  {} -> {};\n",
                         node_id.data().as_ffi(),

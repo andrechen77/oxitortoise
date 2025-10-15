@@ -10,7 +10,6 @@ use slotmap::{SecondaryMap, SlotMap};
 use crate::{
     exec::jit::HOST_FUNCTIONS,
     mir::{self, EffectfulNode},
-    workspace::Workspace,
 };
 
 #[derive(Debug)]
@@ -21,7 +20,7 @@ pub struct LirProgramBuilder {
         HashMap<lir::FunctionId, (Vec<lir::ValType>, SmallVec<[lir::ValType; 1]>)>,
 }
 
-pub fn mir_to_lir(mir: &mir::Program, workspace: &Workspace) -> lir::Program {
+pub fn mir_to_lir(mir: &mir::Program) -> lir::Program {
     // generate host function signatures (always the same)
     let (host_functions, host_function_ids) = HOST_FUNCTIONS.clone();
 
@@ -35,7 +34,7 @@ pub fn mir_to_lir(mir: &mir::Program, workspace: &Workspace) -> lir::Program {
     // functions might reference each other, and their signatures are required
     let mut user_function_tracker = SlotMap::with_key(); // used only to allocate lir::FunctionId
     for (mir_fn_id, mir_fn) in mir.functions.iter() {
-        let signature = translate_function_signature(mir_fn);
+        let signature = translate_function_signature(&*mir_fn.borrow());
         // allocate a new function id for the LIR function
         let lir_fn_id = user_function_tracker.insert(());
         builder.available_user_functions.insert(mir_fn_id, lir_fn_id);
@@ -45,7 +44,7 @@ pub fn mir_to_lir(mir: &mir::Program, workspace: &Workspace) -> lir::Program {
     // translate all user function bodies
     let mut lir_fn_bodies = SecondaryMap::new();
     for (mir_fn_id, mir_fn) in mir.functions.iter() {
-        let lir_fn = translate_function_body(mir_fn, &mut builder);
+        let lir_fn = translate_function_body(&*mir_fn.borrow(), &mut builder);
         let lir_fn_id = builder.available_user_functions[&mir_fn_id];
         lir_fn_bodies.insert(lir_fn_id, lir_fn);
     }
@@ -62,10 +61,10 @@ fn translate_function_signature(
 ) -> (Vec<lir::ValType>, SmallVec<[lir::ValType; 1]>) {
     let mut params = Vec::new();
     for parameter in &function.parameters {
-        params.extend(function.locals[*parameter].ty.to_lir_type());
+        params.extend(function.locals[*parameter].ty.repr().to_lir_type());
     }
-    let return_value = function.return_ty.as_ref().map(|ty| ty.to_lir_type());
-    (params, return_value.unwrap_or_default())
+    let return_value = function.return_ty.repr().to_lir_type();
+    (params, return_value)
 }
 
 #[derive(Debug)]
@@ -138,7 +137,7 @@ fn translate_function_body(
         let local_decl = &function.locals[local_id];
         assert_eq!(local_decl.storage, mir::LocalStorage::Register);
 
-        let &[lir_type] = local_decl.ty.to_lir_type().as_slice() else {
+        let &[lir_type] = local_decl.ty.repr().to_lir_type().as_slice() else {
             todo!("handle local variables that take up multiple LIR values")
         };
         let lir_var_id = lir_local_var_types.push_and_get_key(lir_type);
@@ -154,7 +153,7 @@ fn translate_function_body(
         }
         match local_decl.storage {
             mir::LocalStorage::Register => {
-                let &[lir_type] = local_decl.ty.to_lir_type().as_slice() else {
+                let &[lir_type] = local_decl.ty.repr().to_lir_type().as_slice() else {
                     todo!("handle local variables that take up multiple LIR values")
                 };
                 let lir_var_id = lir_local_var_types.push_and_get_key(lir_type);
@@ -170,10 +169,8 @@ fn translate_function_body(
     // initialize the LIR function and its associated metadata
     let mut insn_seqs = TiVec::new();
     let main_body = insn_seqs.push_and_get_key(TiVec::new());
-    let body_block = lir::Block {
-        output_type: function.return_ty.as_ref().map(|ty| ty.to_lir_type()).unwrap_or_default(),
-        body: main_body,
-    };
+    let body_block =
+        lir::Block { output_type: function.return_ty.repr().to_lir_type(), body: main_body };
     let lir_function = lir::Function {
         local_vars: lir_local_var_types,
         num_parameters: num_lir_parameters,
@@ -195,7 +192,7 @@ fn translate_function_body(
     // algorithm idea: iterate over all statements. if a node depends on another
     // node which is not rooted in its own statement, then those dependencies
     // are translated first
-    translate_stmt_block(&function.nodes, &mut fn_builder, &function.cfg);
+    translate_stmt_block(&*function.nodes.borrow(), &mut fn_builder, &function.cfg);
 
     fn translate_stmt_block(
         nodes: &SlotMap<mir::NodeId, Box<dyn EffectfulNode>>,
@@ -211,7 +208,12 @@ fn translate_function_body(
                         "by the time we get to translating to LIR, all nodes should be able to convert to LIR",
                     );
                 }
-                mir::StatementKind::IfElse { condition, then_block, else_block } => todo!(),
+                mir::StatementKind::IfElse { condition, then_block, else_block } => {
+                    let _ = condition;
+                    let _ = then_block;
+                    let _ = else_block;
+                    todo!()
+                }
                 mir::StatementKind::Stop => todo!(),
                 _ => todo!(),
             }
