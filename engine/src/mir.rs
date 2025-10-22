@@ -1,13 +1,4 @@
-// TODO add documentationa bout MIR. some points to include:
-// - in MIR, a "local variable" doesn't necessarily need to correspond to a
-// local variable in the NetLogo source code. it simply means a value that the
-// function needs for later. it can refer to a temporary value as well. for
-// example, when evaluating (a * b) + c, (a * b) will be computed and stored
-// into a local variable, and then the variable will be used as an operand to
-// add with c.
-
-// Nodes do not necessarily need to appear in the cfg. Some nodes may be
-// "floating", and they will be scheduled for execution when they need to be.
+// TODO add documentation about MIR
 
 use std::{
     fmt::{Debug, Display},
