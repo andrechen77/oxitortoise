@@ -12,12 +12,13 @@ use derive_more::derive::{From, Into};
 use either::Either;
 use slotmap::SlotMap;
 
+use crate::mir;
 use crate::sim::agent_schema::{AgentFieldDescriptor, AgentSchemaField, TurtleSchema};
 use crate::sim::topology::Heading;
 use crate::sim::value::agentset::TurtleSet;
 use crate::sim::value::{DynBox, NetlogoMachineType};
 use crate::util::gen_slot_tracker::{GenIndex, GenSlotTracker};
-use crate::util::row_buffer::RowBuffer;
+use crate::util::row_buffer::{RowBuffer, RowSchema};
 use crate::{
     sim::{color::Color, topology::Point, value},
     util::rng::Rng,
@@ -91,7 +92,9 @@ impl Turtles {
         Self {
             next_who: TurtleWho::default(),
             slot_tracker: GenSlotTracker::new(),
-            data: turtle_schema.make_row_buffers(),
+            // TODO we should avoid having to remake the row schemas if we can;
+            // we should reuse the ones from the compilation process instead.
+            data: turtle_schema.make_row_schemas().map(|s| s.map(|s| RowBuffer::new(s))),
             fallback_custom_fields: HashMap::new(),
             turtle_schema,
             num_turtles: 0,
@@ -326,33 +329,46 @@ pub enum TurtleVarDesc {
 /// row to the required field.
 ///
 /// ```ignore
+/// let mir: &mir::Program;
 /// let turtles: &Turtles;
 /// let var_desc: TurtleVarDesc;
-/// let (buffer_offset, stride, field_offset) = calc_turtle_var_offset(turtles, var_desc);
+/// let (buffer_offset, stride, field_offset) = calc_turtle_var_offset(mir, var_desc);
 /// let ptr_turtles = turtles as *const u8;
 /// let field = *(*ptr_turtles.byte_add(buffer_offset).cast::<*const *const u8>()).byte_add(stride * agent_idx + field_offset);
 /// ```
-pub fn calc_turtle_var_offsets(turtles: &Turtles, var: TurtleVarDesc) -> (usize, usize, usize) {
-    fn stride_and_field_offset(turtles: &Turtles, field: AgentFieldDescriptor) -> (usize, usize) {
-        let row_schema = turtles.data[usize::from(field.buffer_idx)].as_ref().unwrap().schema();
+pub fn calc_turtle_var_offset(mir: &mir::Program, var: TurtleVarDesc) -> (usize, usize, usize) {
+    fn stride_and_field_offset(
+        turtle_schema: &TurtleSchema,
+        field: AgentFieldDescriptor,
+    ) -> (usize, usize) {
+        // TODO it's inefficient to calculate the schemas every time. see
+        // if we can cache this calculation as well as use it for making
+        // the workspace
+        let schemas: [Option<RowSchema>; 4] = turtle_schema.make_row_schemas();
+        let row_schema = schemas[usize::from(field.buffer_idx)].as_ref().unwrap();
         let field_offset = row_schema.field(usize::from(field.field_idx)).offset;
         let stride = row_schema.stride();
         (stride, field_offset)
     }
+
+    let turtle_schema = mir.turtle_schema.as_ref().unwrap();
     let (buffer_idx, stride, field_offset) = match var {
         TurtleVarDesc::Custom(field_id) => {
-            let field_desc = turtles.turtle_schema.custom_fields()[field_id];
-            let (stride, field_offset) = stride_and_field_offset(turtles, field_desc);
+            let field_desc = turtle_schema.custom_fields()[field_id];
+            let (stride, field_offset) = stride_and_field_offset(turtle_schema, field_desc);
             (field_desc.buffer_idx, stride, field_offset)
         }
         _ => {
-            let base_data_desc = turtles.turtle_schema.base_data();
-            let (stride, field_offset) = stride_and_field_offset(turtles, base_data_desc);
+            let base_data_desc = turtle_schema.base_data();
+            let (stride, field_offset) = stride_and_field_offset(turtle_schema, base_data_desc);
             let additional_offset = match var {
                 TurtleVarDesc::Who => offset_of!(TurtleBaseData, who),
                 TurtleVarDesc::Size => offset_of!(TurtleBaseData, size),
                 TurtleVarDesc::Color => offset_of!(TurtleBaseData, color),
-                TurtleVarDesc::Custom(_) => unreachable!("custom fields are handled separately"),
+                TurtleVarDesc::Custom(_) => {
+                    unreachable!("custom fields are handled separately")
+                }
+                _ => todo!(),
             };
             (base_data_desc.buffer_idx, stride, field_offset + additional_offset)
         }

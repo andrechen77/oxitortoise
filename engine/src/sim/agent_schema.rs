@@ -99,8 +99,8 @@ impl TurtleSchema {
         }
     }
 
-    pub fn make_row_buffers<const N: usize>(&self) -> [Option<RowBuffer>; N] {
-        make_row_buffers_impl::<TurtleBaseData, N>(&self.field_groups)
+    pub fn make_row_schemas<const N: usize>(&self) -> [Option<RowSchema>; N] {
+        make_row_schemas_impl::<TurtleBaseData, N>(&self.field_groups)
     }
 
     pub fn base_data(&self) -> AgentFieldDescriptor {
@@ -201,8 +201,8 @@ impl PatchSchema {
         }
     }
 
-    pub fn make_row_buffers<const N: usize>(&self) -> [Option<RowBuffer>; N] {
-        make_row_buffers_impl::<PatchBaseData, N>(&self.field_groups)
+    pub fn make_row_schemas<const N: usize>(&self) -> [Option<RowSchema>; N] {
+        make_row_schemas_impl::<PatchBaseData, N>(&self.field_groups)
     }
 
     pub fn base_data(&self) -> AgentFieldDescriptor {
@@ -266,14 +266,14 @@ impl AgentFieldDescriptor {
     pub const BASE_DATA: Self = Self { buffer_idx: 0, field_idx: 0 };
 }
 
-fn make_row_buffers_impl<A: 'static, const N: usize>(
+fn make_row_schemas_impl<A: 'static, const N: usize>(
     field_groups: &[AgentSchemaFieldGroup],
-) -> [Option<RowBuffer>; N] {
+) -> [Option<RowSchema>; N] {
     let AgentSchemaField::BaseData = field_groups[0].fields[0] else {
         panic!("The first field in the first buffer must be the base data.");
     };
 
-    let row_buffers: [Option<RowBuffer>; N] = std::array::from_fn(|buffer_idx| {
+    let row_schemas: [Option<RowSchema>; N] = std::array::from_fn(|buffer_idx| {
         let Some(buffer_fields) = field_groups.get(buffer_idx) else {
             return None;
         };
@@ -294,8 +294,8 @@ fn make_row_buffers_impl<A: 'static, const N: usize>(
             field_types.push(type_id);
         }
 
-        Some(RowBuffer::new(RowSchema::new(&field_types, !buffer_fields.avoid_occupancy_bitfield)))
+        Some(RowSchema::new(&field_types, !buffer_fields.avoid_occupancy_bitfield))
     });
 
-    row_buffers
+    row_schemas
 }

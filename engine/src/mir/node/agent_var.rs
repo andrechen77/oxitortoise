@@ -10,7 +10,11 @@ use crate::{
         EffectfulNode, Function, MirType, NetlogoAbstractType, NodeId, Nodes, Program,
         build_lir::LirInsnBuilder, node,
     },
-    sim::{patch::PatchVarDesc, turtle::TurtleVarDesc, value::NetlogoMachineType},
+    sim::{
+        patch::{PatchVarDesc, calc_patch_var_offset},
+        turtle::{TurtleVarDesc, calc_turtle_var_offset},
+        value::NetlogoMachineType,
+    },
     util::cell::RefCell,
     workspace::Workspace,
 };
@@ -130,9 +134,6 @@ fn context_to_turtle_data(
     turtle_id: NodeId,
     var: TurtleVarDesc,
 ) -> (NodeId, usize) {
-    fn calc_turtle_var_offset(mir: &Program, var: TurtleVarDesc) -> (usize, usize, usize) {
-        todo!("calculate turtle var offset from program");
-    }
     let (buffer_offset, stride, field_offset): (usize, usize, usize) =
         calc_turtle_var_offset(program, var);
 
@@ -271,8 +272,13 @@ impl EffectfulNode for SetPatchVar {
         _function: &Function,
         nodes: &RefCell<Nodes>,
     ) -> bool {
-        let (data_row, field_offset) =
-            context_to_patch_data(nodes, program, self.context, self.patch, self.var);
+        let (data_row, field_offset) = context_to_patch_data(
+            &mut *nodes.borrow_mut(),
+            program,
+            self.context,
+            self.patch,
+            self.var,
+        );
 
         // create a node to set the field
         let field =
@@ -286,13 +292,36 @@ impl EffectfulNode for SetPatchVar {
 /// the NodeId of the node that outputs the pointer to data row, as well as the byte
 /// offset of the field within the data row. This is used by both loads and stores.
 fn context_to_patch_data(
-    _nodes: &RefCell<SlotMap<NodeId, Box<dyn EffectfulNode>>>,
-    _mir: &Program,
-    _context: NodeId,
-    _patch_id: NodeId,
-    _var: PatchVarDesc,
+    nodes: &mut SlotMap<NodeId, Box<dyn EffectfulNode>>,
+    mir: &Program,
+    context: NodeId,
+    patch_id: NodeId,
+    var: PatchVarDesc,
 ) -> (NodeId, usize) {
-    todo!("requires workspace access; not refactored here")
+    let (buffer_offset, stride, field_offset) = calc_patch_var_offset(mir, var);
+
+    // insert a node that gets the workspace pointer
+    let workspace_ptr = nodes.insert(Box::new(node::MemLoad {
+        ptr: context,
+        offset: offset_of!(CanonExecutionContext, workspace),
+        ty: NetlogoMachineType::UNTYPED_PTR,
+    }));
+
+    // insert a node that gets the row buffer
+    let row_buffer = nodes.insert(Box::new(node::MemLoad {
+        ptr: workspace_ptr,
+        offset: offset_of!(Workspace, world) + buffer_offset,
+        ty: NetlogoMachineType::UNTYPED_PTR,
+    }));
+
+    // insert a node that gets the agent index
+    // let patch_idx = nodes.insert(Box::new(node::PatchIdToIndex { patch_id }));
+
+    // insert a node that gets the right data row
+    let data_row =
+        nodes.insert(Box::new(node::DeriveElement { ptr: row_buffer, index: patch_id, stride }));
+
+    (data_row, field_offset)
 }
 
 /// A node for getting an patch variable when the type of the agent is unknown.

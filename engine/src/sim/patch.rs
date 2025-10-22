@@ -5,13 +5,14 @@ use either::Either;
 
 use super::topology::Point;
 use crate::{
+    mir,
     sim::{
         agent_schema::{AgentFieldDescriptor, AgentSchemaField, PatchSchema},
         color::Color,
         topology::{CoordFloat, PointInt, TopologySpec},
         value::{DynBox, Float, NetlogoMachineType},
     },
-    util::row_buffer::{self, RowBuffer},
+    util::row_buffer::{self, RowBuffer, RowSchema},
 };
 
 // TODO make documentation better
@@ -55,7 +56,9 @@ pub struct Patches {
 impl Patches {
     pub fn new(patch_schema: PatchSchema, topology_spec: &TopologySpec) -> Self {
         let mut patches = Self {
-            data: patch_schema.make_row_buffers(),
+            // TODO we should avoid having to remake the row schemas if we can;
+            // we should reuse the ones from the compilation process instead.
+            data: patch_schema.make_row_schemas().map(|s| s.map(|s| RowBuffer::new(s))),
             patch_schema,
             num_patches: topology_spec.num_patches() as u32,
             fallback_custom_fields: HashMap::new(),
@@ -255,22 +258,32 @@ pub enum PatchVarDesc {
     Custom(usize),
 }
 
-pub fn calc_patch_var_offsets(patches: &Patches, var: PatchVarDesc) -> (usize, usize, usize) {
-    fn stride_and_field_offset(patches: &Patches, field: AgentFieldDescriptor) -> (usize, usize) {
-        let row_schema = patches.data[usize::from(field.buffer_idx)].as_ref().unwrap().schema();
+/// See [`calc_turtle_var_offset`].
+pub fn calc_patch_var_offset(mir: &mir::Program, var: PatchVarDesc) -> (usize, usize, usize) {
+    fn stride_and_field_offset(
+        patch_schema: &PatchSchema,
+        field: AgentFieldDescriptor,
+    ) -> (usize, usize) {
+        // TODO it's inefficient to calculate the schemas every time. see
+        // if we can cache this calculation as well as use it for making
+        // the workspace
+        let schemas: [Option<RowSchema>; 4] = patch_schema.make_row_schemas();
+        let row_schema = schemas[usize::from(field.buffer_idx)].as_ref().unwrap();
         let field_offset = row_schema.field(usize::from(field.field_idx)).offset;
         let stride = row_schema.stride();
         (stride, field_offset)
     }
+
+    let patch_schema = mir.patch_schema.as_ref().unwrap();
     let (buffer_idx, stride, field_offset) = match var {
         PatchVarDesc::Custom(field_id) => {
-            let field_desc = patches.patch_schema.custom_fields()[field_id];
-            let (stride, field_offset) = stride_and_field_offset(patches, field_desc);
+            let field_desc = patch_schema.custom_fields()[field_id];
+            let (stride, field_offset) = stride_and_field_offset(patch_schema, field_desc);
             (field_desc.buffer_idx, stride, field_offset)
         }
         PatchVarDesc::Pcolor => {
-            let base_data_desc = patches.patch_schema.base_data();
-            let (stride, field_offset) = stride_and_field_offset(patches, base_data_desc);
+            let base_data_desc = patch_schema.base_data();
+            let (stride, field_offset) = stride_and_field_offset(patch_schema, base_data_desc);
             (base_data_desc.buffer_idx, stride, field_offset)
         }
     };
