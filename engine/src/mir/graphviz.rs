@@ -36,13 +36,14 @@ impl Function {
         // Add edges based on dependencies
         for (node_id, node) in &*self.nodes.borrow() {
             let dependencies = node.dependencies();
-            for dep_id in dependencies {
+            for (i, dep_id) in dependencies.into_iter().enumerate() {
                 // Only add edge if the dependency node exists in the function
                 if self.nodes.borrow().contains_key(dep_id) {
                     dot.push_str(&format!(
-                        "  {} -> {};\n",
+                        "  {} -> {} [label=\"{}\"];\n",
                         node_id.data().as_ffi(),
                         dep_id.data().as_ffi(),
+                        i,
                     ));
                 }
             }
