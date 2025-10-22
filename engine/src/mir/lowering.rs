@@ -1,10 +1,11 @@
 use std::mem;
 
 use derive_more::derive::Display;
+use tracing::debug;
 
 use crate::{
     mir::{
-        EffectfulNode, Function, MirType, NodeId, Nodes, Program, StatementKind,
+        EffectfulNode, Function, MirType, NodeId, Nodes, Program, StatementBlock, StatementKind,
     },
     util::cell::RefCell,
 };
@@ -22,12 +23,7 @@ impl EffectfulNode for Placeholder {
         panic!()
     }
 
-    fn output_type(
-        &self,
-        _program: &Program,
-        _function: &Function,
-        _nodes: &Nodes,
-    ) -> MirType {
+    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirType {
         panic!()
     }
 
@@ -43,13 +39,34 @@ impl EffectfulNode for Placeholder {
 }
 
 pub fn lower(function: &mut Function, program: &Program) {
-    let statement_block = &function.cfg;
+    lower_statement_block_recursive(&function.cfg, program, function);
+}
+
+fn lower_statement_block_recursive(
+    statement_block: &StatementBlock,
+    program: &Program,
+    function: &Function,
+) {
     for statement in &statement_block.statements {
         match statement {
             StatementKind::Node(node_id) => {
                 lower_node_recursive(*node_id, program, function, &function.nodes)
             }
-            _ => todo!(),
+            StatementKind::IfElse { condition, then_block, else_block } => {
+                lower_node_recursive(*condition, program, function, &function.nodes);
+                lower_statement_block_recursive(then_block, program, function);
+                lower_statement_block_recursive(else_block, program, function);
+            }
+            StatementKind::Repeat { num_repetitions, block } => {
+                lower_node_recursive(*num_repetitions, program, function, &function.nodes);
+                lower_statement_block_recursive(block, program, function);
+            }
+            StatementKind::Return { value } => {
+                lower_node_recursive(*value, program, function, &function.nodes);
+            }
+            StatementKind::Stop => {
+                // do nothing
+            }
         }
     }
 }
@@ -60,10 +77,10 @@ fn lower_node_recursive(
     function: &Function,
     nodes: &RefCell<Nodes>,
 ) {
-    let node = {
-        let mut nodes_borrow = nodes.borrow_mut();
-        mem::replace(&mut nodes_borrow[node_id], Box::new(Placeholder {}))
-    };
+    let node = mem::replace(&mut nodes.borrow_mut()[node_id], Box::new(Placeholder {}));
+
+    debug!("Lowering node {:?}", node);
+
     let expanded = node.lowering_expand(node_id, program, function, nodes);
     if !expanded {
         // lowering couldn't be done, to put the original node back
