@@ -1,4 +1,4 @@
-use crate::sim::{patch::PatchId, turtle::TurtleId, value::NetlogoInternalType};
+use crate::sim::{patch::PatchId, turtle::TurtleId, value::NetlogoMachineType};
 
 /// An 8-byte box that can hold a value of any type.
 ///
@@ -85,14 +85,14 @@ impl std::fmt::Debug for DynBox {
 }
 
 impl UnpackedDynBox {
-    pub fn ty(&self) -> NetlogoInternalType {
+    pub fn ty(&self) -> NetlogoMachineType {
         match self {
-            UnpackedDynBox::Bool(_) => NetlogoInternalType::BOOLEAN,
-            UnpackedDynBox::Int(_) => NetlogoInternalType::INTEGER,
-            UnpackedDynBox::Float(_) => NetlogoInternalType::FLOAT,
-            UnpackedDynBox::Nobody => NetlogoInternalType::BOOLEAN,
-            UnpackedDynBox::Turtle(_) => NetlogoInternalType::TURTLE_ID,
-            UnpackedDynBox::Patch(_) => NetlogoInternalType::PATCH_ID,
+            UnpackedDynBox::Bool(_) => NetlogoMachineType::BOOLEAN,
+            UnpackedDynBox::Int(_) => NetlogoMachineType::INTEGER,
+            UnpackedDynBox::Float(_) => NetlogoMachineType::FLOAT,
+            UnpackedDynBox::Nobody => NetlogoMachineType::BOOLEAN,
+            UnpackedDynBox::Turtle(_) => NetlogoMachineType::TURTLE_ID,
+            UnpackedDynBox::Patch(_) => NetlogoMachineType::PATCH_ID,
             UnpackedDynBox::Link(_) => todo!("add link id"),
             UnpackedDynBox::Other(_) => todo!("match on the inner type"),
         }

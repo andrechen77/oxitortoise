@@ -2,7 +2,7 @@ use derive_more::derive::Display;
 use slotmap::SlotMap;
 
 use crate::mir::{
-    EffectfulNode, Function, NetlogoAbstractAbstractType, NetlogoAbstractType, NodeId, Nodes,
+    EffectfulNode, Function, MirType, NetlogoAbstractType, NodeId, Nodes,
     Program,
 };
 
@@ -44,9 +44,9 @@ impl EffectfulNode for BinaryOperation {
         _program: &Program,
         _function: &Function,
         _nodes: &Nodes,
-    ) -> NetlogoAbstractAbstractType {
+    ) -> MirType {
         // TODO int + int should be int
-        NetlogoAbstractAbstractType::AbstractType(match self.op {
+        MirType::Abstract(match self.op {
             BinaryOpcode::Add => NetlogoAbstractType::Numeric,
             BinaryOpcode::Sub => NetlogoAbstractType::Numeric,
             BinaryOpcode::Mul => NetlogoAbstractType::Numeric,
@@ -99,8 +99,8 @@ impl EffectfulNode for UnaryOp {
         _program: &Program,
         _function: &Function,
         _nodes: &Nodes,
-    ) -> NetlogoAbstractAbstractType {
-        NetlogoAbstractAbstractType::AbstractType(match self.op {
+    ) -> MirType {
+        MirType::Abstract(match self.op {
             UnaryOpcode::Neg => NetlogoAbstractType::Numeric,
             UnaryOpcode::Not => NetlogoAbstractType::Boolean,
         })

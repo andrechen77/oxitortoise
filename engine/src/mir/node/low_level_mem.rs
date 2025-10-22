@@ -7,8 +7,8 @@ use lir::smallvec::smallvec;
 use slotmap::SlotMap;
 
 use crate::{
-    mir::{EffectfulNode, NetlogoAbstractAbstractType, NodeId},
-    sim::value::NetlogoInternalType,
+    mir::{EffectfulNode, MirType, NodeId},
+    sim::value::NetlogoMachineType,
 };
 
 #[derive(Debug, Display)]
@@ -19,7 +19,7 @@ pub struct MemLoad {
     /// The byte offset of the field to load.
     pub offset: usize,
     /// The type of the value to load.
-    pub ty: NetlogoInternalType,
+    pub ty: NetlogoMachineType,
 }
 
 impl EffectfulNode for MemLoad {
@@ -36,8 +36,8 @@ impl EffectfulNode for MemLoad {
         _program: &crate::mir::Program,
         _function: &crate::mir::Function,
         _nodes: &crate::mir::Nodes,
-    ) -> crate::mir::NetlogoAbstractAbstractType {
-        NetlogoAbstractAbstractType::Other
+    ) -> crate::mir::MirType {
+        MirType::Other
     }
 
     fn write_lir_execution(
@@ -90,8 +90,8 @@ impl EffectfulNode for MemStore {
         _program: &crate::mir::Program,
         _function: &crate::mir::Function,
         _nodes: &crate::mir::Nodes,
-    ) -> crate::mir::NetlogoAbstractAbstractType {
-        NetlogoAbstractAbstractType::Other
+    ) -> crate::mir::MirType {
+        MirType::Other
     }
 
     fn write_lir_execution(
@@ -136,8 +136,8 @@ impl EffectfulNode for DeriveField {
         _program: &crate::mir::Program,
         _function: &crate::mir::Function,
         _nodes: &crate::mir::Nodes,
-    ) -> crate::mir::NetlogoAbstractAbstractType {
-        NetlogoAbstractAbstractType::LowLevelType(NetlogoInternalType::UNTYPED_PTR)
+    ) -> crate::mir::MirType {
+        MirType::Machine(NetlogoMachineType::UNTYPED_PTR)
     }
 
     fn write_lir_execution(
@@ -180,8 +180,8 @@ impl EffectfulNode for DeriveElement {
         _program: &crate::mir::Program,
         _function: &crate::mir::Function,
         _nodes: &crate::mir::Nodes,
-    ) -> crate::mir::NetlogoAbstractAbstractType {
-        NetlogoAbstractAbstractType::LowLevelType(NetlogoInternalType::UNTYPED_PTR)
+    ) -> crate::mir::MirType {
+        MirType::Machine(NetlogoMachineType::UNTYPED_PTR)
     }
 
     fn write_lir_execution(

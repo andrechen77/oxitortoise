@@ -9,8 +9,8 @@ use slotmap::{Key, SlotMap};
 
 use crate::{
     mir::{
-        EffectfulNode, Function, NetlogoAbstractAbstractType, NetlogoAbstractType, NodeId, Nodes,
-        Program, build_lir::LirInsnBuilder,
+        EffectfulNode, Function, MirType, NetlogoAbstractType, NodeId, Nodes, Program,
+        build_lir::LirInsnBuilder,
     },
     sim::{patch::PatchVarDesc, turtle::BreedId},
 };
@@ -31,13 +31,8 @@ impl EffectfulNode for ClearAll {
         vec![self.context]
     }
 
-    fn output_type(
-        &self,
-        _program: &Program,
-        _function: &Function,
-        _nodes: &Nodes,
-    ) -> NetlogoAbstractAbstractType {
-        NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Unit)
+    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirType {
+        MirType::Abstract(NetlogoAbstractType::Unit)
     }
 
     fn write_lir_execution(
@@ -83,8 +78,8 @@ impl EffectfulNode for Diffuse {
         _program: &crate::mir::Program,
         _function: &crate::mir::Function,
         _nodes: &crate::mir::Nodes,
-    ) -> NetlogoAbstractAbstractType {
-        NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Unit)
+    ) -> MirType {
+        MirType::Abstract(NetlogoAbstractType::Unit)
     }
 
     fn write_lir_execution(
@@ -118,8 +113,8 @@ impl EffectfulNode for ResetTicks {
         _program: &crate::mir::Program,
         _function: &crate::mir::Function,
         _nodes: &crate::mir::Nodes,
-    ) -> NetlogoAbstractAbstractType {
-        NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Unit)
+    ) -> MirType {
+        MirType::Abstract(NetlogoAbstractType::Unit)
     }
 
     fn write_lir_execution(
@@ -161,8 +156,8 @@ impl EffectfulNode for AdvanceTick {
         _program: &crate::mir::Program,
         _function: &crate::mir::Function,
         _nodes: &crate::mir::Nodes,
-    ) -> NetlogoAbstractAbstractType {
-        NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Unit)
+    ) -> MirType {
+        MirType::Abstract(NetlogoAbstractType::Unit)
     }
 }
 
@@ -187,8 +182,8 @@ impl EffectfulNode for GetTick {
         _program: &crate::mir::Program,
         _function: &crate::mir::Function,
         _nodes: &crate::mir::Nodes,
-    ) -> NetlogoAbstractAbstractType {
-        NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Float)
+    ) -> MirType {
+        MirType::Abstract(NetlogoAbstractType::Float)
     }
 }
 
@@ -219,8 +214,8 @@ impl EffectfulNode for CreateTurtles {
         _program: &crate::mir::Program,
         _function: &crate::mir::Function,
         _nodes: &crate::mir::Nodes,
-    ) -> NetlogoAbstractAbstractType {
-        NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Unit)
+    ) -> MirType {
+        MirType::Abstract(NetlogoAbstractType::Unit)
     }
 
     fn write_lir_execution(
@@ -290,8 +285,8 @@ impl EffectfulNode for Ask {
         _program: &crate::mir::Program,
         _function: &crate::mir::Function,
         _nodes: &crate::mir::Nodes,
-    ) -> NetlogoAbstractAbstractType {
-        NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Unit)
+    ) -> MirType {
+        MirType::Abstract(NetlogoAbstractType::Unit)
     }
 
     // TODO if possible this node should be optimized into AskAllTurtles, etc.
@@ -322,8 +317,8 @@ impl EffectfulNode for AskAllTurtles {
         _program: &crate::mir::Program,
         _function: &crate::mir::Function,
         _nodes: &crate::mir::Nodes,
-    ) -> NetlogoAbstractAbstractType {
-        NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Unit)
+    ) -> MirType {
+        MirType::Abstract(NetlogoAbstractType::Unit)
     }
 
     fn write_lir_execution(
@@ -373,14 +368,14 @@ impl EffectfulNode for Of {
         program: &crate::mir::Program,
         function: &crate::mir::Function,
         nodes: &crate::mir::Nodes,
-    ) -> NetlogoAbstractAbstractType {
-        let NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Closure { return_ty }) =
+    ) -> MirType {
+        let MirType::Abstract(NetlogoAbstractType::Closure { return_ty }) =
             nodes[self.body].output_type(program, function, nodes)
         else {
             panic!("expected node outputting closure body to be a closure")
         };
 
-        NetlogoAbstractAbstractType::AbstractType(*return_ty)
+        MirType::Abstract(*return_ty)
     }
 }
 
@@ -409,8 +404,8 @@ impl EffectfulNode for TurtleRotate {
         _program: &crate::mir::Program,
         _function: &crate::mir::Function,
         _nodes: &crate::mir::Nodes,
-    ) -> NetlogoAbstractAbstractType {
-        NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Unit)
+    ) -> MirType {
+        MirType::Abstract(NetlogoAbstractType::Unit)
     }
 }
 
@@ -439,8 +434,8 @@ impl EffectfulNode for TurtleForward {
         _program: &crate::mir::Program,
         _function: &crate::mir::Function,
         _nodes: &crate::mir::Nodes,
-    ) -> NetlogoAbstractAbstractType {
-        NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Unit)
+    ) -> MirType {
+        MirType::Abstract(NetlogoAbstractType::Unit)
     }
 }
 
@@ -467,8 +462,8 @@ impl EffectfulNode for CanMove {
         _program: &crate::mir::Program,
         _function: &crate::mir::Function,
         _nodes: &crate::mir::Nodes,
-    ) -> NetlogoAbstractAbstractType {
-        NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Boolean)
+    ) -> MirType {
+        MirType::Abstract(NetlogoAbstractType::Boolean)
     }
 
     fn write_lir_execution(
@@ -514,8 +509,8 @@ impl EffectfulNode for PatchRelative {
         _program: &crate::mir::Program,
         _function: &crate::mir::Function,
         _nodes: &crate::mir::Nodes,
-    ) -> NetlogoAbstractAbstractType {
-        NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Patch)
+    ) -> MirType {
+        MirType::Abstract(NetlogoAbstractType::Patch)
     }
 }
 
@@ -544,7 +539,7 @@ impl EffectfulNode for OffsetDistanceByHeading {
         _program: &crate::mir::Program,
         _function: &crate::mir::Function,
         _nodes: &crate::mir::Nodes,
-    ) -> NetlogoAbstractAbstractType {
+    ) -> MirType {
         todo!()
     }
 
@@ -583,8 +578,8 @@ impl EffectfulNode for Distancexy {
         _program: &crate::mir::Program,
         _function: &crate::mir::Function,
         _nodes: &crate::mir::Nodes,
-    ) -> NetlogoAbstractAbstractType {
-        NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Float)
+    ) -> MirType {
+        MirType::Abstract(NetlogoAbstractType::Float)
     }
 }
 
@@ -609,8 +604,8 @@ impl EffectfulNode for MaxPxcor {
         _program: &crate::mir::Program,
         _function: &crate::mir::Function,
         _nodes: &crate::mir::Nodes,
-    ) -> NetlogoAbstractAbstractType {
-        NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Integer)
+    ) -> MirType {
+        MirType::Abstract(NetlogoAbstractType::Integer)
     }
 }
 
@@ -635,8 +630,8 @@ impl EffectfulNode for MaxPycor {
         _program: &crate::mir::Program,
         _function: &crate::mir::Function,
         _nodes: &crate::mir::Nodes,
-    ) -> NetlogoAbstractAbstractType {
-        NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Integer)
+    ) -> MirType {
+        MirType::Abstract(NetlogoAbstractType::Integer)
     }
 }
 
@@ -664,8 +659,8 @@ impl EffectfulNode for ScaleColor {
         _program: &crate::mir::Program,
         _function: &crate::mir::Function,
         _nodes: &crate::mir::Nodes,
-    ) -> NetlogoAbstractAbstractType {
-        NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Color)
+    ) -> MirType {
+        MirType::Abstract(NetlogoAbstractType::Color)
     }
 }
 
@@ -690,7 +685,7 @@ impl EffectfulNode for RandomInt {
         _program: &crate::mir::Program,
         _function: &crate::mir::Function,
         _nodes: &crate::mir::Nodes,
-    ) -> NetlogoAbstractAbstractType {
-        NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Integer)
+    ) -> MirType {
+        MirType::Abstract(NetlogoAbstractType::Integer)
     }
 }

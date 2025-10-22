@@ -2,7 +2,7 @@
 
 use derive_more::derive::Display;
 
-use crate::mir::{EffectfulNode, FunctionId, NetlogoAbstractAbstractType, NodeId};
+use crate::mir::{EffectfulNode, FunctionId, MirType, NodeId};
 
 #[derive(Debug, Display)]
 #[display("CallUserFn {target:?}")]
@@ -27,9 +27,7 @@ impl EffectfulNode for CallUserFn {
         program: &crate::mir::Program,
         _function: &crate::mir::Function,
         _nodes: &crate::mir::Nodes,
-    ) -> NetlogoAbstractAbstractType {
-        NetlogoAbstractAbstractType::AbstractType(
-            program.functions[self.target].borrow().return_ty.clone(),
-        )
+    ) -> MirType {
+        MirType::Abstract(program.functions[self.target].borrow().return_ty.clone())
     }
 }

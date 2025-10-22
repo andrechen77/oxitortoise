@@ -5,14 +5,13 @@ use std::{collections::HashMap, rc::Rc};
 use engine::{
     mir::{
         self, CustomVarDecl, EffectfulNode, Function, FunctionId, GlobalId, LocalDeclaration,
-        LocalId, LocalStorage, NetlogoAbstractAbstractType, NetlogoAbstractType, NodeId,
-        StatementBlock, StatementKind,
+        LocalId, LocalStorage, MirType, NetlogoAbstractType, NodeId, StatementBlock, StatementKind,
         node::{self, BinaryOpcode, PatchLocRelation, UnaryOpcode},
     },
     sim::{
         patch::PatchVarDesc,
         turtle::{BreedId, TurtleVarDesc},
-        value::{NetlogoInternalType, UnpackedDynBox},
+        value::{NetlogoMachineType, UnpackedDynBox},
     },
     slotmap::{SecondaryMap, SlotMap},
     util::cell::RefCell,
@@ -298,7 +297,7 @@ fn create_procedure_skeleton(
     // always add the context parameter TODO this shouldn't be always
     let context_param = locals.insert(LocalDeclaration {
         debug_name: Some("context".to_string()),
-        ty: NetlogoAbstractAbstractType::LowLevelType(NetlogoInternalType::UNTYPED_PTR),
+        ty: MirType::Machine(NetlogoMachineType::UNTYPED_PTR),
         storage: LocalStorage::Register,
     });
     parameter_locals.push(context_param);
@@ -311,7 +310,7 @@ fn create_procedure_skeleton(
         AgentClass::Turtle => {
             let local_id = locals.insert(LocalDeclaration {
                 debug_name: Some("self_turtle_id".to_string()),
-                ty: NetlogoAbstractAbstractType::LowLevelType(NetlogoInternalType::TURTLE_ID),
+                ty: MirType::Machine(NetlogoMachineType::TURTLE_ID),
                 storage: LocalStorage::Register,
             });
             parameter_locals.push(local_id);
@@ -321,7 +320,7 @@ fn create_procedure_skeleton(
         AgentClass::Patch => {
             let local_id = locals.insert(LocalDeclaration {
                 debug_name: Some("self_patch_id".to_string()),
-                ty: NetlogoAbstractAbstractType::LowLevelType(NetlogoInternalType::PATCH_ID),
+                ty: MirType::Machine(NetlogoMachineType::PATCH_ID),
                 storage: LocalStorage::Register,
             });
             parameter_locals.push(local_id);
@@ -334,7 +333,7 @@ fn create_procedure_skeleton(
     for arg in procedure["args"].as_array().unwrap().iter().map(|arg| arg.as_str().unwrap()) {
         let local_id = locals.insert(LocalDeclaration {
             debug_name: Some(arg.to_string()),
-            ty: NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Top),
+            ty: MirType::Abstract(NetlogoAbstractType::Top),
             storage: LocalStorage::Register,
         });
         fn_info.local_names.insert(Rc::from(arg), local_id);
@@ -471,7 +470,7 @@ fn eval_let_binding(expr_json: &JsonObj, mut ctx: FnBodyBuilderCtx<'_>) -> Optio
     let var_name = expr_json["varName"].as_str().unwrap();
     let local_id = ctx.mir.functions[ctx.fn_id].locals.insert(LocalDeclaration {
         debug_name: Some(var_name.to_string()),
-        ty: NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Top),
+        ty: MirType::Abstract(NetlogoAbstractType::Top),
         storage: LocalStorage::Register,
     });
     ctx.mir.fn_info[ctx.fn_id].local_names.insert(Rc::from(var_name), local_id);
@@ -924,7 +923,7 @@ fn eval_ephemeral_closure(
     // add the environment pointer
     let env_param = locals.insert(LocalDeclaration {
         debug_name: Some("env".to_string()),
-        ty: NetlogoAbstractAbstractType::LowLevelType(NetlogoInternalType::UNTYPED_PTR),
+        ty: MirType::Machine(NetlogoMachineType::UNTYPED_PTR),
         storage: LocalStorage::Register,
     });
     parameter_locals.push(env_param);
@@ -932,7 +931,7 @@ fn eval_ephemeral_closure(
     // add the context parameter
     let context_param = locals.insert(LocalDeclaration {
         debug_name: Some("context".to_string()),
-        ty: NetlogoAbstractAbstractType::LowLevelType(NetlogoInternalType::UNTYPED_PTR),
+        ty: MirType::Machine(NetlogoMachineType::UNTYPED_PTR),
         storage: LocalStorage::Register,
     });
     parameter_locals.push(context_param);
@@ -945,7 +944,7 @@ fn eval_ephemeral_closure(
         AgentClass::Turtle => {
             let local_id = locals.insert(LocalDeclaration {
                 debug_name: Some("self_turtle_id".to_string()),
-                ty: NetlogoAbstractAbstractType::LowLevelType(NetlogoInternalType::TURTLE_ID),
+                ty: MirType::Machine(NetlogoMachineType::TURTLE_ID),
                 storage: LocalStorage::Register,
             });
             parameter_locals.push(local_id);
@@ -955,7 +954,7 @@ fn eval_ephemeral_closure(
         AgentClass::Patch => {
             let local_id = locals.insert(LocalDeclaration {
                 debug_name: Some("self_patch_id".to_string()),
-                ty: NetlogoAbstractAbstractType::LowLevelType(NetlogoInternalType::PATCH_ID),
+                ty: MirType::Machine(NetlogoMachineType::PATCH_ID),
                 storage: LocalStorage::Register,
             });
             parameter_locals.push(local_id);
@@ -966,7 +965,7 @@ fn eval_ephemeral_closure(
         AgentClass::Any => {
             let local_id = locals.insert(LocalDeclaration {
                 debug_name: Some("self_any".to_string()),
-                ty: NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Top),
+                ty: MirType::Abstract(NetlogoAbstractType::Top),
                 storage: LocalStorage::Register,
             });
             parameter_locals.push(local_id);

@@ -7,10 +7,10 @@ use slotmap::SlotMap;
 use crate::{
     exec::CanonExecutionContext,
     mir::{
-        EffectfulNode, Function, NetlogoAbstractAbstractType, NetlogoAbstractType, NodeId, Nodes,
-        Program, build_lir::LirInsnBuilder, node,
+        EffectfulNode, Function, MirType, NetlogoAbstractType, NodeId, Nodes, Program,
+        build_lir::LirInsnBuilder, node,
     },
-    sim::{patch::PatchVarDesc, turtle::TurtleVarDesc, value::NetlogoInternalType},
+    sim::{patch::PatchVarDesc, turtle::TurtleVarDesc, value::NetlogoMachineType},
     util::cell::RefCell,
     workspace::Workspace,
 };
@@ -35,14 +35,9 @@ impl EffectfulNode for GetTurtleVar {
         vec![self.context, self.turtle]
     }
 
-    fn output_type(
-        &self,
-        program: &Program,
-        _function: &Function,
-        _nodes: &Nodes,
-    ) -> NetlogoAbstractAbstractType {
+    fn output_type(&self, program: &Program, _function: &Function, _nodes: &Nodes) -> MirType {
         // TODO this should probably be refactored into a function
-        NetlogoAbstractAbstractType::AbstractType(match self.var {
+        MirType::Abstract(match self.var {
             TurtleVarDesc::Who => NetlogoAbstractType::Integer,
             TurtleVarDesc::Color => NetlogoAbstractType::Color,
             TurtleVarDesc::Size => NetlogoAbstractType::Float,
@@ -97,13 +92,8 @@ impl EffectfulNode for SetTurtleVar {
     fn dependencies(&self) -> Vec<NodeId> {
         vec![self.context, self.turtle, self.value]
     }
-    fn output_type(
-        &self,
-        _program: &Program,
-        _function: &Function,
-        _nodes: &Nodes,
-    ) -> NetlogoAbstractAbstractType {
-        NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Unit)
+    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirType {
+        MirType::Abstract(NetlogoAbstractType::Unit)
     }
 
     fn lowering_expand(
@@ -150,14 +140,14 @@ fn context_to_turtle_data(
     let workspace_ptr = nodes.insert(Box::new(node::MemLoad {
         ptr: context,
         offset: offset_of!(CanonExecutionContext, workspace),
-        ty: NetlogoInternalType::UNTYPED_PTR,
+        ty: NetlogoMachineType::UNTYPED_PTR,
     }));
 
     // insert a node that gets the row buffer
     let row_buffer = nodes.insert(Box::new(node::MemLoad {
         ptr: workspace_ptr,
         offset: offset_of!(Workspace, world) + buffer_offset,
-        ty: NetlogoInternalType::UNTYPED_PTR,
+        ty: NetlogoMachineType::UNTYPED_PTR,
     }));
 
     // insert a node that gets the agent index
@@ -186,13 +176,8 @@ impl EffectfulNode for TurtleIdToIndex {
         vec![self.turtle_id]
     }
 
-    fn output_type(
-        &self,
-        _program: &Program,
-        _function: &Function,
-        _nodes: &Nodes,
-    ) -> NetlogoAbstractAbstractType {
-        NetlogoAbstractAbstractType::LowLevelType(NetlogoInternalType::AGENT_INDEX)
+    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirType {
+        MirType::Machine(NetlogoMachineType::AGENT_INDEX)
     }
 
     fn write_lir_execution(
@@ -233,19 +218,12 @@ impl EffectfulNode for GetPatchVar {
         vec![self.context, self.patch]
     }
 
-    fn output_type(
-        &self,
-        program: &Program,
-        _function: &Function,
-        _nodes: &Nodes,
-    ) -> NetlogoAbstractAbstractType {
+    fn output_type(&self, program: &Program, _function: &Function, _nodes: &Nodes) -> MirType {
         match self.var {
-            PatchVarDesc::Pcolor => {
-                NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Color)
+            PatchVarDesc::Pcolor => MirType::Abstract(NetlogoAbstractType::Color),
+            PatchVarDesc::Custom(field) => {
+                MirType::Abstract(program.custom_patch_vars[field].ty.clone())
             }
-            PatchVarDesc::Custom(field) => NetlogoAbstractAbstractType::AbstractType(
-                program.custom_patch_vars[field].ty.clone(),
-            ),
         }
     }
 
@@ -282,13 +260,8 @@ impl EffectfulNode for SetPatchVar {
         vec![self.context, self.patch, self.value]
     }
 
-    fn output_type(
-        &self,
-        _program: &Program,
-        _function: &Function,
-        _nodes: &Nodes,
-    ) -> NetlogoAbstractAbstractType {
-        NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Unit)
+    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirType {
+        MirType::Abstract(NetlogoAbstractType::Unit)
     }
 
     fn lowering_expand(
@@ -344,20 +317,13 @@ impl EffectfulNode for GetPatchVarAsTurtleOrPatch {
         vec![self.context, self.agent]
     }
 
-    fn output_type(
-        &self,
-        program: &Program,
-        _function: &Function,
-        _nodes: &Nodes,
-    ) -> NetlogoAbstractAbstractType {
+    fn output_type(&self, program: &Program, _function: &Function, _nodes: &Nodes) -> MirType {
         // TODO refactor to deduplicate with GetPatchVar
         match self.var {
-            PatchVarDesc::Custom(field) => NetlogoAbstractAbstractType::AbstractType(
-                program.custom_patch_vars[field].ty.clone(),
-            ),
-            PatchVarDesc::Pcolor => {
-                NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Color)
+            PatchVarDesc::Custom(field) => {
+                MirType::Abstract(program.custom_patch_vars[field].ty.clone())
             }
+            PatchVarDesc::Pcolor => MirType::Abstract(NetlogoAbstractType::Color),
         }
     }
 }
@@ -385,12 +351,7 @@ impl EffectfulNode for SetPatchVarAsTurtleOrPatch {
         vec![self.context, self.agent, self.value]
     }
 
-    fn output_type(
-        &self,
-        _program: &Program,
-        _function: &Function,
-        _nodes: &Nodes,
-    ) -> NetlogoAbstractAbstractType {
-        NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Unit)
+    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirType {
+        MirType::Abstract(NetlogoAbstractType::Unit)
     }
 }

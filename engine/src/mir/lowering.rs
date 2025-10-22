@@ -4,7 +4,7 @@ use derive_more::derive::Display;
 
 use crate::{
     mir::{
-        EffectfulNode, Function, NetlogoAbstractAbstractType, NodeId, Nodes, Program, StatementKind,
+        EffectfulNode, Function, MirType, NodeId, Nodes, Program, StatementKind,
     },
     util::cell::RefCell,
 };
@@ -27,7 +27,7 @@ impl EffectfulNode for Placeholder {
         _program: &Program,
         _function: &Function,
         _nodes: &Nodes,
-    ) -> NetlogoAbstractAbstractType {
+    ) -> MirType {
         panic!()
     }
 

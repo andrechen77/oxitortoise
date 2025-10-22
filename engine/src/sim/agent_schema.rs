@@ -2,7 +2,7 @@ use std::{any::TypeId, ops::Index};
 
 use crate::sim::patch::PatchBaseData;
 use crate::{
-    sim::{turtle::TurtleBaseData, value::NetlogoInternalType},
+    sim::{turtle::TurtleBaseData, value::NetlogoMachineType},
     util::row_buffer::{RowBuffer, RowSchema},
 };
 
@@ -30,7 +30,7 @@ impl TurtleSchema {
     pub fn new(
         heading_buffer_idx: u8,
         position_buffer_idx: u8,
-        custom_fields: &[(NetlogoInternalType, u8)],
+        custom_fields: &[(NetlogoMachineType, u8)],
         avoid_occupancy_bitfield: &[u8],
     ) -> Self {
         // create field groups vector and add base data group
@@ -54,10 +54,10 @@ impl TurtleSchema {
         // add heading and position fields
         let heading_group = &mut field_groups[heading_buffer_idx as usize];
         let heading_field_idx = heading_group.fields.len() as u8;
-        heading_group.fields.push(AgentSchemaField::Other(NetlogoInternalType::HEADING));
+        heading_group.fields.push(AgentSchemaField::Other(NetlogoMachineType::HEADING));
         let position_group = &mut field_groups[position_buffer_idx as usize];
         let position_field_idx = position_group.fields.len() as u8;
-        position_group.fields.push(AgentSchemaField::Other(NetlogoInternalType::POINT));
+        position_group.fields.push(AgentSchemaField::Other(NetlogoMachineType::POINT));
 
         // add custom fields
         let mut custom_field_descriptors = Vec::new();
@@ -144,7 +144,7 @@ pub struct PatchSchema {
 impl PatchSchema {
     pub fn new(
         pcolor_buffer_idx: u8,
-        custom_fields: &[(NetlogoInternalType, u8)],
+        custom_fields: &[(NetlogoMachineType, u8)],
         avoid_occupancy_bitfield: &[u8],
     ) -> Self {
         // create field groups vector and add base data group
@@ -167,7 +167,7 @@ impl PatchSchema {
         // add pcolor field
         field_groups[pcolor_buffer_idx as usize]
             .fields
-            .push(AgentSchemaField::Other(NetlogoInternalType::COLOR));
+            .push(AgentSchemaField::Other(NetlogoMachineType::COLOR));
 
         // add custom fields and collect their descriptors
         let mut custom_field_descriptors = Vec::new();
@@ -250,7 +250,7 @@ pub enum AgentSchemaField {
     BaseData,
     /// A variable stored anywhere other than the first field of the first
     /// buffer.
-    Other(NetlogoInternalType),
+    Other(NetlogoMachineType),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

@@ -15,7 +15,7 @@ use slotmap::SlotMap;
 use crate::sim::agent_schema::{AgentFieldDescriptor, AgentSchemaField, TurtleSchema};
 use crate::sim::topology::Heading;
 use crate::sim::value::agentset::TurtleSet;
-use crate::sim::value::{DynBox, NetlogoInternalType};
+use crate::sim::value::{DynBox, NetlogoMachineType};
 use crate::util::gen_slot_tracker::{GenIndex, GenSlotTracker};
 use crate::util::row_buffer::RowBuffer;
 use crate::{
@@ -362,11 +362,11 @@ pub fn calc_turtle_var_offsets(turtles: &Turtles, var: TurtleVarDesc) -> (usize,
     (buffer_offset, stride, field_offset)
 }
 
-pub fn turtle_var_type(schema: &TurtleSchema, var: TurtleVarDesc) -> NetlogoInternalType {
+pub fn turtle_var_type(schema: &TurtleSchema, var: TurtleVarDesc) -> NetlogoMachineType {
     match var {
-        TurtleVarDesc::Who => NetlogoInternalType::INTEGER,
-        TurtleVarDesc::Color => NetlogoInternalType::COLOR,
-        TurtleVarDesc::Size => NetlogoInternalType::FLOAT,
+        TurtleVarDesc::Who => NetlogoMachineType::INTEGER,
+        TurtleVarDesc::Color => NetlogoMachineType::COLOR,
+        TurtleVarDesc::Size => NetlogoMachineType::FLOAT,
         TurtleVarDesc::Custom(field) => {
             let AgentSchemaField::Other(ty) = &schema[schema.custom_fields()[field]] else {
                 unreachable!("this is a custom field, so it cannot be part of the base data");

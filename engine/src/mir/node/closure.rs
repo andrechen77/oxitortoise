@@ -3,7 +3,7 @@ use lir::smallvec::smallvec;
 use slotmap::SlotMap;
 
 use crate::mir::{
-    EffectfulNode, FunctionId, LocalId, NetlogoAbstractAbstractType, NetlogoAbstractType, NodeId,
+    EffectfulNode, FunctionId, LocalId, MirType, NetlogoAbstractType, NodeId,
     build_lir::LirInsnBuilder,
 };
 
@@ -54,9 +54,9 @@ impl EffectfulNode for Closure {
         program: &crate::mir::Program,
         _function: &crate::mir::Function,
         _nodes: &crate::mir::Nodes,
-    ) -> crate::mir::NetlogoAbstractAbstractType {
+    ) -> crate::mir::MirType {
         let return_ty = program.functions[self.body].borrow().return_ty.clone();
-        NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Closure {
+        MirType::Abstract(NetlogoAbstractType::Closure {
             return_ty: Box::new(return_ty),
         })
     }

@@ -5,9 +5,9 @@ use lir::smallvec::{SmallVec, smallvec};
 /// A concrete type representation in the NetLogo engine. The same NetLogo
 /// language type may have multiple concrete type representation.
 #[derive(Debug, PartialEq, Clone)]
-pub struct NetlogoInternalType(u8);
+pub struct NetlogoMachineType(u8);
 
-impl NetlogoInternalType {
+impl NetlogoMachineType {
     pub const FLOAT: Self = Self(0);
     pub const INTEGER: Self = Self(1);
     pub const STRING: Self = Self(2);
@@ -48,8 +48,8 @@ impl NetlogoInternalType {
     }
 }
 
-impl From<&NetlogoInternalType> for TypeId {
-    fn from(value: &NetlogoInternalType) -> Self {
+impl From<&NetlogoMachineType> for TypeId {
+    fn from(value: &NetlogoMachineType) -> Self {
         use crate::sim::{
             color::Color,
             patch::PatchId,
@@ -59,15 +59,15 @@ impl From<&NetlogoInternalType> for TypeId {
         };
 
         match value {
-            &NetlogoInternalType::FLOAT => TypeId::of::<Float>(),
-            &NetlogoInternalType::INTEGER => TypeId::of::<i32>(),
-            &NetlogoInternalType::STRING => TypeId::of::<String>(),
-            &NetlogoInternalType::BOOLEAN => TypeId::of::<Boolean>(),
-            &NetlogoInternalType::TURTLE_ID => TypeId::of::<TurtleId>(),
-            &NetlogoInternalType::PATCH_ID => TypeId::of::<PatchId>(),
-            &NetlogoInternalType::POINT => TypeId::of::<Point>(),
-            &NetlogoInternalType::HEADING => TypeId::of::<Heading>(),
-            &NetlogoInternalType::COLOR => TypeId::of::<Color>(),
+            &NetlogoMachineType::FLOAT => TypeId::of::<Float>(),
+            &NetlogoMachineType::INTEGER => TypeId::of::<i32>(),
+            &NetlogoMachineType::STRING => TypeId::of::<String>(),
+            &NetlogoMachineType::BOOLEAN => TypeId::of::<Boolean>(),
+            &NetlogoMachineType::TURTLE_ID => TypeId::of::<TurtleId>(),
+            &NetlogoMachineType::PATCH_ID => TypeId::of::<PatchId>(),
+            &NetlogoMachineType::POINT => TypeId::of::<Point>(),
+            &NetlogoMachineType::HEADING => TypeId::of::<Heading>(),
+            &NetlogoMachineType::COLOR => TypeId::of::<Color>(),
             _ => panic!("Unknown NetLogo internal type: {:?}", value),
         }
     }

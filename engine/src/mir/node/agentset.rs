@@ -2,7 +2,7 @@ use derive_more::derive::Display;
 use slotmap::SlotMap;
 
 use crate::mir::{
-    EffectfulNode, Function, NetlogoAbstractAbstractType, NetlogoAbstractType, NodeId, Nodes,
+    EffectfulNode, Function, MirType, NetlogoAbstractType, NodeId, Nodes,
     Program,
 };
 
@@ -44,8 +44,8 @@ impl EffectfulNode for Agentset {
         _program: &Program,
         _function: &Function,
         _nodes: &Nodes,
-    ) -> NetlogoAbstractAbstractType {
-        NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Agentset)
+    ) -> MirType {
+        MirType::Abstract(NetlogoAbstractType::Agentset)
     }
 
     fn write_lir_execution(

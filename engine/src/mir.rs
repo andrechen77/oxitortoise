@@ -19,7 +19,7 @@ use slotmap::{SecondaryMap, SlotMap, new_key_type};
 
 use crate::{
     mir::build_lir::LirInsnBuilder,
-    sim::{agent_schema::TurtleSchema, turtle::BreedId, value::NetlogoInternalType},
+    sim::{agent_schema::TurtleSchema, turtle::BreedId, value::NetlogoMachineType},
     util::cell::RefCell,
 };
 
@@ -91,7 +91,7 @@ new_key_type! {
 #[derive(Debug)]
 pub struct LocalDeclaration {
     pub debug_name: Option<String>,
-    pub ty: NetlogoAbstractAbstractType,
+    pub ty: MirType,
     pub storage: LocalStorage,
 }
 
@@ -129,12 +129,7 @@ pub trait EffectfulNode: Debug + Display {
 
     /// For certain low level nodes it doesn't make sense to have an abstract
     /// output type; those should return `None`.
-    fn output_type(
-        &self,
-        program: &Program,
-        function: &Function,
-        nodes: &Nodes,
-    ) -> NetlogoAbstractAbstractType;
+    fn output_type(&self, program: &Program, function: &Function, nodes: &Nodes) -> MirType;
 
     /// Attempt to expand the node into a lower level representation, and
     /// performs the replacement in the nodes arena. Incoming connections to the
@@ -178,19 +173,19 @@ pub trait EffectfulNode: Debug + Display {
 }
 
 #[derive(Debug, Clone)]
-pub enum NetlogoAbstractAbstractType {
-    AbstractType(NetlogoAbstractType),
-    LowLevelType(NetlogoInternalType),
+pub enum MirType {
+    Abstract(NetlogoAbstractType),
+    Machine(NetlogoMachineType),
     /// The "no one cares what type this is" value
     Other,
 }
 
-impl NetlogoAbstractAbstractType {
-    pub fn repr(&self) -> NetlogoInternalType {
+impl MirType {
+    pub fn repr(&self) -> NetlogoMachineType {
         match self {
-            NetlogoAbstractAbstractType::AbstractType(ty) => ty.repr(),
-            NetlogoAbstractAbstractType::LowLevelType(ty) => ty.clone(),
-            NetlogoAbstractAbstractType::Other => unimplemented!(),
+            MirType::Abstract(ty) => ty.repr(),
+            MirType::Machine(ty) => ty.clone(),
+            MirType::Other => unimplemented!(),
         }
     }
 }
@@ -234,7 +229,7 @@ impl NetlogoAbstractType {
         todo!()
     }
 
-    fn repr(&self) -> NetlogoInternalType {
+    fn repr(&self) -> NetlogoMachineType {
         todo!()
     }
 }

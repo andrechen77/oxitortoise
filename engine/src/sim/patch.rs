@@ -9,7 +9,7 @@ use crate::{
         agent_schema::{AgentFieldDescriptor, AgentSchemaField, PatchSchema},
         color::Color,
         topology::{CoordFloat, PointInt, TopologySpec},
-        value::{DynBox, Float, NetlogoInternalType},
+        value::{DynBox, Float, NetlogoMachineType},
     },
     util::row_buffer::{self, RowBuffer},
 };
@@ -279,9 +279,9 @@ pub fn calc_patch_var_offsets(patches: &Patches, var: PatchVarDesc) -> (usize, u
     (buffer_offset, stride, field_offset)
 }
 
-pub fn patch_var_type(schema: &PatchSchema, var: PatchVarDesc) -> NetlogoInternalType {
+pub fn patch_var_type(schema: &PatchSchema, var: PatchVarDesc) -> NetlogoMachineType {
     match var {
-        PatchVarDesc::Pcolor => NetlogoInternalType::COLOR,
+        PatchVarDesc::Pcolor => NetlogoMachineType::COLOR,
         PatchVarDesc::Custom(field) => {
             let AgentSchemaField::Other(ty) = &schema[schema.custom_fields()[field]] else {
                 unreachable!("this is a custom field, so it cannot be part of the base data");

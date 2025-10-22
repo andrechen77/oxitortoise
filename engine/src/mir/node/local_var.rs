@@ -3,7 +3,7 @@ use lir::smallvec::smallvec;
 use slotmap::SlotMap;
 
 use crate::mir::{
-    EffectfulNode, Function, LocalId, NetlogoAbstractAbstractType, NetlogoAbstractType, NodeId,
+    EffectfulNode, Function, LocalId, MirType, NetlogoAbstractType, NodeId,
     Nodes, Program,
     build_lir::{LirInsnBuilder, LocalLocation},
 };
@@ -29,7 +29,7 @@ impl EffectfulNode for GetLocalVar {
         _program: &Program,
         function: &Function,
         _nodes: &Nodes,
-    ) -> NetlogoAbstractAbstractType {
+    ) -> MirType {
         function.locals[self.local_id].ty.clone()
     }
 
@@ -78,7 +78,7 @@ impl EffectfulNode for SetLocalVar {
         _program: &Program,
         _function: &Function,
         _nodes: &Nodes,
-    ) -> NetlogoAbstractAbstractType {
-        NetlogoAbstractAbstractType::AbstractType(NetlogoAbstractType::Unit)
+    ) -> MirType {
+        MirType::Abstract(NetlogoAbstractType::Unit)
     }
 }
