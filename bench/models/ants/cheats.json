@@ -28,11 +28,11 @@
 		"SETUP-NEST": {
 			"self_param_type": "patch"
 		},
-		"CHEMICAL-SCENT-AT-ANGLE": {
-			"self_param_type": "turtle"
+		"SETUP-FOOD": {
+			"self_param_type": "patch"
 		},
-		"LOOK-FOR-FOOD": {
-			"self_param_type": "turtle"
+		"RECOLOR-PATCH": {
+			"self_param_type": "patch"
 		}
 	}
 }

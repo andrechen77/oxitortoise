@@ -1063,7 +1063,7 @@ pub enum CheatTurtleSchema {
 }
 
 #[derive(Deserialize, Debug)]
-pub enum CheatParamType {
+pub enum CheatSelfParamType {
     #[serde(rename = "patch")]
     Patch,
     #[serde(rename = "turtle")]
@@ -1072,7 +1072,7 @@ pub enum CheatParamType {
 
 #[derive(Deserialize, Debug)]
 pub struct CheatFunctionInfo {
-    self_param_type: Option<CheatParamType>,
+    self_param_type: Option<CheatSelfParamType>,
 }
 
 #[derive(Deserialize)]
@@ -1149,8 +1149,8 @@ pub fn add_cheats(
                 let ty =
                     &mut mir.functions[*fn_id].borrow_mut().locals[fn_info.self_param.unwrap()].ty;
                 *ty = match self_param_type {
-                    CheatParamType::Patch => MirType::Machine(NetlogoMachineType::PATCH_ID),
-                    CheatParamType::Turtle => MirType::Machine(NetlogoMachineType::TURTLE_ID),
+                    CheatSelfParamType::Patch => MirType::Machine(NetlogoMachineType::PATCH_ID),
+                    CheatSelfParamType::Turtle => MirType::Machine(NetlogoMachineType::TURTLE_ID),
                 }
             }
         }
