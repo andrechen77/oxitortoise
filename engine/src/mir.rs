@@ -137,10 +137,28 @@ pub trait EffectfulNode: Debug + Display {
     /// output type; those should return `None`.
     fn output_type(&self, program: &Program, function: &Function, nodes: &Nodes) -> MirType;
 
-    /// Attempt to expand the node into a lower level representation, and
-    /// performs the replacement in the nodes arena. Incoming connections to the
-    /// rewritten area are preserved by reusing old `NodeId`. Returns whether
-    /// any modification was performed
+    /// Attempt to optimzie this node, and performs the replacement in the
+    /// nodes arena. Incoming connections to the rewritten area are
+    /// preserved by reusing the old `NodeId`s. Returns whether any modification
+    /// was performed.
+    fn transform(
+        &self,
+        my_node_id: NodeId,
+        program: &Program,
+        function: &Function,
+        nodes: &RefCell<Nodes>,
+    ) -> bool {
+        let _ = my_node_id;
+        let _ = program;
+        let _ = function;
+        let _ = nodes;
+        false
+    }
+
+    /// Attempt to expand the node into a lower level representation.
+    /// Functionally identical to [`EffectfulNode::transform`], but can assume
+    /// a later stage of the compilation process (e.g. schemas are defined
+    /// and everything).
     fn lowering_expand(
         &self,
         my_node_id: NodeId,

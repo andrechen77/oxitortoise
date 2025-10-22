@@ -515,6 +515,34 @@ impl EffectfulNode for PatchRelative {
 }
 
 #[derive(Debug, Display)]
+#[display("PatchAt {x:?} {y:?}")]
+pub struct PatchAt {
+    /// The x coordinate.
+    pub x: NodeId,
+    /// The y coordinate.
+    pub y: NodeId,
+}
+
+impl EffectfulNode for PatchAt {
+    fn has_side_effects(&self) -> bool {
+        false
+    }
+
+    fn dependencies(&self) -> Vec<NodeId> {
+        vec![self.x, self.y]
+    }
+
+    fn output_type(
+        &self,
+        _program: &crate::mir::Program,
+        _function: &crate::mir::Function,
+        _nodes: &crate::mir::Nodes,
+    ) -> MirType {
+        MirType::Abstract(NetlogoAbstractType::Patch)
+    }
+}
+
+#[derive(Debug, Display)]
 #[display("OffsetDistanceByHeading")]
 pub struct OffsetDistanceByHeading {
     /// The position to offset.

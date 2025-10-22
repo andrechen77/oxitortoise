@@ -81,7 +81,8 @@ fn lower_node_recursive(
 
     debug!("Lowering node {:?}", node);
 
-    let expanded = node.lowering_expand(node_id, program, function, nodes);
+    // TODO make transform have its own visitation
+    let expanded = node.transform(node_id, program, function, nodes);
     if !expanded {
         // lowering couldn't be done, to put the original node back
         nodes.borrow_mut()[node_id] = node;

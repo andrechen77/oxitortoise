@@ -45,6 +45,8 @@ impl EffectfulNode for GetTurtleVar {
             TurtleVarDesc::Who => NetlogoAbstractType::Integer,
             TurtleVarDesc::Color => NetlogoAbstractType::Color,
             TurtleVarDesc::Size => NetlogoAbstractType::Float,
+            TurtleVarDesc::Xcor => NetlogoAbstractType::Float,
+            TurtleVarDesc::Ycor => NetlogoAbstractType::Float,
             TurtleVarDesc::Custom(field) => program.custom_turtle_vars[field].ty.clone(),
         })
     }
@@ -355,6 +357,56 @@ impl EffectfulNode for GetPatchVarAsTurtleOrPatch {
             PatchVarDesc::Pcolor => MirType::Abstract(NetlogoAbstractType::Color),
         }
     }
+
+    fn transform(
+        &self,
+        my_node_id: NodeId,
+        program: &Program,
+        function: &Function,
+        nodes: &RefCell<Nodes>,
+    ) -> bool {
+        let nodes_borrowed = nodes.borrow();
+        match nodes_borrowed[self.agent].output_type(program, function, &*nodes_borrowed) {
+            MirType::Abstract(NetlogoAbstractType::Patch)
+            | MirType::Machine(NetlogoMachineType::PATCH_ID) => {
+                drop(nodes_borrowed);
+                nodes.borrow_mut()[my_node_id] = Box::new(node::GetPatchVar {
+                    context: self.context,
+                    patch: self.agent,
+                    var: self.var,
+                });
+                true
+            }
+            MirType::Abstract(NetlogoAbstractType::Turtle)
+            | MirType::Machine(NetlogoMachineType::TURTLE_ID) => {
+                drop(nodes_borrowed);
+                let mut nodes = nodes.borrow_mut();
+
+                let xcor = nodes.insert(Box::new(node::GetTurtleVar {
+                    context: self.context,
+                    turtle: self.agent,
+                    var: TurtleVarDesc::Xcor,
+                }));
+
+                let ycor = nodes.insert(Box::new(node::GetTurtleVar {
+                    context: self.context,
+                    turtle: self.agent,
+                    var: TurtleVarDesc::Ycor,
+                }));
+
+                let patch_here = nodes.insert(Box::new(node::PatchAt { x: xcor, y: ycor }));
+
+                nodes[my_node_id] = Box::new(node::GetPatchVar {
+                    context: self.context,
+                    patch: patch_here,
+                    var: self.var,
+                });
+
+                true
+            }
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug, Display)]
@@ -382,5 +434,57 @@ impl EffectfulNode for SetPatchVarAsTurtleOrPatch {
 
     fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirType {
         MirType::Abstract(NetlogoAbstractType::Unit)
+    }
+
+    fn transform(
+        &self,
+        my_node_id: NodeId,
+        program: &Program,
+        function: &Function,
+        nodes: &RefCell<Nodes>,
+    ) -> bool {
+        let nodes_borrowed = nodes.borrow();
+        match nodes_borrowed[self.agent].output_type(program, function, &*nodes_borrowed) {
+            MirType::Abstract(NetlogoAbstractType::Patch)
+            | MirType::Machine(NetlogoMachineType::PATCH_ID) => {
+                drop(nodes_borrowed);
+                nodes.borrow_mut()[my_node_id] = Box::new(node::SetPatchVar {
+                    context: self.context,
+                    patch: self.agent,
+                    var: self.var,
+                    value: self.value,
+                });
+                true
+            }
+            MirType::Abstract(NetlogoAbstractType::Turtle)
+            | MirType::Machine(NetlogoMachineType::TURTLE_ID) => {
+                drop(nodes_borrowed);
+                let mut nodes = nodes.borrow_mut();
+
+                let xcor = nodes.insert(Box::new(node::GetTurtleVar {
+                    context: self.context,
+                    turtle: self.agent,
+                    var: TurtleVarDesc::Xcor,
+                }));
+
+                let ycor = nodes.insert(Box::new(node::GetTurtleVar {
+                    context: self.context,
+                    turtle: self.agent,
+                    var: TurtleVarDesc::Ycor,
+                }));
+
+                let patch_here = nodes.insert(Box::new(node::PatchAt { x: xcor, y: ycor }));
+
+                nodes[my_node_id] = Box::new(node::SetPatchVar {
+                    context: self.context,
+                    patch: patch_here,
+                    var: self.var,
+                    value: self.value,
+                });
+
+                true
+            }
+            _ => false,
+        }
     }
 }

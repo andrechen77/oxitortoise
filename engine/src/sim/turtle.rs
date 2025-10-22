@@ -316,6 +316,8 @@ pub enum TurtleVarDesc {
     Who,
     Size,
     Color,
+    Xcor,
+    Ycor,
     /// The nth custom field of the turtle.
     Custom(usize),
     // TODO add other builtin variables
@@ -383,6 +385,8 @@ pub fn turtle_var_type(schema: &TurtleSchema, var: TurtleVarDesc) -> NetlogoMach
         TurtleVarDesc::Who => NetlogoMachineType::INTEGER,
         TurtleVarDesc::Color => NetlogoMachineType::COLOR,
         TurtleVarDesc::Size => NetlogoMachineType::FLOAT,
+        TurtleVarDesc::Xcor => NetlogoMachineType::FLOAT,
+        TurtleVarDesc::Ycor => NetlogoMachineType::FLOAT,
         TurtleVarDesc::Custom(field) => {
             let AgentSchemaField::Other(ty) = &schema[schema.custom_fields()[field]] else {
                 unreachable!("this is a custom field, so it cannot be part of the base data");
