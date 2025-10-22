@@ -12,7 +12,7 @@ pub fn diffuse_8_single_variable_buffer(
 ) {
     let old_values = world.patches.take_patch_values(patch_field);
     let new_values = world.patches.patch_field_as_mut_array::<Float>(patch_field);
-    diffuse_8(&world.topology.spec(), &old_values, new_values, fraction);
+    diffuse_8(world.topology.spec(), &old_values, new_values, fraction);
 }
 
 fn diffuse_8<R, W>(topology: &TopologySpec, old_values: &R, new_values: &mut W, fraction: Float)

@@ -34,7 +34,7 @@ pub fn mir_to_lir(mir: &mir::Program) -> lir::Program {
     // functions might reference each other, and their signatures are required
     let mut user_function_tracker = SlotMap::with_key(); // used only to allocate lir::FunctionId
     for (mir_fn_id, mir_fn) in mir.functions.iter() {
-        let signature = translate_function_signature(&*mir_fn.borrow());
+        let signature = translate_function_signature(&mir_fn.borrow());
         // allocate a new function id for the LIR function
         let lir_fn_id = user_function_tracker.insert(());
         builder.available_user_functions.insert(mir_fn_id, lir_fn_id);
@@ -44,7 +44,7 @@ pub fn mir_to_lir(mir: &mir::Program) -> lir::Program {
     // translate all user function bodies
     let mut lir_fn_bodies = SecondaryMap::new();
     for (mir_fn_id, mir_fn) in mir.functions.iter() {
-        let lir_fn = translate_function_body(&*mir_fn.borrow(), &mut builder);
+        let lir_fn = translate_function_body(&mir_fn.borrow(), &mut builder);
         let lir_fn_id = builder.available_user_functions[&mir_fn_id];
         lir_fn_bodies.insert(lir_fn_id, lir_fn);
     }
@@ -192,7 +192,7 @@ fn translate_function_body(
     // algorithm idea: iterate over all statements. if a node depends on another
     // node which is not rooted in its own statement, then those dependencies
     // are translated first
-    translate_stmt_block(&*function.nodes.borrow(), &mut fn_builder, &function.cfg);
+    translate_stmt_block(&function.nodes.borrow(), &mut fn_builder, &function.cfg);
 
     fn translate_stmt_block(
         nodes: &SlotMap<mir::NodeId, Box<dyn EffectfulNode>>,

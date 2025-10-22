@@ -4,10 +4,28 @@ use lir::typed_index_collections::TiVec;
 
 use crate::{exec::CanonExecutionContext, mir::HostFunctionIds};
 
+pub enum InstallLirError {
+    /// Installer state was corrupted and cannot be used to install new
+    /// functions.
+    InstallerPoisoned,
+    /// The runtime encountered an error while instantiating the new functions.
+    /// We have no further information.
+    RuntimeError,
+}
+
 pub trait InstallLir {
+    /// Installs the specified LIR program into the current instance. Potential
+    /// callbacks and entrypoints in the LIR program are also installed in the
+    /// function table, and must have the correct signature.
+    ///
+    /// # Safety
+    ///
+    /// The LIR program being installed will use the same namespace and
+    /// indirect function table as the current instance. The code must not
+    /// cause undefined behavior.
     unsafe fn install_lir(
         lir: &lir::Program,
-    ) -> Result<HashMap<lir::FunctionId, JitEntrypoint>, ()>;
+    ) -> Result<HashMap<lir::FunctionId, JitEntrypoint>, InstallLirError>;
 }
 
 #[repr(transparent)]

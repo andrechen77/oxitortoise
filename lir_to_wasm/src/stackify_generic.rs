@@ -168,7 +168,7 @@ pub fn stackify_single<V, Idx>(
                     .map(|i| (i, &available_operand_stack[i - 1])) // order barrier must be > 0 bc something was released
                     .find_map(|(i, o)| {
                         (o.ends_multivalue && Some(&o.releases_at) >= birthdate)
-                            .then(|| (i, o.releases_at))
+                            .then_some((i, o.releases_at))
                     })
                     // if the top of the stack is just part of a multivalue,
                     // the suffix of which was chomped off by someone else
@@ -242,16 +242,16 @@ pub fn stackify_single<V, Idx>(
 /// # Arguments
 ///
 /// * `excess_op_stack` - An iterator over all operands needing to be cleared,
-/// paired with a boolean indicating whether the operand should be released.
-/// False means the operand is excess and should be captured, while true means
-/// the operand is required and should be released.
+///   paired with a boolean indicating whether the operand should be released.
+///   False means the operand is excess and should be captured, while true means
+///   the operand is required and should be released.
 /// * `manips` - The set of stack manipulators to add to such to achieve the
-/// desired result.
+///   desired result.
 /// * `target_idx` - The idx at which we want to achieve the target state with the
-/// operand stack containing only the released operands. This is also the
-/// fallback location to add stack manipulators if manipulators cannot be added
-/// immediately after the instructions that produced the operands. This value
-/// must be greater than all idx's in the excess op stack.
+///   operand stack containing only the released operands. This is also the
+///   fallback location to add stack manipulators if manipulators cannot be added
+///   immediately after the instructions that produced the operands. This value
+///   must be greater than all idx's in the excess op stack.
 pub fn remove_excess_operands<V, Idx>(
     excess_op_stack: impl Iterator<Item = (AvailOperand<V, Idx>, bool)>,
     manips: &mut TiVec<Idx, StackManipulators<V>>,
@@ -321,7 +321,7 @@ pub fn remove_excess_operands<V, Idx>(
         // previous instruction. instead, insert the captures and getters
         // immediately before the target idx
         let manips = &mut manips[target_idx];
-        manips.getters.extend(queued.into_iter());
+        manips.getters.extend(queued);
         manips.captures += num_captures;
     }
 }

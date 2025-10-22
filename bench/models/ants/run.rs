@@ -107,7 +107,7 @@ fn main() {
             fn_id,
             function.borrow().debug_name.as_deref().unwrap_or_default()
         );
-        lower(&mut *function.borrow_mut(), &program);
+        lower(&mut function.borrow_mut(), &program);
     }
 
     for (fn_id, function) in &program.functions {

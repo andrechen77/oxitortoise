@@ -59,7 +59,7 @@ impl EffectfulNode for GetTurtleVar {
         nodes: &RefCell<SlotMap<NodeId, Box<dyn EffectfulNode>>>,
     ) -> bool {
         let (data_row, field_offset) = context_to_turtle_data(
-            &mut *nodes.borrow_mut(),
+            &mut nodes.borrow_mut(),
             program,
             self.context,
             self.turtle,
@@ -70,7 +70,7 @@ impl EffectfulNode for GetTurtleVar {
         let field = Box::new(node::MemLoad {
             ptr: data_row,
             offset: field_offset,
-            ty: self.output_type(program, function, &*nodes.borrow()).repr(),
+            ty: self.output_type(program, function, &nodes.borrow()).repr(),
         });
         nodes.borrow_mut()[my_node_id] = field;
         true
@@ -110,7 +110,7 @@ impl EffectfulNode for SetTurtleVar {
         nodes: &RefCell<SlotMap<NodeId, Box<dyn EffectfulNode>>>,
     ) -> bool {
         let (data_row, field_offset) = context_to_turtle_data(
-            &mut *nodes.borrow_mut(),
+            &mut nodes.borrow_mut(),
             program,
             self.context,
             self.turtle,
@@ -275,7 +275,7 @@ impl EffectfulNode for SetPatchVar {
         nodes: &RefCell<Nodes>,
     ) -> bool {
         let (data_row, field_offset) = context_to_patch_data(
-            &mut *nodes.borrow_mut(),
+            &mut nodes.borrow_mut(),
             program,
             self.context,
             self.patch,
@@ -366,7 +366,7 @@ impl EffectfulNode for GetPatchVarAsTurtleOrPatch {
         nodes: &RefCell<Nodes>,
     ) -> bool {
         let nodes_borrowed = nodes.borrow();
-        match nodes_borrowed[self.agent].output_type(program, function, &*nodes_borrowed) {
+        match nodes_borrowed[self.agent].output_type(program, function, &nodes_borrowed) {
             MirType::Abstract(NetlogoAbstractType::Patch)
             | MirType::Machine(NetlogoMachineType::PATCH_ID) => {
                 drop(nodes_borrowed);
@@ -444,7 +444,7 @@ impl EffectfulNode for SetPatchVarAsTurtleOrPatch {
         nodes: &RefCell<Nodes>,
     ) -> bool {
         let nodes_borrowed = nodes.borrow();
-        match nodes_borrowed[self.agent].output_type(program, function, &*nodes_borrowed) {
+        match nodes_borrowed[self.agent].output_type(program, function, &nodes_borrowed) {
             MirType::Abstract(NetlogoAbstractType::Patch)
             | MirType::Machine(NetlogoMachineType::PATCH_ID) => {
                 drop(nodes_borrowed);

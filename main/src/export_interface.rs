@@ -84,7 +84,7 @@ pub extern "C" fn oxitortoise_distance_euclidean_no_wrap(
 ) -> Float {
     let a = Point { x: a_x, y: a_y };
     let b = Point { x: b_x, y: b_y };
-    engine::sim::topology::euclidean_distance_no_wrap(a, b).into()
+    engine::sim::topology::euclidean_distance_no_wrap(a, b)
 }
 
 #[unsafe(no_mangle)]
@@ -97,7 +97,7 @@ pub extern "C" fn oxitortoise_offset_distance_by_heading(
     world
         .topology
         .offset_distance_by_heading(point, heading, distance)
-        .unwrap_or_else(|| Point { x: f64::NAN, y: f64::NAN })
+        .unwrap_or(Point { x: f64::NAN, y: f64::NAN })
 }
 
 #[unsafe(no_mangle)]

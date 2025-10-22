@@ -27,22 +27,19 @@ impl NetlogoMachineType {
     /// at the all-zero bit pattern, i.e. whether the all-zero bit pattern
     /// is valid as the default value for a NetLogo variable of this type.
     pub fn is_numeric_zeroable(&self) -> bool {
-        match self {
-            &Self::FLOAT | &Self::INTEGER | &Self::POINT | &Self::COLOR => true,
-            _ => false,
-        }
+        matches!(self, &Self::FLOAT | &Self::INTEGER | &Self::POINT | &Self::COLOR)
     }
 
     pub fn to_lir_type(&self) -> SmallVec<[lir::ValType; 1]> {
-        match self {
-            &Self::FLOAT => smallvec![lir::ValType::F64],
-            &Self::INTEGER => smallvec![lir::ValType::I64],
-            &Self::BOOLEAN => smallvec![lir::ValType::I8],
-            &Self::TURTLE_ID => smallvec![lir::ValType::I64],
-            &Self::PATCH_ID => smallvec![lir::ValType::I32],
-            &Self::POINT => smallvec![lir::ValType::F64, lir::ValType::F64],
-            &Self::HEADING => smallvec![lir::ValType::F64],
-            &Self::UNTYPED_PTR => smallvec![lir::ValType::Ptr],
+        match *self {
+            Self::FLOAT => smallvec![lir::ValType::F64],
+            Self::INTEGER => smallvec![lir::ValType::I64],
+            Self::BOOLEAN => smallvec![lir::ValType::I8],
+            Self::TURTLE_ID => smallvec![lir::ValType::I64],
+            Self::PATCH_ID => smallvec![lir::ValType::I32],
+            Self::POINT => smallvec![lir::ValType::F64, lir::ValType::F64],
+            Self::HEADING => smallvec![lir::ValType::F64],
+            Self::UNTYPED_PTR => smallvec![lir::ValType::Ptr],
             _ => todo!(),
         }
     }
@@ -58,16 +55,16 @@ impl From<&NetlogoMachineType> for TypeId {
             value::{Boolean, Float},
         };
 
-        match value {
-            &NetlogoMachineType::FLOAT => TypeId::of::<Float>(),
-            &NetlogoMachineType::INTEGER => TypeId::of::<i32>(),
-            &NetlogoMachineType::STRING => TypeId::of::<String>(),
-            &NetlogoMachineType::BOOLEAN => TypeId::of::<Boolean>(),
-            &NetlogoMachineType::TURTLE_ID => TypeId::of::<TurtleId>(),
-            &NetlogoMachineType::PATCH_ID => TypeId::of::<PatchId>(),
-            &NetlogoMachineType::POINT => TypeId::of::<Point>(),
-            &NetlogoMachineType::HEADING => TypeId::of::<Heading>(),
-            &NetlogoMachineType::COLOR => TypeId::of::<Color>(),
+        match *value {
+            NetlogoMachineType::FLOAT => TypeId::of::<Float>(),
+            NetlogoMachineType::INTEGER => TypeId::of::<i32>(),
+            NetlogoMachineType::STRING => TypeId::of::<String>(),
+            NetlogoMachineType::BOOLEAN => TypeId::of::<Boolean>(),
+            NetlogoMachineType::TURTLE_ID => TypeId::of::<TurtleId>(),
+            NetlogoMachineType::PATCH_ID => TypeId::of::<PatchId>(),
+            NetlogoMachineType::POINT => TypeId::of::<Point>(),
+            NetlogoMachineType::HEADING => TypeId::of::<Heading>(),
+            NetlogoMachineType::COLOR => TypeId::of::<Color>(),
             _ => panic!("Unknown NetLogo internal type: {:?}", value),
         }
     }

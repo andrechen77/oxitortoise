@@ -1,10 +1,7 @@
 use derive_more::derive::Display;
 use slotmap::SlotMap;
 
-use crate::mir::{
-    EffectfulNode, Function, MirType, NetlogoAbstractType, NodeId, Nodes,
-    Program,
-};
+use crate::mir::{EffectfulNode, Function, MirType, NetlogoAbstractType, NodeId, Nodes, Program};
 
 #[derive(Debug, Display)]
 pub enum Agentset {
@@ -39,12 +36,7 @@ impl EffectfulNode for Agentset {
         }
     }
 
-    fn output_type(
-        &self,
-        _program: &Program,
-        _function: &Function,
-        _nodes: &Nodes,
-    ) -> MirType {
+    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirType {
         MirType::Abstract(NetlogoAbstractType::Agentset)
     }
 

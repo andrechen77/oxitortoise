@@ -16,6 +16,11 @@ use crate::{
 };
 
 // TODO make documentation better
+
+// TODO document that the Patch Id uses -1 as a sentinel value for nobody
+
+/// A reference to a patch.
+///
 /// The patches in the world are indexed in a row-major order, where the first
 /// row contains the patches with the highest `pycor`, and the first column
 /// contains the patches with the lowest `pxcor`.
@@ -23,9 +28,6 @@ use crate::{
 /// Unlike turtles or links, which only have the fields corresponding to their
 /// current breed, patches do not have the concept of breeds so all fields are
 /// always active.
-
-// TODO document that the Patch Id uses -1 as a sentinel value for nobody
-/// A reference to a patch.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, From)]
 #[repr(transparent)]
 pub struct PatchId(pub u32);
@@ -58,9 +60,9 @@ impl Patches {
         let mut patches = Self {
             // TODO we should avoid having to remake the row schemas if we can;
             // we should reuse the ones from the compilation process instead.
-            data: patch_schema.make_row_schemas().map(|s| s.map(|s| RowBuffer::new(s))),
+            data: patch_schema.make_row_schemas().map(|s| s.map(RowBuffer::new)),
             patch_schema,
-            num_patches: topology_spec.num_patches() as u32,
+            num_patches: topology_spec.num_patches(),
             fallback_custom_fields: HashMap::new(),
         };
 

@@ -314,9 +314,9 @@ fn add_function<A: FnTableSlotAllocator>(
                         let v = v.unwrap_val_ref();
                         (ctx.remaining_getters.contains_key(&v)
                             && !ctx.val_local_ids.contains_key(&v))
-                        .then(|| i)
+                        .then_some(i)
                     })
-                    .last(); // get the bottomost value needing saving
+                    .next_back(); // get the bottomost value needing saving
                 // if required_pops is None, that means we did not find any
                 // new values that needed to be saved
                 if let Some(required_pops) = required_pops {
@@ -337,8 +337,8 @@ fn add_function<A: FnTableSlotAllocator>(
                     insn_builder.local_tee(local_id);
                     // add instructions to push the saved values back onto the
                     // stack
-                    for i in (op_stack.len() - required_pops)..op_stack.len() {
-                        insn_builder.local_get(ctx.val_local_ids[&op_stack[i].unwrap_val_ref()]);
+                    for operand in op_stack.iter().skip(op_stack.len() - required_pops) {
+                        insn_builder.local_get(ctx.val_local_ids[&operand.unwrap_val_ref()]);
                     }
                 }
             }
@@ -490,14 +490,14 @@ fn add_function<A: FnTableSlotAllocator>(
                             // is okay as long as the label is set correctly while
                             // this branch is being built.
                             let mut ctx = ctx.borrow_mut();
-                            write_code(&mut *ctx, then_builder, *then_body);
+                            write_code(*ctx, then_builder, *then_body);
                         },
                         |else_builder| {
                             // this may override the label in the other branch. this
                             // is okay as long as the label is set correctly while
                             // this branch is being built.
                             let mut ctx = ctx.borrow_mut();
-                            write_code(&mut *ctx, else_builder, *else_body);
+                            write_code(*ctx, else_builder, *else_body);
                         },
                     );
                 }
@@ -521,7 +521,6 @@ fn add_function<A: FnTableSlotAllocator>(
             }
             known_saved = op_stack.len();
             // add the outputs to our symbolic operand stack
-            let outputs = outputs;
             op_stack.extend(outputs);
         }
 
@@ -678,7 +677,7 @@ fn translate_instr_seq_type(
 ) -> wir::InstrSeqType {
     let inputs: Vec<_> = inputs.map(translate_val_type).collect();
     let outputs: Vec<_> = outputs.map(translate_val_type).collect();
-    if inputs.len() == 0 && outputs.len() <= 1 {
+    if inputs.is_empty() && outputs.len() <= 1 {
         wir::InstrSeqType::Simple(outputs.first().copied())
     } else {
         let type_id = module_types.add(&inputs, &outputs);

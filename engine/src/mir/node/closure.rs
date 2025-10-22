@@ -56,9 +56,7 @@ impl EffectfulNode for Closure {
         _nodes: &crate::mir::Nodes,
     ) -> crate::mir::MirType {
         let return_ty = program.functions[self.body].borrow().return_ty.clone();
-        MirType::Abstract(NetlogoAbstractType::Closure {
-            return_ty: Box::new(return_ty),
-        })
+        MirType::Abstract(NetlogoAbstractType::Closure { return_ty: Box::new(return_ty) })
     }
 
     fn write_lir_execution(

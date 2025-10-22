@@ -313,6 +313,7 @@ pub enum UnaryOpcode {
 /// - `S` operations apply to signed integer types.
 /// - `U` operations apply to unsigned integer types.
 /// - `F` operations apply to floating point types.
+///
 /// Pointers are considered unsigned integers at the LIR level.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Display)]
 pub enum BinaryOpcode {

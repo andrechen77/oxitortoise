@@ -295,6 +295,7 @@ fn create_procedure_skeleton(
     // verify that the procedure can support the given agent class
     let agent_class_str = procedure["agentClass"].as_str().unwrap();
     match agent_class {
+        #[allow(clippy::iter_nth_zero)]
         AgentClass::Observer => assert_eq!(agent_class_str.chars().nth(0).unwrap(), 'O',),
         AgentClass::Turtle => assert_eq!(agent_class_str.chars().nth(1).unwrap(), 'T',),
         AgentClass::Patch => assert_eq!(agent_class_str.chars().nth(2).unwrap(), 'P',),
@@ -759,9 +760,7 @@ fn eval_reporter(expr_json: &JsonObj, mut ctx: FnBodyBuilderCtx<'_>) -> NodeId {
                         "OR" => BinaryOpcode::Or,
                         _ => unreachable!(),
                     };
-                    let less_than =
-                        ctx.nodes.insert(Box::new(node::BinaryOperation { op, lhs, rhs }));
-                    less_than
+                    ctx.nodes.insert(Box::new(node::BinaryOperation { op, lhs, rhs }))
                 }
                 "NOT" => {
                     let &[operand] = args.as_slice() else {
@@ -1025,11 +1024,10 @@ fn eval_ephemeral_closure(
     build_body(statements, fn_id, ctx.mir).unwrap();
 
     // return a closure object
-    let closure = ctx.nodes.insert(Box::new(node::Closure {
+    ctx.nodes.insert(Box::new(node::Closure {
         captures: vec![], // TODO add captures
         body: fn_id,
-    }));
-    closure
+    }))
 }
 
 #[derive(Deserialize)]
@@ -1106,7 +1104,7 @@ pub fn add_cheats(
                 panic!("variable {} is not a custom patch variable", var_name);
             };
 
-            let var_type = translate_var_type_name(&var_type);
+            let var_type = translate_var_type_name(var_type);
 
             mir.custom_patch_vars[var_id].ty = var_type;
         }

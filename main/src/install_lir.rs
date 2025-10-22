@@ -4,7 +4,13 @@ use std::{
     sync::{LazyLock, Mutex},
 };
 
-use engine::{exec::jit::JitEntrypoint, lir};
+use engine::{
+    exec::{
+        ExecutionContext,
+        jit::{InstallLirError, JitEntrypoint},
+    },
+    lir,
+};
 
 static FUNCTION_INSTALLER: LazyLock<Mutex<FunctionInstaller>> = LazyLock::new(|| {
     // SAFETY: the function installer is the only code that interacts with the
@@ -16,8 +22,10 @@ static FUNCTION_INSTALLER: LazyLock<Mutex<FunctionInstaller>> = LazyLock::new(||
 
 pub unsafe fn install_lir(
     lir: &lir::Program,
-) -> Result<HashMap<lir::FunctionId, JitEntrypoint>, ()> {
-    unsafe { FUNCTION_INSTALLER.lock().map_err(|_| ())?.install_lir(lir) }
+) -> Result<HashMap<lir::FunctionId, JitEntrypoint>, InstallLirError> {
+    unsafe {
+        FUNCTION_INSTALLER.lock().map_err(|_| InstallLirError::InstallerPoisoned)?.install_lir(lir)
+    }
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -57,8 +65,7 @@ unsafe extern "C" {
 fn grow_function_table(num_slots: usize) -> usize {
     use std::sync::atomic::{AtomicUsize, Ordering};
     static NEXT_FREE_SLOT: AtomicUsize = AtomicUsize::new(420);
-    let next_free_slot = NEXT_FREE_SLOT.fetch_add(num_slots, Ordering::Relaxed);
-    next_free_slot
+    NEXT_FREE_SLOT.fetch_add(num_slots, Ordering::Relaxed)
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -87,7 +94,7 @@ impl FunctionInstaller {
 
     /// Installs the specified LIR program into the current instance. Potential
     /// callbacks and entrypoints in the LIR program are also installed in the
-    /// function, and must have the correct signature.
+    /// function table, and must have the correct signature.
     ///
     /// # Safety
     ///
@@ -97,7 +104,7 @@ impl FunctionInstaller {
     unsafe fn install_lir(
         &mut self,
         lir: &lir::Program,
-    ) -> Result<HashMap<lir::FunctionId, JitEntrypoint>, ()> {
+    ) -> Result<HashMap<lir::FunctionId, JitEntrypoint>, InstallLirError> {
         struct A<'a>(&'a mut BinaryHeap<Reverse<usize>>);
         impl<'a> lir_to_wasm::FnTableSlotAllocator for A<'a> {
             fn allocate_slot(&mut self) -> usize {
@@ -107,12 +114,10 @@ impl FunctionInstaller {
 
                 let num_new_slots = 32;
                 let first_new_slot = grow_function_table(num_new_slots);
-                let new_slots =
-                    (first_new_slot..(first_new_slot + num_new_slots)).map(|slot| Reverse(slot));
+                let new_slots = (first_new_slot..(first_new_slot + num_new_slots)).map(Reverse);
                 self.0.extend(new_slots);
 
-                let Reverse(slot) = self.0.pop().expect("ensured that there were enough slots");
-                slot
+                self.0.pop().expect("ensured that there were enough slots").0
             }
         }
 
@@ -121,7 +126,7 @@ impl FunctionInstaller {
         // if we indirectly call a function with the wrong signature.
 
         let (mut wasm_module, fn_table_allocated_slots) =
-            lir_to_wasm::lir_to_wasm(&lir, &mut A(&mut self.free_slots));
+            lir_to_wasm::lir_to_wasm(lir, &mut A(&mut self.free_slots));
 
         let module_bytes = wasm_module.emit_wasm();
 
@@ -129,7 +134,7 @@ impl FunctionInstaller {
         // cause undefined behavior in the current instance
         let success = unsafe { instantiate_module(module_bytes.as_ptr(), module_bytes.len()) };
         if !success {
-            return Err(());
+            return Err(InstallLirError::RuntimeError);
         }
 
         // return the function pointers to the installed functions.
@@ -142,7 +147,12 @@ impl FunctionInstaller {
                         // SAFETY: in the wasm32 target, a function pointer is
                         // represented by a i32 indicating the slot in the
                         // function table, so they literally have the same ABI
-                        unsafe { std::mem::transmute(slot) },
+                        unsafe {
+                            std::mem::transmute::<
+                                usize,
+                                extern "C" fn(&mut ExecutionContext, *mut u8),
+                            >(slot)
+                        },
                     ),
                 )
             }));

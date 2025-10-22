@@ -3,7 +3,7 @@ use std::{any::TypeId, ops::Index};
 use crate::sim::patch::PatchBaseData;
 use crate::{
     sim::{turtle::TurtleBaseData, value::NetlogoMachineType},
-    util::row_buffer::{RowBuffer, RowSchema},
+    util::row_buffer::RowSchema,
 };
 
 // TODO make better, actual documentation for how the agents are laid out
@@ -274,9 +274,7 @@ fn make_row_schemas_impl<A: 'static, const N: usize>(
     };
 
     let row_schemas: [Option<RowSchema>; N] = std::array::from_fn(|buffer_idx| {
-        let Some(buffer_fields) = field_groups.get(buffer_idx) else {
-            return None;
-        };
+        let buffer_fields = field_groups.get(buffer_idx)?;
 
         // the types and sizes of the fields in this buffer
         let mut field_types = Vec::new();

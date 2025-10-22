@@ -94,7 +94,7 @@ impl Turtles {
             slot_tracker: GenSlotTracker::new(),
             // TODO we should avoid having to remake the row schemas if we can;
             // we should reuse the ones from the compilation process instead.
-            data: turtle_schema.make_row_schemas().map(|s| s.map(|s| RowBuffer::new(s))),
+            data: turtle_schema.make_row_schemas().map(|s| s.map(RowBuffer::new)),
             fallback_custom_fields: HashMap::new(),
             turtle_schema,
             num_turtles: 0,
@@ -194,7 +194,7 @@ impl Turtles {
     }
 
     pub fn turtle_ids(&self) -> impl Iterator<Item = TurtleId> + '_ {
-        self.slot_tracker.iter().map(|id| TurtleId(id))
+        self.slot_tracker.iter().map(TurtleId)
     }
 
     /// Get a reference to a field of a turtle. Returns `None` if the

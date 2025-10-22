@@ -4,8 +4,8 @@ use slotmap::SlotMap;
 
 use crate::{
     mir::{
-        EffectfulNode, Function, MirType, NetlogoAbstractType, NodeId, Nodes,
-        Program, build_lir::LirInsnBuilder,
+        EffectfulNode, Function, MirType, NetlogoAbstractType, NodeId, Nodes, Program,
+        build_lir::LirInsnBuilder,
     },
     sim::value::UnpackedDynBox,
 };
@@ -25,12 +25,7 @@ impl EffectfulNode for Constant {
         vec![]
     }
 
-    fn output_type(
-        &self,
-        _program: &Program,
-        _function: &Function,
-        _nodes: &Nodes,
-    ) -> MirType {
+    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirType {
         MirType::Abstract(match self.value {
             UnpackedDynBox::Int(_) => NetlogoAbstractType::Integer,
             UnpackedDynBox::Float(_) => NetlogoAbstractType::Float,

@@ -111,7 +111,7 @@ impl RowSchema {
         // find the length of the bitfield to hold whether each column is
         // present
         let occupancy_bitfield_len =
-            if occupancy_bitfield { (types_and_layouts.len() + 7) / 8 } else { 0 };
+            if occupancy_bitfield { types_and_layouts.len().div_ceil(8) } else { 0 };
 
         // find the offsets of each field
         // https://doc.rust-lang.org/std/alloc/struct.Layout.html#method.extend
@@ -177,8 +177,7 @@ impl<'a, B: AsRef<[u8]> + 'a> Row<'a, B> {
         let field_offset = self.schema.fields[field_idx].offset;
         let base_ptr = self.data.as_ref() as *const [u8] as *const ();
         // SAFETY: the offset is into an allocated object
-        let field_ptr = unsafe { base_ptr.byte_add(field_offset) };
-        field_ptr
+        unsafe { base_ptr.byte_add(field_offset) }
     }
 
     pub fn get<T: 'static>(&self, field_idx: usize) -> Option<&'a T> {
@@ -217,8 +216,7 @@ impl<'a, B: AsRef<[u8]> + AsMut<[u8]> + 'a> Row<'a, B> {
         let field_offset = self.schema.fields[field_idx].offset;
         let base_ptr = self.data.as_mut() as *mut [u8] as *mut ();
         // SAFETY: the offset is into an allocated object
-        let field_ptr = unsafe { base_ptr.byte_add(field_offset) };
-        field_ptr
+        unsafe { base_ptr.byte_add(field_offset) }
     }
 
     pub fn get_mut<T: 'static>(&mut self, field_idx: usize) -> Option<&'a mut T> {
@@ -309,7 +307,7 @@ impl<'a, B: AsRef<[u8]> + AsMut<[u8]> + 'a> Row<'a, B> {
             // function to call to drop the value. we know this value is
             // actually present. this value will not be read again because the
             // field will be marked as not present in the following line
-            unsafe { drop_fn(self.get_ptr_mut(field_idx) as *mut ()) };
+            unsafe { drop_fn(self.get_ptr_mut(field_idx)) };
             if self.schema.occupancy_bitfield_len != 0 {
                 self.mark_absent(field_idx);
             }
@@ -497,8 +495,7 @@ impl RowBuffer {
         let start = self.bytes.deref_mut().as_mut_ptr().cast::<T>();
         let len = self.num_rows();
         // SAFETY: the bytes are guaranteed to hold valid T values
-        let slice = unsafe { std::slice::from_raw_parts_mut(start, len) };
-        slice
+        unsafe { std::slice::from_raw_parts_mut(start, len) }
     }
 
     /// Drops all fields in all rows.
@@ -555,6 +552,10 @@ pub struct Array<T: Copy> {
 impl<T: Copy> Array<T> {
     pub fn len(&self) -> usize {
         self.bytes.len() / std::mem::size_of::<T>()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 
     fn as_ptr(&self) -> *const T {

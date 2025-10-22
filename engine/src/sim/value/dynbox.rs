@@ -47,7 +47,7 @@ impl DynBox {
     /// all-zero bit pattern is a non-NaN value that represents +0.0.
     pub const ZERO: Self = Self(0u64);
 
-    pub const FALSE: Self = Self(NAN_BASE | 0b001 << 48 | 0);
+    pub const FALSE: Self = Self(NAN_BASE | 0b001 << 48);
     pub const TRUE: Self = Self(NAN_BASE | 0b001 << 48 | 1);
 
     pub fn unpack(&self) -> UnpackedDynBox {
