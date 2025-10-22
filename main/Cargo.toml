@@ -7,6 +7,8 @@ edition = "2024"
 engine = { path = "../engine", package = "oxitortoise_engine" }
 lir_to_wasm = { path = "../lir_to_wasm", package = "oxitortoise_lir_to_wasm" }
 ast_to_mir = { path = "../ast_to_mir", package = "oxitortoise_ast_to_mir" }
+tracing = "0.1.41"
+tracing-subscriber = "0.3.20"
 
 [[bin]]
 name = "ants"

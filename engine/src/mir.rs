@@ -19,7 +19,11 @@ use slotmap::{SecondaryMap, SlotMap, new_key_type};
 
 use crate::{
     mir::build_lir::LirInsnBuilder,
-    sim::{agent_schema::TurtleSchema, turtle::BreedId, value::NetlogoMachineType},
+    sim::{
+        agent_schema::{PatchSchema, TurtleSchema},
+        turtle::BreedId,
+        value::NetlogoMachineType,
+    },
     util::cell::RefCell,
 };
 
@@ -50,6 +54,8 @@ pub struct Program {
     /// None if the turtle schema has not been calculated yet.
     pub turtle_schema: Option<TurtleSchema>,
     pub custom_patch_vars: Vec<CustomVarDecl>,
+    /// None if the patch schema has not been calculated yet.
+    pub patch_schema: Option<PatchSchema>,
     pub functions: SecondaryMap<FunctionId, RefCell<Function>>,
 }
 
@@ -191,12 +197,11 @@ impl MirType {
 }
 
 /// A representation of an element of the lattice making up all NetLogo types.
-#[derive(derive_more::Debug)]
+#[derive(derive_more::Debug, Clone)]
 pub enum NetlogoAbstractType {
     Unit,
     /// Top doesn't actually include everything
     Top,
-    Bottom,
     Numeric,
     Color,
     Integer,
@@ -219,23 +224,36 @@ pub enum NetlogoAbstractType {
 }
 
 impl NetlogoAbstractType {
-    fn join(&self, other: &NetlogoAbstractType) -> NetlogoAbstractType {
+    pub fn join(&self, other: &NetlogoAbstractType) -> NetlogoAbstractType {
         let _ = other;
         todo!()
     }
 
-    fn meet(&self, other: &NetlogoAbstractType) -> NetlogoAbstractType {
+    pub fn meet(&self, other: &NetlogoAbstractType) -> NetlogoAbstractType {
         let _ = other;
         todo!()
     }
 
-    fn repr(&self) -> NetlogoMachineType {
-        todo!()
-    }
-}
-
-impl Clone for NetlogoAbstractType {
-    fn clone(&self) -> Self {
-        todo!()
+    pub fn repr(&self) -> NetlogoMachineType {
+        match self {
+            Self::Unit => {
+                panic!("No one should be asking about the representation of the unit type")
+            }
+            Self::Top => NetlogoMachineType::DYN_BOX,
+            Self::Numeric => NetlogoMachineType::FLOAT,
+            Self::Color => NetlogoMachineType::COLOR,
+            Self::Integer => NetlogoMachineType::INTEGER,
+            Self::Float => NetlogoMachineType::FLOAT,
+            Self::Boolean => NetlogoMachineType::BOOLEAN,
+            Self::String => NetlogoMachineType::STRING,
+            Self::Agent => NetlogoMachineType::DYN_BOX,
+            Self::Patch => NetlogoMachineType::PATCH_ID,
+            Self::Turtle => NetlogoMachineType::TURTLE_ID,
+            Self::Link => todo!("add link id"),
+            Self::Agentset => todo!("add agentset id"),
+            Self::Nobody => todo!(),
+            Self::Closure { return_ty } => todo!(),
+            Self::List { element_ty } => todo!(),
+        }
     }
 }

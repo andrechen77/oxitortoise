@@ -251,6 +251,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "oxitortoise_engine",
+ "serde",
  "serde_json",
  "tracing",
  "tracing-subscriber",
@@ -293,6 +294,8 @@ dependencies = [
  "oxitortoise_ast_to_mir",
  "oxitortoise_engine",
  "oxitortoise_lir_to_wasm",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

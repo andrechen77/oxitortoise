@@ -1,0 +1,38 @@
+{
+	"patch_var_types": {
+		"CHEMICAL": "float",
+		"FOOD": "float",
+		"NEST?": "boolean",
+		"NEST-SCENT": "float",
+		"FOOD-SOURCE-NUMBER": "float"
+	},
+	"patch_schema": {
+		"type": "ctor",
+		"pcolor_buffer_idx": 1,
+		"custom_fields": [
+			2,
+			0,
+			0,
+			0,
+			0
+		],
+		"avoid_occupancy_bitfield": [
+			1,
+			2
+		]
+	},
+	"turtle_schema": {
+		"type": "default"
+	},
+	"functions": {
+		"SETUP-NEST": {
+			"self_param_type": "patch"
+		},
+		"CHEMICAL-SCENT-AT-ANGLE": {
+			"self_param_type": "turtle"
+		},
+		"LOOK-FOR-FOOD": {
+			"self_param_type": "turtle"
+		}
+	}
+}

@@ -9,6 +9,7 @@ use engine::{
         node::{self, BinaryOpcode, PatchLocRelation, UnaryOpcode},
     },
     sim::{
+        agent_schema::{PatchSchema, TurtleSchema},
         patch::PatchVarDesc,
         turtle::{BreedId, TurtleVarDesc},
         value::{NetlogoMachineType, UnpackedDynBox},
@@ -16,6 +17,7 @@ use engine::{
     slotmap::{SecondaryMap, SlotMap},
     util::cell::RefCell,
 };
+use serde::Deserialize;
 use serde_json::{Value as JsonValue, json};
 use tracing::{Span, error, instrument, trace};
 
@@ -25,7 +27,7 @@ type JsonObj = serde_json::Map<String, JsonValue>;
 
 // TODO this should work with local variables too
 #[derive(Debug)]
-struct GlobalNames {
+pub struct GlobalNames {
     constants: HashMap<&'static str, fn() -> Box<dyn EffectfulNode>>,
     globals: HashMap<Rc<str>, GlobalId>,
     patch_vars: HashMap<Rc<str>, PatchVarDesc>,
@@ -116,7 +118,13 @@ struct MirBuilder {
     global_names: GlobalNames,
 }
 
-pub fn ast_to_mir(ast: &JsonValue) -> anyhow::Result<mir::Program> {
+pub struct ParseResult {
+    pub program: mir::Program,
+    pub global_names: GlobalNames,
+    pub fn_info: SecondaryMap<FunctionId, FnInfo>,
+}
+
+pub fn ast_to_mir(ast: &JsonValue) -> anyhow::Result<ParseResult> {
     trace!("Starting AST to MIR conversion");
     let root = ast.as_object().unwrap();
 
@@ -127,7 +135,7 @@ pub fn ast_to_mir(ast: &JsonValue) -> anyhow::Result<mir::Program> {
     let mut turtle_breeds: SlotMap<BreedId, ()> = SlotMap::with_key();
     let default_turtle_breed = turtle_breeds.insert(());
 
-    let mut name_scope = GlobalNames::with_builtins(default_turtle_breed);
+    let mut global_names = GlobalNames::with_builtins(default_turtle_breed);
     trace!("Initialized name scope with builtins");
 
     let meta_vars = root["metaVars"].as_object().unwrap();
@@ -135,14 +143,14 @@ pub fn ast_to_mir(ast: &JsonValue) -> anyhow::Result<mir::Program> {
     for global in meta_vars["globals"].as_array().unwrap() {
         let global_name = global.as_str().unwrap();
         let global_id = globals.insert(());
-        name_scope.globals.insert(Rc::from(global_name), global_id);
+        global_names.globals.insert(Rc::from(global_name), global_id);
         trace!("Added global variable `{}` with id {:?}", global_name, global_id);
     }
     // add custom patch variables
     for (i, patch_var) in meta_vars["patchVars"].as_array().unwrap().iter().enumerate() {
         let patch_var_name = patch_var.as_str().unwrap();
         let patch_var_id = PatchVarDesc::Custom(i);
-        name_scope.patch_vars.insert(Rc::from(patch_var_name), patch_var_id);
+        global_names.patch_vars.insert(Rc::from(patch_var_name), patch_var_id);
         custom_patch_vars
             .push(CustomVarDecl { name: Rc::from(patch_var_name), ty: NetlogoAbstractType::Top });
         trace!("Added patch variable `{}` with id {:?}", patch_var_name, patch_var_id);
@@ -151,7 +159,7 @@ pub fn ast_to_mir(ast: &JsonValue) -> anyhow::Result<mir::Program> {
     for (i, turtle_var) in meta_vars["turtleVars"].as_array().unwrap().iter().enumerate() {
         let turtle_var_name = turtle_var.as_str().unwrap();
         let turtle_var_id = TurtleVarDesc::Custom(i);
-        name_scope.turtle_vars.insert(Rc::from(turtle_var_name), turtle_var_id);
+        global_names.turtle_vars.insert(Rc::from(turtle_var_name), turtle_var_id);
         custom_turtle_vars
             .push(CustomVarDecl { name: Rc::from(turtle_var_name), ty: NetlogoAbstractType::Top });
         trace!("Added turtle variable `{}` with id {:?}", turtle_var_name, turtle_var_id);
@@ -183,15 +191,14 @@ pub fn ast_to_mir(ast: &JsonValue) -> anyhow::Result<mir::Program> {
         let (procedure, signature) = create_procedure_skeleton(procedure_json, agent_class)?;
         let fn_id = functions.insert(procedure);
         fn_info.insert(fn_id, signature);
-        name_scope.functions.insert(Rc::from(proc_name), fn_id);
+        global_names.functions.insert(Rc::from(proc_name), fn_id);
         trace!("Created procedure skeleton for {} with function id: {:?}", proc_name, fn_id);
 
         // save the json to build the body later
         functions_to_build.insert(fn_id, procedure_json);
     }
 
-    let mut mir_builder =
-        MirBuilder { globals, turtle_breeds, functions, fn_info, global_names: name_scope };
+    let mut mir_builder = MirBuilder { globals, turtle_breeds, functions, fn_info, global_names };
 
     // then go through each procedure and build out the bodies
     for (function_id, procedure_json) in functions_to_build {
@@ -205,17 +212,22 @@ pub fn ast_to_mir(ast: &JsonValue) -> anyhow::Result<mir::Program> {
         trace!("Completed body building for procedure: {}", proc_name);
     }
 
-    Ok(mir::Program {
-        globals: mir_builder.globals,
-        turtle_breeds: mir_builder.turtle_breeds,
-        custom_turtle_vars,
-        custom_patch_vars,
-        turtle_schema: None,
-        functions: mir_builder
-            .functions
-            .into_iter()
-            .map(|(id, function)| (id, RefCell::new(function)))
-            .collect(),
+    Ok(ParseResult {
+        program: mir::Program {
+            globals: mir_builder.globals,
+            turtle_breeds: mir_builder.turtle_breeds,
+            custom_turtle_vars,
+            custom_patch_vars,
+            turtle_schema: None,
+            patch_schema: None,
+            functions: mir_builder
+                .functions
+                .into_iter()
+                .map(|(id, function)| (id, RefCell::new(function)))
+                .collect(),
+        },
+        global_names: mir_builder.global_names,
+        fn_info: mir_builder.fn_info,
     })
 }
 
@@ -244,12 +256,12 @@ impl AgentClass {
 
 /// Holds information about a function while it is being built.
 #[derive(Debug)]
-struct FnInfo {
+pub struct FnInfo {
     /// The name of the entire function.
     debug_name: Rc<str>,
     env_param: Option<LocalId>,
     context_param: Option<LocalId>,
-    self_param: Option<(AgentClass, LocalId)>,
+    self_param: Option<LocalId>,
     positional_params: Vec<LocalId>,
     local_names: HashMap<Rc<str>, LocalId>,
     num_internal_bodies: usize,
@@ -314,7 +326,7 @@ fn create_procedure_skeleton(
                 storage: LocalStorage::Register,
             });
             parameter_locals.push(local_id);
-            fn_info.self_param = Some((AgentClass::Turtle, local_id));
+            fn_info.self_param = Some(local_id);
             trace!("Added turtle self parameter with local_id: {:?}", local_id);
         }
         AgentClass::Patch => {
@@ -324,7 +336,7 @@ fn create_procedure_skeleton(
                 storage: LocalStorage::Register,
             });
             parameter_locals.push(local_id);
-            fn_info.self_param = Some((AgentClass::Patch, local_id));
+            fn_info.self_param = Some(local_id);
             trace!("Added patch self parameter with local_id: {:?}", local_id);
         }
         AgentClass::Link => todo!(),
@@ -428,8 +440,8 @@ impl<'a> FnBodyBuilderCtx<'a> {
     /// Returns a node that gets the turtle self parameter. Panics if the current
     /// function doesn't have a turtle self parameter.
     fn get_self_turtle(&mut self) -> NodeId {
-        let (agent_class, self_param) = self.mir.fn_info[self.fn_id].self_param.unwrap();
-        assert!(agent_class.is_turtle(), "Expected turtle agent class");
+        let self_param = self.mir.fn_info[self.fn_id].self_param.unwrap();
+        // assert!(agent_class.is_turtle(), "Expected turtle agent class");
         let id = self.nodes.insert(Box::new(node::GetLocalVar { local_id: self_param }));
         trace!("Got turtle self parameter with id: {:?}", id);
         id
@@ -438,25 +450,25 @@ impl<'a> FnBodyBuilderCtx<'a> {
     /// Returns a node that gets the patch self parameter. Panics if the current
     /// function doesn't have a patch self parameter.
     fn get_self_patch(&mut self) -> NodeId {
-        let (agent_class, self_param) = self.mir.fn_info[self.fn_id].self_param.unwrap();
-        assert!(agent_class.is_patch(), "Expected patch agent class");
+        let self_param = self.mir.fn_info[self.fn_id].self_param.unwrap();
+        // assert!(agent_class.is_patch(), "Expected patch agent class");
         self.nodes.insert(Box::new(node::GetLocalVar { local_id: self_param }))
     }
 
     /// Returns a node that gets the self parameter for turtle or patch agents.
     /// Panics if the current function doesn't have a turtle or patch self parameter.
     fn get_self_turtle_or_patch(&mut self) -> NodeId {
-        let (agent_class, self_param) = self.mir.fn_info[self.fn_id].self_param.unwrap();
-        assert!(
-            agent_class.is_turtle() || agent_class.is_patch(),
-            "Expected turtle or patch agent class"
-        );
+        let self_param = self.mir.fn_info[self.fn_id].self_param.unwrap();
+        // assert!(
+        //     agent_class.is_turtle() || agent_class.is_patch(),
+        //     "Expected turtle or patch agent class"
+        // );
         self.nodes.insert(Box::new(node::GetLocalVar { local_id: self_param }))
     }
 
     /// Returns a node that gets the self parameter for any agent type.
     fn get_self_any(&mut self) -> NodeId {
-        let (_agent_class, self_param) = self.mir.fn_info[self.fn_id].self_param.unwrap();
+        let self_param = self.mir.fn_info[self.fn_id].self_param.unwrap();
         self.nodes.insert(Box::new(node::GetLocalVar { local_id: self_param }))
     }
 }
@@ -948,7 +960,7 @@ fn eval_ephemeral_closure(
                 storage: LocalStorage::Register,
             });
             parameter_locals.push(local_id);
-            this_fn_info.self_param = Some((AgentClass::Turtle, local_id));
+            this_fn_info.self_param = Some(local_id);
             trace!("Added turtle self parameter with local_id: {:?}", local_id);
         }
         AgentClass::Patch => {
@@ -958,7 +970,7 @@ fn eval_ephemeral_closure(
                 storage: LocalStorage::Register,
             });
             parameter_locals.push(local_id);
-            this_fn_info.self_param = Some((AgentClass::Patch, local_id));
+            this_fn_info.self_param = Some(local_id);
             trace!("Added patch self parameter with local_id: {:?}", local_id);
         }
         AgentClass::Link => todo!(),
@@ -969,7 +981,7 @@ fn eval_ephemeral_closure(
                 storage: LocalStorage::Register,
             });
             parameter_locals.push(local_id);
-            this_fn_info.self_param = Some((AgentClass::Any, local_id));
+            this_fn_info.self_param = Some(local_id);
             trace!("Added any self parameter with local_id: {:?}", local_id);
         }
     }
@@ -1020,6 +1032,135 @@ fn eval_ephemeral_closure(
     closure
 }
 
+#[derive(Deserialize)]
+pub enum CheatVarType {
+    #[serde(rename = "float")]
+    Float,
+    #[serde(rename = "boolean")]
+    Boolean,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(tag = "type")]
+pub enum CheatPatchSchema {
+    #[serde(rename = "default")]
+    Default,
+    #[serde(rename = "ctor")]
+    Ctor(CheatPatchSchemaCtor),
+}
+
+#[derive(Deserialize, Debug)]
+pub struct CheatPatchSchemaCtor {
+    pcolor_buffer_idx: u8,
+    custom_fields: Vec<u8>,
+    avoid_occupancy_bitfield: Vec<u8>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(tag = "type")]
+pub enum CheatTurtleSchema {
+    #[serde(rename = "default")]
+    Default,
+    // TODO add ctor type
+}
+
+#[derive(Deserialize, Debug)]
+pub enum CheatParamType {
+    #[serde(rename = "patch")]
+    Patch,
+    #[serde(rename = "turtle")]
+    Turtle,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct CheatFunctionInfo {
+    self_param_type: Option<CheatParamType>,
+}
+
+#[derive(Deserialize)]
+pub struct Cheats {
+    patch_var_types: Option<HashMap<String, CheatVarType>>,
+    patch_schema: Option<CheatPatchSchema>,
+    turtle_schema: Option<CheatTurtleSchema>,
+    functions: Option<HashMap<String, CheatFunctionInfo>>,
+}
+
+pub fn add_cheats(
+    cheats: &Cheats,
+    mir: &mut mir::Program,
+    global_names: &GlobalNames,
+    fn_info: &SecondaryMap<FunctionId, FnInfo>,
+) {
+    fn translate_var_type_name(var_type: &CheatVarType) -> NetlogoAbstractType {
+        match var_type {
+            CheatVarType::Float => NetlogoAbstractType::Float,
+            CheatVarType::Boolean => NetlogoAbstractType::Boolean,
+        }
+    }
+
+    if let Some(patch_var_types) = &cheats.patch_var_types {
+        for (var_name, var_type) in patch_var_types {
+            let PatchVarDesc::Custom(var_id) =
+                *global_names.patch_vars.get(var_name.as_str()).unwrap()
+            else {
+                panic!("variable {} is not a custom patch variable", var_name);
+            };
+
+            let var_type = translate_var_type_name(&var_type);
+
+            mir.custom_patch_vars[var_id].ty = var_type;
+        }
+    }
+
+    // TODO add turtle variable types
+
+    if let Some(patch_schema) = &cheats.patch_schema {
+        let patch_schema = match patch_schema {
+            CheatPatchSchema::Default => PatchSchema::default(),
+            CheatPatchSchema::Ctor(ctor_args) => {
+                let custom_fields: Vec<_> = ctor_args
+                    .custom_fields
+                    .iter()
+                    .map(|&buffer_idx| {
+                        (mir.custom_patch_vars[usize::from(buffer_idx)].ty.repr(), buffer_idx)
+                    })
+                    .collect();
+                PatchSchema::new(
+                    ctor_args.pcolor_buffer_idx,
+                    &custom_fields,
+                    &ctor_args.avoid_occupancy_bitfield,
+                )
+            }
+        };
+        mir.patch_schema = Some(patch_schema);
+    };
+
+    if let Some(turtle_schema) = &cheats.turtle_schema {
+        let turtle_schema = match turtle_schema {
+            CheatTurtleSchema::Default => TurtleSchema::default(),
+            // TODO add ctor type
+        };
+        mir.turtle_schema = Some(turtle_schema);
+    }
+
+    if let Some(fn_cheats) = &cheats.functions {
+        for (fn_name, fn_cheats) in fn_cheats {
+            let fn_id = global_names.functions.get(fn_name.as_str()).unwrap();
+            if let Some(self_param_type) = &fn_cheats.self_param_type {
+                let fn_info = &fn_info[*fn_id];
+                let ty =
+                    &mut mir.functions[*fn_id].borrow_mut().locals[fn_info.self_param.unwrap()].ty;
+                *ty = match self_param_type {
+                    CheatParamType::Patch => MirType::Machine(NetlogoMachineType::PATCH_ID),
+                    CheatParamType::Turtle => MirType::Machine(NetlogoMachineType::TURTLE_ID),
+                }
+            }
+        }
+    }
+
+    // TODO add types of variables
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1030,12 +1171,12 @@ mod tests {
 
         let json = include_str!("../../bench/models/ants/ast.json");
         let json: JsonValue = serde_json::from_str(json).unwrap();
-        let mir = ast_to_mir(&json).unwrap();
+        let ParseResult { program, .. } = ast_to_mir(&json).unwrap();
 
-        let debug_output = format!("{:#?}", mir);
+        let debug_output = format!("{:#?}", program);
         std::fs::write("mir_debug.txt", debug_output).expect("Failed to write MIR debug output");
 
-        for (fn_id, function) in mir.functions {
+        for (fn_id, function) in program.functions {
             let function = function.borrow();
             let dot_string = function.to_dot_string_with_options(false);
             let filename =
