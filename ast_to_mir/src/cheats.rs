@@ -14,19 +14,16 @@ use serde::Deserialize;
 use crate::{FnInfo, GlobalNames};
 
 #[derive(Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum CheatVarType {
-    #[serde(rename = "float")]
     Float,
-    #[serde(rename = "boolean")]
     Boolean,
 }
 
 #[derive(Deserialize, Debug)]
-#[serde(tag = "type")]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum CheatPatchSchema {
-    #[serde(rename = "default")]
     Default,
-    #[serde(rename = "ctor")]
     Ctor(CheatPatchSchemaCtor),
 }
 
@@ -38,18 +35,16 @@ pub struct CheatPatchSchemaCtor {
 }
 
 #[derive(Deserialize, Debug)]
-#[serde(tag = "type")]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum CheatTurtleSchema {
-    #[serde(rename = "default")]
     Default,
     // TODO add ctor type
 }
 
 #[derive(Deserialize, Debug)]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum CheatSelfParamType {
-    #[serde(rename = "patch")]
     Patch,
-    #[serde(rename = "turtle")]
     Turtle,
 }
 
