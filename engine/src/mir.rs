@@ -20,8 +20,8 @@ use crate::{
 
 mod build_lir;
 mod graphviz;
-pub mod lowering;
 pub mod node;
+pub mod transforms;
 
 pub use build_lir::{HostFunctionIds, LirProgramBuilder, mir_to_lir};
 
@@ -264,5 +264,56 @@ impl NetlogoAbstractType {
             Self::Closure { return_ty } => todo!(),
             Self::List { element_ty } => todo!(),
         }
+    }
+}
+
+pub trait MirVisitor {
+    fn visit_statement(&mut self, statement: &StatementKind) {
+        let _ = statement;
+    }
+
+    fn visit_node(&mut self, node_id: NodeId) {
+        let _ = node_id;
+    }
+}
+
+pub fn visit_mir_function<V: MirVisitor>(visitor: &mut V, function: &Function) {
+    visit_statement_block_recursive(visitor, &function.cfg, &function.nodes);
+}
+
+fn visit_statement_block_recursive<V: MirVisitor>(
+    visitor: &mut V,
+    statement_block: &StatementBlock,
+    nodes: &RefCell<Nodes>,
+) {
+    for statement in &statement_block.statements {
+        visitor.visit_statement(statement);
+        match statement {
+            StatementKind::Node(node_id) => visit_node_recursive(visitor, *node_id, nodes),
+            StatementKind::IfElse { condition, then_block, else_block } => {
+                visit_node_recursive(visitor, *condition, nodes);
+                visit_statement_block_recursive(visitor, then_block, nodes);
+                visit_statement_block_recursive(visitor, else_block, nodes);
+            }
+            StatementKind::Repeat { num_repetitions, block } => {
+                visit_node_recursive(visitor, *num_repetitions, nodes);
+                visit_statement_block_recursive(visitor, block, nodes);
+            }
+            StatementKind::Return { value } => {
+                visit_node_recursive(visitor, *value, nodes);
+            }
+            StatementKind::Stop => {
+                // do nothing
+            }
+        }
+    }
+}
+
+fn visit_node_recursive<V: MirVisitor>(visitor: &mut V, node_id: NodeId, nodes: &RefCell<Nodes>) {
+    visitor.visit_node(node_id);
+
+    let dependencies = nodes.borrow()[node_id].dependencies();
+    for dependency in dependencies {
+        visit_node_recursive(visitor, dependency, nodes);
     }
 }

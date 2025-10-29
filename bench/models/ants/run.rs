@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use ast_to_mir::{ParseResult, add_cheats, serde_json, write_dot};
 use engine::{
-    mir::lowering::lower,
+    mir::transforms::{lower, transform},
     sim::{
         agent_schema::{PatchSchema, TurtleSchema},
         patch::Patches,
@@ -96,10 +96,11 @@ fn main() {
 
     for (fn_id, function) in &program.functions {
         info!(
-            "lowering function {} {}",
+            "transforming function {} {}",
             fn_id,
             function.borrow().debug_name.as_deref().unwrap_or_default()
         );
+        transform(&mut function.borrow_mut(), &program);
         lower(&mut function.borrow_mut(), &program);
     }
 
