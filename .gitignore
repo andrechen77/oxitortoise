@@ -1,3 +1,4 @@
-/target
 /.cargo
+/dots
+/target
 output

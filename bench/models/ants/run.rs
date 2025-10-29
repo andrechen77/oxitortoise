@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use ast_to_mir::{ParseResult, add_cheats, serde_json};
+use ast_to_mir::{ParseResult, add_cheats, serde_json, write_dot};
 use engine::{
     mir::lowering::lower,
     sim::{
@@ -86,14 +86,7 @@ fn main() {
     let ParseResult { mut program, global_names, fn_info } = ast_to_mir::ast_to_mir(&ast).unwrap();
 
     for (fn_id, function) in &program.functions {
-        let function = function.borrow();
-        let dot_string = function.to_dot_string_with_options(false);
-        let filename = format!(
-            "{}-{:?}-original.dot",
-            fn_id,
-            function.debug_name.as_deref().unwrap_or("unnamed")
-        );
-        std::fs::write(filename, dot_string).expect("Failed to write DOT file");
+        write_dot(fn_id, &*function.borrow());
     }
 
     info!("applying cheats");
@@ -111,13 +104,6 @@ fn main() {
     }
 
     for (fn_id, function) in &program.functions {
-        let function = function.borrow();
-        let dot_string = function.to_dot_string_with_options(false);
-        let filename = format!(
-            "{}-{:?}-lowered.dot",
-            fn_id,
-            function.debug_name.as_deref().unwrap_or("unnamed")
-        );
-        std::fs::write(filename, dot_string).expect("Failed to write DOT file");
+        write_dot(fn_id, &*function.borrow());
     }
 }

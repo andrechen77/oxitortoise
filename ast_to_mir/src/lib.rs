@@ -1,6 +1,7 @@
 // #![feature(if_let_guard)]
 
-use std::{collections::HashMap, rc::Rc};
+use std::{collections::HashMap, fs, rc::Rc};
+use std::path::Path;
 
 use engine::{
     mir::{
@@ -1041,6 +1042,24 @@ fn eval_ephemeral_closure(
     }))
 }
 
+#[instrument(skip_all)]
+pub fn write_dot(
+    fn_id: FunctionId,
+    function: &Function,
+) {
+
+    let dot_string = function.to_dot_string_with_options(false);
+    let filename = format!("dots/{}-{:?}.dot", fn_id, function.debug_name.as_deref().unwrap_or("unnamed"));
+    trace!("Writing DOT file for function {:?}: {}", fn_id, filename);
+
+    if let Some(parent) = Path::new(&filename).parent() {
+        fs::create_dir_all(parent);
+    }
+
+    fs::write(filename, dot_string).expect("Failed to write DOT file");
+
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1057,12 +1076,7 @@ mod tests {
         std::fs::write("mir_debug.txt", debug_output).expect("Failed to write MIR debug output");
 
         for (fn_id, function) in program.functions {
-            let function = function.borrow();
-            let dot_string = function.to_dot_string_with_options(false);
-            let filename =
-                format!("{}-{:?}.dot", fn_id, function.debug_name.as_deref().unwrap_or("unnamed"));
-            trace!("Writing DOT file for function {:?}: {}", fn_id, filename);
-            std::fs::write(filename, dot_string).expect("Failed to write DOT file");
+            write_dot(fn_id, &*function.borrow());
         }
     }
 }
