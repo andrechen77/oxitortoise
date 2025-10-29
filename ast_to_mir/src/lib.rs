@@ -595,7 +595,11 @@ fn translate_expression(expr: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) -> NodeI
             // TODO implement string constants
             Box::new(node::Constant { value: UnpackedDynBox::Float(0.0) })
         }
-        N::List { items: _ } => todo!(),
+        N::List { items } => {
+            let items =
+                items.into_iter().map(|item| translate_expression(item, ctx.reborrow())).collect();
+            Box::new(node::ListLiteral { items })
+        }
         N::Nobody => Box::new(node::Constant { value: UnpackedDynBox::Nobody }),
         N::ReporterProcCall { name, args } => {
             let referent = ctx.mir.global_names.lookup(&name).unwrap_or_else(|| {

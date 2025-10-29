@@ -61,3 +61,25 @@ impl EffectfulNode for Constant {
         }
     }
 }
+
+#[derive(Debug, Display)]
+#[display("ListLiteral {items:?}")]
+pub struct ListLiteral {
+    pub items: Vec<NodeId>,
+}
+
+impl EffectfulNode for ListLiteral {
+    fn has_side_effects(&self) -> bool {
+        false
+    }
+
+    fn dependencies(&self) -> Vec<NodeId> {
+        self.items.clone()
+    }
+
+    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirType {
+        MirType::Abstract(NetlogoAbstractType::List {
+            element_ty: Box::new(NetlogoAbstractType::Top),
+        })
+    }
+}
