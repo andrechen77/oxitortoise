@@ -232,12 +232,28 @@ impl EffectfulNode for GetPatchVar {
 
     fn lowering_expand(
         &self,
-        _my_node_id: NodeId,
-        _program: &Program,
-        _function: &Function,
-        _nodes: &RefCell<Nodes>,
+        my_node_id: NodeId,
+        program: &Program,
+        function: &Function,
+        nodes: &RefCell<Nodes>,
     ) -> bool {
-        todo!()
+        let (data_row, field_offset) = context_to_patch_data(
+            &mut nodes.borrow_mut(),
+            program,
+            self.context,
+            self.patch,
+            self.var,
+        );
+
+        // create a node to get the field
+        let field = Box::new(node::MemLoad {
+            ptr: data_row,
+            offset: field_offset,
+            ty: self.output_type(program, function, &nodes.borrow()).repr(),
+        });
+        nodes.borrow_mut()[my_node_id] = field;
+
+        true
     }
 }
 

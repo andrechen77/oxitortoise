@@ -354,26 +354,17 @@ pub fn calc_turtle_var_offset(mir: &mir::Program, var: TurtleVarDesc) -> (usize,
     }
 
     let turtle_schema = mir.turtle_schema.as_ref().unwrap();
-    let (buffer_idx, stride, field_offset) = match var {
-        TurtleVarDesc::Custom(field_id) => {
-            let field_desc = turtle_schema.custom_fields()[field_id];
-            let (stride, field_offset) = stride_and_field_offset(turtle_schema, field_desc);
-            (field_desc.buffer_idx, stride, field_offset)
-        }
-        _ => {
-            let base_data_desc = turtle_schema.base_data();
-            let (stride, field_offset) = stride_and_field_offset(turtle_schema, base_data_desc);
-            let additional_offset = match var {
-                TurtleVarDesc::Who => offset_of!(TurtleBaseData, who),
-                TurtleVarDesc::Size => offset_of!(TurtleBaseData, size),
-                TurtleVarDesc::Color => offset_of!(TurtleBaseData, color),
-                TurtleVarDesc::Custom(_) => {
-                    unreachable!("custom fields are handled separately")
-                }
-                _ => todo!(),
-            };
-            (base_data_desc.buffer_idx, stride, field_offset + additional_offset)
-        }
+    let (buffer_idx, stride, field_offset) = {
+        let (field_desc, additional_offset) = match var {
+            TurtleVarDesc::Custom(field_id) => (turtle_schema.custom_fields()[field_id], 0),
+            TurtleVarDesc::Who => (turtle_schema.base_data(), offset_of!(TurtleBaseData, who)),
+            TurtleVarDesc::Size => (turtle_schema.base_data(), offset_of!(TurtleBaseData, size)),
+            TurtleVarDesc::Color => (turtle_schema.base_data(), offset_of!(TurtleBaseData, color)),
+            TurtleVarDesc::Xcor => (turtle_schema.position(), offset_of!(Point, x)),
+            TurtleVarDesc::Ycor => (turtle_schema.position(), offset_of!(Point, y)),
+        };
+        let (stride, field_offset) = stride_and_field_offset(turtle_schema, field_desc);
+        (field_desc.buffer_idx, stride, field_offset + additional_offset)
     };
     let buffer_offset =
         offset_of!(Turtles, data) + (usize::from(buffer_idx) * size_of::<Option<RowBuffer>>());
