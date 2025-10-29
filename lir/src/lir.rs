@@ -42,7 +42,7 @@
 //! will exit the current iteration of the loop body and re-enter the loop body
 //! with the loop iteration values set to the values that were broken with.
 
-use std::{collections::HashMap, fmt::Debug, iter::Step};
+use std::{collections::HashMap, fmt::Debug};
 
 use derive_more::{Display, From, Into};
 use slotmap::{SecondaryMap, new_key_type};

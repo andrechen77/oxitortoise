@@ -1,4 +1,5 @@
-use std::{collections::HashMap, hash::Hash, iter::Step};
+use std::ops::Add;
+use std::{collections::HashMap, hash::Hash};
 
 mod macros;
 use lir::smallvec::SmallVec;
@@ -103,7 +104,7 @@ pub fn stackify_single<V, Idx>(
     outputs: SmallVec<[V; 1]>,
 ) where
     V: Copy + PartialEq + Eq + Hash,
-    Idx: PartialOrd + Ord + Copy + Step + From<usize>,
+    Idx: PartialOrd + Ord + Copy + From<usize> + Add<usize, Output = Idx>,
     usize: From<Idx>,
 {
     // The order barrier is an index into the operand stack. Only operands
@@ -220,7 +221,7 @@ pub fn stackify_single<V, Idx>(
     // at this point we have removed all inputs for the current instruction.
     // now we need to add the outputs of the current instruction to the
     // operand stack for the next instruction to potentially use
-    let succ_idx = Idx::forward(my_idx, 1);
+    let succ_idx = my_idx + 1;
     for (i, output) in outputs.iter().enumerate() {
         available_operand_stack.push(AvailOperand {
             value: *output,
@@ -258,7 +259,7 @@ pub fn remove_excess_operands<V, Idx>(
     target_idx: Idx,
 ) where
     V: Copy + PartialEq + Eq + Hash,
-    Idx: PartialOrd + Ord + Copy + Step + From<usize>,
+    Idx: PartialOrd + Ord + Copy + From<usize>,
     usize: From<Idx>,
 {
     // The general idea of the algorithm is to go through each operand and, if

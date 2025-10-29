@@ -1,4 +1,4 @@
-#![feature(if_let_guard)]
+// #![feature(if_let_guard)]
 
 use std::{collections::HashMap, rc::Rc};
 
@@ -853,42 +853,49 @@ fn eval_reporter(expr_json: &JsonObj, mut ctx: FnBodyBuilderCtx<'_>) -> NodeId {
                     let bound = eval_reporter(bound, ctx.reborrow());
                     ctx.nodes.insert(Box::new(node::RandomInt { bound }))
                 }
-                other if let Some(val) = ctx.mir.global_names.lookup(other) => match val {
-                    NameReferent::Constant(mk_node) => ctx.nodes.insert(mk_node()),
-                    NameReferent::PatchVar(var_desc) => {
-                        let context = ctx.get_context();
-                        let agent = ctx.get_self_turtle_or_patch();
-                        ctx.nodes.insert(Box::new(node::GetPatchVarAsTurtleOrPatch {
-                            context,
-                            agent,
-                            var: var_desc,
-                        }))
-                    }
-                    NameReferent::TurtleVar(var_desc) => {
-                        let context = ctx.get_context();
-                        let turtle = ctx.get_self_turtle();
-                        ctx.nodes.insert(Box::new(node::GetTurtleVar {
-                            context,
-                            turtle,
-                            var: var_desc,
-                        }))
-                    }
-                    NameReferent::UserProc(fn_id) => {
-                        // eagerly evaluate all arguments
-                        let evaled_args = args
-                            .iter()
-                            .map(|&arg| eval_reporter(arg, ctx.reborrow()))
-                            .collect::<Vec<_>>();
+                // TODO use if_let_guard once stabilized
+                other if ctx.mir.global_names.lookup(other).is_some() => {
+                    match ctx.mir.global_names.lookup(other).unwrap() {
+                        NameReferent::Constant(mk_node) => ctx.nodes.insert(mk_node()),
+                        NameReferent::PatchVar(var_desc) => {
+                            let context = ctx.get_context();
+                            let agent = ctx.get_self_turtle_or_patch();
+                            ctx.nodes.insert(Box::new(node::GetPatchVarAsTurtleOrPatch {
+                                context,
+                                agent,
+                                var: var_desc,
+                            }))
+                        }
+                        NameReferent::TurtleVar(var_desc) => {
+                            let context = ctx.get_context();
+                            let turtle = ctx.get_self_turtle();
+                            ctx.nodes.insert(Box::new(node::GetTurtleVar {
+                                context,
+                                turtle,
+                                var: var_desc,
+                            }))
+                        }
+                        NameReferent::UserProc(fn_id) => {
+                            // eagerly evaluate all arguments
+                            let evaled_args = args
+                                .iter()
+                                .map(|&arg| eval_reporter(arg, ctx.reborrow()))
+                                .collect::<Vec<_>>();
 
-                        ctx.nodes
-                            .insert(Box::new(node::CallUserFn { target: fn_id, args: evaled_args }))
+                            ctx.nodes.insert(Box::new(node::CallUserFn {
+                                target: fn_id,
+                                args: evaled_args,
+                            }))
+                        }
+                        referent => {
+                            error!("reporter has referent: {:?}", referent);
+                            todo!("reporter has referent: {:?}", referent);
+                        }
                     }
-                    referent => {
-                        error!("reporter has referent: {:?}", referent);
-                        todo!("reporter has referent: {:?}", referent);
-                    }
-                },
-                other if let Some(local_id) = ctx.mir.fn_info[ctx.fn_id].local_names.get(other) => {
+                }
+                // TODO use if_let_guard once stabilized
+                other if ctx.mir.fn_info[ctx.fn_id].local_names.get(other).is_some() => {
+                    let local_id = ctx.mir.fn_info[ctx.fn_id].local_names.get(other).unwrap();
                     ctx.nodes.insert(Box::new(node::GetLocalVar { local_id: *local_id }))
                 }
                 _ => unreachable!("unknown reporter: {}", reporter_name),

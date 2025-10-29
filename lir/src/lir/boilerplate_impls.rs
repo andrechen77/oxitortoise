@@ -1,22 +1,28 @@
-use std::fmt::Display;
+use std::{fmt::Display, ops::Add};
 
 use super::*;
+
+// TODO for all display impls, use debug_closure_helpers once stabilized. see
+// how the code looked in 4e8f50af940c6cacd4bb5511ad156093f0da4e7b
 
 impl Display for Program {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let Program { entrypoints, user_functions, host_functions } = self;
-        f.debug_struct("Program")
-            .field("entrypoints", entrypoints)
-            .field("host_functions", host_functions)
-            .field_with("user_functions", |f| {
-                let mut list = f.debug_map();
-                for (id, func) in user_functions {
-                    list.key(&id);
-                    list.value_with(|f| <Function as Display>::fmt(func, f));
-                }
-                list.finish()
-            })
-            .finish()
+        write!(f, "Program {{ entrypoints: ")?;
+        entrypoints.fmt(f)?;
+        write!(f, ", host_functions: ")?;
+        host_functions.fmt(f)?;
+        write!(f, ", user_functions: {{")?;
+        let mut iter = user_functions.iter();
+        if let Some((id, func)) = iter.next() {
+            write!(f, "{:?}: ", id)?;
+            <Function as Display>::fmt(func, f)?;
+            for (id, func) in iter {
+                write!(f, ", {:?}: ", id)?;
+                <Function as Display>::fmt(func, f)?;
+            }
+        }
+        write!(f, "}} }}")
     }
 }
 
@@ -32,43 +38,56 @@ impl Display for Function {
             debug_val_names,
             debug_var_names,
         } = self;
-        f.debug_struct("Function")
-            .field("local_vars", local_vars)
-            .field("num_parameters", num_parameters)
-            .field("stack_space", stack_space)
-            .field("body", body)
-            .field_with("insn_seqs", |f| {
-                let mut map = f.debug_map();
-                for (insn_seq_id, insn_seq) in insn_seqs.iter_enumerated() {
-                    map.key(&insn_seq_id);
-                    map.value_with(|f| {
-                        let mut map = f.debug_map();
-                        for (insn_idx, insn) in insn_seq.iter_enumerated() {
-                            map.key(&insn_idx);
-                            map.value_with(|f| <InsnKind as Display>::fmt(insn, f));
-                        }
-                        map.finish()
-                    });
+        write!(f, "Function {{ local_vars: ")?;
+        local_vars.fmt(f)?;
+        write!(f, ", num_parameters: ")?;
+        write!(f, "{}", num_parameters)?;
+        write!(f, ", stack_space: ")?;
+        write!(f, "{}", stack_space)?;
+        write!(f, ", body: ")?;
+        write!(f, "{}", body)?;
+        write!(f, ", insn_seqs: {{")?;
+        let mut iter = insn_seqs.iter_enumerated();
+        if let Some((insn_seq_id, insn_seq)) = iter.next() {
+            write!(f, "{:?}: {{", insn_seq_id)?;
+            let mut inner_iter = insn_seq.iter_enumerated();
+            if let Some((insn_idx, insn)) = inner_iter.next() {
+                write!(f, "{:?}: ", insn_idx)?;
+                <InsnKind as Display>::fmt(insn, f)?;
+                for (insn_idx, insn) in inner_iter {
+                    write!(f, ", {:?}: ", insn_idx)?;
+                    <InsnKind as Display>::fmt(insn, f)?;
                 }
-                map.finish()
-            })
-            .field("debug_fn_name", debug_fn_name)
-            .field("debug_val_names", debug_val_names)
-            .field("debug_var_names", debug_var_names)
-            .finish()
+            }
+            write!(f, "}}")?;
+            for (insn_seq_id, insn_seq) in iter {
+                write!(f, ", {:?}: {{", insn_seq_id)?;
+                let mut inner_iter = insn_seq.iter_enumerated();
+                if let Some((insn_idx, insn)) = inner_iter.next() {
+                    write!(f, "{:?}: ", insn_idx)?;
+                    <InsnKind as Display>::fmt(insn, f)?;
+                    for (insn_idx, insn) in inner_iter {
+                        write!(f, ", {:?}: ", insn_idx)?;
+                        <InsnKind as Display>::fmt(insn, f)?;
+                    }
+                }
+                write!(f, "}}")?;
+            }
+        }
+        write!(f, "}}, debug_fn_name: ")?;
+        debug_fn_name.fmt(f)?;
+        write!(f, ", debug_val_names: ")?;
+        debug_val_names.fmt(f)?;
+        write!(f, ", debug_var_names: ")?;
+        debug_var_names.fmt(f)?;
+        write!(f, " }}")
     }
 }
 
-impl Step for InsnIdx {
-    fn steps_between(start: &Self, end: &Self) -> (usize, Option<usize>) {
-        (end.0 - start.0, Some(end.0 - start.0))
-    }
+impl Add<usize> for InsnIdx {
+    type Output = Self;
 
-    fn forward_checked(start: Self, count: usize) -> Option<Self> {
-        Some(InsnIdx(start.0.checked_add(count)?))
-    }
-
-    fn backward_checked(start: Self, count: usize) -> Option<Self> {
-        Some(InsnIdx(start.0.checked_sub(count)?))
+    fn add(self, rhs: usize) -> Self::Output {
+        InsnIdx(self.0 + rhs)
     }
 }

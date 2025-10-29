@@ -360,14 +360,30 @@ pub struct RowBuffer {
 impl RowBuffer {
     fn make_byte_buffer(schema: &RowSchema, num_rows: usize) -> AlignedBytes {
         //  the layout of all the rows at once
+        /*
+        // only usable once alloc_layout_extra is stabilized
         let (total_layout, stride) = schema
             .layout
             .repeat(num_rows)
             .expect("if we overflow on a layout calculate we're in bigger trouble");
+        */
+
+        let mut total_layout = schema.layout;
+        let mut stride = None;
+        for _ in 1..num_rows {
+            let (l, s) = total_layout
+                .extend(schema.layout)
+                .expect("if we overflow on layout calculation we're in bigger trouble");
+            total_layout = l;
+            if let Some(stride) = stride {
+                assert!(s == stride);
+            }
+            stride = Some(s);
+        }
 
         // this must be true because we use layout size as the stride in
         // other methods
-        assert!(schema.layout.size() == stride);
+        assert!(schema.layout.size() == stride.unwrap());
 
         AlignedBytes::new(total_layout)
     }
