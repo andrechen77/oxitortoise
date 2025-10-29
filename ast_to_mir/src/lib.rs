@@ -709,9 +709,10 @@ fn translate_expression(expr: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) -> NodeI
         }
         N::ReporterCall(R::MaxPxcor([])) => Box::new(node::MaxPxcor { context: ctx.get_context() }),
         N::ReporterCall(R::MaxPycor([])) => Box::new(node::MaxPycor { context: ctx.get_context() }),
-        // TODO handle one-of reporter
-        N::ReporterCall(R::OneOf([_choices])) => {
-            Box::new(node::Constant { value: UnpackedDynBox::Float(1.0) })
+        N::ReporterCall(R::OneOf([xs])) => {
+            let context = ctx.get_context();
+            let xs = translate_expression(*xs, ctx.reborrow());
+            Box::new(node::OneOf { context, xs })
         }
         N::ReporterCall(R::ScaleColor([color, number, range1, range2])) => {
             let color = translate_expression(*color, ctx.reborrow());

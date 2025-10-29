@@ -667,6 +667,38 @@ impl EffectfulNode for MaxPycor {
     }
 }
 
+#[derive(Debug, Display)]
+#[display("OneOf")]
+pub struct OneOf {
+    pub context: NodeId,
+    pub xs: NodeId,
+}
+
+impl EffectfulNode for OneOf {
+    fn has_side_effects(&self) -> bool {
+        true
+    }
+
+    fn dependencies(&self) -> Vec<NodeId> {
+        vec![self.context, self.xs]
+    }
+
+    fn output_type(
+        &self,
+        _program: &crate::mir::Program,
+        _function: &crate::mir::Function,
+        _nodes: &crate::mir::Nodes,
+    ) -> MirType {
+        let out_type = match _nodes[self.xs].output_type(_program, _function, _nodes) {
+            MirType::Abstract(NetlogoAbstractType::Agentset { agent_type }) => agent_type,
+            MirType::Abstract(NetlogoAbstractType::List { element_ty }) => element_ty,
+            x => panic!("Impossible argument type for `one-of`: {:?}", x),
+        };
+
+        MirType::Abstract(*out_type)
+    }
+}
+
 /// https://docs.netlogo.org/dict/scale-color.html
 #[derive(Debug, Display)]
 #[display("ScaleColor")]
