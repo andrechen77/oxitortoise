@@ -1053,7 +1053,9 @@ pub fn write_dot(
     trace!("Writing DOT file for function {:?}: {}", fn_id, filename);
 
     if let Some(parent) = Path::new(&filename).parent() {
-        fs::create_dir_all(parent);
+        if let Err(e) = fs::create_dir_all(parent) {
+            panic!("Failed to create parent directory for {} | {:?}", filename, e);
+        }
     }
 
     fs::write(filename, dot_string).expect("Failed to write DOT file");
