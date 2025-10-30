@@ -11,7 +11,7 @@ use engine::{
 };
 use serde::Deserialize;
 
-use crate::{FnInfo, GlobalNames};
+use crate::{FnInfo, GlobalScope};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -64,7 +64,7 @@ pub struct Cheats {
 pub fn add_cheats(
     cheats: &Cheats,
     mir: &mut mir::Program,
-    global_names: &GlobalNames,
+    global_names: &GlobalScope,
     fn_info: &SecondaryMap<FunctionId, FnInfo>,
 ) {
     fn translate_var_type_name(var_type: &CheatVarType) -> NetlogoAbstractType {

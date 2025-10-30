@@ -442,6 +442,8 @@ impl EffectfulNode for TurtleForward {
 #[derive(Debug, Display)]
 #[display("CanMove")]
 pub struct CanMove {
+    /// The execution context to use.
+    pub context: NodeId,
     /// The turtle to check movement for
     pub turtle: NodeId,
     /// The distance to check
@@ -454,7 +456,7 @@ impl EffectfulNode for CanMove {
     }
 
     fn dependencies(&self) -> Vec<NodeId> {
-        vec![self.turtle, self.distance]
+        vec![self.context, self.turtle, self.distance]
     }
 
     fn output_type(
@@ -485,6 +487,8 @@ pub enum PatchLocRelation {
 #[derive(Debug, Display)]
 #[display("PatchNearby {relative_loc:?}")]
 pub struct PatchRelative {
+    /// The execution context to use.
+    pub context: NodeId,
     /// The location to check relative to the patch
     pub relative_loc: PatchLocRelation,
     /// The turtle to check from
@@ -501,7 +505,7 @@ impl EffectfulNode for PatchRelative {
     }
 
     fn dependencies(&self) -> Vec<NodeId> {
-        vec![self.turtle, self.distance, self.heading]
+        vec![self.context, self.turtle, self.distance, self.heading]
     }
 
     fn output_type(
@@ -696,6 +700,8 @@ impl EffectfulNode for ScaleColor {
 #[derive(Debug, Display)]
 #[display("RandomInt")]
 pub struct RandomInt {
+    /// The execution context to use.
+    pub context: NodeId,
     pub bound: NodeId,
 }
 
@@ -705,7 +711,7 @@ impl EffectfulNode for RandomInt {
     }
 
     fn dependencies(&self) -> Vec<NodeId> {
-        vec![self.bound]
+        vec![self.context, self.bound]
     }
 
     fn output_type(
@@ -715,5 +721,33 @@ impl EffectfulNode for RandomInt {
         _nodes: &crate::mir::Nodes,
     ) -> MirType {
         MirType::Abstract(NetlogoAbstractType::Integer)
+    }
+}
+
+#[derive(Debug, Display)]
+#[display("SetDefaultShape")]
+pub struct SetDefaultShape {
+    /// The breed to set the default shape for.
+    pub breed: NodeId,
+    /// The shape to set.
+    pub shape: NodeId,
+}
+
+impl EffectfulNode for SetDefaultShape {
+    fn has_side_effects(&self) -> bool {
+        true
+    }
+
+    fn dependencies(&self) -> Vec<NodeId> {
+        vec![self.breed, self.shape]
+    }
+
+    fn output_type(
+        &self,
+        _program: &crate::mir::Program,
+        _function: &crate::mir::Function,
+        _nodes: &crate::mir::Nodes,
+    ) -> MirType {
+        MirType::Abstract(NetlogoAbstractType::Unit)
     }
 }

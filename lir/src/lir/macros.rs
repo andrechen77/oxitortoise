@@ -11,7 +11,7 @@ macro_rules! push_node {
             })
         );
         let $val_ref = $crate::ValRef($crate::InsnPc($ctx.1, insn_idx), 0);
-        $ctx.2.insert($val_ref, stringify!($val_ref).to_string());
+        $ctx.2.insert($val_ref, stringify!($val_ref).into());
     };
     ($ctx:expr; [$val_ref:ident] = user_fn_ptr($function:ident)) => {
         let insn_idx = $ctx.0[$ctx.1].push_and_get_key(
@@ -20,7 +20,7 @@ macro_rules! push_node {
             }
         );
         let $val_ref = $crate::ValRef($crate::InsnPc($ctx.1, insn_idx), 0);
-        $ctx.2.insert($val_ref, stringify!($val_ref).to_string());
+        $ctx.2.insert($val_ref, stringify!($val_ref).into());
     };
     ($ctx:expr; [$val_ref:ident] = loop_argument($initial_value:ident)) => {
         let insn_idx = $ctx.0[$ctx.1].push_and_get_key(
@@ -29,7 +29,7 @@ macro_rules! push_node {
             }
         );
         let $val_ref = $crate::ValRef($crate::InsnPc($ctx.1, insn_idx), 0);
-        $ctx.2.insert($val_ref, stringify!($val_ref).to_string());
+        $ctx.2.insert($val_ref, stringify!($val_ref).into());
     };
     ($ctx:expr; [$val_ref:ident] = derive_field($offset:expr)(
         $ptr_ident:ident $(($($ptr_param:tt)*))* $(,)?
@@ -43,7 +43,7 @@ macro_rules! push_node {
             }
         );
         let $val_ref = $crate::ValRef($crate::InsnPc($ctx.1, insn_idx), 0);
-        $ctx.2.insert($val_ref, stringify!($val_ref).to_string());
+        $ctx.2.insert($val_ref, stringify!($val_ref).into());
     };
     ($ctx:expr; [$val_ref:ident] = derive_element($element_size:expr)(
         $ptr_ident:ident $(($($ptr_param:tt)*))*,
@@ -60,7 +60,7 @@ macro_rules! push_node {
             }
         );
         let $val_ref = $crate::ValRef($crate::InsnPc($ctx.1, insn_idx), 0);
-        $ctx.2.insert($val_ref, stringify!($val_ref).to_string());
+        $ctx.2.insert($val_ref, stringify!($val_ref).into());
     };
     ($ctx:expr; [$val_ref:ident] = var_load($var_id:expr)) => {
         let insn_idx = $ctx.0[$ctx.1].push_and_get_key(
@@ -69,7 +69,7 @@ macro_rules! push_node {
             },
         );
         let $val_ref = $crate::ValRef($crate::InsnPc($ctx.1, insn_idx), 0);
-        $ctx.2.insert($val_ref, stringify!($val_ref).to_string());
+        $ctx.2.insert($val_ref, stringify!($val_ref).into());
     };
     ($ctx:expr; var_store($var_id:expr)(
         $value_ident:ident $(($($value_param:tt)*))*
@@ -94,7 +94,7 @@ macro_rules! push_node {
             }
         );
         let $val_ref = $crate::ValRef($crate::InsnPc($ctx.1, insn_idx), 0);
-        $ctx.2.insert($val_ref, stringify!($val_ref).to_string());
+        $ctx.2.insert($val_ref, stringify!($val_ref).into());
     };
     ($ctx:expr; mem_store($offset:expr)(
         $ptr_ident:ident $(($($ptr_param:tt)*))*,
@@ -117,7 +117,7 @@ macro_rules! push_node {
             }
         );
         let $val_ref = $crate::ValRef($crate::InsnPc($ctx.1, insn_idx), 0);
-        $ctx.2.insert($val_ref, stringify!($val_ref).to_string());
+        $ctx.2.insert($val_ref, stringify!($val_ref).into());
     };
     ($ctx:expr; stack_store($offset:expr)(
         $value_ident:ident $(($($value_param:tt)*))* $(,)?
@@ -132,7 +132,7 @@ macro_rules! push_node {
     ($ctx:expr; [$val_ref:ident] = stack_addr($offset:expr)) => {
         let insn_idx = $ctx.0[$ctx.1].push_and_get_key($crate::InsnKind::StackAddr { offset: $offset });
         let $val_ref = $crate::ValRef($crate::InsnPc($ctx.1, insn_idx), 0);
-        $ctx.2.insert($val_ref, stringify!($val_ref).to_string());
+        $ctx.2.insert($val_ref, stringify!($val_ref).into());
     };
     ($ctx:expr; [$($val_ref:ident),*] = call_host_fn($function:ident -> [$($return_ty:ident),*])(
         $(
@@ -161,7 +161,7 @@ macro_rules! push_node {
             let j = i;
             i += 1;
             let v = $crate::ValRef($crate::InsnPc($ctx.1, insn_idx), j);
-            $ctx.2.insert(v, stringify!($val_ref).to_string());
+            $ctx.2.insert(v, stringify!($val_ref).into());
             v
         }),*);
     };
@@ -191,7 +191,7 @@ macro_rules! push_node {
             let j = i;
             i += 1;
             let v = $crate::ValRef($crate::InsnPc($ctx.1, insn_idx), j);
-            $ctx.2.insert(v, stringify!($val_ref).to_string());
+            $ctx.2.insert(v, stringify!($val_ref).into());
             v
         }),*);
     };
@@ -208,7 +208,7 @@ macro_rules! push_node {
         );
 
         let $val_ref = $crate::ValRef($crate::InsnPc($ctx.1, insn_idx), 0);
-        $ctx.2.insert($val_ref, stringify!($val_ref).to_string());
+        $ctx.2.insert($val_ref, stringify!($val_ref).into());
     };
     ($ctx:expr; [$val_ref:ident] = $binary_op:ident(
         $lhs_ident:ident $(($($lhs_param:tt)*))*,
@@ -226,7 +226,7 @@ macro_rules! push_node {
         );
 
         let $val_ref = $crate::ValRef($crate::InsnPc($ctx.1, insn_idx), 0);
-        $ctx.2.insert($val_ref, stringify!($val_ref).to_string());
+        $ctx.2.insert($val_ref, stringify!($val_ref).into());
     };
     ($ctx:expr; break_($target:expr)(
         $($value_ident:ident $(($($value_param:tt)*))*),* $(,)?
@@ -278,7 +278,7 @@ macro_rules! push_node {
             let j = i;
             i += 1;
             let v = $crate::ValRef($crate::InsnPc($ctx.1, insn_idx), j);
-            $ctx.2.insert(v, stringify!($val_ref).to_string());
+            $ctx.2.insert(v, stringify!($val_ref).into());
             v
         }),*];
     };
@@ -307,7 +307,7 @@ macro_rules! push_node {
             let j = i;
             i += 1;
             let v = $crate::ValRef($crate::InsnPc($ctx.1, insn_idx), j);
-            $ctx.2.insert(v, stringify!($val_ref).to_string());
+            $ctx.2.insert(v, stringify!($val_ref).into());
             v
         }),*);
     };
@@ -337,16 +337,16 @@ macro_rules! lir_function {
         $label:ident: { $($inner:tt)* }
     ) => {
         let mut i = 0;
-        let mut debug_var_names: std::collections::HashMap<$crate::VarId, String> = std::collections::HashMap::new();
+        let mut debug_var_names: std::collections::HashMap<$crate::VarId, std::rc::Rc<str>> = std::collections::HashMap::new();
         $(
             let $param_name: $crate::VarId = i.into();
-            debug_var_names.insert($param_name, stringify!($param_name).to_string());
+            debug_var_names.insert($param_name, stringify!($param_name).into());
             i += 1;
         )*
         let num_parameters = i;
         $(
             let $var_name: $crate::VarId = i.into();
-            debug_var_names.insert($var_name, stringify!($var_name).to_string());
+            debug_var_names.insert($var_name, stringify!($var_name).into());
             i += 1;
         )*
 
@@ -369,7 +369,7 @@ macro_rules! lir_function {
                 body: $crate::InsnSeqId(0),
             },
             insn_seqs,
-            debug_fn_name: Some(stringify!($func).to_string()),
+            debug_fn_name: Some(stringify!($func).into()),
             debug_val_names,
             debug_var_names,
         };

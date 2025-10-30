@@ -174,7 +174,7 @@ fn add_function<A: FnTableSlotAllocator>(
     let mut function =
         walrus::FunctionBuilder::new(&mut mod_ctx.module.types, &parameter_types, &return_types);
     if let Some(debug_fn_name) = &func.debug_fn_name {
-        function.name(debug_fn_name.clone());
+        function.name(debug_fn_name.to_string());
     }
 
     // add stack pointer if needed
@@ -530,7 +530,7 @@ fn add_function<A: FnTableSlotAllocator>(
     fn allocate_local_for_val<A>(ctx: &mut CodegenFnCtx<A>, val: lir::ValRef) -> wir::LocalId {
         let local_id = ctx.mod_ctx.module.locals.add(translate_val_type(ctx.types[&val]));
         if let Some(name) = ctx.func.debug_val_names.get(&val) {
-            ctx.mod_ctx.module.locals.get_mut(local_id).name = Some(name.clone());
+            ctx.mod_ctx.module.locals.get_mut(local_id).name = Some(name.to_string());
         }
         ctx.val_local_ids.insert(val, local_id);
         local_id
@@ -539,7 +539,7 @@ fn add_function<A: FnTableSlotAllocator>(
         let local_id =
             ctx.mod_ctx.module.locals.add(translate_val_type(ctx.func.local_vars[var_id]));
         if let Some(name) = ctx.func.debug_var_names.get(&var_id) {
-            ctx.mod_ctx.module.locals.get_mut(local_id).name = Some(name.clone());
+            ctx.mod_ctx.module.locals.get_mut(local_id).name = Some(name.to_string());
         }
         ctx.var_local_ids.insert(var_id, local_id);
         local_id

@@ -83,7 +83,7 @@ fn main() {
 
     let ast = include_str!("ast.json");
     let ast = serde_json::from_str(ast).unwrap();
-    let ParseResult { mut program, global_names, fn_info } = ast_to_mir::ast_to_mir(&ast).unwrap();
+    let ParseResult { mut program, global_names, fn_info } = ast_to_mir::ast_to_mir(ast).unwrap();
 
     for (fn_id, function) in &program.functions {
         write_dot(fn_id, &*function.borrow());

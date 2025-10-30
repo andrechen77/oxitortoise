@@ -1,7 +1,7 @@
-// #![feature(if_let_guard)]
+// #![feature(if_let_guard, slice_as_array)]
 
-use std::{collections::HashMap, fs, rc::Rc};
 use std::path::Path;
+use std::{collections::HashMap, fs, rc::Rc};
 
 use engine::{
     mir::{
@@ -18,23 +18,22 @@ use engine::{
     slotmap::{SecondaryMap, SlotMap},
     util::cell::RefCell,
 };
-use serde::Deserialize;
-use serde_json::{Value as JsonValue, json};
 use tracing::{Span, error, instrument, trace};
 
 pub extern crate serde_json;
 
+mod ast;
 mod cheats;
 
 pub use cheats::add_cheats;
 
-type JsonObj = serde_json::Map<String, JsonValue>;
+use crate::ast::Ast;
 
 // TODO this should work with local variables too
 #[derive(Debug)]
-pub struct GlobalNames {
+pub struct GlobalScope {
     constants: HashMap<&'static str, fn() -> Box<dyn EffectfulNode>>,
-    globals: HashMap<Rc<str>, GlobalId>,
+    global_vars: HashMap<Rc<str>, GlobalId>,
     patch_vars: HashMap<Rc<str>, PatchVarDesc>,
     turtle_vars: HashMap<Rc<str>, TurtleVarDesc>,
     turtle_breeds: HashMap<Option<Rc<str>>, BreedId>,
@@ -52,7 +51,7 @@ enum NameReferent {
     UserProc(FunctionId),
 }
 
-impl GlobalNames {
+impl GlobalScope {
     fn with_builtins(default_turtle_breed: BreedId) -> Self {
         Self {
             constants: HashMap::from([
@@ -77,7 +76,7 @@ impl GlobalNames {
                 ("TURTLES", || Box::new(node::Agentset::AllTurtles)),
                 ("PATCHES", || Box::new(node::Agentset::AllPatches)),
             ]),
-            globals: HashMap::new(),
+            global_vars: HashMap::new(),
             patch_vars: HashMap::from([(Rc::from("PCOLOR"), PatchVarDesc::Pcolor)]),
             turtle_vars: HashMap::from([
                 (Rc::from("WHO"), TurtleVarDesc::Who),
@@ -90,7 +89,14 @@ impl GlobalNames {
     }
 
     fn lookup(&self, name: &str) -> Option<NameReferent> {
-        let Self { constants, globals, patch_vars, turtle_vars, turtle_breeds, functions } = self;
+        let Self {
+            constants,
+            global_vars: globals,
+            patch_vars,
+            turtle_vars,
+            turtle_breeds,
+            functions,
+        } = self;
         if let Some(mk_node) = constants.get(name) {
             return Some(NameReferent::Constant(*mk_node));
         }
@@ -120,100 +126,110 @@ struct MirBuilder {
     turtle_breeds: SlotMap<BreedId, ()>,
     functions: SlotMap<FunctionId, Function>,
     fn_info: SecondaryMap<FunctionId, FnInfo>,
-    global_names: GlobalNames,
+    global_names: GlobalScope,
 }
 
 pub struct ParseResult {
     pub program: mir::Program,
-    pub global_names: GlobalNames,
+    pub global_names: GlobalScope,
     pub fn_info: SecondaryMap<FunctionId, FnInfo>,
 }
 
-pub fn ast_to_mir(ast: &JsonValue) -> anyhow::Result<ParseResult> {
+pub fn ast_to_mir(ast: Ast) -> anyhow::Result<ParseResult> {
     trace!("Starting AST to MIR conversion");
-    let root = ast.as_object().unwrap();
 
-    let mut globals: SlotMap<GlobalId, ()> = SlotMap::with_key();
+    let mut global_vars: SlotMap<GlobalId, ()> = SlotMap::with_key();
     let mut custom_patch_vars = Vec::new();
     let mut custom_turtle_vars = Vec::new();
 
     let mut turtle_breeds: SlotMap<BreedId, ()> = SlotMap::with_key();
     let default_turtle_breed = turtle_breeds.insert(());
 
-    let mut global_names = GlobalNames::with_builtins(default_turtle_breed);
+    let mut global_scope = GlobalScope::with_builtins(default_turtle_breed);
     trace!("Initialized name scope with builtins");
 
-    let meta_vars = root["metaVars"].as_object().unwrap();
-    // add global variables
-    for global in meta_vars["globals"].as_array().unwrap() {
-        let global_name = global.as_str().unwrap();
-        let global_id = globals.insert(());
-        global_names.globals.insert(Rc::from(global_name), global_id);
-        trace!("Added global variable `{}` with id {:?}", global_name, global_id);
+    let Ast { global_names, procedures } = ast;
+
+    let ast::GlobalNames {
+        global_vars: global_var_names,
+        turtle_vars: turtle_var_names,
+        patch_vars: patch_var_names,
+        link_vars: link_var_names,
+    } = global_names;
+
+    for global_name in global_var_names {
+        let global_name: Rc<str> = Rc::from(global_name);
+        let global_id = global_vars.insert(());
+        trace!("Adding global variable `{}` with id {:?}", global_name, global_id);
+        global_scope.global_vars.insert(global_name, global_id);
     }
     // add custom patch variables
-    for (i, patch_var) in meta_vars["patchVars"].as_array().unwrap().iter().enumerate() {
-        let patch_var_name = patch_var.as_str().unwrap();
+    for (i, patch_var_name) in patch_var_names.into_iter().enumerate() {
+        let patch_var_name: Rc<str> = Rc::from(patch_var_name);
         let patch_var_id = PatchVarDesc::Custom(i);
-        global_names.patch_vars.insert(Rc::from(patch_var_name), patch_var_id);
+        trace!("Adding patch variable `{}` with id {:?}", patch_var_name, patch_var_id);
+        global_scope.patch_vars.insert(patch_var_name.clone(), patch_var_id);
         custom_patch_vars
-            .push(CustomVarDecl { name: Rc::from(patch_var_name), ty: NetlogoAbstractType::Top });
-        trace!("Added patch variable `{}` with id {:?}", patch_var_name, patch_var_id);
+            .push(CustomVarDecl { name: patch_var_name, ty: NetlogoAbstractType::Top });
     }
     // add custom turtle variables
-    for (i, turtle_var) in meta_vars["turtleVars"].as_array().unwrap().iter().enumerate() {
-        let turtle_var_name = turtle_var.as_str().unwrap();
+    for (i, turtle_var_name) in turtle_var_names.into_iter().enumerate() {
+        let turtle_var_name: Rc<str> = Rc::from(turtle_var_name);
         let turtle_var_id = TurtleVarDesc::Custom(i);
-        global_names.turtle_vars.insert(Rc::from(turtle_var_name), turtle_var_id);
+        trace!("Adding turtle variable `{}` with id {:?}", turtle_var_name, turtle_var_id);
+        global_scope.turtle_vars.insert(turtle_var_name.clone(), turtle_var_id);
         custom_turtle_vars
-            .push(CustomVarDecl { name: Rc::from(turtle_var_name), ty: NetlogoAbstractType::Top });
-        trace!("Added turtle variable `{}` with id {:?}", turtle_var_name, turtle_var_id);
+            .push(CustomVarDecl { name: turtle_var_name, ty: NetlogoAbstractType::Top });
     }
 
     let mut functions: SlotMap<FunctionId, Function> = SlotMap::with_key();
     let mut fn_info = SecondaryMap::new();
-    let mut functions_to_build = SecondaryMap::new();
+    let mut bodies_to_build = SecondaryMap::new();
 
     // go through each procedure and add a skeleton with just the signatures
-    for procedure_json in
-        root["procedures"].as_array().unwrap().iter().map(|p| p.as_object().unwrap())
-    {
-        let proc_name = procedure_json["name"].as_str().unwrap();
-
+    for procedure_ast in procedures {
         // compile for a set of hardcoded agent classes
-        let agent_class = match procedure_json["agentClass"].as_str().unwrap() {
+        use ast::AgentClass as Ac;
+        let agent_class = match procedure_ast.agent_class {
             // if any agent can execute it, it's probably the observer that executes it
-            "OTPL" => AgentClass::Observer,
-            "O---" => AgentClass::Observer,
+            Ac { observer: true, turtle: true, patch: true, link: true } => AgentClass::Observer,
+            Ac { observer: true, turtle: false, patch: false, link: false } => AgentClass::Observer,
             // -TP- means it uses patch variables, which is probably for patches
-            "-TP-" => AgentClass::Patch,
-            "-T--" => AgentClass::Turtle,
+            // TODO account for the possibility that a turtle does execute it
+            Ac { observer: false, turtle: true, patch: true, link: false } => AgentClass::Patch,
+            Ac { observer: false, turtle: true, patch: false, link: false } => AgentClass::Turtle,
             _ => todo!("handle all agent classes"),
         };
 
         // create the skeleton
-        trace!("Creating procedure skeleton for `{}` (agent class: {:?})", proc_name, agent_class);
-        let (procedure, signature) = create_procedure_skeleton(procedure_json, agent_class)?;
+        trace!(
+            "Creating procedure skeleton for `{}` (agent class: {:?})",
+            procedure_ast.name, agent_class
+        );
+        let (procedure, signature, body) = create_procedure_skeleton(procedure_ast, agent_class)?;
+        let proc_name = procedure.debug_name.as_ref().cloned().unwrap();
         let fn_id = functions.insert(procedure);
         fn_info.insert(fn_id, signature);
-        global_names.functions.insert(Rc::from(proc_name), fn_id);
+        global_scope.functions.insert(proc_name.clone(), fn_id);
         trace!("Created procedure skeleton for {} with function id: {:?}", proc_name, fn_id);
 
-        // save the json to build the body later
-        functions_to_build.insert(fn_id, procedure_json);
+        // save the ast to build the body later
+        bodies_to_build.insert(fn_id, body);
     }
 
-    let mut mir_builder = MirBuilder { globals, turtle_breeds, functions, fn_info, global_names };
+    let mut mir_builder = MirBuilder {
+        globals: global_vars,
+        turtle_breeds,
+        functions,
+        fn_info,
+        global_names: global_scope,
+    };
 
     // then go through each procedure and build out the bodies
-    for (function_id, procedure_json) in functions_to_build {
-        let proc_name = procedure_json["name"].as_str().unwrap();
-        trace!("Building body for procedure: {} (id: {:?})", proc_name, function_id);
-        build_body(
-            procedure_json["statements"].as_array().unwrap(),
-            function_id,
-            &mut mir_builder,
-        )?;
+    for (fn_id, body) in bodies_to_build {
+        let proc_name = mir_builder.functions[fn_id].debug_name.as_ref().cloned().unwrap();
+        trace!("Building body for procedure: {} (id: {:?})", proc_name, fn_id);
+        build_body(body, fn_id, &mut mir_builder)?;
         trace!("Completed body building for procedure: {}", proc_name);
     }
 
@@ -262,8 +278,6 @@ impl AgentClass {
 /// Holds information about a function while it is being built.
 #[derive(Debug)]
 pub struct FnInfo {
-    /// The name of the entire function.
-    debug_name: Rc<str>,
     env_param: Option<LocalId>,
     context_param: Option<LocalId>,
     self_param: Option<LocalId>,
@@ -273,9 +287,8 @@ pub struct FnInfo {
 }
 
 impl FnInfo {
-    fn new(debug_name: Rc<str>) -> Self {
+    fn new() -> Self {
         Self {
-            debug_name,
             env_param: None,
             context_param: None,
             self_param: None,
@@ -287,34 +300,33 @@ impl FnInfo {
 }
 
 #[instrument(
-    skip(procedure),
-    fields(proc_name = procedure["name"].as_str().unwrap()),
+    skip(procedure_ast),
+    fields(proc_name = procedure_ast.name),
 )]
 fn create_procedure_skeleton(
-    procedure: &JsonObj,
+    procedure_ast: ast::Procedure,
     agent_class: AgentClass,
-) -> anyhow::Result<(Function, FnInfo)> {
+) -> anyhow::Result<(Function, FnInfo, Vec<ast::Node>)> {
     trace!("Creating procedure skeleton");
-    let proc_name = procedure["name"].as_str().unwrap();
+    let proc_name = Rc::from(procedure_ast.name);
 
     // verify that the procedure can support the given agent class
-    let agent_class_str = procedure["agentClass"].as_str().unwrap();
     match agent_class {
         #[allow(clippy::iter_nth_zero)]
-        AgentClass::Observer => assert_eq!(agent_class_str.chars().nth(0).unwrap(), 'O',),
-        AgentClass::Turtle => assert_eq!(agent_class_str.chars().nth(1).unwrap(), 'T',),
-        AgentClass::Patch => assert_eq!(agent_class_str.chars().nth(2).unwrap(), 'P',),
-        AgentClass::Link => assert_eq!(agent_class_str.chars().nth(3).unwrap(), 'L',),
+        AgentClass::Observer => assert!(procedure_ast.agent_class.observer),
+        AgentClass::Turtle => assert!(procedure_ast.agent_class.turtle),
+        AgentClass::Patch => assert!(procedure_ast.agent_class.patch),
+        AgentClass::Link => assert!(procedure_ast.agent_class.link),
         AgentClass::Any => {}
     }
 
     // calculate the function parameters
-    let mut fn_info = FnInfo::new(Rc::from(proc_name));
+    let mut fn_info = FnInfo::new();
     let mut locals = SlotMap::with_key();
     let mut parameter_locals = Vec::new();
     // always add the context parameter TODO this shouldn't be always
     let context_param = locals.insert(LocalDeclaration {
-        debug_name: Some("context".to_string()),
+        debug_name: Some("context".into()),
         ty: MirType::Machine(NetlogoMachineType::UNTYPED_PTR),
         storage: LocalStorage::Register,
     });
@@ -327,7 +339,7 @@ fn create_procedure_skeleton(
         }
         AgentClass::Turtle => {
             let local_id = locals.insert(LocalDeclaration {
-                debug_name: Some("self_turtle_id".to_string()),
+                debug_name: Some("self_turtle_id".into()),
                 ty: MirType::Machine(NetlogoMachineType::TURTLE_ID),
                 storage: LocalStorage::Register,
             });
@@ -337,7 +349,7 @@ fn create_procedure_skeleton(
         }
         AgentClass::Patch => {
             let local_id = locals.insert(LocalDeclaration {
-                debug_name: Some("self_patch_id".to_string()),
+                debug_name: Some("self_patch_id".into()),
                 ty: MirType::Machine(NetlogoMachineType::PATCH_ID),
                 storage: LocalStorage::Register,
             });
@@ -348,29 +360,29 @@ fn create_procedure_skeleton(
         AgentClass::Link => todo!(),
         AgentClass::Any => todo!(),
     }
-    for arg in procedure["args"].as_array().unwrap().iter().map(|arg| arg.as_str().unwrap()) {
+    for arg_name in procedure_ast.arg_names {
+        let arg_name: Rc<str> = Rc::from(arg_name);
         let local_id = locals.insert(LocalDeclaration {
-            debug_name: Some(arg.to_string()),
+            debug_name: Some(arg_name.clone()),
             ty: MirType::Abstract(NetlogoAbstractType::Top),
             storage: LocalStorage::Register,
         });
-        fn_info.local_names.insert(Rc::from(arg), local_id);
+        trace!("Adding positional parameter {} with local_id: {:?}", arg_name, local_id);
+        fn_info.local_names.insert(arg_name, local_id);
         parameter_locals.push(local_id);
         fn_info.positional_params.push(local_id);
-        trace!("Added positional parameter {} with local_id: {:?}", arg, local_id);
     }
 
     // calculate the function return type
-    let return_ty = match procedure["returnType"].as_str().unwrap() {
-        "unit" => NetlogoAbstractType::Unit,
-        "wildcard" => NetlogoAbstractType::Top,
-        _ => todo!(),
+    let return_ty = match procedure_ast.return_type {
+        ast::ReturnType::Unit => NetlogoAbstractType::Unit,
+        ast::ReturnType::Wildcard => NetlogoAbstractType::Top,
     };
     trace!("calculated return type: {:?}", return_ty);
 
     // create the function skeleton
     let function = Function {
-        debug_name: Some(proc_name.to_string()),
+        debug_name: Some(proc_name),
         parameters: parameter_locals,
         return_ty,
         locals,
@@ -380,19 +392,19 @@ fn create_procedure_skeleton(
     };
     trace!(
         "Created function skeleton for {} with {} parameters",
-        proc_name,
+        function.debug_name.as_deref().unwrap(),
         function.parameters.len()
     );
 
-    Ok((function, fn_info))
+    Ok((function, fn_info, procedure_ast.statements))
 }
 
 /// # Arguments
 ///
 /// * `function_id`: The id of the function whose body is being written
-#[instrument(skip(statements_json, mir_builder))]
+#[instrument(skip(statements_ast, mir_builder))]
 fn build_body(
-    statements_json: &[JsonValue],
+    statements_ast: Vec<ast::Node>,
     fn_id: FunctionId,
     mir_builder: &mut MirBuilder,
 ) -> anyhow::Result<()> {
@@ -402,16 +414,11 @@ fn build_body(
     let mut nodes: SlotMap<NodeId, Box<dyn EffectfulNode>> = SlotMap::with_key();
 
     // the statements of the current control flow construct
-    let statements: Vec<StatementKind> = statements_json
-        .iter()
-        .filter_map(|stmt_json| {
-            let statement_json = stmt_json.as_object().unwrap();
+    let statements: Vec<StatementKind> = statements_ast
+        .into_iter()
+        .map(|stmt_ast| {
             let ctx = FnBodyBuilderCtx { mir: mir_builder, fn_id, nodes: &mut nodes };
-            match statement_json["type"].as_str().unwrap() {
-                "let-binding" => eval_let_binding(statement_json, ctx),
-                "command-app" => eval_command(statement_json, ctx),
-                _ => todo!(),
-            }
+            translate_statement(stmt_ast, ctx)
         })
         .collect();
 
@@ -479,486 +486,369 @@ impl<'a> FnBodyBuilderCtx<'a> {
     }
 }
 
-#[instrument(skip_all, fields(cmd_name))]
-fn eval_let_binding(expr_json: &JsonObj, mut ctx: FnBodyBuilderCtx<'_>) -> Option<StatementKind> {
-    trace!("Evaluating let binding json: {:?}", expr_json);
-    assert_eq!(expr_json["type"].as_str().unwrap(), "let-binding");
-
-    // create a new local variable with the given name
-    let var_name = expr_json["varName"].as_str().unwrap();
-    let local_id = ctx.mir.functions[ctx.fn_id].locals.insert(LocalDeclaration {
-        debug_name: Some(var_name.to_string()),
-        ty: MirType::Abstract(NetlogoAbstractType::Top),
-        storage: LocalStorage::Register,
-    });
-    ctx.mir.fn_info[ctx.fn_id].local_names.insert(Rc::from(var_name), local_id);
-
-    let value = expr_json["value"].as_object().unwrap();
-    let value = eval_reporter(value, ctx.reborrow());
-
-    let let_stmt = ctx.nodes.insert(Box::new(node::SetLocalVar { local_id, value }));
-    Some(StatementKind::Node(let_stmt))
-}
-
-#[instrument(skip_all, fields(cmd_name))]
-fn eval_command(expr_json: &JsonObj, mut ctx: FnBodyBuilderCtx<'_>) -> Option<StatementKind> {
-    trace!("Evaluating command json: {:?}", expr_json);
-    assert_eq!(expr_json["type"].as_str().unwrap(), "command-app");
-
-    let args: Vec<&JsonObj> =
-        expr_json["args"].as_array().unwrap().iter().map(|arg| arg.as_object().unwrap()).collect();
-
-    let cmd_name = expr_json["name"].as_str().unwrap();
-    Span::current().record("cmd_name", cmd_name);
-    trace!("Handling command `{}`", cmd_name);
-    match cmd_name {
-        "STOP" => Some(StatementKind::Stop),
-        "CLEAR-ALL" => {
-            let context = ctx.get_context();
-            let clear_all = ctx.nodes.insert(Box::new(node::ClearAll { context }));
-            Some(StatementKind::Node(clear_all))
+#[instrument(skip_all, fields(node_type, name))]
+fn translate_statement(ast_node: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) -> StatementKind {
+    use ast::CommandApp as C;
+    use ast::Node as N;
+    let mir_node: Box<dyn EffectfulNode> = match ast_node {
+        N::LetBinding { var_name, value } => {
+            return translate_let_binding(Rc::from(var_name.as_str()), *value, ctx.reborrow());
         }
-        "SET-DEFAULT-SHAPE" => {
-            // FUTURE implmement this instead of skipping it
-            None
-        }
-        "CREATE-TURTLES" => {
-            let &[population, body] = args.as_slice() else {
-                panic!("expected two arguments for CREATE-TURTLES");
+        N::CommandApp(C::UserProcCall { name, args }) => {
+            let referent = ctx
+                .mir
+                .global_names
+                .lookup(&name)
+                .unwrap_or_else(|| panic!("unknown command {:?}", name));
+            let NameReferent::UserProc(target) = referent else {
+                panic!("expected a user procedure, got {:?}", referent);
             };
+            let args =
+                args.into_iter().map(|arg| translate_expression(arg, ctx.reborrow())).collect();
+            Box::new(node::CallUserFn { target, args })
+        }
+        N::CommandApp(C::Report([value])) => {
+            let value = translate_expression(*value, ctx.reborrow());
+            return StatementKind::Return { value };
+        }
+        N::CommandApp(C::Stop([])) => return StatementKind::Stop,
+        N::CommandApp(C::ClearAll([])) => {
             let context = ctx.get_context();
-            let population = eval_reporter(population, ctx.reborrow());
-            let body = eval_ephemeral_closure(body, ctx.fn_id, AgentClass::Turtle, ctx.reborrow());
-
-            let create_turtles = ctx.nodes.insert(Box::new(node::CreateTurtles {
+            Box::new(node::ClearAll { context })
+        }
+        N::CommandApp(C::CreateTurtles([population, body])) => {
+            let context = ctx.get_context();
+            let population = translate_expression(*population, ctx.reborrow());
+            let body =
+                translate_ephemeral_closure(*body, ctx.fn_id, AgentClass::Turtle, ctx.reborrow());
+            Box::new(node::CreateTurtles {
                 context,
-                breed: ctx.mir.global_names.turtle_breeds[&None],
+                breed: ctx.mir.global_names.turtle_breeds[&None], // FUTURE add creating other turtle breeds
                 num_turtles: population,
                 body,
-            }));
-            Some(StatementKind::Node(create_turtles))
+            })
         }
-        "SET" => {
-            let &[var, value] = args.as_slice() else {
-                panic!("expected two arguments for SET");
-            };
-
-            let context = ctx.get_context();
-
-            assert!(var["type"].as_str().unwrap() == "reporter-call");
-            assert!(var["args"].as_array().unwrap().is_empty());
-            let var_name = var["name"].as_str().unwrap();
+        N::CommandApp(C::Set([var, value])) => {
+            let var_name = translate_var_reporter_without_read(var.as_ref());
             let var_desc = ctx.mir.global_names.lookup(var_name).unwrap();
-            let value = eval_reporter(value, ctx.reborrow());
+            let value = translate_expression(*value, ctx.reborrow());
 
-            // TODO this should also be able to work for local variables
-            // the type of the variable being assigned determines which node to use
+            // the kind of variable being  assigned determines which node to use
             match var_desc {
-                NameReferent::TurtleVar(var_desc) => {
+                NameReferent::TurtleVar(var) => {
+                    let context = ctx.get_context();
                     let turtle = ctx.get_self_turtle();
-                    let set_turtle_var = ctx.nodes.insert(Box::new(node::SetTurtleVar {
-                        context,
-                        turtle,
-                        var: var_desc,
-                        value,
-                    }));
-                    Some(StatementKind::Node(set_turtle_var))
+                    Box::new(node::SetTurtleVar { context, turtle, var, value })
                 }
-                NameReferent::PatchVar(var_desc) => {
+                NameReferent::PatchVar(var) => {
+                    let context = ctx.get_context();
                     let agent = ctx.get_self_turtle_or_patch();
-                    let set_patch_var =
-                        ctx.nodes.insert(Box::new(node::SetPatchVarAsTurtleOrPatch {
-                            context,
-                            agent,
-                            var: var_desc,
-                            value,
-                        }));
-                    Some(StatementKind::Node(set_patch_var))
+                    Box::new(node::SetPatchVarAsTurtleOrPatch { context, agent, var, value })
                 }
-                _ => todo!(),
+                NameReferent::Global(_) => todo!("setting global variables not yet supported"),
+                other => panic!("cannot mutate value of {:?}", other),
             }
         }
-        "FD" => {
-            let &[distance] = args.as_slice() else {
-                panic!("expected one argument for FD");
-            };
+        N::CommandApp(C::Fd([distance])) => {
             let context = ctx.get_context();
             let turtle = ctx.get_self_turtle();
-            let distance = eval_reporter(distance, ctx.reborrow());
-            let fd = ctx.nodes.insert(Box::new(node::TurtleForward { context, turtle, distance }));
-            Some(StatementKind::Node(fd))
+            let distance = translate_expression(*distance, ctx.reborrow());
+            Box::new(node::TurtleForward { context, turtle, distance })
         }
-        "LT" => {
-            let &[heading] = args.as_slice() else {
-                panic!("expected one argument for LT");
-            };
+        N::CommandApp(C::Left([heading])) => {
             let context = ctx.get_context();
             let turtle = ctx.get_self_turtle();
-            let angle_rt = eval_reporter(heading, ctx.reborrow());
+            let angle_rt = translate_expression(*heading, ctx.reborrow());
             let angle_lt = ctx
                 .nodes
                 .insert(Box::new(node::UnaryOp { op: UnaryOpcode::Neg, operand: angle_rt }));
-            let rt =
-                ctx.nodes.insert(Box::new(node::TurtleRotate { context, turtle, angle: angle_lt }));
-            Some(StatementKind::Node(rt))
+            Box::new(node::TurtleRotate { context, turtle, angle: angle_lt })
         }
-        "RT" => {
-            let &[heading] = args.as_slice() else {
-                panic!("expected one argument for RT");
-            };
+        N::CommandApp(C::Right([heading])) => {
             let context = ctx.get_context();
             let turtle = ctx.get_self_turtle();
-            let angle = eval_reporter(heading, ctx.reborrow());
-            let rt = ctx.nodes.insert(Box::new(node::TurtleRotate { context, turtle, angle }));
-            Some(StatementKind::Node(rt))
+            let angle = translate_expression(*heading, ctx.reborrow());
+            Box::new(node::TurtleRotate { context, turtle, angle })
         }
-        "RESET-TICKS" => {
-            let &[] = args.as_slice() else {
-                panic!("expected no arguments for RESET-TICKS");
-            };
+        N::CommandApp(C::ResetTicks([])) => {
+            Box::new(node::ResetTicks { context: ctx.get_context() })
+        }
+        N::CommandApp(C::Ask([recipients, body])) => {
             let context = ctx.get_context();
-            let reset_ticks = ctx.nodes.insert(Box::new(node::ResetTicks { context }));
-            Some(StatementKind::Node(reset_ticks))
+            let recipients = translate_expression(*recipients, ctx.reborrow());
+            let body =
+                translate_ephemeral_closure(*body, ctx.fn_id, AgentClass::Any, ctx.reborrow());
+            Box::new(node::Ask { context, recipients, body })
         }
-        "ASK" => {
-            let &[recipients, body] = args.as_slice() else {
-                panic!("expected two arguments for ASK");
-            };
-            let context = ctx.get_context();
-            let recipients = eval_reporter(recipients, ctx.reborrow());
-            let body = eval_ephemeral_closure(body, ctx.fn_id, AgentClass::Any, ctx.reborrow());
-            let ask = ctx.nodes.insert(Box::new(node::Ask { context, recipients, body }));
-            Some(StatementKind::Node(ask))
-        }
-        "IF" | "IFELSE" => {
-            // eagerly evaluate the condition
-            let condition = eval_reporter(args[0], ctx.reborrow());
-
-            // translate the inner statements
-            let then_stmts = args[1]["statements"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .filter_map(|stmt_json| {
-                    let stmt_json = stmt_json.as_object().unwrap();
-                    eval_command(stmt_json, ctx.reborrow())
-                })
-                .collect();
-            let else_stmts = if cmd_name == "IFELSE" {
-                args[2]["statements"]
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .filter_map(|stmt_json| {
-                        let stmt_json = stmt_json.as_object().unwrap();
-                        eval_command(stmt_json, ctx.reborrow())
-                    })
-                    .collect()
-            } else {
-                Vec::new()
-            };
-
-            Some(StatementKind::IfElse {
+        N::CommandApp(C::If([condition, then_block])) => {
+            let condition = translate_expression(*condition, ctx.reborrow());
+            let then_block = translate_statement_block(*then_block, ctx.reborrow());
+            return StatementKind::IfElse {
                 condition,
-                then_block: StatementBlock { statements: then_stmts },
-                else_block: StatementBlock { statements: else_stmts },
-            })
-        }
-        "DIFFUSE" => {
-            let &[var_name, amt] = args.as_slice() else {
-                panic!("expected two arguments for DIFFUSE");
+                then_block,
+                else_block: StatementBlock::default(),
             };
-
-            assert!(var_name["type"].as_str().unwrap() == "reporter-call");
-            assert!(var_name["args"].as_array().unwrap().is_empty());
-            let var_name = var_name["name"].as_str().unwrap();
-
+        }
+        N::CommandApp(C::IfElse([condition, then_block, else_block])) => {
+            let condition = translate_expression(*condition, ctx.reborrow());
+            let then_block = translate_statement_block(*then_block, ctx.reborrow());
+            let else_block = translate_statement_block(*else_block, ctx.reborrow());
+            return StatementKind::IfElse { condition, then_block, else_block };
+        }
+        N::CommandApp(C::Diffuse([variable, amt])) => {
+            let var_name = translate_var_reporter_without_read(variable.as_ref());
             let Some(NameReferent::PatchVar(var_desc)) = ctx.mir.global_names.lookup(var_name)
             else {
                 panic!("expected patch variable for DIFFUSE");
             };
             let context = ctx.get_context();
-            let amt = eval_reporter(amt, ctx.reborrow());
-
-            let diffuse =
-                ctx.nodes.insert(Box::new(node::Diffuse { context, variable: var_desc, amt }));
-            Some(StatementKind::Node(diffuse))
+            let amt = translate_expression(*amt, ctx.reborrow());
+            Box::new(node::Diffuse { context, variable: var_desc, amt })
         }
-        "TICK" => {
-            let &[] = args.as_slice() else {
-                panic!("expected no arguments for TICK");
-            };
-            let context = ctx.get_context();
-            let tick = ctx.nodes.insert(Box::new(node::AdvanceTick { context }));
-            Some(StatementKind::Node(tick))
+        N::CommandApp(C::Tick([])) => Box::new(node::AdvanceTick { context: ctx.get_context() }),
+        N::CommandApp(C::SetDefaultShape([breed, shape])) => {
+            let breed = translate_expression(*breed, ctx.reborrow());
+            let shape = translate_expression(*shape, ctx.reborrow());
+            Box::new(node::SetDefaultShape { breed, shape })
         }
-        "REPORT" => {
-            let &[expr] = args.as_slice() else {
-                panic!("expected one argument for REPORT");
-            };
-            let value = eval_reporter(expr, ctx.reborrow());
-            Some(StatementKind::Return { value })
-        }
-        cmd_name => {
-            // at this point, assume that the command is a user-defined
-            // procedure call
-            let target_fn = ctx.mir.global_names.lookup(cmd_name).unwrap();
-            if let NameReferent::UserProc(fn_id) = target_fn {
-                // eagerly evaluate all arguments
-                let evaled_args =
-                    args.iter().map(|&arg| eval_reporter(arg, ctx.reborrow())).collect::<Vec<_>>();
-
-                let call_user_fn = ctx
-                    .nodes
-                    .insert(Box::new(node::CallUserFn { target: fn_id, args: evaled_args }));
-                Some(StatementKind::Node(call_user_fn))
-            } else {
-                unimplemented!();
-            }
-        }
-    }
+        other => panic!("expected a statement, got {:?}", other),
+    };
+    // most statements are just StatementKind::Node. there will be an early
+    // return in the big match above if it is a different kind
+    StatementKind::Node(ctx.nodes.insert(mir_node))
 }
 
-#[instrument(skip_all, fields(name))]
-fn eval_reporter(expr_json: &JsonObj, mut ctx: FnBodyBuilderCtx<'_>) -> NodeId {
-    match expr_json["type"].as_str().unwrap() {
-        "reporter-call" | "reporter-proc-call" => {
-            let reporter_name = expr_json["name"].as_str().unwrap();
-            Span::current().record("name", reporter_name);
-            trace!("Handling reporter call `{}`", reporter_name);
-
-            let args: Vec<&JsonObj> = expr_json["args"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .map(|arg| arg.as_object().unwrap())
-                .collect();
-
-            match reporter_name {
-                "OF" => {
-                    let &[body, recipients] = args.as_slice() else {
-                        panic!("expected two arguments for OF");
-                    };
+fn translate_expression(expr: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) -> NodeId {
+    use ast::Node as N;
+    use ast::ReporterCall as R;
+    let mir_node: Box<dyn EffectfulNode> = match expr {
+        N::LetRef { name } | N::ProcedureArgRef { name } => {
+            let Some(&local_id) = ctx.mir.fn_info[ctx.fn_id].local_names.get(name.as_str()) else {
+                unreachable!("unknown variable reference: {}", name);
+            };
+            Box::new(node::GetLocalVar { local_id })
+        }
+        N::Number { value } => {
+            Box::new(node::Constant { value: UnpackedDynBox::Float(value.as_f64().unwrap()) })
+        }
+        N::String { value } => {
+            // TODO implement string constants
+            Box::new(node::Constant { value: UnpackedDynBox::Float(0.0) })
+        }
+        N::List { items } => todo!(),
+        N::Nobody => Box::new(node::Constant { value: UnpackedDynBox::Nobody }),
+        N::ReporterProcCall { name, args } => {
+            let referent = ctx.mir.global_names.lookup(&name).unwrap_or_else(|| {
+                panic!("unknown reporter procedure {:?}", name);
+            });
+            let NameReferent::UserProc(target) = referent else {
+                panic!("expected a user reporter procedure, got {:?}", referent);
+            };
+            let args =
+                args.into_iter().map(|arg| translate_expression(arg, ctx.reborrow())).collect();
+            Box::new(node::CallUserFn { target, args })
+        }
+        N::ReporterCall(R::VarAccess { name }) => {
+            let Some(referent) = ctx.mir.global_names.lookup(&name) else {
+                panic!("unknown variable access `{}`", name);
+            };
+            match referent {
+                NameReferent::Global(global_id) => {
+                    todo!("global variable accesses not yet implemented")
+                }
+                NameReferent::TurtleVar(var) => {
                     let context = ctx.get_context();
-                    let recipients = eval_reporter(recipients, ctx.reborrow());
-                    let body =
-                        eval_ephemeral_closure(body, ctx.fn_id, AgentClass::Any, ctx.reborrow());
-                    ctx.nodes.insert(Box::new(node::Of { context, recipients, body }))
+                    let turtle = ctx.get_self_turtle();
+                    Box::new(node::GetTurtleVar { context, turtle, var })
                 }
-                "<" | ">" | "=" | "<=" | ">=" | "-" | "+" | "*" | "/" | "AND" | "OR" => {
-                    let &[lhs, rhs] = args.as_slice() else {
-                        panic!("expected two arguments for `{}`", reporter_name);
-                    };
-                    let lhs = eval_reporter(lhs, ctx.reborrow());
-                    let rhs = eval_reporter(rhs, ctx.reborrow());
-                    let op = match reporter_name {
-                        "<" => BinaryOpcode::Lt,
-                        ">" => BinaryOpcode::Gt,
-                        "=" => BinaryOpcode::Eq,
-                        "<=" => BinaryOpcode::Lte,
-                        ">=" => BinaryOpcode::Gte,
-                        "-" => BinaryOpcode::Sub,
-                        "+" => BinaryOpcode::Add,
-                        "*" => BinaryOpcode::Mul,
-                        "/" => BinaryOpcode::Div,
-                        "AND" => BinaryOpcode::And,
-                        "OR" => BinaryOpcode::Or,
-                        _ => unreachable!(),
-                    };
-                    ctx.nodes.insert(Box::new(node::BinaryOperation { op, lhs, rhs }))
-                }
-                "NOT" => {
-                    let &[operand] = args.as_slice() else {
-                        panic!("expected one argument for `NOT`");
-                    };
-                    let operand = eval_reporter(operand, ctx.reborrow());
-                    ctx.nodes.insert(Box::new(node::UnaryOp { op: UnaryOpcode::Not, operand }))
-                }
-                "DISTANCEXY" => {
-                    let &[x, y] = args.as_slice() else {
-                        panic!("expected two arguments for `DISTANCEXY`");
-                    };
+                NameReferent::PatchVar(var) => {
+                    let context = ctx.get_context();
                     let agent = ctx.get_self_turtle_or_patch();
-                    let x = eval_reporter(x, ctx.reborrow());
-                    let y = eval_reporter(y, ctx.reborrow());
-                    ctx.nodes.insert(Box::new(node::Distancexy { agent, x, y }))
+                    Box::new(node::GetPatchVarAsTurtleOrPatch { context, agent, var })
                 }
-                "CAN-MOVE?" => {
-                    let &[distance] = args.as_slice() else {
-                        panic!("expected one argument for `CAN-MOVE?`");
-                    };
-                    let turtle = ctx.get_self_turtle();
-                    let distance = eval_reporter(distance, ctx.reborrow());
-                    ctx.nodes.insert(Box::new(node::CanMove { turtle, distance }))
-                }
-                reporter_name @ ("PATCH-RIGHT-AND-AHEAD" | "PATCH-LEFT-AND-AHEAD") => {
-                    let &[heading, distance] = args.as_slice() else {
-                        panic!(
-                            "expected two arguments for `PATCH-RIGHT-AND-AHEAD` or `PATCH-LEFT-AND-AHEAD`"
-                        );
-                    };
-                    let turtle = ctx.get_self_turtle();
-                    let relative_loc = match reporter_name {
-                        "PATCH-RIGHT-AND-AHEAD" => PatchLocRelation::RightAhead,
-                        "PATCH-LEFT-AND-AHEAD" => PatchLocRelation::LeftAhead,
-                        _ => unreachable!(),
-                    };
-                    let heading = eval_reporter(heading, ctx.reborrow());
-                    let distance = eval_reporter(distance, ctx.reborrow());
-                    ctx.nodes.insert(Box::new(node::PatchRelative {
-                        relative_loc,
-                        turtle,
-                        distance,
-                        heading,
-                    }))
-                }
-                "MAX-PXCOR" => {
-                    let &[] = args.as_slice() else {
-                        panic!("expected no arguments for `MAX-PXCOR`");
-                    };
-                    let context = ctx.get_context();
-                    ctx.nodes.insert(Box::new(node::MaxPxcor { context }))
-                }
-                "MAX-PYCOR" => {
-                    let &[] = args.as_slice() else {
-                        panic!("expected no arguments for `MAX-PYCOR`");
-                    };
-                    let context = ctx.get_context();
-                    ctx.nodes.insert(Box::new(node::MaxPycor { context }))
-                }
-                "ONE-OF" => {
-                    // TODO actually implement this
-                    ctx.nodes.insert(Box::new(node::Constant { value: UnpackedDynBox::Float(1.0) }))
-                }
-                "SCALE-COLOR" => {
-                    let &[color, number, range1, range2] = args.as_slice() else {
-                        panic!("expected four arguments for `SCALE-COLOR`");
-                    };
-                    let color = eval_reporter(color, ctx.reborrow());
-                    let number = eval_reporter(number, ctx.reborrow());
-                    let range1 = eval_reporter(range1, ctx.reborrow());
-                    let range2 = eval_reporter(range2, ctx.reborrow());
-                    ctx.nodes.insert(Box::new(node::ScaleColor { color, number, range1, range2 }))
-                }
-                "TICKS" => {
-                    let &[] = args.as_slice() else {
-                        panic!("expected no arguments for `TICKS`");
-                    };
-                    let context = ctx.get_context();
-                    ctx.nodes.insert(Box::new(node::GetTick { context }))
-                }
-                "RANDOM" => {
-                    let &[bound] = args.as_slice() else {
-                        panic!("expected one argument for `RANDOM`");
-                    };
-                    let bound = eval_reporter(bound, ctx.reborrow());
-                    ctx.nodes.insert(Box::new(node::RandomInt { bound }))
-                }
-                // TODO use if_let_guard once stabilized
-                other if ctx.mir.global_names.lookup(other).is_some() => {
-                    match ctx.mir.global_names.lookup(other).unwrap() {
-                        NameReferent::Constant(mk_node) => ctx.nodes.insert(mk_node()),
-                        NameReferent::PatchVar(var_desc) => {
-                            let context = ctx.get_context();
-                            let agent = ctx.get_self_turtle_or_patch();
-                            ctx.nodes.insert(Box::new(node::GetPatchVarAsTurtleOrPatch {
-                                context,
-                                agent,
-                                var: var_desc,
-                            }))
-                        }
-                        NameReferent::TurtleVar(var_desc) => {
-                            let context = ctx.get_context();
-                            let turtle = ctx.get_self_turtle();
-                            ctx.nodes.insert(Box::new(node::GetTurtleVar {
-                                context,
-                                turtle,
-                                var: var_desc,
-                            }))
-                        }
-                        NameReferent::UserProc(fn_id) => {
-                            // eagerly evaluate all arguments
-                            let evaled_args = args
-                                .iter()
-                                .map(|&arg| eval_reporter(arg, ctx.reborrow()))
-                                .collect::<Vec<_>>();
-
-                            ctx.nodes.insert(Box::new(node::CallUserFn {
-                                target: fn_id,
-                                args: evaled_args,
-                            }))
-                        }
-                        referent => {
-                            error!("reporter has referent: {:?}", referent);
-                            todo!("reporter has referent: {:?}", referent);
-                        }
-                    }
-                }
-                // TODO use if_let_guard once stabilized
-                other if ctx.mir.fn_info[ctx.fn_id].local_names.get(other).is_some() => {
-                    let local_id = ctx.mir.fn_info[ctx.fn_id].local_names.get(other).unwrap();
-                    ctx.nodes.insert(Box::new(node::GetLocalVar { local_id: *local_id }))
-                }
-                _ => unreachable!("unknown reporter: {}", reporter_name),
+                NameReferent::Constant(mk_node) => mk_node(),
+                _ => panic!("unexpected variable referent {:?} for name {}", referent, name),
             }
         }
-        "string" => todo!(),
-        "number" => {
-            let val = expr_json["value"].as_f64().unwrap();
-            ctx.nodes.insert(Box::new(node::Constant { value: UnpackedDynBox::Float(val) }))
+        N::ReporterCall(R::Of([body, recipients])) => {
+            let context = ctx.get_context();
+            let recipients = translate_expression(*recipients, ctx.reborrow());
+            let body =
+                translate_ephemeral_closure(*body, ctx.fn_id, AgentClass::Any, ctx.reborrow());
+            Box::new(node::Of { context, recipients, body })
         }
-        "nobody" => ctx.nodes.insert(Box::new(node::Constant { value: UnpackedDynBox::Nobody })),
-        r#type => {
-            error!("unknown reporter type: {}", r#type);
-            panic!();
+        #[rustfmt::skip]
+        N::ReporterCall(reporter @ (
+            | R::Lt(..)
+            | R::Gt(..)
+            | R::Eq(..)
+            | R::Lte(..)
+            | R::Gte(..)
+            | R::Sub(..)
+            | R::Add(..)
+            | R::Mul(..)
+            | R::Div(..)
+            | R::And(..)
+            | R::Or(..)
+        )) => {
+            let (op, lhs, rhs) = match reporter {
+                R::Lt([lhs, rhs]) => (BinaryOpcode::Lt, lhs, rhs),
+                R::Gt([lhs, rhs]) => (BinaryOpcode::Gt, lhs, rhs),
+                R::Eq([lhs, rhs]) => (BinaryOpcode::Eq, lhs, rhs),
+                R::Lte([lhs, rhs]) => (BinaryOpcode::Lte, lhs, rhs),
+                R::Gte([lhs, rhs]) => (BinaryOpcode::Gte, lhs, rhs),
+                R::Sub([lhs, rhs]) => (BinaryOpcode::Sub, lhs, rhs),
+                R::Add([lhs, rhs]) => (BinaryOpcode::Add, lhs, rhs),
+                R::Mul([lhs, rhs]) => (BinaryOpcode::Mul, lhs, rhs),
+                R::Div([lhs, rhs]) => (BinaryOpcode::Div, lhs, rhs),
+                R::And([lhs, rhs]) => (BinaryOpcode::And, lhs, rhs),
+                R::Or([lhs, rhs]) => (BinaryOpcode::Or, lhs, rhs),
+                _ => unreachable!(),
+            };
+            let lhs = translate_expression(*lhs, ctx.reborrow());
+            let rhs = translate_expression(*rhs, ctx.reborrow());
+            Box::new(node::BinaryOperation { op, lhs, rhs })
         }
-    }
+        N::ReporterCall(R::Not([operand])) => {
+            let operand = translate_expression(*operand, ctx.reborrow());
+            Box::new(node::UnaryOp { op: UnaryOpcode::Not, operand })
+        }
+        N::ReporterCall(R::Distancexy([x, y])) => {
+            let agent = ctx.get_self_turtle_or_patch();
+            let x = translate_expression(*x, ctx.reborrow());
+            let y = translate_expression(*y, ctx.reborrow());
+            Box::new(node::Distancexy { agent, x, y })
+        }
+        N::ReporterCall(R::CanMove([distance])) => {
+            let context = ctx.get_context();
+            let turtle = ctx.get_self_turtle();
+            let distance = translate_expression(*distance, ctx.reborrow());
+            Box::new(node::CanMove { context, turtle, distance })
+        }
+        N::ReporterCall(
+            reporter @ (R::PatchRightAndAhead { .. } | R::PatchLeftAndAhead { .. }),
+        ) => {
+            let (relative_loc, heading, distance) = match reporter {
+                R::PatchRightAndAhead([heading, distance]) => {
+                    (PatchLocRelation::RightAhead, heading, distance)
+                }
+                R::PatchLeftAndAhead([heading, distance]) => {
+                    (PatchLocRelation::LeftAhead, heading, distance)
+                }
+                _ => unreachable!(),
+            };
+            let context = ctx.get_context();
+            let turtle = ctx.get_self_turtle();
+            let heading = translate_expression(*heading, ctx.reborrow());
+            let distance = translate_expression(*distance, ctx.reborrow());
+            Box::new(node::PatchRelative { context, turtle, relative_loc, heading, distance })
+        }
+        N::ReporterCall(R::MaxPxcor([])) => Box::new(node::MaxPxcor { context: ctx.get_context() }),
+        N::ReporterCall(R::MaxPycor([])) => Box::new(node::MaxPycor { context: ctx.get_context() }),
+        N::ReporterCall(R::OneOf(choices)) => {
+            Box::new(node::Constant { value: UnpackedDynBox::Float(1.0) })
+        }
+        N::ReporterCall(R::ScaleColor([color, number, range1, range2])) => {
+            let color = translate_expression(*color, ctx.reborrow());
+            let number = translate_expression(*number, ctx.reborrow());
+            let range1 = translate_expression(*range1, ctx.reborrow());
+            let range2 = translate_expression(*range2, ctx.reborrow());
+            Box::new(node::ScaleColor { color, number, range1, range2 })
+        }
+        N::ReporterCall(R::Ticks([])) => Box::new(node::GetTick { context: ctx.get_context() }),
+        N::ReporterCall(R::Random([bound])) => {
+            let bound = translate_expression(*bound, ctx.reborrow());
+            Box::new(node::RandomInt { context: ctx.get_context(), bound })
+        }
+        other => panic!("expected an expression, got {:?}", other),
+    };
+    ctx.nodes.insert(mir_node)
+}
+
+fn translate_statement_block(
+    statements_ast: ast::Node,
+    mut ctx: FnBodyBuilderCtx<'_>,
+) -> StatementBlock {
+    let ast::Node::CommandBlock { statements } = statements_ast else {
+        panic!("expected a command block, got {:?}", statements_ast);
+    };
+    let statements = statements
+        .into_iter()
+        .map(|ast_node| translate_statement(ast_node, ctx.reborrow()))
+        .collect();
+    StatementBlock { statements }
+}
+
+fn translate_let_binding(
+    name: Rc<str>,
+    value: ast::Node,
+    mut ctx: FnBodyBuilderCtx<'_>,
+) -> StatementKind {
+    let local_id = ctx.mir.functions[ctx.fn_id].locals.insert(LocalDeclaration {
+        debug_name: Some(name.clone()),
+        ty: MirType::Abstract(NetlogoAbstractType::Top),
+        storage: LocalStorage::Register,
+    });
+    ctx.mir.fn_info[ctx.fn_id].local_names.insert(name, local_id);
+    let value = translate_expression(value, ctx.reborrow());
+    StatementKind::Node(ctx.nodes.insert(Box::new(node::SetLocalVar { local_id, value })))
+}
+
+fn translate_var_reporter_without_read(ast_node: &ast::Node) -> &str {
+    let ast::Node::ReporterCall(ast::ReporterCall::VarAccess { name }) = ast_node else {
+        panic!("expected a variable reporter call, got {:?}", ast_node);
+    };
+    name
 }
 
 #[instrument(skip_all)]
-fn eval_ephemeral_closure(
-    expr_json: &JsonObj,
+fn translate_ephemeral_closure(
+    expr: ast::Node,
     parent_fn_id: FunctionId,
     agent_class: AgentClass,
     ctx: FnBodyBuilderCtx<'_>,
 ) -> NodeId {
-    trace!("Evaluating ephemeral closure");
+    trace!("Translating ephemeral closure");
 
-    enum ClosureType {
-        CommandBlock,
-        ReporterBlock,
-    }
-
-    let closure_type = match expr_json["type"].as_str().unwrap() {
-        "command-block" => ClosureType::CommandBlock,
-        "reporter-block" => ClosureType::ReporterBlock,
-        _ => unimplemented!(),
+    use ast::Node as N;
+    let (statements, return_ty) = match expr {
+        N::CommandBlock { statements } => (statements, NetlogoAbstractType::Unit),
+        N::ReporterBlock { reporter_app } => {
+            let statements = vec![N::CommandApp(ast::CommandApp::Report([reporter_app]))];
+            (statements, NetlogoAbstractType::Top)
+        }
+        _ => panic!("expected a command block or reporter block, got {:?}", expr),
     };
 
-    // generate a proc name
-    let parent_debug_name = ctx.mir.fn_info[parent_fn_id].debug_name.as_ref();
-    let proc_name = format!("{} body", parent_debug_name);
+    // generate a procedure name
+    let parent_fn_bodies = &mut ctx.mir.fn_info[parent_fn_id].num_internal_bodies;
+    let parent_fn_name = ctx.mir.functions[parent_fn_id].debug_name.as_deref().unwrap();
+    let proc_name = Rc::from(format!("{} body {}", parent_fn_name, *parent_fn_bodies));
+    *parent_fn_bodies += 1;
 
     // calculate the function parameters
-    let mut this_fn_info = FnInfo::new(Rc::from(proc_name.as_str()));
+    let mut fn_info = FnInfo::new();
     let mut locals = SlotMap::with_key();
     let mut parameter_locals = Vec::new();
+
     // add the environment pointer
     let env_param = locals.insert(LocalDeclaration {
-        debug_name: Some("env".to_string()),
+        debug_name: Some("env".into()),
         ty: MirType::Machine(NetlogoMachineType::UNTYPED_PTR),
         storage: LocalStorage::Register,
     });
     parameter_locals.push(env_param);
-    this_fn_info.env_param = Some(env_param);
+    fn_info.env_param = Some(env_param);
+
     // add the context parameter
     let context_param = locals.insert(LocalDeclaration {
-        debug_name: Some("context".to_string()),
+        debug_name: Some("context".into()),
         ty: MirType::Machine(NetlogoMachineType::UNTYPED_PTR),
         storage: LocalStorage::Register,
     });
     parameter_locals.push(context_param);
-    this_fn_info.context_param = Some(context_param);
+    fn_info.context_param = Some(context_param);
+
     // add the self parameter
     match agent_class {
         AgentClass::Observer => {
@@ -966,41 +856,36 @@ fn eval_ephemeral_closure(
         }
         AgentClass::Turtle => {
             let local_id = locals.insert(LocalDeclaration {
-                debug_name: Some("self_turtle_id".to_string()),
+                debug_name: Some("self_turtle_id".into()),
                 ty: MirType::Machine(NetlogoMachineType::TURTLE_ID),
                 storage: LocalStorage::Register,
             });
             parameter_locals.push(local_id);
-            this_fn_info.self_param = Some(local_id);
+            fn_info.self_param = Some(local_id);
             trace!("Added turtle self parameter with local_id: {:?}", local_id);
         }
         AgentClass::Patch => {
             let local_id = locals.insert(LocalDeclaration {
-                debug_name: Some("self_patch_id".to_string()),
+                debug_name: Some("self_patch_id".into()),
                 ty: MirType::Machine(NetlogoMachineType::PATCH_ID),
                 storage: LocalStorage::Register,
             });
             parameter_locals.push(local_id);
-            this_fn_info.self_param = Some(local_id);
+            fn_info.self_param = Some(local_id);
             trace!("Added patch self parameter with local_id: {:?}", local_id);
         }
         AgentClass::Link => todo!(),
         AgentClass::Any => {
             let local_id = locals.insert(LocalDeclaration {
-                debug_name: Some("self_any".to_string()),
+                debug_name: Some("self_any".into()),
                 ty: MirType::Abstract(NetlogoAbstractType::Top),
                 storage: LocalStorage::Register,
             });
             parameter_locals.push(local_id);
-            this_fn_info.self_param = Some(local_id);
+            fn_info.self_param = Some(local_id);
             trace!("Added any self parameter with local_id: {:?}", local_id);
         }
     }
-
-    let return_ty = match closure_type {
-        ClosureType::CommandBlock => NetlogoAbstractType::Unit,
-        ClosureType::ReporterBlock => NetlogoAbstractType::Top,
-    };
 
     // create the function skeleton
     let function = Function {
@@ -1008,31 +893,15 @@ fn eval_ephemeral_closure(
         parameters: parameter_locals,
         return_ty,
         locals,
-        // cfg and nodes are defaulted and will be filled in after
-        cfg: StatementBlock { statements: vec![] },
-        nodes: RefCell::new(SlotMap::with_key()),
+        // cfg and nodes are defaulted and will be filled in later
+        cfg: StatementBlock::default(),
+        nodes: RefCell::default(),
     };
     let fn_id = ctx.mir.functions.insert(function);
-    ctx.mir.fn_info.insert(fn_id, this_fn_info);
+    ctx.mir.fn_info.insert(fn_id, fn_info);
     trace!("Inserted function for closure with id: {:?}", fn_id);
-    trace!("Current function ids: {:?}", ctx.mir.functions.keys().collect::<Vec<_>>());
 
     // build the function body
-    let statements = match closure_type {
-        ClosureType::CommandBlock => expr_json["statements"].as_array().unwrap(),
-        ClosureType::ReporterBlock => {
-            let cmd = json!(
-                {
-                    "type": "command-app",
-                    "name": "REPORT",
-                    "args": [
-                        expr_json["reporterApp"]
-                    ]
-                }
-            );
-            &vec![cmd]
-        }
-    };
     build_body(statements, fn_id, ctx.mir).unwrap();
 
     // return a closure object
@@ -1043,13 +912,10 @@ fn eval_ephemeral_closure(
 }
 
 #[instrument(skip_all)]
-pub fn write_dot(
-    fn_id: FunctionId,
-    function: &Function,
-) {
-
+pub fn write_dot(fn_id: FunctionId, function: &Function) {
     let dot_string = function.to_dot_string_with_options(false);
-    let filename = format!("dots/{}-{:?}.dot", fn_id, function.debug_name.as_deref().unwrap_or("unnamed"));
+    let filename =
+        format!("dots/{}-{:?}.dot", fn_id, function.debug_name.as_deref().unwrap_or("unnamed"));
     trace!("Writing DOT file for function {:?}: {}", fn_id, filename);
 
     if let Some(parent) = Path::new(&filename).parent() {
@@ -1059,7 +925,6 @@ pub fn write_dot(
     }
 
     fs::write(filename, dot_string).expect("Failed to write DOT file");
-
 }
 
 #[cfg(test)]
@@ -1071,8 +936,12 @@ mod tests {
         tracing_subscriber::fmt().with_max_level(tracing::Level::TRACE).init();
 
         let json = include_str!("../../bench/models/ants/ast.json");
-        let json: JsonValue = serde_json::from_str(json).unwrap();
-        let ParseResult { program, .. } = ast_to_mir(&json).unwrap();
+        let ast: ast::Ast = serde_json::from_str(json).unwrap();
+
+        std::fs::write("ast_debug.txt", format!("{:#?}", ast))
+            .expect("Failed to write AST debug output");
+
+        let ParseResult { program, .. } = ast_to_mir(ast).unwrap();
 
         let debug_output = format!("{:#?}", program);
         std::fs::write("mir_debug.txt", debug_output).expect("Failed to write MIR debug output");

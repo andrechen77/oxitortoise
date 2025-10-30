@@ -42,7 +42,7 @@
 //! will exit the current iteration of the loop body and re-enter the loop body
 //! with the loop iteration values set to the values that were broken with.
 
-use std::{collections::HashMap, fmt::Debug};
+use std::{collections::HashMap, fmt::Debug, rc::Rc};
 
 use derive_more::{Display, From, Into};
 use slotmap::{SecondaryMap, new_key_type};
@@ -86,9 +86,9 @@ pub struct Function {
     pub stack_space: usize,
     pub body: Block,
     pub insn_seqs: TiVec<InsnSeqId, TiVec<InsnIdx, InsnKind>>,
-    pub debug_fn_name: Option<String>,
-    pub debug_val_names: HashMap<ValRef, String>,
-    pub debug_var_names: HashMap<VarId, String>,
+    pub debug_fn_name: Option<Rc<str>>,
+    pub debug_val_names: HashMap<ValRef, Rc<str>>,
+    pub debug_var_names: HashMap<VarId, Rc<str>>,
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy, From, Into, Debug, Display)]

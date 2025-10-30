@@ -60,7 +60,7 @@ pub type Nodes = SlotMap<NodeId, Box<dyn EffectfulNode>>;
 
 #[derive(derive_more::Debug)]
 pub struct Function {
-    pub debug_name: Option<String>,
+    pub debug_name: Option<Rc<str>>,
     /// A list of local variables which are parameters to the function. This
     /// includes implicit parameters such as the closure environment, the
     /// context pointer, and the executing agent.
@@ -87,7 +87,7 @@ new_key_type! {
 
 #[derive(Debug)]
 pub struct LocalDeclaration {
-    pub debug_name: Option<String>,
+    pub debug_name: Option<Rc<str>>,
     pub ty: MirType,
     pub storage: LocalStorage,
 }
@@ -100,7 +100,7 @@ pub enum LocalStorage {
     Register,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct StatementBlock {
     pub statements: Vec<StatementKind>,
 }
