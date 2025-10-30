@@ -22,6 +22,8 @@ use tracing_subscriber::{
     Layer as _, filter::Targets, layer::SubscriberExt as _, util::SubscriberInitExt as _,
 };
 
+// keep this function around as as reminder of how the workspace is set up
+#[allow(dead_code)]
 fn create_workspace() -> (Workspace, BreedId) {
     let topology_spec = TopologySpec {
         min_pxcor: -35,
@@ -86,7 +88,7 @@ fn main() {
     let ParseResult { mut program, global_names, fn_info } = ast_to_mir::ast_to_mir(ast).unwrap();
 
     for (fn_id, function) in &program.functions {
-        write_dot(fn_id, &*function.borrow());
+        write_dot(fn_id, &function.borrow());
     }
 
     info!("applying cheats");
@@ -105,6 +107,6 @@ fn main() {
     }
 
     for (fn_id, function) in &program.functions {
-        write_dot(fn_id, &*function.borrow());
+        write_dot(fn_id, &function.borrow());
     }
 }

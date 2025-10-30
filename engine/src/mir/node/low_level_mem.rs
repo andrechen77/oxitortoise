@@ -7,7 +7,7 @@ use lir::smallvec::smallvec;
 use slotmap::SlotMap;
 
 use crate::{
-    mir::{EffectfulNode, MirType, NodeId},
+    mir::{EffectfulNode, MirType, NodeId, WriteLirError},
     sim::value::NetlogoMachineType,
 };
 
@@ -45,7 +45,7 @@ impl EffectfulNode for MemLoad {
         my_node_id: NodeId,
         nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
         lir_builder: &mut crate::mir::build_lir::LirInsnBuilder,
-    ) -> Result<(), ()> {
+    ) -> Result<(), WriteLirError> {
         let &[lir_type] = self.ty.to_lir_type().as_slice() else {
             // this panic is purely a limitation of this implementation; there's
             // no inherent limitation that makes insertion of multiple mem load
@@ -99,7 +99,7 @@ impl EffectfulNode for MemStore {
         _my_node_id: NodeId,
         nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
         lir_builder: &mut crate::mir::build_lir::LirInsnBuilder,
-    ) -> Result<(), ()> {
+    ) -> Result<(), WriteLirError> {
         let &[ptr] = lir_builder.get_node_results(nodes, self.ptr) else {
             panic!("expected a node that outputs a pointer to be a single LIR value");
         };
@@ -145,7 +145,7 @@ impl EffectfulNode for DeriveField {
         my_node_id: NodeId,
         nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
         lir_builder: &mut crate::mir::build_lir::LirInsnBuilder,
-    ) -> Result<(), ()> {
+    ) -> Result<(), WriteLirError> {
         let &[ptr] = lir_builder.get_node_results(nodes, self.ptr) else {
             panic!("expected a node that outputs a pointer to be a single LIR value");
         };
@@ -189,7 +189,7 @@ impl EffectfulNode for DeriveElement {
         my_node_id: NodeId,
         nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
         lir_builder: &mut crate::mir::build_lir::LirInsnBuilder,
-    ) -> Result<(), ()> {
+    ) -> Result<(), WriteLirError> {
         let &[ptr] = lir_builder.get_node_results(nodes, self.ptr) else {
             panic!("expected a node that outputs a pointer to be a single LIR value");
         };

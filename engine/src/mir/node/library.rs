@@ -10,7 +10,7 @@ use slotmap::{Key, SlotMap};
 use crate::{
     mir::{
         EffectfulNode, Function, MirType, NetlogoAbstractType, NodeId, Nodes, Program,
-        build_lir::LirInsnBuilder,
+        WriteLirError, build_lir::LirInsnBuilder,
     },
     sim::{patch::PatchVarDesc, turtle::BreedId},
 };
@@ -40,7 +40,7 @@ impl EffectfulNode for ClearAll {
         _my_node_id: NodeId,
         nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
         lir_builder: &mut LirInsnBuilder,
-    ) -> Result<(), ()> {
+    ) -> Result<(), WriteLirError> {
         let &[ctx_ptr] = lir_builder.get_node_results(nodes, self.context) else {
             panic!("expected node outputting context pointer to be a single LIR value")
         };
@@ -87,7 +87,7 @@ impl EffectfulNode for Diffuse {
         _my_node_id: NodeId,
         _nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
         _lir_builder: &mut LirInsnBuilder,
-    ) -> Result<(), ()> {
+    ) -> Result<(), WriteLirError> {
         todo!()
     }
 }
@@ -122,7 +122,7 @@ impl EffectfulNode for ResetTicks {
         _my_node_id: NodeId,
         nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
         lir_builder: &mut LirInsnBuilder,
-    ) -> Result<(), ()> {
+    ) -> Result<(), WriteLirError> {
         let &[ctx_ptr] = lir_builder.get_node_results(nodes, self.context) else {
             panic!("expected node outputting context pointer to be a single LIR value")
         };
@@ -223,7 +223,7 @@ impl EffectfulNode for CreateTurtles {
         my_node_id: NodeId,
         nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
         lir_builder: &mut LirInsnBuilder,
-    ) -> Result<(), ()> {
+    ) -> Result<(), WriteLirError> {
         let &[ctx_ptr] = lir_builder.get_node_results(nodes, self.context) else {
             panic!("expected node outputting context pointer to be a single LIR value")
         };
@@ -326,7 +326,7 @@ impl EffectfulNode for AskAllTurtles {
         my_node_id: NodeId,
         nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
         lir_builder: &mut LirInsnBuilder,
-    ) -> Result<(), ()> {
+    ) -> Result<(), WriteLirError> {
         let &[ctx_ptr] = lir_builder.get_node_results(nodes, self.context) else {
             panic!("expected node outputting context pointer to be a single LIR value")
         };
@@ -473,7 +473,7 @@ impl EffectfulNode for CanMove {
         _my_node_id: NodeId,
         _nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
         _lir_builder: &mut LirInsnBuilder,
-    ) -> Result<(), ()> {
+    ) -> Result<(), WriteLirError> {
         todo!()
     }
 }
@@ -580,7 +580,7 @@ impl EffectfulNode for OffsetDistanceByHeading {
         _my_node_id: NodeId,
         _nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
         _lir_builder: &mut LirInsnBuilder,
-    ) -> Result<(), ()> {
+    ) -> Result<(), WriteLirError> {
         todo!()
     }
 }

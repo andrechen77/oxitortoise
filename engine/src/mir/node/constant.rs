@@ -5,7 +5,7 @@ use slotmap::SlotMap;
 use crate::{
     mir::{
         EffectfulNode, Function, MirType, NetlogoAbstractType, NodeId, Nodes, Program,
-        build_lir::LirInsnBuilder,
+        WriteLirError, build_lir::LirInsnBuilder,
     },
     sim::value::UnpackedDynBox,
 };
@@ -38,7 +38,7 @@ impl EffectfulNode for Constant {
         my_node_id: NodeId,
         _nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
         lir_builder: &mut LirInsnBuilder,
-    ) -> Result<(), ()> {
+    ) -> Result<(), WriteLirError> {
         let _ = my_node_id;
         match self.value {
             UnpackedDynBox::Int(value) => {

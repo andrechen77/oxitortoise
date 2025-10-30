@@ -114,6 +114,9 @@ pub enum StatementKind {
     Stop,
 }
 
+#[derive(Debug)]
+pub struct WriteLirError;
+
 /// Some kind of computation that takes inputs and produces outputs. The output
 /// of a node is immutable, though may change between instances if the node is
 /// part of a loop. The output of a node can be referenced by its node id.
@@ -179,11 +182,11 @@ pub trait EffectfulNode: Debug + Display {
         my_node_id: NodeId,
         nodes: &Nodes,
         lir_builder: &mut LirInsnBuilder,
-    ) -> Result<(), ()> {
+    ) -> Result<(), WriteLirError> {
         let _ = my_node_id;
         let _ = lir_builder;
         let _ = nodes;
-        Err(())
+        Err(WriteLirError)
     }
 }
 
@@ -261,8 +264,8 @@ impl NetlogoAbstractType {
             Self::Link => todo!("add link id"),
             Self::Agentset => todo!("add agentset id"),
             Self::Nobody => todo!(),
-            Self::Closure { return_ty } => todo!(),
-            Self::List { element_ty } => todo!(),
+            Self::Closure { return_ty: _ } => todo!(),
+            Self::List { element_ty: _ } => todo!(),
         }
     }
 }

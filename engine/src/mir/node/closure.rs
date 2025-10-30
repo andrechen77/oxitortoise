@@ -3,7 +3,7 @@ use lir::smallvec::smallvec;
 use slotmap::SlotMap;
 
 use crate::mir::{
-    EffectfulNode, FunctionId, LocalId, MirType, NetlogoAbstractType, NodeId,
+    EffectfulNode, FunctionId, LocalId, MirType, NetlogoAbstractType, NodeId, WriteLirError,
     build_lir::LirInsnBuilder,
 };
 
@@ -64,7 +64,7 @@ impl EffectfulNode for Closure {
         my_node_id: NodeId,
         _nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
         lir_builder: &mut LirInsnBuilder,
-    ) -> Result<(), ()> {
+    ) -> Result<(), WriteLirError> {
         // insert an instruction to create the env pointer
         let mk_env_ptr = if !self.captures.is_empty() {
             todo!(

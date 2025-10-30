@@ -10,7 +10,6 @@ use engine::{
         node::{self, BinaryOpcode, PatchLocRelation, UnaryOpcode},
     },
     sim::{
-        agent_schema::{PatchSchema, TurtleSchema},
         patch::PatchVarDesc,
         turtle::{BreedId, TurtleVarDesc},
         value::{NetlogoMachineType, UnpackedDynBox},
@@ -18,7 +17,7 @@ use engine::{
     slotmap::{SecondaryMap, SlotMap},
     util::cell::RefCell,
 };
-use tracing::{Span, error, instrument, trace};
+use tracing::{instrument, trace};
 
 pub extern crate serde_json;
 
@@ -48,6 +47,7 @@ enum NameReferent {
     Global(GlobalId),
     TurtleVar(TurtleVarDesc),
     PatchVar(PatchVarDesc),
+    #[allow(dead_code)] // remove when turtle breeds are implemented
     TurtleBreed(BreedId),
     UserProc(FunctionId),
 }
@@ -154,7 +154,7 @@ pub fn ast_to_mir(ast: Ast) -> anyhow::Result<ParseResult> {
         global_vars: global_var_names,
         turtle_vars: turtle_var_names,
         patch_vars: patch_var_names,
-        link_vars: link_var_names,
+        link_vars: _link_var_names, // TODO handle link variables
     } = global_names;
 
     for global_name in global_var_names {
@@ -257,22 +257,9 @@ enum AgentClass {
     Observer,
     Turtle,
     Patch,
+    #[allow(dead_code)] // remove when link procedures are implemented
     Link,
     Any,
-}
-
-impl AgentClass {
-    fn is_turtle(&self) -> bool {
-        matches!(self, AgentClass::Turtle | AgentClass::Any)
-    }
-
-    fn is_patch(&self) -> bool {
-        matches!(self, AgentClass::Patch | AgentClass::Any)
-    }
-
-    fn is_link(&self) -> bool {
-        matches!(self, AgentClass::Link | AgentClass::Any)
-    }
 }
 
 /// Holds information about a function while it is being built.
@@ -444,44 +431,17 @@ impl<'a> FnBodyBuilderCtx<'a> {
     /// Returns a node that gets the context parameter for the current function
     fn get_context(&mut self) -> NodeId {
         let id = self.nodes.insert(Box::new(node::GetLocalVar {
-            local_id: self.mir.fn_info[self.fn_id].context_param.unwrap(),
+            local_id: self.mir.fn_info[self.fn_id]
+                .context_param
+                .expect("expected context parameter"),
         }));
         trace!("Got context parameter with id: {:?}", id);
         id
     }
 
-    /// Returns a node that gets the turtle self parameter. Panics if the current
-    /// function doesn't have a turtle self parameter.
-    fn get_self_turtle(&mut self) -> NodeId {
-        let self_param = self.mir.fn_info[self.fn_id].self_param.unwrap();
-        // assert!(agent_class.is_turtle(), "Expected turtle agent class");
-        let id = self.nodes.insert(Box::new(node::GetLocalVar { local_id: self_param }));
-        trace!("Got turtle self parameter with id: {:?}", id);
-        id
-    }
-
-    /// Returns a node that gets the patch self parameter. Panics if the current
-    /// function doesn't have a patch self parameter.
-    fn get_self_patch(&mut self) -> NodeId {
-        let self_param = self.mir.fn_info[self.fn_id].self_param.unwrap();
-        // assert!(agent_class.is_patch(), "Expected patch agent class");
-        self.nodes.insert(Box::new(node::GetLocalVar { local_id: self_param }))
-    }
-
-    /// Returns a node that gets the self parameter for turtle or patch agents.
-    /// Panics if the current function doesn't have a turtle or patch self parameter.
-    fn get_self_turtle_or_patch(&mut self) -> NodeId {
-        let self_param = self.mir.fn_info[self.fn_id].self_param.unwrap();
-        // assert!(
-        //     agent_class.is_turtle() || agent_class.is_patch(),
-        //     "Expected turtle or patch agent class"
-        // );
-        self.nodes.insert(Box::new(node::GetLocalVar { local_id: self_param }))
-    }
-
-    /// Returns a node that gets the self parameter for any agent type.
-    fn get_self_any(&mut self) -> NodeId {
-        let self_param = self.mir.fn_info[self.fn_id].self_param.unwrap();
+    /// Returns a node that gets the self parameter.
+    fn get_self_agent(&mut self) -> NodeId {
+        let self_param = self.mir.fn_info[self.fn_id].self_param.expect("expected self parameter");
         self.nodes.insert(Box::new(node::GetLocalVar { local_id: self_param }))
     }
 }
@@ -537,12 +497,12 @@ fn translate_statement(ast_node: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) -> St
             match var_desc {
                 NameReferent::TurtleVar(var) => {
                     let context = ctx.get_context();
-                    let turtle = ctx.get_self_turtle();
+                    let turtle = ctx.get_self_agent();
                     Box::new(node::SetTurtleVar { context, turtle, var, value })
                 }
                 NameReferent::PatchVar(var) => {
                     let context = ctx.get_context();
-                    let agent = ctx.get_self_turtle_or_patch();
+                    let agent = ctx.get_self_agent();
                     Box::new(node::SetPatchVarAsTurtleOrPatch { context, agent, var, value })
                 }
                 NameReferent::Global(_) => todo!("setting global variables not yet supported"),
@@ -551,13 +511,13 @@ fn translate_statement(ast_node: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) -> St
         }
         N::CommandApp(C::Fd([distance])) => {
             let context = ctx.get_context();
-            let turtle = ctx.get_self_turtle();
+            let turtle = ctx.get_self_agent();
             let distance = translate_expression(*distance, ctx.reborrow());
             Box::new(node::TurtleForward { context, turtle, distance })
         }
         N::CommandApp(C::Left([heading])) => {
             let context = ctx.get_context();
-            let turtle = ctx.get_self_turtle();
+            let turtle = ctx.get_self_agent();
             let angle_rt = translate_expression(*heading, ctx.reborrow());
             let angle_lt = ctx
                 .nodes
@@ -566,7 +526,7 @@ fn translate_statement(ast_node: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) -> St
         }
         N::CommandApp(C::Right([heading])) => {
             let context = ctx.get_context();
-            let turtle = ctx.get_self_turtle();
+            let turtle = ctx.get_self_agent();
             let angle = translate_expression(*heading, ctx.reborrow());
             Box::new(node::TurtleRotate { context, turtle, angle })
         }
@@ -631,11 +591,11 @@ fn translate_expression(expr: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) -> NodeI
         N::Number { value } => {
             Box::new(node::Constant { value: UnpackedDynBox::Float(value.as_f64().unwrap()) })
         }
-        N::String { value } => {
+        N::String { value: _ } => {
             // TODO implement string constants
             Box::new(node::Constant { value: UnpackedDynBox::Float(0.0) })
         }
-        N::List { items } => todo!(),
+        N::List { items: _ } => todo!(),
         N::Nobody => Box::new(node::Constant { value: UnpackedDynBox::Nobody }),
         N::ReporterProcCall { name, args } => {
             let referent = ctx.mir.global_names.lookup(&name).unwrap_or_else(|| {
@@ -653,17 +613,17 @@ fn translate_expression(expr: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) -> NodeI
                 panic!("unknown variable access `{}`", name);
             };
             match referent {
-                NameReferent::Global(global_id) => {
+                NameReferent::Global(_global_id) => {
                     todo!("global variable accesses not yet implemented")
                 }
                 NameReferent::TurtleVar(var) => {
                     let context = ctx.get_context();
-                    let turtle = ctx.get_self_turtle();
+                    let turtle = ctx.get_self_agent();
                     Box::new(node::GetTurtleVar { context, turtle, var })
                 }
                 NameReferent::PatchVar(var) => {
                     let context = ctx.get_context();
-                    let agent = ctx.get_self_turtle_or_patch();
+                    let agent = ctx.get_self_agent();
                     Box::new(node::GetPatchVarAsTurtleOrPatch { context, agent, var })
                 }
                 NameReferent::Constant(mk_node) => mk_node(),
@@ -714,14 +674,14 @@ fn translate_expression(expr: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) -> NodeI
             Box::new(node::UnaryOp { op: UnaryOpcode::Not, operand })
         }
         N::ReporterCall(R::Distancexy([x, y])) => {
-            let agent = ctx.get_self_turtle_or_patch();
+            let agent = ctx.get_self_agent();
             let x = translate_expression(*x, ctx.reborrow());
             let y = translate_expression(*y, ctx.reborrow());
             Box::new(node::Distancexy { agent, x, y })
         }
         N::ReporterCall(R::CanMove([distance])) => {
             let context = ctx.get_context();
-            let turtle = ctx.get_self_turtle();
+            let turtle = ctx.get_self_agent();
             let distance = translate_expression(*distance, ctx.reborrow());
             Box::new(node::CanMove { context, turtle, distance })
         }
@@ -738,14 +698,15 @@ fn translate_expression(expr: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) -> NodeI
                 _ => unreachable!(),
             };
             let context = ctx.get_context();
-            let turtle = ctx.get_self_turtle();
+            let turtle = ctx.get_self_agent();
             let heading = translate_expression(*heading, ctx.reborrow());
             let distance = translate_expression(*distance, ctx.reborrow());
             Box::new(node::PatchRelative { context, turtle, relative_loc, heading, distance })
         }
         N::ReporterCall(R::MaxPxcor([])) => Box::new(node::MaxPxcor { context: ctx.get_context() }),
         N::ReporterCall(R::MaxPycor([])) => Box::new(node::MaxPycor { context: ctx.get_context() }),
-        N::ReporterCall(R::OneOf(choices)) => {
+        // TODO handle one-of reporter
+        N::ReporterCall(R::OneOf([_choices])) => {
             Box::new(node::Constant { value: UnpackedDynBox::Float(1.0) })
         }
         N::ReporterCall(R::ScaleColor([color, number, range1, range2])) => {
@@ -918,10 +879,10 @@ pub fn write_dot(fn_id: FunctionId, function: &Function) {
         format!("dots/{}-{:?}.dot", fn_id, function.debug_name.as_deref().unwrap_or("unnamed"));
     trace!("Writing DOT file for function {:?}: {}", fn_id, filename);
 
-    if let Some(parent) = Path::new(&filename).parent() {
-        if let Err(e) = fs::create_dir_all(parent) {
-            panic!("Failed to create parent directory for {} | {:?}", filename, e);
-        }
+    if let Some(parent) = Path::new(&filename).parent()
+        && let Err(e) = fs::create_dir_all(parent)
+    {
+        panic!("Failed to create parent directory for {} | {:?}", filename, e);
     }
 
     fs::write(filename, dot_string).expect("Failed to write DOT file");

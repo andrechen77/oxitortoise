@@ -4,6 +4,7 @@ use slotmap::SlotMap;
 
 use crate::mir::{
     EffectfulNode, Function, LocalId, MirType, NetlogoAbstractType, NodeId, Nodes, Program,
+    WriteLirError,
     build_lir::{LirInsnBuilder, LocalLocation},
 };
 
@@ -32,7 +33,7 @@ impl EffectfulNode for GetLocalVar {
         my_node_id: NodeId,
         _nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
         lir_builder: &mut LirInsnBuilder,
-    ) -> Result<(), ()> {
+    ) -> Result<(), WriteLirError> {
         match lir_builder.local_to_lir[&self.local_id] {
             LocalLocation::Stack { offset } => {
                 let _ = offset;

@@ -64,9 +64,9 @@ impl GenSlotTracker {
     /// slot is not occupied. Otherwise, returns whether freeing up this slot
     /// caused the generation number to wrap around, as a warning that keys
     /// may begin to collide.
-    pub fn deallocate(&mut self, gen_index: GenIndex) -> Result<bool, ()> {
+    pub fn deallocate(&mut self, gen_index: GenIndex) -> Option<bool> {
         if !self.has_key(gen_index) {
-            return Err(());
+            return None;
         }
 
         let current_gen = self.generations[gen_index.index as usize];
@@ -76,7 +76,7 @@ impl GenSlotTracker {
 
         // add to free list
         self.free_list.push_back(gen_index.index);
-        Ok(overflow)
+        Some(overflow)
     }
 
     pub fn has_key(&self, gen_index: GenIndex) -> bool {
@@ -307,7 +307,7 @@ mod tests {
         let gen1 = tracker.allocate();
         assert!(tracker.has_key(gen1));
 
-        assert_eq!(tracker.deallocate(gen1), Ok(false));
+        assert_eq!(tracker.deallocate(gen1), Some(false));
         assert!(!tracker.has_key(gen1));
 
         // should be able to reallocate the same slot
@@ -340,7 +340,7 @@ mod tests {
         let _ = tracker.deallocate(gen1);
 
         // try to deallocate again
-        assert_eq!(tracker.deallocate(gen1), Err(()));
+        assert_eq!(tracker.deallocate(gen1), None);
     }
 
     #[test]
@@ -350,7 +350,7 @@ mod tests {
         // allocate and deallocate multiple times
         for _ in 0..5 {
             let gen_index = tracker.allocate();
-            assert_eq!(tracker.deallocate(gen_index), Ok(false));
+            assert_eq!(tracker.deallocate(gen_index), Some(false));
         }
 
         // should reuse slots from free list
@@ -369,7 +369,7 @@ mod tests {
             assert_eq!(key.r#gen, (i << 1) | 1);
 
             let result = tracker.deallocate(key);
-            assert_eq!(result, Ok(false));
+            assert_eq!(result, Some(false));
         }
 
         // the next allocation-deallocation will cause a generation overflow
@@ -378,7 +378,7 @@ mod tests {
         assert_eq!(about_to_overflow.r#gen, u16::MAX);
 
         let result = tracker.deallocate(about_to_overflow);
-        assert_eq!(result, Ok(true));
+        assert_eq!(result, Some(true));
 
         // allocating again will use the same slot with generation 1
         let overflowed = tracker.allocate();

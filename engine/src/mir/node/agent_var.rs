@@ -8,7 +8,7 @@ use crate::{
     exec::CanonExecutionContext,
     mir::{
         EffectfulNode, Function, MirType, NetlogoAbstractType, NodeId, Nodes, Program,
-        build_lir::LirInsnBuilder, node,
+        WriteLirError, build_lir::LirInsnBuilder, node,
     },
     sim::{
         patch::{PatchVarDesc, calc_patch_var_offset},
@@ -188,7 +188,7 @@ impl EffectfulNode for TurtleIdToIndex {
         my_node_id: NodeId,
         nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
         lir_builder: &mut LirInsnBuilder,
-    ) -> Result<(), ()> {
+    ) -> Result<(), WriteLirError> {
         let &[turtle_id] = lir_builder.get_node_results(nodes, self.turtle_id) else {
             panic!("expected node outputting turtle id to be a single LIR value");
         };

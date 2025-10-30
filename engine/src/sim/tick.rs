@@ -13,6 +13,9 @@ impl Default for Tick {
     }
 }
 
+#[derive(Debug)]
+pub struct TickAdvanceError;
+
 impl Tick {
     pub fn new() -> Self {
         Self(f64::NAN)
@@ -26,15 +29,15 @@ impl Tick {
 
     /// Attempts to advance the tick counter by one. Errors if the counter is
     /// in a clear state.
-    pub fn advance(&mut self) -> Result<(), ()> {
+    pub fn advance(&mut self) -> Result<(), TickAdvanceError> {
         self.advance_by(1.0)
     }
 
     /// Attempts to advance the tick counter by the specified amount. Returns `true` if
     /// successful, and false if the counter was cleared.
-    pub fn advance_by(&mut self, amount: f64) -> Result<(), ()> {
+    pub fn advance_by(&mut self, amount: f64) -> Result<(), TickAdvanceError> {
         if self.is_clear() {
-            return Err(());
+            return Err(TickAdvanceError);
         }
 
         self.0 += amount;
