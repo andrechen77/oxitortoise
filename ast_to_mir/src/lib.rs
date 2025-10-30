@@ -36,7 +36,8 @@ pub struct GlobalScope {
     global_vars: HashMap<Rc<str>, GlobalId>,
     patch_vars: HashMap<Rc<str>, PatchVarDesc>,
     turtle_vars: HashMap<Rc<str>, TurtleVarDesc>,
-    turtle_breeds: HashMap<Option<Rc<str>>, BreedId>,
+    /// The default turtle breed is represented by the empty string.
+    turtle_breeds: HashMap<Rc<str>, BreedId>,
     functions: HashMap<Rc<str>, FunctionId>,
 }
 
@@ -83,7 +84,7 @@ impl GlobalScope {
                 (Rc::from("COLOR"), TurtleVarDesc::Color),
                 (Rc::from("SIZE"), TurtleVarDesc::Size),
             ]),
-            turtle_breeds: HashMap::from([(None, default_turtle_breed)]),
+            turtle_breeds: HashMap::from([("".into(), default_turtle_breed)]),
             functions: HashMap::new(),
         }
     }
@@ -109,10 +110,9 @@ impl GlobalScope {
         if let Some(patch_var_id) = patch_vars.get(name) {
             return Some(NameReferent::PatchVar(*patch_var_id));
         }
-        // idk how to get lookup by option working
-        // if let Some(turtle_breed_id) = turtle_breeds.get(Some(name)) {
-        //     return Some(NameReferent::TurtleBreed(*turtle_breed_id));
-        // }
+        if let Some(turtle_breed_id) = turtle_breeds.get(name) {
+            return Some(NameReferent::TurtleBreed(*turtle_breed_id));
+        }
         if let Some(function_id) = functions.get(name) {
             return Some(NameReferent::UserProc(*function_id));
         }
@@ -523,7 +523,7 @@ fn translate_statement(ast_node: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) -> St
                 translate_ephemeral_closure(*body, ctx.fn_id, AgentClass::Turtle, ctx.reborrow());
             Box::new(node::CreateTurtles {
                 context,
-                breed: ctx.mir.global_names.turtle_breeds[&None], // FUTURE add creating other turtle breeds
+                breed: ctx.mir.global_names.turtle_breeds[""], // FUTURE add creating other turtle breeds
                 num_turtles: population,
                 body,
             })
