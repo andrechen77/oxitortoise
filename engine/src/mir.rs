@@ -224,7 +224,9 @@ pub enum NetlogoAbstractType {
     Patch,
     Turtle,
     Link,
-    Agentset,
+    Agentset {
+        agent_type: Box<NetlogoAbstractType>,
+    },
     Nobody,
     Closure {
         return_ty: Box<NetlogoAbstractType>,
@@ -262,7 +264,7 @@ impl NetlogoAbstractType {
             Self::Patch => NetlogoMachineType::PATCH_ID,
             Self::Turtle => NetlogoMachineType::TURTLE_ID,
             Self::Link => todo!("add link id"),
-            Self::Agentset => todo!("add agentset id"),
+            Self::Agentset { agent_type: _ } => todo!("add agentset id"),
             Self::Nobody => todo!(),
             Self::Closure { return_ty: _ } => todo!(),
             Self::List { element_ty: _ } => todo!(),

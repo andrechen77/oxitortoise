@@ -2,7 +2,9 @@ use derive_more::derive::Display;
 use slotmap::SlotMap;
 
 use crate::mir::{
-    EffectfulNode, Function, MirType, NetlogoAbstractType, NodeId, Nodes, Program, WriteLirError,
+    EffectfulNode, Function, MirType, NetlogoAbstractType,
+    NetlogoAbstractType::{Patch, Turtle},
+    NodeId, Nodes, Program, WriteLirError,
 };
 
 #[derive(Debug, Display)]
@@ -39,7 +41,11 @@ impl EffectfulNode for Agentset {
     }
 
     fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirType {
-        MirType::Abstract(NetlogoAbstractType::Agentset)
+        let typ = match self {
+            Agentset::AllTurtles => Turtle,
+            Agentset::AllPatches => Patch,
+        };
+        MirType::Abstract(NetlogoAbstractType::Agentset { agent_type: Box::new(typ) })
     }
 
     fn write_lir_execution(
