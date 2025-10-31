@@ -1,2 +1,2 @@
 [toolchain]
-channel = "1.90.0" # Update to "1.91.0" after 10/30/25
+channel = "1.91.0"
