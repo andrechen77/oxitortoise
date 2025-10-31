@@ -1,0 +1,3 @@
+[submodule "nl2ast"]
+	path = nl2ast
+	url = https://github.com/NetLogo/nl2ast
