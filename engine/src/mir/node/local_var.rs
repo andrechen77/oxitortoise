@@ -1,6 +1,5 @@
 use derive_more::derive::Display;
 use lir::smallvec::smallvec;
-use slotmap::SlotMap;
 
 use crate::mir::{
     EffectfulNode, Function, LocalId, MirType, NetlogoAbstractType, NodeId, Nodes, Program,
@@ -31,7 +30,7 @@ impl EffectfulNode for GetLocalVar {
     fn write_lir_execution(
         &self,
         my_node_id: NodeId,
-        _nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
+        _nodes: &Nodes,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
         match lir_builder.local_to_lir[&self.local_id] {

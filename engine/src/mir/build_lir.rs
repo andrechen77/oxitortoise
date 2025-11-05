@@ -9,7 +9,7 @@ use slotmap::{SecondaryMap, SlotMap};
 
 use crate::{
     exec::jit::HOST_FUNCTIONS,
-    mir::{self, EffectfulNode},
+    mir::{self, EffectfulNode, Nodes},
 };
 
 #[derive(Debug)]
@@ -83,11 +83,7 @@ pub struct LirInsnBuilder<'a> {
 }
 
 impl<'a> LirInsnBuilder<'a> {
-    pub fn get_node_results(
-        &mut self,
-        nodes: &SlotMap<mir::NodeId, Box<dyn EffectfulNode>>,
-        node_id: mir::NodeId,
-    ) -> &[lir::ValRef] {
+    pub fn get_node_results(&mut self, nodes: &Nodes, node_id: mir::NodeId) -> &[lir::ValRef] {
         if !self.node_to_lir.contains_key(&node_id) {
             nodes[node_id].write_lir_execution(node_id, nodes, self).unwrap();
         }
@@ -195,7 +191,7 @@ fn translate_function_body(
     translate_stmt_block(&function.nodes.borrow(), &mut fn_builder, &function.cfg);
 
     fn translate_stmt_block(
-        nodes: &SlotMap<mir::NodeId, Box<dyn EffectfulNode>>,
+        nodes: &Nodes,
         fn_builder: &mut LirInsnBuilder,
         stmt_block: &mir::StatementBlock,
     ) {

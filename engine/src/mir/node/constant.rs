@@ -1,6 +1,5 @@
 use derive_more::derive::Display;
 use lir::smallvec::smallvec;
-use slotmap::SlotMap;
 
 use crate::{
     mir::{
@@ -36,7 +35,7 @@ impl EffectfulNode for Constant {
     fn write_lir_execution(
         &self,
         my_node_id: NodeId,
-        _nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
+        _nodes: &Nodes,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
         let _ = my_node_id;

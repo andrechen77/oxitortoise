@@ -10,6 +10,7 @@ flagset = "0.4.6"
 slotmap = "1.0.7"
 lir = { path = "../lir", package = "oxitortoise_lir" }
 tracing = "0.1.41"
+ambassador = "0.4.2"
 
 [features]
 runtime-unsafety = []

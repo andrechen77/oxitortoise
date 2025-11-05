@@ -1,11 +1,9 @@
 // TODO add documentation about MIR
 
-use std::{
-    fmt::{Debug, Display},
-    rc::Rc,
-};
+use std::rc::Rc;
 
-use derive_more::derive::Display;
+use ambassador::{Delegate, delegatable_trait};
+use derive_more::derive::{Display, From};
 use slotmap::{SecondaryMap, SlotMap, new_key_type};
 
 use crate::{
@@ -56,7 +54,7 @@ pub struct CustomVarDecl {
     pub ty: NetlogoAbstractType,
 }
 
-pub type Nodes = SlotMap<NodeId, Box<dyn EffectfulNode>>;
+pub type Nodes = SlotMap<NodeId, EffectfulNodeKind>;
 
 #[derive(derive_more::Debug)]
 pub struct Function {
@@ -117,12 +115,18 @@ pub enum StatementKind {
 #[derive(Debug)]
 pub struct WriteLirError;
 
+/// A local transformation that can be applied to a node. The function
+/// returns `true` if the transformation was successfully applied, `false`
+/// otherwise.
+pub type NodeTransform = Box<dyn Fn(&Program, FunctionId, NodeId) -> bool>;
+
 /// Some kind of computation that takes inputs and produces outputs. The output
 /// of a node is immutable, though may change between instances if the node is
 /// part of a loop. The output of a node can be referenced by its node id.
 /// The execution of a node may have side effects; if it does, then it is
 /// incorrect to deduplicate nodes; if it doesn't, deduplication is correct.
-pub trait EffectfulNode: Debug + Display {
+#[delegatable_trait]
+pub trait EffectfulNode {
     fn has_side_effects(&self) -> bool;
 
     fn dependencies(&self) -> Vec<NodeId>;
@@ -131,22 +135,22 @@ pub trait EffectfulNode: Debug + Display {
     /// output type; those should return `None`.
     fn output_type(&self, program: &Program, function: &Function, nodes: &Nodes) -> MirType;
 
-    /// Attempt to optimzie this node, and performs the replacement in the
-    /// nodes arena. Incoming connections to the rewritten area are
-    /// preserved by reusing the old `NodeId`s. Returns whether any modification
-    /// was performed.
-    fn transform(
+    /// Returns a possible local transformation that could apply to this node.
+    /// This can return at most one transformation, even if multiple are
+    /// applicable. The implementation should attempt to choose the best
+    /// transformation using local peephole analysis. The returned
+    /// transformation, if any, is not guaranteed to be applicable; it will
+    /// return `true` if anything was applied.
+    fn peephole_transform(
         &self,
-        my_node_id: NodeId,
         program: &Program,
-        function: &Function,
-        nodes: &RefCell<Nodes>,
-    ) -> bool {
-        let _ = my_node_id;
+        fn_id: FunctionId,
+        my_node_id: NodeId,
+    ) -> Option<NodeTransform> {
         let _ = program;
-        let _ = function;
-        let _ = nodes;
-        false
+        let _ = fn_id;
+        let _ = my_node_id;
+        None
     }
 
     /// Attempt to expand the node into a lower level representation.
@@ -155,16 +159,14 @@ pub trait EffectfulNode: Debug + Display {
     /// and everything).
     fn lowering_expand(
         &self,
-        my_node_id: NodeId,
         program: &Program,
-        function: &Function,
-        nodes: &RefCell<Nodes>,
-    ) -> bool {
-        let _ = my_node_id;
+        fn_id: FunctionId,
+        my_node_id: NodeId,
+    ) -> Option<NodeTransform> {
         let _ = program;
-        let _ = function;
-        let _ = nodes;
-        false
+        let _ = fn_id;
+        let _ = my_node_id;
+        None
     }
 
     /// Writes the LIR instructions that correspond to the calculation
@@ -188,6 +190,55 @@ pub trait EffectfulNode: Debug + Display {
         let _ = nodes;
         Err(WriteLirError)
     }
+}
+
+use node::*;
+
+#[derive(Debug, Display, From, Delegate)]
+#[delegate(EffectfulNode)]
+pub enum EffectfulNodeKind {
+    GetPatchVarAsTurtleOrPatch(GetPatchVarAsTurtleOrPatch),
+    GetTurtleVar(GetTurtleVar),
+    SetTurtleVar(SetTurtleVar),
+    TurtleIdToIndex(TurtleIdToIndex),
+    GetPatchVar(GetPatchVar),
+    SetPatchVar(SetPatchVar),
+    SetPatchVarAsTurtleOrPatch(SetPatchVarAsTurtleOrPatch),
+    Agentset(Agentset),
+    ClearAll(ClearAll),
+    Diffuse(Diffuse),
+    ResetTicks(ResetTicks),
+    AdvanceTick(AdvanceTick),
+    GetTick(GetTick),
+    CreateTurtles(CreateTurtles),
+    Ask(Ask),
+    AskAllTurtles(AskAllTurtles),
+    Of(Of),
+    TurtleRotate(TurtleRotate),
+    TurtleForward(TurtleForward),
+    CanMove(CanMove),
+    PatchRelative(PatchRelative),
+    PatchAt(PatchAt),
+    OffsetDistanceByHeading(OffsetDistanceByHeading),
+    Distancexy(Distancexy),
+    MaxPxcor(MaxPxcor),
+    MaxPycor(MaxPycor),
+    OneOf(OneOf),
+    ScaleColor(ScaleColor),
+    RandomInt(RandomInt),
+    SetDefaultShape(SetDefaultShape),
+    GetLocalVar(GetLocalVar),
+    SetLocalVar(SetLocalVar),
+    BinaryOperation(BinaryOperation),
+    UnaryOp(UnaryOp),
+    Closure(Closure),
+    Constant(Constant),
+    ListLiteral(ListLiteral),
+    MemLoad(MemLoad),
+    MemStore(MemStore),
+    DeriveField(DeriveField),
+    DeriveElement(DeriveElement),
+    CallUserFn(CallUserFn),
 }
 
 #[derive(Clone, Debug, PartialEq)]

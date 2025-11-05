@@ -1,18 +1,20 @@
-use std::mem;
+use std::{any::Any, mem};
 
 use derive_more::derive::Display;
 use tracing::debug;
 
 use crate::{
     mir::{
-        EffectfulNode, Function, MirType, MirVisitor, NodeId, Nodes, Program, visit_mir_function,
+        EffectfulNode, Function, FunctionId, MirType, MirVisitor, NetlogoAbstractType, NodeId,
+        Nodes, Program, node, visit_mir_function,
     },
+    sim::{turtle::TurtleVarDesc, value::NetlogoMachineType},
     util::cell::RefCell,
 };
 
 #[derive(Debug, Display)]
 #[display("Placeholder")]
-struct Placeholder {}
+pub struct Placeholder {}
 
 impl EffectfulNode for Placeholder {
     fn has_side_effects(&self) -> bool {
@@ -29,61 +31,61 @@ impl EffectfulNode for Placeholder {
 
     fn lowering_expand(
         &self,
-        _my_node_id: NodeId,
-        _program: &Program,
-        _function: &Function,
-        _nodes: &RefCell<Nodes>,
-    ) -> bool {
-        panic!()
+        program: &Program,
+        fn_id: FunctionId,
+        my_node_id: NodeId,
+    ) -> Option<Box<dyn Fn(&Program, FunctionId, NodeId) -> bool>> {
+        let _ = program;
+        let _ = fn_id;
+        let _ = my_node_id;
+        None
     }
 }
 
-pub fn lower(function: &mut Function, program: &Program) {
+pub fn lower(program: &Program, fn_id: FunctionId) {
     struct Visitor<'a> {
         program: &'a Program,
-        function: &'a Function,
+        fn_id: FunctionId,
     }
     impl<'a> MirVisitor for Visitor<'a> {
         fn visit_node(&mut self, node_id: NodeId) {
-            let node = mem::replace(
-                &mut self.function.nodes.borrow_mut()[node_id],
-                Box::new(Placeholder {}),
-            );
-
-            debug!("Lowering node {:?}", node);
-
-            let expanded =
-                node.lowering_expand(node_id, self.program, self.function, &self.function.nodes);
-            if !expanded {
-                // lowering couldn't be done, so put the original node back
-                self.function.nodes.borrow_mut()[node_id] = node;
-            }
-        }
-    }
-    visit_mir_function(&mut Visitor { program, function }, function);
-}
-
-pub fn transform(function: &mut Function, program: &Program) {
-    struct Visitor<'a> {
-        program: &'a Program,
-        function: &'a Function,
-    }
-    impl<'a> MirVisitor for Visitor<'a> {
-        fn visit_node(&mut self, node_id: NodeId) {
-            let node = mem::replace(
-                &mut self.function.nodes.borrow_mut()[node_id],
-                Box::new(Placeholder {}),
-            );
+            let function = self.program.functions[self.fn_id].borrow();
+            let nodes = function.nodes.borrow();
+            let node = &nodes[node_id];
 
             debug!("Transforming node {:?}", node);
 
-            let expanded =
-                node.transform(node_id, self.program, self.function, &self.function.nodes);
-            if !expanded {
-                // transformation couldn't be done, so put the original node back
-                self.function.nodes.borrow_mut()[node_id] = node;
+            let transform = node.lowering_expand(self.program, self.fn_id, node_id);
+            if let Some(transform) = transform {
+                drop(nodes);
+                drop(function);
+                transform(self.program, self.fn_id, node_id);
             }
         }
     }
-    visit_mir_function(&mut Visitor { program, function }, function);
+    visit_mir_function(&mut Visitor { program, fn_id }, &program.functions[fn_id].borrow());
+}
+
+pub fn peephole_transform(program: &Program, fn_id: FunctionId) {
+    struct Visitor<'a> {
+        program: &'a Program,
+        fn_id: FunctionId,
+    }
+    impl<'a> MirVisitor for Visitor<'a> {
+        fn visit_node(&mut self, node_id: NodeId) {
+            let function = self.program.functions[self.fn_id].borrow();
+            let nodes = function.nodes.borrow();
+            let node = &nodes[node_id];
+
+            debug!("Transforming node {:?}", node);
+
+            let transform = node.peephole_transform(self.program, self.fn_id, node_id);
+            if let Some(transform) = transform {
+                drop(nodes);
+                drop(function);
+                transform(self.program, self.fn_id, node_id);
+            }
+        }
+    }
+    visit_mir_function(&mut Visitor { program, fn_id }, &program.functions[fn_id].borrow());
 }

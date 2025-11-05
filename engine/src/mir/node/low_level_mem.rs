@@ -4,10 +4,9 @@
 
 use derive_more::derive::Display;
 use lir::smallvec::smallvec;
-use slotmap::SlotMap;
 
 use crate::{
-    mir::{EffectfulNode, MirType, NodeId, WriteLirError},
+    mir::{EffectfulNode, MirType, NodeId, Nodes, WriteLirError},
     sim::value::NetlogoMachineType,
 };
 
@@ -43,7 +42,7 @@ impl EffectfulNode for MemLoad {
     fn write_lir_execution(
         &self,
         my_node_id: NodeId,
-        nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
+        nodes: &Nodes,
         lir_builder: &mut crate::mir::build_lir::LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
         let &[lir_type] = self.ty.to_lir_type().as_slice() else {
@@ -97,7 +96,7 @@ impl EffectfulNode for MemStore {
     fn write_lir_execution(
         &self,
         _my_node_id: NodeId,
-        nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
+        nodes: &Nodes,
         lir_builder: &mut crate::mir::build_lir::LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
         let &[ptr] = lir_builder.get_node_results(nodes, self.ptr) else {
@@ -143,7 +142,7 @@ impl EffectfulNode for DeriveField {
     fn write_lir_execution(
         &self,
         my_node_id: NodeId,
-        nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
+        nodes: &Nodes,
         lir_builder: &mut crate::mir::build_lir::LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
         let &[ptr] = lir_builder.get_node_results(nodes, self.ptr) else {
@@ -187,7 +186,7 @@ impl EffectfulNode for DeriveElement {
     fn write_lir_execution(
         &self,
         my_node_id: NodeId,
-        nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
+        nodes: &Nodes,
         lir_builder: &mut crate::mir::build_lir::LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
         let &[ptr] = lir_builder.get_node_results(nodes, self.ptr) else {

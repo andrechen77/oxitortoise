@@ -1,9 +1,8 @@
 use derive_more::derive::Display;
 use lir::smallvec::smallvec;
-use slotmap::SlotMap;
 
 use crate::mir::{
-    EffectfulNode, FunctionId, LocalId, MirType, NetlogoAbstractType, NodeId, WriteLirError,
+    EffectfulNode, FunctionId, LocalId, MirType, NetlogoAbstractType, NodeId, Nodes, WriteLirError,
     build_lir::LirInsnBuilder,
 };
 
@@ -26,7 +25,7 @@ pub struct Closure {
 //     fn generate_projections(
 //         &self,
 //         my_node_id: NodeId,
-//         nodes: &mut SlotMap<NodeId, Box<dyn EffectfulNode>>,
+//         nodes: &mut SlotMap<NodeId, EffectfulNodeKind>,
 //     ) -> (NodeId, NodeId) {
 //         if let Some(projs) = self.projections.get() {
 //             projs
@@ -62,7 +61,7 @@ impl EffectfulNode for Closure {
     fn write_lir_execution(
         &self,
         my_node_id: NodeId,
-        _nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
+        _nodes: &Nodes,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
         // insert an instruction to create the env pointer
@@ -108,7 +107,7 @@ impl EffectfulNode for Closure {
 //     fn output_type(
 //         &self,
 //         workspace: &crate::workspace::Workspace,
-//         nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
+//         nodes: &SlotMap<NodeId, EffectfulNodeKind>,
 //         locals: &SlotMap<LocalId, LocalDeclaration>,
 //     ) -> Option<NetlogoInternalType> {
 //         Some(NetlogoInternalType::UNTYPED_PTR)
@@ -143,7 +142,7 @@ impl EffectfulNode for Closure {
 //     fn output_type(
 //         &self,
 //         workspace: &crate::workspace::Workspace,
-//         nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
+//         nodes: &SlotMap<NodeId, EffectfulNodeKind>,
 //         locals: &SlotMap<LocalId, LocalDeclaration>,
 //     ) -> Option<NetlogoInternalType> {
 //         Some(NetlogoInternalType::UNTYPED_PTR)

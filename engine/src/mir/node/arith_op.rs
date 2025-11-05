@@ -1,5 +1,4 @@
 use derive_more::derive::Display;
-use slotmap::SlotMap;
 
 use crate::mir::{
     EffectfulNode, Function, MirType, NetlogoAbstractType, NodeId, Nodes, Program, WriteLirError,
@@ -70,7 +69,7 @@ impl EffectfulNode for BinaryOperation {
     fn write_lir_execution(
         &self,
         _my_node_id: NodeId,
-        _nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
+        _nodes: &Nodes,
         _lir_builder: &mut crate::mir::build_lir::LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
         todo!()
@@ -110,7 +109,7 @@ impl EffectfulNode for UnaryOp {
     fn write_lir_execution(
         &self,
         _my_node_id: NodeId,
-        _nodes: &SlotMap<NodeId, Box<dyn EffectfulNode>>,
+        _nodes: &Nodes,
         _lir_builder: &mut crate::mir::build_lir::LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
         todo!()
