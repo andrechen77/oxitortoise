@@ -39,11 +39,23 @@ impl EffectfulNode for BinaryOperation {
     }
 
     fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirType {
-        // TODO int + int should be int
+        let int_type = NetlogoAbstractType::Integer;
+        let mir_int = MirType::Abstract(int_type.clone());
+
+        let type_of = |node_id| _nodes[node_id].output_type(_program, _function, _nodes);
+
+        let int_preserving_type = || {
+            if type_of(self.lhs) == mir_int && type_of(self.rhs) == mir_int {
+                int_type
+            } else {
+                NetlogoAbstractType::Numeric
+            }
+        };
+
         MirType::Abstract(match self.op {
-            BinaryOpcode::Add => NetlogoAbstractType::Numeric,
-            BinaryOpcode::Sub => NetlogoAbstractType::Numeric,
-            BinaryOpcode::Mul => NetlogoAbstractType::Numeric,
+            BinaryOpcode::Add => int_preserving_type(),
+            BinaryOpcode::Sub => int_preserving_type(),
+            BinaryOpcode::Mul => int_preserving_type(),
             BinaryOpcode::Div => NetlogoAbstractType::Numeric,
             BinaryOpcode::Lt => NetlogoAbstractType::Boolean,
             BinaryOpcode::Lte => NetlogoAbstractType::Boolean,

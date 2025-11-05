@@ -190,7 +190,7 @@ pub trait EffectfulNode: Debug + Display {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum MirType {
     Abstract(NetlogoAbstractType),
     Machine(NetlogoMachineType),
@@ -209,7 +209,7 @@ impl MirType {
 }
 
 /// A representation of an element of the lattice making up all NetLogo types.
-#[derive(derive_more::Debug, Clone)]
+#[derive(PartialEq, derive_more::Debug, Clone)]
 pub enum NetlogoAbstractType {
     Unit,
     /// Top doesn't actually include everything
