@@ -878,10 +878,14 @@ fn translate_ephemeral_closure(
 }
 
 #[instrument(skip_all)]
-pub fn write_dot(fn_id: FunctionId, function: &Function) {
+pub fn write_dot(fn_id: FunctionId, function: &Function, prefix: &str) {
     let dot_string = function.to_dot_string_with_options(false);
-    let filename =
-        format!("dots/{}-{:?}.dot", fn_id, function.debug_name.as_deref().unwrap_or("unnamed"));
+    let filename = format!(
+        "dots/{}-{}-{:?}.dot",
+        prefix,
+        fn_id,
+        function.debug_name.as_deref().unwrap_or("unnamed")
+    );
     trace!("Writing DOT file for function {:?}: {}", fn_id, filename);
 
     if let Some(parent) = Path::new(&filename).parent()
@@ -913,7 +917,7 @@ mod tests {
         std::fs::write("mir_debug.txt", debug_output).expect("Failed to write MIR debug output");
 
         for (fn_id, function) in program.functions {
-            write_dot(fn_id, &*function.borrow());
+            write_dot(fn_id, &*function.borrow(), "debug");
         }
     }
 }
