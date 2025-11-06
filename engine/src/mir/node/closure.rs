@@ -11,7 +11,8 @@ use crate::mir::{
 pub struct Closure {
     /// All the local variables that are captured by the closure.
     pub captures: Vec<LocalId>,
-    /// The body of the closure.
+    /// The body of the closure. This determines the calling convention of
+    /// the function.
     pub body: FunctionId,
     // TODO other stuff like whether the closure uses a context pointer, env
     // pointer, self/myself, etc.

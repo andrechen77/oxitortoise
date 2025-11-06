@@ -1,15 +1,9 @@
-use std::{any::Any, mem};
-
 use derive_more::derive::Display;
-use tracing::debug;
+use tracing::{debug, trace};
 
-use crate::{
-    mir::{
-        EffectfulNode, Function, FunctionId, MirType, MirVisitor, NetlogoAbstractType, NodeId,
-        Nodes, Program, node, visit_mir_function,
-    },
-    sim::{turtle::TurtleVarDesc, value::NetlogoMachineType},
-    util::cell::RefCell,
+use crate::mir::{
+    EffectfulNode, EffectfulNodeKind, Function, FunctionId, MirType, MirVisitor, NodeId,
+    NodeTransform, Nodes, Program, visit_mir_function,
 };
 
 #[derive(Debug, Display)]
@@ -31,13 +25,10 @@ impl EffectfulNode for Placeholder {
 
     fn lowering_expand(
         &self,
-        program: &Program,
-        fn_id: FunctionId,
-        my_node_id: NodeId,
-    ) -> Option<Box<dyn Fn(&Program, FunctionId, NodeId) -> bool>> {
-        let _ = program;
-        let _ = fn_id;
-        let _ = my_node_id;
+        _program: &Program,
+        _fn_id: FunctionId,
+        _my_node_id: NodeId,
+    ) -> Option<NodeTransform> {
         None
     }
 }
@@ -53,7 +44,7 @@ pub fn lower(program: &Program, fn_id: FunctionId) {
             let nodes = function.nodes.borrow();
             let node = &nodes[node_id];
 
-            debug!("Transforming node {:?}", node);
+            trace!("Transforming node {:?}", node);
 
             let transform = node.lowering_expand(self.program, self.fn_id, node_id);
             if let Some(transform) = transform {
@@ -77,13 +68,53 @@ pub fn peephole_transform(program: &Program, fn_id: FunctionId) {
             let nodes = function.nodes.borrow();
             let node = &nodes[node_id];
 
-            debug!("Transforming node {:?}", node);
+            trace!("Transforming node {:?}", node);
 
             let transform = node.peephole_transform(self.program, self.fn_id, node_id);
             if let Some(transform) = transform {
                 drop(nodes);
                 drop(function);
                 transform(self.program, self.fn_id, node_id);
+            }
+        }
+    }
+    visit_mir_function(&mut Visitor { program, fn_id }, &program.functions[fn_id].borrow());
+}
+
+// TODO this optimziation should instead be part of the type inference pass,
+// which should collect information about all the types in the program; the
+// types of the arguments to the `of`'s closure should be included in there.
+// However, we are able to perform this optimization prematurely because
+// we know that the `of` is the only way that the closure is ever going
+// to be called, so we can assume that whatever is passed to `of` is going to
+// be the only thing passed to the closure.
+pub fn optimize_of_agent_type(program: &Program, fn_id: FunctionId) {
+    struct Visitor<'a> {
+        program: &'a Program,
+        fn_id: FunctionId,
+    }
+    impl<'a> MirVisitor for Visitor<'a> {
+        fn visit_node(&mut self, node_id: NodeId) {
+            let function = self.program.functions[self.fn_id].borrow();
+            let nodes = function.nodes.borrow();
+            let node = &nodes[node_id];
+
+            if let EffectfulNodeKind::Of(of) = &node {
+                debug!("Optimizing Of node {:?}", node);
+
+                let recipients = &nodes[of.recipients];
+                let EffectfulNodeKind::Closure(closure) = &nodes[of.body] else {
+                    return;
+                };
+                debug!("Closure body: {:?}", closure.body);
+                let mut body = self.program.functions[closure.body].borrow_mut();
+                debug!("Body parameters: {:?}", body.parameters);
+
+                let self_param_id = body.parameters[2]; // TODO should not be magic number
+
+                let ty = recipients.output_type(self.program, &function, &nodes).clone();
+                debug!("{:?}", ty);
+                body.locals[self_param_id].ty = ty;
             }
         }
     }

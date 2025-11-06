@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use ast_to_mir::{ParseResult, add_cheats, serde_json, write_dot};
 use engine::{
-    mir::transforms::{lower, peephole_transform},
+    mir::transforms::{lower, optimize_of_agent_type, peephole_transform},
     sim::{
         agent_schema::{PatchSchema, TurtleSchema},
         patch::Patches,
@@ -73,7 +73,7 @@ fn main() {
         .with(
             tracing_subscriber::fmt::layer().with_filter(
                 Targets::new()
-                    .with_target("oxitortoise_engine", Level::TRACE)
+                    .with_target("oxitortoise_engine", Level::DEBUG)
                     .with_target("oxitortoise_ast_to_mir", Level::INFO)
                     .with_target("ants", Level::TRACE)
                     .with_target("oxitortoise_main", Level::TRACE),
@@ -102,6 +102,8 @@ fn main() {
             fn_id,
             function.borrow().debug_name.as_deref().unwrap_or_default()
         );
+        peephole_transform(&program, fn_id);
+        optimize_of_agent_type(&program, fn_id);
         peephole_transform(&program, fn_id);
         lower(&program, fn_id);
     }

@@ -1,9 +1,9 @@
 {
 	"metaVars": {
 		"globals": [
-			"diffusion-rate",
 			"evaporation-rate",
-			"population"
+			"population",
+			"diffusion-rate"
 		],
 		"turtleVars": [],
 		"patchVars": [
@@ -1610,8 +1610,18 @@
 									}
 								},
 								{
-									"type": "let-ref",
-									"name": "P"
+									"type": "reporter-call",
+									"name": "PATCH-RIGHT-AND-AHEAD",
+									"args": [
+										{
+											"type": "procedure-arg-ref",
+											"name": "ANGLE"
+										},
+										{
+											"type": "number",
+											"value": 1
+										}
+									]
 								}
 							]
 						}
@@ -1696,8 +1706,18 @@
 									}
 								},
 								{
-									"type": "let-ref",
-									"name": "P"
+									"type": "reporter-call",
+									"name": "PATCH-RIGHT-AND-AHEAD",
+									"args": [
+										{
+											"type": "procedure-arg-ref",
+											"name": "ANGLE"
+										},
+										{
+											"type": "number",
+											"value": 1
+										}
+									]
 								}
 							]
 						}
@@ -1708,194 +1728,8 @@
 	],
 	"widgets": [
 		{
-			"type": "button",
-			"index": 1,
-			"onClick": {
-				"returnType": "unit",
-				"agentClass": "O---",
-				"statements": [
-					{
-						"type": "command-app",
-						"name": "SETUP",
-						"args": []
-					}
-				]
-			}
-		},
-		{
-			"type": "slider",
-			"index": 2,
-			"getMin": {
-				"returnType": "wildcard",
-				"agentClass": "O---",
-				"statements": [
-					{
-						"type": "command-app",
-						"name": "REPORT",
-						"args": [
-							{
-								"type": "number",
-								"value": 0
-							}
-						]
-					}
-				]
-			},
-			"getMax": {
-				"returnType": "wildcard",
-				"agentClass": "O---",
-				"statements": [
-					{
-						"type": "command-app",
-						"name": "REPORT",
-						"args": [
-							{
-								"type": "number",
-								"value": 99
-							}
-						]
-					}
-				]
-			},
-			"getStep": {
-				"returnType": "wildcard",
-				"agentClass": "O---",
-				"statements": [
-					{
-						"type": "command-app",
-						"name": "REPORT",
-						"args": [
-							{
-								"type": "number",
-								"value": 1
-							}
-						]
-					}
-				]
-			}
-		},
-		{
-			"type": "slider",
-			"index": 3,
-			"getMin": {
-				"returnType": "wildcard",
-				"agentClass": "O---",
-				"statements": [
-					{
-						"type": "command-app",
-						"name": "REPORT",
-						"args": [
-							{
-								"type": "number",
-								"value": 0
-							}
-						]
-					}
-				]
-			},
-			"getMax": {
-				"returnType": "wildcard",
-				"agentClass": "O---",
-				"statements": [
-					{
-						"type": "command-app",
-						"name": "REPORT",
-						"args": [
-							{
-								"type": "number",
-								"value": 99
-							}
-						]
-					}
-				]
-			},
-			"getStep": {
-				"returnType": "wildcard",
-				"agentClass": "O---",
-				"statements": [
-					{
-						"type": "command-app",
-						"name": "REPORT",
-						"args": [
-							{
-								"type": "number",
-								"value": 1
-							}
-						]
-					}
-				]
-			}
-		},
-		{
-			"type": "button",
-			"index": 4,
-			"onClick": {
-				"returnType": "unit",
-				"agentClass": "O---",
-				"statements": [
-					{
-						"type": "command-app",
-						"name": "GO",
-						"args": []
-					}
-				]
-			}
-		},
-		{
-			"type": "slider",
-			"index": 5,
-			"getMin": {
-				"returnType": "wildcard",
-				"agentClass": "O---",
-				"statements": [
-					{
-						"type": "command-app",
-						"name": "REPORT",
-						"args": [
-							{
-								"type": "number",
-								"value": 0
-							}
-						]
-					}
-				]
-			},
-			"getMax": {
-				"returnType": "wildcard",
-				"agentClass": "O---",
-				"statements": [
-					{
-						"type": "command-app",
-						"name": "REPORT",
-						"args": [
-							{
-								"type": "number",
-								"value": 200
-							}
-						]
-					}
-				]
-			},
-			"getStep": {
-				"returnType": "wildcard",
-				"agentClass": "O---",
-				"statements": [
-					{
-						"type": "command-app",
-						"name": "REPORT",
-						"args": [
-							{
-								"type": "number",
-								"value": 1
-							}
-						]
-					}
-				]
-			}
-		},
-		{
 			"type": "plot",
-			"index": 6,
+			"index": 1,
 			"setup": {
 				"returnType": "unit",
 				"agentClass": "O---",
@@ -2130,6 +1964,192 @@
 					}
 				}
 			]
+		},
+		{
+			"type": "slider",
+			"index": 2,
+			"getMin": {
+				"returnType": "wildcard",
+				"agentClass": "O---",
+				"statements": [
+					{
+						"type": "command-app",
+						"name": "REPORT",
+						"args": [
+							{
+								"type": "number",
+								"value": 0
+							}
+						]
+					}
+				]
+			},
+			"getMax": {
+				"returnType": "wildcard",
+				"agentClass": "O---",
+				"statements": [
+					{
+						"type": "command-app",
+						"name": "REPORT",
+						"args": [
+							{
+								"type": "number",
+								"value": 99
+							}
+						]
+					}
+				]
+			},
+			"getStep": {
+				"returnType": "wildcard",
+				"agentClass": "O---",
+				"statements": [
+					{
+						"type": "command-app",
+						"name": "REPORT",
+						"args": [
+							{
+								"type": "number",
+								"value": 1
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"type": "slider",
+			"index": 3,
+			"getMin": {
+				"returnType": "wildcard",
+				"agentClass": "O---",
+				"statements": [
+					{
+						"type": "command-app",
+						"name": "REPORT",
+						"args": [
+							{
+								"type": "number",
+								"value": 0
+							}
+						]
+					}
+				]
+			},
+			"getMax": {
+				"returnType": "wildcard",
+				"agentClass": "O---",
+				"statements": [
+					{
+						"type": "command-app",
+						"name": "REPORT",
+						"args": [
+							{
+								"type": "number",
+								"value": 200
+							}
+						]
+					}
+				]
+			},
+			"getStep": {
+				"returnType": "wildcard",
+				"agentClass": "O---",
+				"statements": [
+					{
+						"type": "command-app",
+						"name": "REPORT",
+						"args": [
+							{
+								"type": "number",
+								"value": 1
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"type": "slider",
+			"index": 4,
+			"getMin": {
+				"returnType": "wildcard",
+				"agentClass": "O---",
+				"statements": [
+					{
+						"type": "command-app",
+						"name": "REPORT",
+						"args": [
+							{
+								"type": "number",
+								"value": 0
+							}
+						]
+					}
+				]
+			},
+			"getMax": {
+				"returnType": "wildcard",
+				"agentClass": "O---",
+				"statements": [
+					{
+						"type": "command-app",
+						"name": "REPORT",
+						"args": [
+							{
+								"type": "number",
+								"value": 99
+							}
+						]
+					}
+				]
+			},
+			"getStep": {
+				"returnType": "wildcard",
+				"agentClass": "O---",
+				"statements": [
+					{
+						"type": "command-app",
+						"name": "REPORT",
+						"args": [
+							{
+								"type": "number",
+								"value": 1
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"type": "button",
+			"index": 5,
+			"onClick": {
+				"returnType": "unit",
+				"agentClass": "O---",
+				"statements": [
+					{
+						"type": "command-app",
+						"name": "SETUP",
+						"args": []
+					}
+				]
+			}
+		},
+		{
+			"type": "button",
+			"index": 6,
+			"onClick": {
+				"returnType": "unit",
+				"agentClass": "O---",
+				"statements": [
+					{
+						"type": "command-app",
+						"name": "GO",
+						"args": []
+					}
+				]
+			}
 		}
 	]
 }
