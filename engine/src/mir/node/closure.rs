@@ -2,8 +2,8 @@ use derive_more::derive::Display;
 use lir::smallvec::smallvec;
 
 use crate::mir::{
-    EffectfulNode, FunctionId, LocalId, MirType, NetlogoAbstractType, NodeId, Nodes, WriteLirError,
-    build_lir::LirInsnBuilder,
+    ClosureType, EffectfulNode, FunctionId, LocalId, MirType, NetlogoAbstractType, NodeId, Nodes,
+    WriteLirError, build_lir::LirInsnBuilder,
 };
 
 #[derive(Debug, Display)]
@@ -55,8 +55,16 @@ impl EffectfulNode for Closure {
         _function: &crate::mir::Function,
         _nodes: &crate::mir::Nodes,
     ) -> crate::mir::MirType {
-        let return_ty = program.functions[self.body].borrow().return_ty.clone();
-        MirType::Abstract(NetlogoAbstractType::Closure { return_ty: Box::new(return_ty) })
+        let function = program.functions[self.body].borrow();
+        let arg_ty = function.locals[function.parameters[ClosureType::PARAM_ARG_IDX]]
+            .ty
+            .clone()
+            .as_abstract();
+        let return_ty = function.return_ty.clone();
+        MirType::Abstract(NetlogoAbstractType::Closure(ClosureType {
+            arg_ty: Box::new(arg_ty),
+            return_ty: Box::new(return_ty),
+        }))
     }
 
     fn write_lir_execution(

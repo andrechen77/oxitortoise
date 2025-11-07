@@ -28,6 +28,11 @@ pub trait InstallLir {
     ) -> Result<HashMap<lir::FunctionId, JitEntrypoint>, InstallLirError>;
 }
 
+// FUTURE currently we have hardcoded constants to define what the indices
+// of all parameters are for entrypoints and callbacks, i.e. functions with
+// known signatures. There must be a cleaner way to get ahold of these
+// constants.
+
 #[repr(transparent)]
 pub struct JitEntrypoint {
     // TODO for type safety, we probably want to use a newtype over *mut u8 to
@@ -36,6 +41,11 @@ pub struct JitEntrypoint {
 }
 
 impl JitEntrypoint {
+    /// The index of the context parameter when calling an entrypoint function.
+    pub const PARAM_CONTEXT_IDX: usize = 0;
+    /// The index of the arguments parameter when calling an entrypoint function.
+    pub const PARAM_ARGS_IDX: usize = 1;
+
     pub fn new(fn_ptr: extern "C" fn(&mut CanonExecutionContext, *mut u8)) -> Self {
         Self { fn_ptr }
     }
@@ -49,10 +59,17 @@ impl JitEntrypoint {
 pub struct JitCallback<'env, Arg, Ret> {
     pub fn_ptr: extern "C" fn(*mut u8, &mut CanonExecutionContext, Arg) -> Ret,
     pub env: *mut u8,
-    pub _phantom: PhantomData<&'env ()>,
+    pub _phantom: PhantomData<&'env mut ()>,
 }
 
 impl<'env, Arg, Ret> JitCallback<'env, Arg, Ret> {
+    /// The index of the environment parameter when calling a callback function.
+    pub const PARAM_ENV_IDX: usize = 0;
+    /// The index of the context parameter when calling a callback function.
+    pub const PARAM_CONTEXT_IDX: usize = 1;
+    /// The index of the arguments parameter when calling a callback function.
+    pub const PARAM_ARG_IDX: usize = 2;
+
     pub fn call_mut(&mut self, context: &mut CanonExecutionContext, arg: Arg) -> Ret {
         (self.fn_ptr)(self.env, context, arg)
     }

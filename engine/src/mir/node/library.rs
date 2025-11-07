@@ -427,13 +427,13 @@ impl EffectfulNode for Of {
         function: &crate::mir::Function,
         nodes: &crate::mir::Nodes,
     ) -> MirType {
-        let MirType::Abstract(NetlogoAbstractType::Closure { return_ty }) =
+        let MirType::Abstract(NetlogoAbstractType::Closure(closure)) =
             nodes[self.body].output_type(program, function, nodes)
         else {
             panic!("expected node outputting closure body to be a closure")
         };
 
-        MirType::Abstract(*return_ty)
+        MirType::Abstract(*closure.return_ty)
     }
 }
 

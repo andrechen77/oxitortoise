@@ -2,8 +2,8 @@ use derive_more::derive::Display;
 use tracing::{debug, trace};
 
 use crate::mir::{
-    EffectfulNode, EffectfulNodeKind, Function, FunctionId, MirType, MirVisitor, NodeId,
-    NodeTransform, Nodes, Program, visit_mir_function,
+    ClosureType, EffectfulNode, EffectfulNodeKind, Function, FunctionId, MirType, MirVisitor,
+    NodeId, NodeTransform, Nodes, Program, visit_mir_function,
 };
 
 #[derive(Debug, Display)]
@@ -110,7 +110,7 @@ pub fn optimize_of_agent_type(program: &Program, fn_id: FunctionId) {
                 let mut body = self.program.functions[closure.body].borrow_mut();
                 debug!("Body parameters: {:?}", body.parameters);
 
-                let self_param_id = body.parameters[2]; // TODO should not be magic number
+                let self_param_id = body.parameters[ClosureType::PARAM_ARG_IDX];
 
                 let ty = recipients.output_type(self.program, &function, &nodes).clone();
                 debug!("{:?}", ty);

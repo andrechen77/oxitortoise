@@ -257,10 +257,18 @@ impl MirType {
             MirType::Other => unimplemented!(),
         }
     }
+
+    pub fn as_abstract(self) -> NetlogoAbstractType {
+        match self {
+            MirType::Abstract(ty) => ty,
+            MirType::Machine(_) => panic!("cannot convert machine type to abstract type"),
+            MirType::Other => unimplemented!(),
+        }
+    }
 }
 
 /// A representation of an element of the lattice making up all NetLogo types.
-#[derive(PartialEq, derive_more::Debug, Clone)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum NetlogoAbstractType {
     Unit,
     /// Top doesn't actually include everything
@@ -279,9 +287,7 @@ pub enum NetlogoAbstractType {
         agent_type: Box<NetlogoAbstractType>,
     },
     Nobody,
-    Closure {
-        return_ty: Box<NetlogoAbstractType>,
-    },
+    Closure(ClosureType),
     List {
         element_ty: Box<NetlogoAbstractType>,
     },
@@ -317,10 +323,26 @@ impl NetlogoAbstractType {
             Self::Link => todo!("add link id"),
             Self::Agentset { agent_type: _ } => todo!("add agentset id"),
             Self::Nobody => todo!(),
-            Self::Closure { return_ty: _ } => todo!(),
+            Self::Closure(_) => todo!(),
             Self::List { element_ty: _ } => todo!(),
         }
     }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct ClosureType {
+    pub arg_ty: Box<NetlogoAbstractType>,
+    pub return_ty: Box<NetlogoAbstractType>,
+}
+
+impl ClosureType {
+    // TODO this should be linked somehow to the machine-level calling
+    // convention defined in jit.rs
+    #[allow(dead_code)] // TODO remove when used
+    const PARAM_ENV_IDX: usize = 0;
+    #[allow(dead_code)] // TODO remove when used
+    const PARAM_CONTEXT_IDX: usize = 1;
+    const PARAM_ARG_IDX: usize = 2;
 }
 
 pub trait MirVisitor {
