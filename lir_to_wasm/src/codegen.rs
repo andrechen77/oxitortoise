@@ -688,6 +688,7 @@ fn translate_instr_seq_type(
 #[cfg(test)]
 mod tests {
     use lir::{lir_function, slotmap::SlotMap};
+    use tracing::debug;
 
     use super::*;
 
@@ -767,7 +768,7 @@ mod tests {
             }
         }
 
-        println!("{:?}", use_args);
+        debug!("{:?}", use_args);
 
         let mut lir = lir::Program::default();
         let mut functions: SlotMap<lir::FunctionId, ()> = SlotMap::with_key();

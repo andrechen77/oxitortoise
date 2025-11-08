@@ -6,6 +6,7 @@ use std::collections::HashMap;
 
 use lir::{smallvec::SmallVec, typed_index_collections::TiVec};
 use slotmap::{SecondaryMap, SlotMap};
+use tracing::error;
 
 use crate::{
     exec::jit::HOST_FUNCTIONS,
@@ -199,7 +200,7 @@ fn translate_function_body(
             match stmt {
                 &mir::StatementKind::Node(node_id) => {
                     nodes[node_id].write_lir_execution(node_id, nodes, fn_builder).inspect_err(|_| {
-                        eprintln!("failed to translate node {:?} to LIR", nodes[node_id]);
+                        error!("failed to translate node {:?} to LIR", nodes[node_id]);
                     }).expect(
                         "by the time we get to translating to LIR, all nodes should be able to convert to LIR",
                     );

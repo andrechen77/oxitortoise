@@ -306,6 +306,7 @@ name = "oxitortoise_lir_to_wasm"
 version = "0.1.0"
 dependencies = [
  "oxitortoise_lir",
+ "tracing",
  "walrus",
 ]
 
