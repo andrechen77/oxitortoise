@@ -391,7 +391,7 @@ fn create_procedure_skeleton(
     let function = Function {
         debug_name: Some(proc_name),
         parameters: parameter_locals,
-        return_ty,
+        return_ty: MirType::Abstract(return_ty),
         locals,
         // cfg and nodes are defaulted values and will be filled in later
         cfg: StatementBlock { statements: vec![] },
@@ -434,7 +434,7 @@ fn build_body(
     let function = &mut mir_builder.functions[fn_id];
     function.cfg = statements;
     function.nodes = RefCell::new(nodes);
-    function.return_ty = return_ty;
+    function.return_ty = MirType::Abstract(return_ty);
 
     trace!("finished building body");
     Ok(())
@@ -946,7 +946,7 @@ fn translate_ephemeral_closure(
         parameters: parameter_locals,
         locals,
         // cfg, nodes, and return_ty are defaulted and will be filled in later
-        return_ty: NetlogoAbstractType::Top,
+        return_ty: MirType::Other,
         cfg: StatementBlock::default(),
         nodes: RefCell::default(),
     };

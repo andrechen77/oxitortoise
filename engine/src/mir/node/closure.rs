@@ -63,7 +63,7 @@ impl EffectfulNode for Closure {
         let return_ty = function.return_ty.clone();
         MirType::Abstract(NetlogoAbstractType::Closure(ClosureType {
             arg_ty: Box::new(arg_ty),
-            return_ty: Box::new(return_ty),
+            return_ty: Box::new(return_ty.as_abstract()),
         }))
     }
 

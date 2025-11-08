@@ -63,7 +63,7 @@ pub struct Function {
     /// includes implicit parameters such as the closure environment, the
     /// context pointer, and the executing agent.
     pub parameters: Vec<LocalId>,
-    pub return_ty: NetlogoAbstractType,
+    pub return_ty: MirType,
     /// The set of all local variables used by the function.
     pub locals: SlotMap<LocalId, LocalDeclaration>,
     /// The structured control flow of the function
@@ -307,9 +307,7 @@ impl NetlogoAbstractType {
 
     pub fn repr(&self) -> NetlogoMachineType {
         match self {
-            Self::Unit => {
-                panic!("No one should be asking about the representation of the unit type")
-            }
+            Self::Unit => NetlogoMachineType::UNIT,
             Self::Top => NetlogoMachineType::DYN_BOX,
             Self::Numeric => NetlogoMachineType::FLOAT,
             Self::Color => NetlogoMachineType::COLOR,

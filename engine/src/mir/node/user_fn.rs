@@ -28,6 +28,6 @@ impl EffectfulNode for CallUserFn {
         _function: &crate::mir::Function,
         _nodes: &crate::mir::Nodes,
     ) -> MirType {
-        MirType::Abstract(program.functions[self.target].borrow().return_ty.clone())
+        program.functions[self.target].borrow().return_ty.clone()
     }
 }

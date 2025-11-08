@@ -22,12 +22,13 @@ impl NetlogoMachineType {
     /// A closure that can be passed to `ask`, `create-turtles`, etc.
     pub const ASK_CLOSURE: Self = Self(12);
     pub const DYN_BOX: Self = Self(13);
+    pub const UNIT: Self = Self(14);
 
     /// Returns whether this type is valid and represents the numeric value 0.0
     /// at the all-zero bit pattern, i.e. whether the all-zero bit pattern
     /// is valid as the default value for a NetLogo variable of this type.
     pub fn is_numeric_zeroable(&self) -> bool {
-        matches!(self, &Self::FLOAT | &Self::INTEGER | &Self::POINT | &Self::COLOR)
+        matches!(self, &Self::FLOAT | &Self::INTEGER | &Self::POINT | &Self::COLOR | &Self::UNIT)
     }
 
     pub fn to_lir_type(&self) -> SmallVec<[lir::ValType; 1]> {
@@ -40,6 +41,7 @@ impl NetlogoMachineType {
             Self::POINT => smallvec![lir::ValType::F64, lir::ValType::F64],
             Self::HEADING => smallvec![lir::ValType::F64],
             Self::UNTYPED_PTR => smallvec![lir::ValType::Ptr],
+            Self::UNIT => smallvec![],
             _ => todo!(),
         }
     }
