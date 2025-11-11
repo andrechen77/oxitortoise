@@ -39,7 +39,7 @@ impl EffectfulNode for GetTurtleVar {
     }
 
     fn output_type(&self, program: &Program, _function: &Function, _nodes: &Nodes) -> MirType {
-        // TODO this should probably be refactored into a function
+        // TODO(wishlist) this should probably be refactored into a function
         MirType::Abstract(match self.var {
             TurtleVarDesc::Who => NetlogoAbstractType::Integer,
             TurtleVarDesc::Color => NetlogoAbstractType::Color,
@@ -413,7 +413,7 @@ impl EffectfulNode for GetPatchVarAsTurtleOrPatch {
     }
 
     fn output_type(&self, program: &Program, _function: &Function, _nodes: &Nodes) -> MirType {
-        // TODO refactor to deduplicate with GetPatchVar
+        // TODO(wishlist) refactor to deduplicate with GetPatchVar
         match self.var {
             PatchVarDesc::Custom(field) => {
                 MirType::Abstract(program.custom_patch_vars[field].ty.clone())

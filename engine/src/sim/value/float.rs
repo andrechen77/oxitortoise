@@ -6,8 +6,8 @@ use crate::sim::{color::Color, topology::CoordInt, turtle::TurtleWho};
 
 /// A double-precision floating-point number which is guaranteed to be finite
 /// (not Infinity or NaN).
-#[derive(Debug, Display, Default, Clone, Copy, From, PartialEq, PartialOrd)] // TODO also ord and eq
-#[derive(Neg, Add, AddAssign, Sub, SubAssign, Mul, MulAssign, Div, DivAssign)] // TODO how to keep guaranteeing that the result is finite?
+#[derive(Debug, Display, Default, Clone, Copy, From, PartialEq, PartialOrd)] // TODO(mvp) implement Ord and Eq
+#[derive(Neg, Add, AddAssign, Sub, SubAssign, Mul, MulAssign, Div, DivAssign)] // FIXME these impls don't guarantee that the result is finite
 #[mul(forward)]
 #[div(forward)]
 #[repr(transparent)]

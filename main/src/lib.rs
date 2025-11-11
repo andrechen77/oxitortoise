@@ -2,10 +2,6 @@
 // compatibility with Emscripten-emitted Wasm. Add this to .cargo/config.toml or
 // pass via RUSTFLAGS.
 
-// TODO in the future when we actually generate our own JIT
-// code instead of relying on Emscripten, it doesn't actually matter what the
-// ABI is, as long as it is known and stable.
-
 use std::collections::HashMap;
 
 use engine::{

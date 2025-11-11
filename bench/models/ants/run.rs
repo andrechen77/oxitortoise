@@ -63,8 +63,6 @@ fn create_workspace() -> (Workspace, BreedId) {
     let rng = Rc::new(RefCell::new(CanonRng::new(0)));
     let workspace = Workspace { world, rng };
 
-    // TODO declare the population widget variable
-
     (workspace, default_turtle_breed)
 }
 

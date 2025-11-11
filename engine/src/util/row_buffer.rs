@@ -1,4 +1,3 @@
-// TODO document everything here better
 //! A buffer of rows, each of which has a fixed schema.
 //!
 //! The schema describes the fields in each row, and the layout of the fields
@@ -15,8 +14,6 @@ use std::{
 
 use crate::util::type_registry::get_type_info;
 
-// TODO consider using a custom allocator since we'll probably want to allocate
-// within Wasm memory at some point
 #[derive(Debug)]
 #[repr(C)]
 pub struct AlignedBytes {
@@ -391,7 +388,7 @@ impl RowBuffer {
     /// Creates a RowBuffer with some initial number of rows.
     /// See [`Self::new_with_capacity`] for more information.
     pub fn new(schema: RowSchema) -> Self {
-        // TODO pick a good initial size
+        // arbitrary initial size
         let num_rows = 100;
         Self::new_with_capacity(schema, num_rows)
     }
@@ -454,7 +451,7 @@ impl RowBuffer {
         self.bytes.resize(num_rows * self.schema.layout.size());
     }
 
-    // TODO add functionality for unchecked insert/remove
+    // TODO(wishlist) add functionality for unchecked insert/remove rows
 
     /// Remaps all the rows the buffer to a new schema. [`map_fn`] is called
     /// with a reference to the old row and the new row.

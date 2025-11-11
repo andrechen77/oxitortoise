@@ -14,7 +14,7 @@ pub struct TypeInfo {
     pub drop_fn: unsafe fn(*mut ()),
 }
 
-// TODO use const_type_name once stabilized
+// TODO(wishlist) use const_type_name once stabilized
 pub fn generate_type_info<T: 'static>(is_zeroable: bool) -> TypeInfo {
     unsafe fn drop_impl<T>(ptr: *mut ()) {
         // SAFETY: caller guarantees that ptr is a valid pointer to T that can

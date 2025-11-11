@@ -118,14 +118,15 @@ impl MersenneTwister {
         }
         loop {
             let y = self.next_u32() as u64;
-            // TODO the correct behavior would have been to do `let z =
+            // the correct behavior would have been to do `let z =
             // self.next_u32() as u64;`, but this is not what the existing
             // engine does with the MersenneTwisterFast.scala file. that code
             // has a bug which unintentionally sign-extends the integer.
             // therefore we replicate the behavior here and hope that people are
-            // okay with changing up the RNG. when this gets fixed, also
-            // remove the wrapping_add below.
+            // okay with changing up the RNG. when this gets fixed, also remove
+            // the wrapping_add below.
             // https://github.com/NetLogo/Tortoise/blob/master/engine/src/main/scala/MersenneTwisterFast.scala#L540
+            // FIXME this has been fixed in Tortoise, so fix it here too
             let z = self.next_u32() as i32 as i64 as u64;
 
             // concatenate two 32-bit values into a 64-bit value. the wrapping

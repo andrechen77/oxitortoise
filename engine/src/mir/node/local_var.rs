@@ -36,11 +36,11 @@ impl EffectfulNode for GetLocalVar {
         match lir_builder.local_to_lir[&self.local_id] {
             LocalLocation::Stack { offset } => {
                 let _ = offset;
-                todo!()
+                todo!("TODO(mvp) write LIR code to load the value from the stack")
             }
             LocalLocation::Var { var_id } => {
-                // TODO this should be done in a loop in case the MIR value
-                // spans multiple LIR values
+                // FIXME this should account for the case the MIR value spans
+                // multiple LIR values
                 let pc = lir_builder.push_lir_insn(lir::InsnKind::VarLoad { var_id });
                 lir_builder.node_to_lir.insert(my_node_id, smallvec![lir::ValRef(pc, 0)]);
                 Ok(())

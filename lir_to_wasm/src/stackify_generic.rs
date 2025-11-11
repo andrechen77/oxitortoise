@@ -214,7 +214,7 @@ pub fn stackify_single<V, Idx>(
     // already inserted at the same idx. The pre-existing getters should bind
     // more tightly, which is done by having them come after
     for (insertion_idx, v) in getters.into_iter().rev() {
-        // FUTURE can be made faster
+        // FIXME can be made faster
         stack_manips[insertion_idx].getters.insert(0, v);
     }
 
@@ -992,7 +992,7 @@ mod tests {
         };
     }
 
-    // TODO change the function to not need external values, since the algorithm
+    // FIXME change the function to not need external values, since the algorithm
     // above was changed to interpret any value without an entry in
     // `available_getters` as being always available
     fn test_skeleton(external: &[V], insns: &[(&[V], &[V])]) -> InsnSeqStackification<V, Idx> {

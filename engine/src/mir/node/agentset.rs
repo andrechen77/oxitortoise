@@ -12,15 +12,7 @@ pub enum Agentset {
     AllTurtles,
     #[display("AllPatches")]
     AllPatches,
-    // #[display("TurtleAgentset")]
-    // TurtleAgentset(NodeId),
-    // #[display("PatchAgentset")]
-    // PatchAgentset(NodeId),
-    // #[display("SingleTurtle")]
-    // SingleTurtle(NodeId),
-    // #[display("SinglePatch")]
-    // SinglePatch(NodeId),
-    // TODO add links
+    // TODO(mvp) add links
 }
 
 impl EffectfulNode for Agentset {
@@ -32,10 +24,6 @@ impl EffectfulNode for Agentset {
         match self {
             Agentset::AllTurtles => vec![],
             Agentset::AllPatches => vec![],
-            // Agentset::TurtleAgentset(id) => vec![*id],
-            // Agentset::PatchAgentset(id) => vec![*id],
-            // Agentset::SingleTurtle(id) => vec![*id],
-            // Agentset::SinglePatch(id) => vec![*id],
         }
     }
 
@@ -53,6 +41,6 @@ impl EffectfulNode for Agentset {
         _nodes: &Nodes,
         _lir_builder: &mut crate::mir::build_lir::LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
-        todo!()
+        todo!("TODO(mvp) write LIR code to generate a value representing the agentset")
     }
 }

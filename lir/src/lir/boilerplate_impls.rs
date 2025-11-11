@@ -2,8 +2,8 @@ use std::{fmt::Display, ops::Add};
 
 use super::*;
 
-// TODO for all display impls, use debug_closure_helpers once stabilized. see
-// how the code looked in 4e8f50af940c6cacd4bb5511ad156093f0da4e7b
+// TODO(wishlist) for all display impls, use debug_closure_helpers once stabilized.
+// see how the code looked in 4e8f50af940c6cacd4bb5511ad156093f0da4e7b
 
 impl Display for Program {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

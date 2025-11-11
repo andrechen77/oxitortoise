@@ -11,7 +11,7 @@ use crate::sim::{
     value::Float,
 };
 
-// TODO updater fields for the observer's perspective and target agent
+// TODO(mvp) add updater fields for the observer's perspective and target agent
 
 flags! {
     pub enum WorldSettingsProp: u8 {
@@ -29,7 +29,7 @@ pub struct WorldSettingsUpdate {
 }
 
 flags! {
-    // TODO what to do about the pxcor and pycor properties? it seems the
+    // QUESTION what to do about the pxcor and pycor properties? it seems the
     // original tortoise engine outputs updates to them but it doesn't really
     // make sense for them to be updated
     pub enum PatchProp: u8 {
@@ -155,7 +155,7 @@ impl DirtyAggregator {
         &mut self.patches
     }
 
-    // TODO accessors for non-public fields
+    // TODO(wishlist) add accessors for non-public fields
 }
 
 impl Default for DirtyAggregator {
@@ -173,7 +173,7 @@ pub struct UpdateContent {
     pub patches: Vec<(PatchId, PatchUpdate)>,
 }
 
-// TODO create UpdateContent by reading the world state. also have a function to
-// serialize the update content to JSON. could consider using unchecked accesses
-// or JIT-compiled function to grab the properties (to avoid constant type
-// checks)
+// TODO(mvp) create UpdateContent by reading the world state.
+// TODO(mvp) write a function to serialize the update content to JSON.
+// could consider using unchecked accesses or JIT-compiled function to grab the
+// properties (to avoid constant type checks)

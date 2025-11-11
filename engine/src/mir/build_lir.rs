@@ -135,7 +135,7 @@ fn translate_function_body(
         assert_eq!(local_decl.storage, mir::LocalStorage::Register);
 
         let &[lir_type] = local_decl.ty.repr().to_lir_type().as_slice() else {
-            todo!("handle local variables that take up multiple LIR values")
+            unimplemented!("handle local variables that take up multiple LIR values")
         };
         let lir_var_id = lir_local_var_types.push_and_get_key(lir_type);
         local_to_lir.insert(local_id, LocalLocation::Var { var_id: lir_var_id });
@@ -151,7 +151,7 @@ fn translate_function_body(
         match local_decl.storage {
             mir::LocalStorage::Register => {
                 let &[lir_type] = local_decl.ty.repr().to_lir_type().as_slice() else {
-                    todo!("handle local variables that take up multiple LIR values")
+                    unimplemented!("handle local variables that take up multiple LIR values")
                 };
                 let lir_var_id = lir_local_var_types.push_and_get_key(lir_type);
                 local_to_lir.insert(local_id, LocalLocation::Var { var_id: lir_var_id });
@@ -159,7 +159,9 @@ fn translate_function_body(
                     lir_debug_var_names.insert(lir_var_id, debug_name);
                 }
             }
-            mir::LocalStorage::Stack => todo!(),
+            mir::LocalStorage::Stack => {
+                todo!("TODO(mvp) allocate space on the stack and map the local variable to it")
+            }
         }
     }
 
@@ -171,11 +173,11 @@ fn translate_function_body(
     let lir_function = lir::Function {
         local_vars: lir_local_var_types,
         num_parameters: num_lir_parameters,
-        stack_space: 0, // TODO add stack variables
+        stack_space: 0, // TODO(mvp) add stack variables
         body: body_block,
         insn_seqs,
         debug_fn_name: function.debug_name.clone(),
-        debug_val_names: HashMap::new(), // TODO add debug val names
+        debug_val_names: HashMap::new(), // TODO(nice_to_have) add debug val names
         debug_var_names: lir_debug_var_names,
     };
     let mut fn_builder = LirInsnBuilder {
@@ -197,6 +199,7 @@ fn translate_function_body(
         stmt_block: &mir::StatementBlock,
     ) {
         for stmt in &stmt_block.statements {
+            // TODO(mvp) add translation for other statement kinds to LIR
             match stmt {
                 &mir::StatementKind::Node(node_id) => {
                     nodes[node_id].write_lir_execution(node_id, nodes, fn_builder).inspect_err(|_| {

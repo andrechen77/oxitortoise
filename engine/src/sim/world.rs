@@ -12,7 +12,6 @@ use crate::sim::{
 
 #[derive(Debug)]
 pub struct World {
-    // pub observer: RefCell<Observer>,
     pub turtles: Turtles,
 
     pub patches: Patches,
@@ -22,7 +21,6 @@ pub struct World {
     pub tick_counter: Tick,
 
     pub shapes: Shapes,
-    // TODO add other fields
 }
 
 impl World {
@@ -56,6 +54,7 @@ impl World {
             Extensions[extensionName].clearAll?()
         )
         return
-         */ // TODO
+         */
+        // TODO(mvp) finish clear_all implementation
     }
 }

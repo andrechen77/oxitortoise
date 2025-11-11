@@ -185,12 +185,12 @@ fn add_function<A: FnTableSlotAllocator>(
         local_id
     });
 
-    // TODO we can make more efficient use of local variables by having the
-    // ctx.uses become ctx.remaining_uses, which counts down each time a getter
-    // for the value is taken. if a value is known to not be used again, we can
-    // put the local variable into a pool of unused local variables, which we'll
-    // pull from when we need a new local variable without having to create a
-    // new one every time.
+    // TODO(wishlist) we can make more efficient use of local variables by
+    // having the ctx.uses become ctx.remaining_uses, which counts down each
+    // time a getter for the value is taken. if a value is known to not be used
+    // again, we can put the local variable into a pool of unused local
+    // variables, which we'll pull from when we need a new local variable
+    // without having to create a new one every time.
 
     let types = lir::infer_output_types(func);
     let stk = stackify_lir::stackify_cfg(func);
@@ -524,8 +524,8 @@ fn add_function<A: FnTableSlotAllocator>(
             op_stack.extend(outputs);
         }
 
-        // TODO should we deliberately skip stack manipulators at the end? the
-        // end idx won't show up because it's not a real instruction
+        // QUESTION should we deliberately skip stack manipulators at the end?
+        // the end idx won't show up because it's not a real instruction
     }
     fn allocate_local_for_val<A>(ctx: &mut CodegenFnCtx<A>, val: lir::ValRef) -> wir::LocalId {
         let local_id = ctx.mod_ctx.module.locals.add(translate_val_type(ctx.types[&val]));
@@ -592,7 +592,7 @@ fn translate_val(r#type: lir::ValType, value: u64) -> walrus::ir::Value {
 /// Translates a pointer or pointer-sized value in LIR to a Wasm value. This
 /// is preferred over using `as` casts because it type-checks that the input is
 /// a `usize`, and picks the correct output type for the target platform.
-// TODO this function depends on the fact that the pointer width is 32 bits, so
+// FIXME this function depends on the fact that the pointer width is 32 bits, so
 // maybe annotate this with an attribute that fails compilation if this is not
 // true?
 fn translate_usize(x: usize) -> walrus::ir::Value {
@@ -666,7 +666,12 @@ fn translate_binary_op(
         (O::FLt, V::F64, V::F64) => Wo::F64Lt,
         (O::FGt, V::F64, V::F64) => Wo::F64Gt,
         (O::FEq, V::F64, V::F64) => Wo::F64Eq,
-        _ => todo!(),
+        _ => unimplemented!(
+            "unknown combination of op and val types: {:?}, {:?}, {:?}",
+            op,
+            lhs_type,
+            rhs_type
+        ),
     }
 }
 

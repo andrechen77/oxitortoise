@@ -1,5 +1,6 @@
-// TODO this is not exactly the same implementation as the one in Tortoise but
-// it should work for proof of concept
+// FIXME this is not exactly the same implementation as the one in Tortoise but
+// it should work for proof of concept. the implementations must match before
+// it can be considered correct
 
 use std::{collections::VecDeque, mem};
 

@@ -38,7 +38,7 @@ pub struct CheatPatchSchemaCtor {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum CheatTurtleSchema {
     Default,
-    // TODO add ctor type
+    // TODO(mvp_ants) add ctor type, similar to PatchSchemaCtor
 }
 
 #[derive(Deserialize, Debug)]
@@ -88,7 +88,7 @@ pub fn add_cheats(
         }
     }
 
-    // TODO add turtle variable types
+    // TODO(mvp_ants) add turtle variable types
 
     if let Some(patch_schema) = &cheats.patch_schema {
         let patch_schema = match patch_schema {
@@ -114,7 +114,6 @@ pub fn add_cheats(
     if let Some(turtle_schema) = &cheats.turtle_schema {
         let turtle_schema = match turtle_schema {
             CheatTurtleSchema::Default => TurtleSchema::default(),
-            // TODO add ctor type
         };
         mir.turtle_schema = Some(turtle_schema);
     }
@@ -134,5 +133,5 @@ pub fn add_cheats(
         }
     }
 
-    // TODO add types of variables
+    // TODO(mvp_ants) add types of global and local variables
 }

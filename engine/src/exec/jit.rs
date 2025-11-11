@@ -28,15 +28,15 @@ pub trait InstallLir {
     ) -> Result<HashMap<lir::FunctionId, JitEntrypoint>, InstallLirError>;
 }
 
-// FUTURE currently we have hardcoded constants to define what the indices
-// of all parameters are for entrypoints and callbacks, i.e. functions with
-// known signatures. There must be a cleaner way to get ahold of these
+// TODO(wishlist) currently we have hardcoded constants to define what the
+// indices of all parameters are for entrypoints and callbacks, i.e. functions
+// with known signatures. There must be a cleaner way to get ahold of these
 // constants.
 
 #[repr(transparent)]
 pub struct JitEntrypoint {
-    // TODO for type safety, we probably want to use a newtype over *mut u8 to
-    // indicate dynamically passed arguments
+    // TODO(wishlist) for type safety, we probably want to use a newtype
+    // over *mut u8 to indicate dynamically passed arguments
     fn_ptr: extern "C" fn(&mut CanonExecutionContext, *mut u8),
 }
 
@@ -75,9 +75,12 @@ impl<'env, Arg, Ret> JitCallback<'env, Arg, Ret> {
     }
 }
 
-// TODO this should be automatically generated from the signatures of the
-// actual host functions (probably done from the main crate rather than the
-// engine crate)
+// TODO(mvp) this should be automatically generated from the signatures
+// of the actual host functions (probably done from the main crate rather than
+// the engine crate).
+//
+// TODO(mvp_ants) once the compiler pipeline is done, double-check that the
+// signatures match.
 pub static HOST_FUNCTIONS: LazyLock<(
     TiVec<lir::HostFunctionId, lir::HostFunction>,
     HostFunctionIds,
@@ -96,7 +99,6 @@ pub static HOST_FUNCTIONS: LazyLock<(
     let create_turtles = host_functions.push_and_get_key(lir::HostFunction {
         name: "create_turtles",
         parameter_types: vec![
-            // TODO recheck the types
             lir::ValType::Ptr,
             lir::ValType::I32,
             lir::ValType::I32,

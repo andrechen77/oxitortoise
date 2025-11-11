@@ -1,4 +1,4 @@
-// TODO add documentation about MIR
+// TODO(doc) all of MIR
 
 use std::rc::Rc;
 
@@ -169,6 +169,8 @@ pub trait EffectfulNode {
         None
     }
 
+    // TODO(mvp_ants) the LIR execution of a node should depend on the access
+    // type, e.g. by-value, by-reference, etc.
     /// Writes the LIR instructions that correspond to the calculation
     /// represented by this node. This means executing any necessary side
     /// effects and making the LIR values for this node's outputs available. It
@@ -291,21 +293,21 @@ pub enum NetlogoAbstractType {
     List {
         element_ty: Box<NetlogoAbstractType>,
     },
-    // TODO add more
 }
 
 impl NetlogoAbstractType {
     pub fn join(&self, other: &NetlogoAbstractType) -> NetlogoAbstractType {
         let _ = other;
-        todo!()
+        todo!("TODO(mvp) calculate common supertype")
     }
 
     pub fn meet(&self, other: &NetlogoAbstractType) -> NetlogoAbstractType {
         let _ = other;
-        todo!()
+        todo!("TODO(mvp) calculate common subtype")
     }
 
     pub fn repr(&self) -> NetlogoMachineType {
+        // TODO(mvp) add machine types for all abstract types
         match self {
             Self::Unit => NetlogoMachineType::UNIT,
             Self::Top => NetlogoMachineType::DYN_BOX,
@@ -318,8 +320,8 @@ impl NetlogoAbstractType {
             Self::Agent => NetlogoMachineType::DYN_BOX,
             Self::Patch => NetlogoMachineType::PATCH_ID,
             Self::Turtle => NetlogoMachineType::TURTLE_ID,
-            Self::Link => todo!("add link id"),
-            Self::Agentset { agent_type: _ } => todo!("add agentset id"),
+            Self::Link => todo!(""),
+            Self::Agentset { agent_type: _ } => todo!(""),
             Self::Nobody => todo!(),
             Self::Closure(_) => todo!(),
             Self::List { element_ty: _ } => todo!(),
@@ -334,11 +336,11 @@ pub struct ClosureType {
 }
 
 impl ClosureType {
-    // TODO this should be linked somehow to the machine-level calling
+    // TODO(wishlist) this should be linked somehow to the machine-level calling
     // convention defined in jit.rs
-    #[allow(dead_code)] // TODO remove when used
+    #[allow(dead_code)] // remove when used
     const PARAM_ENV_IDX: usize = 0;
-    #[allow(dead_code)] // TODO remove when used
+    #[allow(dead_code)] // remove when used
     const PARAM_CONTEXT_IDX: usize = 1;
     const PARAM_ARG_IDX: usize = 2;
 }

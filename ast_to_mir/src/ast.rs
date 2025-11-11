@@ -6,7 +6,7 @@ pub struct Ast {
     #[serde(rename = "metaVars")]
     pub global_names: GlobalNames,
     pub procedures: Vec<Procedure>,
-    // TODO add widgets
+    // TODO(mvp) add widgets
 }
 
 #[derive(Deserialize, Debug)]

@@ -114,15 +114,15 @@ pub struct VarId(pub usize);
 
 #[derive(PartialEq, Eq, Debug, Display)]
 pub enum InsnKind {
-    // TODO rethink loop args. first, they should output a multivalue, instead
-    // of being a single value, since that's what it will look like on the stack
-    // machine. In addition, should the loop args instruction be considered to
-    // output values on the stack, or does the instruction only exist so that
-    // other instructions can have a ValRef to use the loop args? If the latter,
-    // then I need to modify the stackify_lir code so that entering a loop body
-    // *doesn't* start with a fresh stack. If the former, then I'll have to deal
-    // with the fact that every loop body must start with a loop args
-    // instruction.
+    // QUESTION rethink loop args.
+    // first, they should output a multivalue, instead of being a single value,
+    // since that's what it will look like on the stack machine. In addition,
+    // should the loop args instruction be considered to output values on the
+    // stack, or does the instruction only exist so that other instructions can
+    // have a ValRef to use the loop args? If the latter, then I need to modify
+    // the stackify_lir code so that entering a loop body *doesn't* start with a
+    // fresh stack. If the former, then I'll have to deal with the fact that
+    // every loop body must start with a loop args instruction.
     /// Outputs all arguments of a loop body.
     #[display("loop_args(-> {})", initial_value)]
     LoopArg {
@@ -467,7 +467,7 @@ fn infer_unary_op_output_type(op: UnaryOpcode, operand: ValType) -> ValType {
 
     match (op, operand) {
         (O::I64ToI32, V::I64) => V::I32,
-        _ => todo!(),
+        _ => todo!("TODO(mvp) add other compinations of ops and val types"),
     }
 }
 

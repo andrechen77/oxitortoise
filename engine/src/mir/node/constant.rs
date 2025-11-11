@@ -28,7 +28,7 @@ impl EffectfulNode for Constant {
         MirType::Abstract(match self.value {
             UnpackedDynBox::Int(_) => NetlogoAbstractType::Integer,
             UnpackedDynBox::Float(_) => NetlogoAbstractType::Float,
-            _ => todo!(),
+            _ => todo!("TODO(mvp) include all other variants"),
         })
     }
 
@@ -56,7 +56,7 @@ impl EffectfulNode for Constant {
                 lir_builder.node_to_lir.insert(my_node_id, smallvec![lir::ValRef(pc, 0)]);
                 Ok(())
             }
-            _ => todo!(),
+            _ => todo!("TODO(mvp) include other variants"),
         }
     }
 }

@@ -29,7 +29,6 @@ pub use cheats::add_cheats;
 
 use crate::ast::Ast;
 
-// TODO this should work with local variables too
 #[derive(Debug)]
 pub struct GlobalScope {
     constants: HashMap<&'static str, fn() -> EffectfulNodeKind>,
@@ -39,6 +38,7 @@ pub struct GlobalScope {
     /// The default turtle breed is represented by the empty string.
     turtle_breeds: HashMap<Rc<str>, BreedId>,
     functions: HashMap<Rc<str>, FunctionId>,
+    // TODO(mvp) add link variables
 }
 
 #[non_exhaustive]
@@ -172,7 +172,8 @@ pub fn ast_to_mir(ast: Ast) -> anyhow::Result<ParseResult> {
         global_vars: global_var_names,
         turtle_vars: turtle_var_names,
         patch_vars: patch_var_names,
-        link_vars: _link_var_names, // TODO handle link variables
+        // TODO(mvp) generate link variable registry from names
+        link_vars: _link_var_names,
     } = global_names;
 
     for global_name in global_var_names {
@@ -213,10 +214,17 @@ pub fn ast_to_mir(ast: Ast) -> anyhow::Result<ParseResult> {
             Ac { observer: true, turtle: true, patch: true, link: true } => AgentClass::Observer,
             Ac { observer: true, turtle: false, patch: false, link: false } => AgentClass::Observer,
             // -TP- means it uses patch variables, which is probably for patches
-            // TODO account for the possibility that a turtle does execute it
             Ac { observer: false, turtle: true, patch: true, link: false } => AgentClass::Patch,
             Ac { observer: false, turtle: true, patch: false, link: false } => AgentClass::Turtle,
-            _ => todo!("handle all agent classes"),
+            // TODO(mvp) I believe the correct way to handle this is, instead of
+            // just picking the most plausible agent class to generate the
+            // function for, is to generate a different version of the function
+            // for each agent class (except for observer functions, which any
+            // agent can execute since it doesn't have a self parameter). Not
+            // all of those variants will actually be needed, but we can just
+            // prune the unused ones later (perhaps selectively compiling only
+            // the bodies that are needed).
+            _ => todo!("handle all combinations of agent classes"),
         };
 
         // create the skeleton
@@ -364,8 +372,8 @@ fn create_procedure_skeleton(
             fn_info.self_param = Some(local_id);
             trace!("Added patch self parameter with local_id: {:?}", local_id);
         }
-        AgentClass::Link => todo!(),
-        AgentClass::Any => todo!(),
+        AgentClass::Link => todo!("TODO(mvp) add self parameter for Link agent class"),
+        AgentClass::Any => todo!("TODO(mvp) add self parameter that can be any agent"),
     }
     for arg_name in procedure_ast.arg_names {
         let arg_name: Rc<str> = Rc::from(arg_name);
@@ -532,7 +540,7 @@ fn translate_statement(ast_node: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) {
                 );
                 EffectfulNodeKind::from(node::CreateTurtles {
                     context,
-                    breed: ctx.mir.global_names.turtle_breeds[""], // FUTURE add creating other turtle breeds
+                    breed: ctx.mir.global_names.turtle_breeds[""], // TODO(mvp) add creating other turtle breeds
                     num_turtles: population,
                     body,
                 })
@@ -559,7 +567,7 @@ fn translate_statement(ast_node: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) {
                             value,
                         })
                     }
-                    NameReferent::Global(_) => todo!("setting global variables not yet supported"),
+                    NameReferent::Global(_) => todo!("TODO(mvp) add setting global variables"),
                     other => panic!("cannot mutate value of {:?}", other),
                 }
             }
@@ -653,7 +661,7 @@ fn translate_expression(expr: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) -> NodeI
             value: UnpackedDynBox::Float(value.as_f64().unwrap()),
         }),
         N::String { value: _ } => {
-            // TODO implement string constants
+            // TODO(mvp_ants) implement string literals
             EffectfulNodeKind::from(node::Constant { value: UnpackedDynBox::Float(0.0) })
         }
         N::List { items } => {
@@ -679,7 +687,7 @@ fn translate_expression(expr: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) -> NodeI
             };
             match referent {
                 NameReferent::Global(_global_id) => {
-                    todo!("global variable accesses not yet implemented")
+                    todo!("TODO(mvp_ants) add accessing global variables")
                 }
                 NameReferent::TurtleVar(var) => {
                     let context = ctx.get_context();
@@ -927,7 +935,7 @@ fn translate_ephemeral_closure(
             fn_info.self_param = Some(local_id);
             trace!("Added patch self parameter with local_id: {:?}", local_id);
         }
-        AgentClass::Link => todo!(),
+        AgentClass::Link => todo!("TODO(mvp) add self parameter with link type"),
         AgentClass::Any => {
             let local_id = locals.insert(LocalDeclaration {
                 debug_name: Some("self_any".into()),
@@ -959,7 +967,7 @@ fn translate_ephemeral_closure(
 
     // return a closure object
     ctx.nodes.insert(EffectfulNodeKind::from(node::Closure {
-        captures: vec![], // TODO add captures
+        captures: vec![], // TODO(mvp) find which variables are captured by the closure
         body: fn_id,
     }))
 }

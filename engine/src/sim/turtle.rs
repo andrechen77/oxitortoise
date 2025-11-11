@@ -82,7 +82,8 @@ pub struct Turtles {
     turtle_schema: TurtleSchema,
     /// The number of turtles in the world.
     num_turtles: u64,
-    // TODO this should be a secondary map, using the breed ids generated during MIR creation
+    // TODO(mvp) this should be a secondary map, using the breed ids generated
+    // during MIR creation
     /// The breeds of turtles.
     breeds: SlotMap<BreedId, Breed>,
 }
@@ -92,8 +93,9 @@ impl Turtles {
         Self {
             next_who: TurtleWho::default(),
             slot_tracker: GenSlotTracker::new(),
-            // TODO we should avoid having to remake the row schemas if we can;
-            // we should reuse the ones from the compilation process instead.
+            // TODO(wishlist) we should avoid having to remake the row schemas
+            // if we can; we should reuse the ones from the compilation process
+            // instead.
             data: turtle_schema.make_row_schemas().map(|s| s.map(RowBuffer::new)),
             fallback_custom_fields: HashMap::new(),
             turtle_schema,
@@ -115,7 +117,7 @@ impl Turtles {
     }
 
     pub fn translate_who(&self, _who: TurtleWho) -> TurtleId {
-        todo!()
+        todo!("TODO(mvp) use a lookup table to translate")
     }
 
     pub fn create_turtles(
@@ -136,7 +138,7 @@ impl Turtles {
             let who = self.next_who.take_next();
             let color = Color::random(next_int);
             let heading = Heading::random(next_int);
-            let shape_name = "default".to_owned(); // TODO use the breed's default shape
+            let shape_name = "default".to_owned(); // FIXME look up and use the breed's default shape
 
             // initialize base data
             let base_data = TurtleBaseData {
@@ -144,14 +146,13 @@ impl Turtles {
                 breed,
                 color,
                 label: String::new(),
-                label_color: color, // TODO use a default label color
+                label_color: color, // FIXME use a default label color
                 hidden: false,
                 size: value::Float::new(1.0),
                 shape_name,
             };
             self.data[0].as_mut().unwrap().row_mut(id.0.index as usize).insert(0, base_data);
 
-            // TODO is there a point in separating position/heading from base data?
             // set builtin variables that aren't in the base data
             let heading_desc = self.turtle_schema.heading();
             self.data[heading_desc.buffer_idx as usize]
@@ -209,14 +210,14 @@ impl Turtles {
         }
         if let Some(field) = self.data[field.buffer_idx as usize]
             .as_ref()
-            .unwrap()
+            .expect("data buffer should exist")
             .row(id.0.index as usize)
             .get(field.field_idx as usize)
         {
             Some(Either::Left(field))
         } else {
             let fallback = self.fallback_custom_fields.get(&(id, field));
-            Some(Either::Right(fallback.unwrap())) // TODO handle unwrap
+            Some(Either::Right(fallback?))
         }
     }
 
@@ -247,14 +248,14 @@ impl Turtles {
         }
         if let Some(field) = self.data[field.buffer_idx as usize]
             .as_mut()
-            .unwrap()
+            .expect("data buffer should exist")
             .row_mut(id.0.index as usize)
             .get_mut(field.field_idx as usize)
         {
             Some(Either::Left(field))
         } else {
             let fallback = self.fallback_custom_fields.get_mut(&(id, field));
-            Some(Either::Right(fallback.unwrap())) // TODO handle unwrap
+            Some(Either::Right(fallback?))
         }
     }
 
@@ -290,9 +291,9 @@ pub struct TurtleBaseData {
     pub breed: BreedId,
     /// The shape of this turtle due to its breed. This may or may not be the
     /// default shape of the turtle's breed.
-    pub shape_name: String, // TODO consider using the netlogo version of string for this
+    pub shape_name: String, // FIXME consider using the netlogo version of string for this
     pub color: Color,
-    pub label: String, // TODO consider using the netlogo version of string for this
+    pub label: String, // FIXME consider using the netlogo version of string for this
     pub label_color: Color,
     pub hidden: bool,
     pub size: value::Float,
@@ -320,7 +321,7 @@ pub enum TurtleVarDesc {
     Ycor,
     /// The nth custom field of the turtle.
     Custom(usize),
-    // TODO add other builtin variables
+    // TODO(mvp) add other builtin variables
 }
 
 /// Returns a tuple indicating how to access a given variable given a pointer
@@ -343,9 +344,9 @@ pub fn calc_turtle_var_offset(mir: &mir::Program, var: TurtleVarDesc) -> (usize,
         turtle_schema: &TurtleSchema,
         field: AgentFieldDescriptor,
     ) -> (usize, usize) {
-        // TODO it's inefficient to calculate the schemas every time. see
-        // if we can cache this calculation as well as use it for making
-        // the workspace
+        // TODO(wishlist) it's inefficient to calculate the schemas every time.
+        // see if we can cache this calculation as well as use it for making the
+        // workspace
         let schemas: [Option<RowSchema>; 4] = turtle_schema.make_row_schemas();
         let row_schema = schemas[usize::from(field.buffer_idx)].as_ref().unwrap();
         let field_offset = row_schema.field(usize::from(field.field_idx)).offset;
@@ -387,4 +388,4 @@ pub fn turtle_var_type(schema: &TurtleSchema, var: TurtleVarDesc) -> NetlogoMach
     }
 }
 
-// TODO write tests for turtle initialization and access
+// TODO(test) write tests for turtle initialization and access

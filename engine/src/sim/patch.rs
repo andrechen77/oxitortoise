@@ -15,9 +15,9 @@ use crate::{
     util::row_buffer::{self, RowBuffer, RowSchema},
 };
 
-// TODO make documentation better
-
-// TODO document that the Patch Id uses -1 as a sentinel value for nobody
+// TODO(doc) the patch id uses -1 as a sentinel value for nobody.
+// We must also decide whether the Rust newtype PatchId should allow this
+// sentinel value
 
 /// A reference to a patch.
 ///
@@ -58,7 +58,7 @@ pub struct Patches {
 impl Patches {
     pub fn new(patch_schema: PatchSchema, topology_spec: &TopologySpec) -> Self {
         let mut patches = Self {
-            // TODO we should avoid having to remake the row schemas if we can;
+            // TODO(wishlist) we should avoid having to remake the row schemas if we can;
             // we should reuse the ones from the compilation process instead.
             data: patch_schema.make_row_schemas().map(|s| s.map(RowBuffer::new)),
             patch_schema,
@@ -87,7 +87,7 @@ impl Patches {
                 let base_data = PatchBaseData {
                     position,
                     plabel: String::new(),
-                    plabel_color: Color::BLACK, // TODO use a more sensible default
+                    plabel_color: Color::BLACK, // FIXME use a more sensible default
                 };
                 patches.data[0].as_mut().unwrap().row_mut(id.0 as usize).insert(0, base_data);
 
@@ -114,9 +114,9 @@ impl Patches {
                         patches.fallback_custom_fields.insert((id, field), DynBox::ZERO);
                     }
                 }
-                // TODO can reduce code duplication by using a helper function
-                // for initialization of the custom fields of turtles, patches,
-                // and links
+                // TODO(wishlist) can reduce code duplication by using a helper
+                // function for initialization of the custom fields of turtles,
+                // patches, and links
             }
         }
 
@@ -140,14 +140,14 @@ impl Patches {
 
         if let Some(field) = self.data[field.buffer_idx as usize]
             .as_ref()
-            .unwrap()
+            .expect("data buffer should exist")
             .row(id.0 as usize)
             .get(field.field_idx as usize)
         {
             Some(Either::Left(field))
         } else {
             let fallback = self.fallback_custom_fields.get(&(id, field));
-            Some(Either::Right(fallback.unwrap())) // TODO handle unwrap
+            Some(Either::Right(fallback?))
         }
     }
 
@@ -174,14 +174,14 @@ impl Patches {
 
         if let Some(field) = self.data[field.buffer_idx as usize]
             .as_mut()
-            .unwrap()
+            .expect("data buffer should exist")
             .row_mut(id.0 as usize)
             .get_mut(field.field_idx as usize)
         {
             Some(Either::Left(field))
         } else {
             let fallback = self.fallback_custom_fields.get_mut(&(id, field));
-            Some(Either::Right(fallback.unwrap())) // TODO handle unwrap
+            Some(Either::Right(fallback?))
         }
     }
 
@@ -219,8 +219,8 @@ impl Patches {
     /// Panics if the field cannot be interpreted as a float or if it wasn't
     /// put into its own field group with no occupancy bitfield.
     pub fn take_patch_values(&mut self, field: AgentFieldDescriptor) -> row_buffer::Array<Float> {
-        // TODO make sure that patches don't have a fallback value for this
-        // field
+        // FIXME when taking patch values, we should make sure that patches
+        // don't have fallback values for this field
         self.data[field.buffer_idx as usize].as_mut().unwrap().take_array()
     }
 
@@ -238,7 +238,7 @@ impl Patches {
 
     /// Resets all patch variables to their default values.
     pub fn clear_patch_variables(&mut self) {
-        // TODO implement this
+        // TODO(mvp) implement clearing patch variables
     }
 
     pub fn patch_ids(&self) -> impl Iterator<Item = PatchId> + '_ {
@@ -249,9 +249,9 @@ impl Patches {
 #[derive(Debug)]
 pub struct PatchBaseData {
     pub position: Point,
-    pub plabel: String, // TODO consider using the netlogo version of string for this
+    pub plabel: String, // FIXME consider using the netlogo version of string for this
     pub plabel_color: Color,
-    // TODO some way of tracking what turtles are on this patch.
+    // TODO add some way of tracking what turtles are on this patch.
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -266,7 +266,7 @@ pub fn calc_patch_var_offset(mir: &mir::Program, var: PatchVarDesc) -> (usize, u
         patch_schema: &PatchSchema,
         field: AgentFieldDescriptor,
     ) -> (usize, usize) {
-        // TODO it's inefficient to calculate the schemas every time. see
+        // TODO(wishlist) it's inefficient to calculate the schemas every time. see
         // if we can cache this calculation as well as use it for making
         // the workspace
         let schemas: [Option<RowSchema>; 4] = patch_schema.make_row_schemas();

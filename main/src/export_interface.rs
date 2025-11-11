@@ -19,7 +19,7 @@ pub extern "C" fn oxitortoise_is_nan(value: f64) -> bool {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn oxitortoise_round(value: Float) -> Float {
-    // TODO is it possible for this to go from finite to non-finite?
+    // FIXME is it possible for this to go from finite to non-finite?
     Float::new(value.get().round())
 }
 
@@ -35,12 +35,12 @@ pub extern "C" fn oxitortoise_reset_ticks(world: &mut World) {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn oxitortoise_get_ticks(world: &mut World) -> Float {
-    world.tick_counter.get().unwrap() // TODO: handle error
+    world.tick_counter.get().unwrap() // TODO(mvp) handle error
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn oxitortoise_advance_tick(world: &mut World) {
-    world.tick_counter.advance().unwrap(); // TODO: handle error
+    world.tick_counter.advance().unwrap(); // TODO(mvp) handle error
 }
 
 #[unsafe(no_mangle)]

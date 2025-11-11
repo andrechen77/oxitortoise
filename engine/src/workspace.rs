@@ -13,6 +13,4 @@ static OFFSET_WORKSPACE_TO_WORLD: usize = offset_of!(Workspace, world);
 pub struct Workspace {
     pub world: World,
     pub rng: Rc<RefCell<CanonRng>>,
-    // TODO add other fields
-    // plot manager
 }

@@ -1,7 +1,7 @@
 use std::{collections::VecDeque, marker::PhantomData};
 
-// TODO document how the generation number must always be odd for occupied slots
-// and now this naturally allows gen 0 index 0 to be a natural null value
+// TODO(doc) the generation number must always be odd for occupied slots and now
+// this naturally allows gen 0 index 0 to be a natural null value
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -17,8 +17,9 @@ impl GenIndex {
         Self { index, r#gen, _padding: 0 }
     }
 
-    // TODO check that the to/from ffi functions are equivalent to transmutes.
-    // add tests for this as well.
+    // TODO verify that the to/from ffi functions are equivalent to transmutes.
+    // TODO(test) add tests for this behavior as well, since we slightly depend on
+    // it for performance
 
     pub const fn to_ffi(&self) -> u64 {
         (self._padding as u64) << 48 | (self.r#gen as u64) << 32 | (self.index as u64)

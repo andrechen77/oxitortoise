@@ -6,7 +6,7 @@ use crate::{
     util::row_buffer::RowSchema,
 };
 
-// TODO make better, actual documentation for how the agents are laid out
+// TODO(mvp) make better, actual documentation for how the agents are laid out
 // hybrid SoA-AoS model: the set of fields for an agent is organized into
 // a set of sets: {{A, B}, {C, D}, {E}, {F}} means that A and B are stored in
 // an array of structs, C and D are stored in a separate array of structs, E

@@ -325,7 +325,7 @@ macro_rules! instruction_seq {
     }
 }
 
-// TODO fix macro to work with new function parameter passing (i.e. they are
+// FIXME fix macro to work with new function parameter passing (i.e. they are
 // used to initialize first X local variables rather than coming from some
 // "arguments" instruction)
 #[macro_export]

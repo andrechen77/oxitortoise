@@ -81,13 +81,13 @@ pub fn peephole_transform(program: &Program, fn_id: FunctionId) {
     visit_mir_function(&mut Visitor { program, fn_id }, &program.functions[fn_id].borrow());
 }
 
-// TODO this optimziation should instead be part of the type inference pass,
-// which should collect information about all the types in the program; the
-// types of the arguments to the `of`'s closure should be included in there.
-// However, we are able to perform this optimization prematurely because
-// we know that the `of` is the only way that the closure is ever going
-// to be called, so we can assume that whatever is passed to `of` is going to
-// be the only thing passed to the closure.
+// TODO(wishlist) this optimization should instead be part of the type inference
+// pass, which should collect information about all the types in the program;
+// the types of the arguments to the `of`'s closure should be included in there.
+// However, we are able to perform this optimization prematurely because we know
+// that the `of` is the only way that the closure is ever going to be called, so
+// we can assume that whatever is passed to `of` is going to be the only thing
+// passed to the closure.
 pub fn optimize_of_agent_type(program: &Program, fn_id: FunctionId) {
     struct Visitor<'a> {
         program: &'a Program,

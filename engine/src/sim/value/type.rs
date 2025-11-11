@@ -42,7 +42,7 @@ impl NetlogoMachineType {
             Self::HEADING => smallvec![lir::ValType::F64],
             Self::UNTYPED_PTR => smallvec![lir::ValType::Ptr],
             Self::UNIT => smallvec![],
-            _ => todo!(),
+            _ => unimplemented!(),
         }
     }
 }

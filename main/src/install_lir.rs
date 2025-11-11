@@ -52,9 +52,9 @@ unsafe extern "C" {
     /// behavior.
     fn instantiate_module(module_bytes_start: *const u8, module_bytes_len: usize) -> bool;
 
-    // TODO this shouldn't have to be imported from the host environment. it
-    // would be ideal if we could do this by emitting Wasm instructions in the
-    // current module directly to just grow the table.
+    // TODO(wishlist) this shouldn't have to be imported from the host
+    // environment. it would be ideal if we could do this by emitting Wasm
+    // instructions in the current module directly to just grow the table.
     /// Creates new slots in the function table by growing the table, and
     /// returns the index of the first new slot in the table. Returns `usize::MAX`
     /// if the operation could not be completed.
@@ -138,7 +138,7 @@ impl FunctionInstaller {
         }
 
         // return the function pointers to the installed functions.
-        // FUTURE we might be able to transmute here
+        // TODO(wishlist) we might be able to transmute here
         let jit_entries =
             HashMap::from_iter(fn_table_allocated_slots.into_iter().map(|(lir_fn_id, slot)| {
                 (

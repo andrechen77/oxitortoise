@@ -88,7 +88,7 @@ impl EffectfulNode for Diffuse {
         _nodes: &Nodes,
         _lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
-        todo!()
+        todo!("TODO(mvp_ants) write LIR code to call a host function")
     }
 }
 
@@ -256,7 +256,7 @@ pub enum AskRecipient {
     SingleTurtle(NodeId),
     SinglePatch(NodeId),
     Any(NodeId),
-    // TODO add links
+    // TODO(mvp) add links
 }
 
 impl AskRecipient {
@@ -313,9 +313,9 @@ impl EffectfulNode for Ask {
         _fn_id: FunctionId,
         _my_node_id: NodeId,
     ) -> Option<NodeTransform> {
-        // FUTURE a more robust solution would check the type of the recipients
-        // to see if it refers to an entire agent class, rather than just
-        // checking for a specific node. this would require augmenting the
+        // TODO(wishlist) a more robust solution would check the type of the
+        // recipients to see if it refers to an entire agent class, rather than
+        // just checking for a specific node. this would require augmenting the
         // type system to include special types for "entire agent class"
 
         fn type_erase_ask(program: &Program, fn_id: FunctionId, my_node_id: NodeId) -> bool {
@@ -346,10 +346,6 @@ impl EffectfulNode for Ask {
 
         Some(Box::new(type_erase_ask))
     }
-
-    // TODO if possible this node should be optimized into AskAllTurtles, etc.
-    // maybe we can hijack lowering expand for this? or repurpose that function
-    // as one that checks for all optimizations?
 }
 
 #[derive(Debug, Display)]
@@ -391,9 +387,12 @@ impl EffectfulNode for AskAllTurtles {
         let &[env_ptr, fn_ptr] = lir_builder.get_node_results(nodes, self.body) else {
             panic!("expected node outputting closure body to be two LIR values");
         };
+        // TODO(mvp) consult registry of host functions.
+        // there should be a registry of host functions that we can consult
+        // which abstracts the details of the signatures of each function.
         let pc = lir_builder.push_lir_insn(lir::InsnKind::CallHostFunction {
             function: lir_builder.program_builder.host_function_ids.ask_all_turtles,
-            output_type: smallvec![], // TODO this should be inferred from the host function declaration
+            output_type: smallvec![],
             args: Box::new([ctx_ptr, env_ptr, fn_ptr]),
         });
         lir_builder.node_to_lir.insert(my_node_id, smallvec![lir::ValRef(pc, 0)]);
@@ -526,14 +525,7 @@ impl EffectfulNode for CanMove {
         MirType::Abstract(NetlogoAbstractType::Boolean)
     }
 
-    fn write_lir_execution(
-        &self,
-        _my_node_id: NodeId,
-        _nodes: &Nodes,
-        _lir_builder: &mut LirInsnBuilder,
-    ) -> Result<(), WriteLirError> {
-        todo!()
-    }
+    // TODO(mvp_ants) add transformation to turn the node into "patch ahead != nobody"
 }
 
 #[derive(Debug, Display)]
@@ -630,7 +622,7 @@ impl EffectfulNode for OffsetDistanceByHeading {
         _function: &crate::mir::Function,
         _nodes: &crate::mir::Nodes,
     ) -> MirType {
-        todo!()
+        todo!("TODO(mvp) return Point type")
     }
 
     fn write_lir_execution(
@@ -639,7 +631,7 @@ impl EffectfulNode for OffsetDistanceByHeading {
         _nodes: &Nodes,
         _lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
-        todo!()
+        todo!("TODO(mvp_ants) write LIR code to call a host function")
     }
 }
 

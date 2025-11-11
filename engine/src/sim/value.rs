@@ -14,5 +14,6 @@ pub use float::Float;
 pub use string::String;
 pub use r#type::NetlogoMachineType;
 
-// TODO add other types such as link references, lists, reporters,
-// commmands
+// TODO(mvp) add box-like representation for indirect values.
+// Values such as strings, lists, anonymous procedures, etc. should use this,
+// replacing the existing String file

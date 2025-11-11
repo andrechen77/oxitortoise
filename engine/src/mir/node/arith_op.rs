@@ -72,7 +72,7 @@ impl EffectfulNode for BinaryOperation {
         _nodes: &Nodes,
         _lir_builder: &mut crate::mir::build_lir::LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
-        todo!()
+        todo!("TODO(mvp_ants) write LIR code to perform the binary operation")
     }
 }
 
@@ -112,6 +112,6 @@ impl EffectfulNode for UnaryOp {
         _nodes: &Nodes,
         _lir_builder: &mut crate::mir::build_lir::LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
-        todo!()
+        todo!("TODO(mvp_ants) write LIR code to perform the unary operation")
     }
 }

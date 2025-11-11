@@ -38,7 +38,8 @@ pub enum UnpackedDynBox {
     Turtle(TurtleId),
     Patch(PatchId),
     Link(LinkId),
-    // TODO make this a pointer to a value in storage
+    // TODO(mvp) make this a pointer to a value in storage
+    // see mention of a "boxed representation" the parent module
     Other(u64),
 }
 
@@ -56,11 +57,13 @@ impl DynBox {
             return UnpackedDynBox::Float(float);
         }
 
+        // TODO(wishlist) add constants for each tag variant
         let tag = (self.0 >> 48) & 0b111;
         let value = self.0 & 0xFFFFFFFFFFFF;
 
+        // TODO(mvp) complete all cases for unpacking a DynBox
         match tag {
-            0b000 => UnpackedDynBox::Int(value as i64), // TODO sign extend
+            0b000 => UnpackedDynBox::Int(value as i64), // FIXME this should sign extend
             0b001 => match value {
                 0 => UnpackedDynBox::Bool(false),
                 1 => UnpackedDynBox::Bool(true),
@@ -111,6 +114,6 @@ impl Clone for UnpackedDynBox {
     }
 }
 
-// TODO implement links
+// placeholder; remove once links are implemented
 #[derive(Debug)]
 pub struct LinkId;

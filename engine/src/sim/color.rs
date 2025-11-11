@@ -74,7 +74,7 @@ pub fn base_colors() -> &'static [Color] {
 }
 
 /// see https://ccl.northwestern.edu/netlogo/docs/dictionary.html#scale-color
-// TODO how to ensure this works for extreme values that might cause overflow?
+// FIXME ensure this works for extreme values that might cause overflow
 //
 //  scale-color color number range1 range2
 // Reports a shade of color proportional to the value of number.
@@ -86,7 +86,7 @@ pub fn scale_color(color: Color, number: Float, range_start: Float, range_end: F
     let range_end = range_end.get();
     let number = number.get();
 
-    // TODO handle NaN case
+    // FIXME handle case where NaNs might show up in the calculation.
 
     // determine where in the the range the number is
     let proportion = (number - range_start) / (range_end - range_start);
