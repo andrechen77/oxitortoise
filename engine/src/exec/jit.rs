@@ -112,5 +112,19 @@ pub static HOST_FUNCTIONS: LazyLock<(
         parameter_types: vec![lir::ValType::Ptr, lir::ValType::Ptr, lir::ValType::FnPtr],
         return_type: vec![],
     });
-    (host_functions, HostFunctionIds { clear_all, reset_ticks, create_turtles, ask_all_turtles })
+    let ask_all_patches = host_functions.push_and_get_key(lir::HostFunction {
+        name: "for_all_patches",
+        parameter_types: vec![lir::ValType::Ptr, lir::ValType::Ptr, lir::ValType::FnPtr],
+        return_type: vec![],
+    });
+    (
+        host_functions,
+        HostFunctionIds {
+            clear_all,
+            reset_ticks,
+            create_turtles,
+            ask_all_turtles,
+            ask_all_patches,
+        },
+    )
 });

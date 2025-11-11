@@ -138,6 +138,7 @@ pub struct HostFunctionIds {
     pub reset_ticks: lir::HostFunctionId,
     pub create_turtles: lir::HostFunctionId,
     pub ask_all_turtles: lir::HostFunctionId,
+    pub ask_all_patches: lir::HostFunctionId,
 }
 
 #[instrument(skip_all)]

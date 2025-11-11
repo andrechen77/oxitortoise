@@ -1,6 +1,7 @@
 mod agent_var;
 mod agentset;
 mod arith_op;
+mod ask;
 mod closure;
 mod constant;
 mod library;
@@ -11,6 +12,7 @@ mod user_fn;
 pub use agent_var::*;
 pub use agentset::*;
 pub use arith_op::*;
+pub use ask::*;
 pub use closure::*;
 pub use constant::*;
 pub use library::*;

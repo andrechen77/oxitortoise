@@ -202,7 +202,6 @@ pub enum EffectfulNodeKind {
     Agentset(Agentset),
     AdvanceTick(AdvanceTick),
     Ask(Ask),
-    AskAllTurtles(AskAllTurtles),
     BinaryOperation(BinaryOperation),
     CallUserFn(CallUserFn),
     CanMove(CanMove),
