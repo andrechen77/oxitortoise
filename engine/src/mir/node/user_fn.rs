@@ -30,4 +30,29 @@ impl EffectfulNode for CallUserFn {
     ) -> MirType {
         program.functions[self.target].borrow().return_ty.clone()
     }
+
+    fn write_lir_execution(
+        &self,
+        _my_node_id: NodeId,
+        nodes: &crate::mir::Nodes,
+        lir_builder: &mut crate::mir::build_lir::LirInsnBuilder,
+    ) -> Result<(), crate::mir::WriteLirError> {
+        let lir_fn_id = lir_builder.program_builder.available_user_functions[&self.target];
+        let (_input_type, output_type) =
+            &lir_builder.program_builder.function_signatures[&lir_fn_id];
+
+        let mut args = Vec::new();
+        for arg in &self.args {
+            args.extend(lir_builder.get_node_results(nodes, *arg));
+        }
+
+        let insn = lir::InsnKind::CallUserFunction {
+            function: lir_fn_id,
+            output_type: output_type.clone(),
+            args: args.into_boxed_slice(),
+        };
+
+        lir_builder.push_lir_insn(insn);
+        Ok(())
+    }
 }
