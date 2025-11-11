@@ -4,9 +4,12 @@
 
 use std::collections::HashMap;
 
-use lir::{smallvec::SmallVec, typed_index_collections::TiVec};
+use lir::{
+    smallvec::{SmallVec, smallvec},
+    typed_index_collections::TiVec,
+};
 use slotmap::{SecondaryMap, SlotMap};
-use tracing::error;
+use tracing::{error, instrument, trace};
 
 use crate::{
     exec::jit::HOST_FUNCTIONS,
@@ -35,6 +38,7 @@ pub fn mir_to_lir(mir: &mir::Program) -> lir::Program {
     // functions might reference each other, and their signatures are required
     let mut user_function_tracker = SlotMap::with_key(); // used only to allocate lir::FunctionId
     for (mir_fn_id, mir_fn) in mir.functions.iter() {
+        trace!("translating function signature for {}", mir_fn_id);
         let signature = translate_function_signature(&mir_fn.borrow());
         // allocate a new function id for the LIR function
         let lir_fn_id = user_function_tracker.insert(());
@@ -45,6 +49,7 @@ pub fn mir_to_lir(mir: &mir::Program) -> lir::Program {
     // translate all user function bodies
     let mut lir_fn_bodies = SecondaryMap::new();
     for (mir_fn_id, mir_fn) in mir.functions.iter() {
+        trace!("translating function body for {}", mir_fn_id);
         let lir_fn = translate_function_body(&mir_fn.borrow(), &mut builder);
         let lir_fn_id = builder.available_user_functions[&mir_fn_id];
         lir_fn_bodies.insert(lir_fn_id, lir_fn);
@@ -57,13 +62,16 @@ pub fn mir_to_lir(mir: &mir::Program) -> lir::Program {
     }
 }
 
+#[instrument(skip(function))]
 fn translate_function_signature(
     function: &mir::Function,
 ) -> (Vec<lir::ValType>, SmallVec<[lir::ValType; 1]>) {
     let mut params = Vec::new();
     for parameter in &function.parameters {
+        trace!("adding parameter {:?} with type {:?}", parameter, function.locals[*parameter].ty);
         params.extend(function.locals[*parameter].ty.repr().to_lir_type());
     }
+    trace!("adding return value with type {:?}", function.return_ty);
     let return_value = function.return_ty.repr().to_lir_type();
     (params, return_value)
 }
@@ -79,7 +87,7 @@ pub struct LirInsnBuilder<'a> {
     pub node_to_lir: HashMap<mir::NodeId, SmallVec<[lir::ValRef; 1]>>,
     /// The LIR function being built.
     pub product: lir::Function,
-    /// The stack of current instruction sequence being built.
+    /// The stack of current instruction sequences being built.
     pub insn_seqs: Vec<lir::InsnSeqId>,
 }
 
@@ -89,6 +97,16 @@ impl<'a> LirInsnBuilder<'a> {
             nodes[node_id].write_lir_execution(node_id, nodes, self).unwrap();
         }
         self.node_to_lir.get(&node_id).unwrap().as_slice()
+    }
+
+    pub fn with_insn_seq(
+        &mut self,
+        insn_seq: lir::InsnSeqId,
+        op: impl FnOnce(&mut LirInsnBuilder),
+    ) {
+        self.insn_seqs.push(insn_seq);
+        op(self);
+        self.insn_seqs.pop();
     }
 }
 
@@ -122,6 +140,7 @@ pub struct HostFunctionIds {
     pub ask_all_turtles: lir::HostFunctionId,
 }
 
+#[instrument(skip_all)]
 fn translate_function_body(
     function: &mir::Function,
     program_builder: &mut LirProgramBuilder,
@@ -209,13 +228,44 @@ fn translate_function_body(
                     );
                 }
                 mir::StatementKind::IfElse { condition, then_block, else_block } => {
-                    let _ = condition;
-                    let _ = then_block;
-                    let _ = else_block;
-                    todo!()
+                    // create a new instruction for each branch
+                    let then_body = fn_builder.product.insn_seqs.push_and_get_key(TiVec::new());
+                    let else_body = fn_builder.product.insn_seqs.push_and_get_key(TiVec::new());
+                    fn_builder.with_insn_seq(then_body, |fn_builder| {
+                        translate_stmt_block(nodes, fn_builder, then_block)
+                    });
+                    fn_builder.with_insn_seq(else_body, |fn_builder| {
+                        translate_stmt_block(nodes, fn_builder, else_block)
+                    });
+
+                    let &[condition] = fn_builder.get_node_results(nodes, *condition) else {
+                        panic!("a condition should evaluate to a single LIR value");
+                    };
+                    fn_builder.push_lir_insn(lir::InsnKind::IfElse(lir::IfElse {
+                        condition,
+                        output_type: smallvec![],
+                        then_body,
+                        else_body,
+                    }));
                 }
-                mir::StatementKind::Stop => todo!(),
-                _ => todo!(),
+                mir::StatementKind::Stop => {
+                    // TODO(wishlist) this as well as the Return statement
+                    // should stop translating any following statements in the
+                    // same block, because a break instruction must be the last
+                    // instruction in a LIR instruction sequence
+                    fn_builder.push_lir_insn(lir::InsnKind::Break {
+                        target: fn_builder.insn_seqs[0],
+                        values: Box::new([]),
+                    });
+                }
+                mir::StatementKind::Return { value } => {
+                    let break_insn = lir::InsnKind::Break {
+                        target: fn_builder.insn_seqs[0],
+                        values: Box::from(fn_builder.get_node_results(nodes, *value)),
+                    };
+                    fn_builder.push_lir_insn(break_insn);
+                }
+                mir::StatementKind::Repeat { num_repetitions: _, block: _ } => todo!(),
             }
         }
     }

@@ -33,6 +33,7 @@ impl NetlogoMachineType {
 
     pub fn to_lir_type(&self) -> SmallVec<[lir::ValType; 1]> {
         match *self {
+            Self::DYN_BOX => smallvec![lir::ValType::F64],
             Self::FLOAT => smallvec![lir::ValType::F64],
             Self::INTEGER => smallvec![lir::ValType::I64],
             Self::BOOLEAN => smallvec![lir::ValType::I8],

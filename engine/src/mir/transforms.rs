@@ -81,9 +81,9 @@ pub fn peephole_transform(program: &Program, fn_id: FunctionId) {
     visit_mir_function(&mut Visitor { program, fn_id }, &program.functions[fn_id].borrow());
 }
 
-// TODO(wishlist) this optimization should instead be part of the type inference
-// pass, which should collect information about all the types in the program;
-// the types of the arguments to the `of`'s closure should be included in there.
+// HACK this optimization should instead be part of the type inference pass,
+// which should collect information about all the types in the program; the
+// types of the arguments to the `of`'s closure should be included in there.
 // However, we are able to perform this optimization prematurely because we know
 // that the `of` is the only way that the closure is ever going to be called, so
 // we can assume that whatever is passed to `of` is going to be the only thing
@@ -100,20 +100,17 @@ pub fn optimize_of_agent_type(program: &Program, fn_id: FunctionId) {
             let node = &nodes[node_id];
 
             if let EffectfulNodeKind::Of(of) = &node {
-                debug!("Optimizing Of node {:?}", node);
+                trace!("Optimizing Of node {:?}", node);
 
                 let recipients = &nodes[of.recipients];
                 let EffectfulNodeKind::Closure(closure) = &nodes[of.body] else {
                     return;
                 };
-                debug!("Closure body: {:?}", closure.body);
                 let mut body = self.program.functions[closure.body].borrow_mut();
-                debug!("Body parameters: {:?}", body.parameters);
 
                 let self_param_id = body.parameters[ClosureType::PARAM_ARG_IDX];
 
                 let ty = recipients.output_type(self.program, &function, &nodes).clone();
-                debug!("{:?}", ty);
                 body.locals[self_param_id].ty = ty;
             }
         }
