@@ -368,15 +368,17 @@ impl RowBuffer {
         let mut total_layout = schema.layout;
         let mut stride = None;
         for _ in 1..num_rows {
-            let (l, s) = total_layout
+            let (new_layout, offset_of_last_elem) = total_layout
                 .extend(schema.layout)
                 .expect("if we overflow on layout calculation we're in bigger trouble");
-            total_layout = l;
+            total_layout = new_layout;
             if let Some(stride) = stride {
-                assert!(s == stride);
+                assert!(offset_of_last_elem % stride == 0);
+            } else {
+                stride = Some(offset_of_last_elem);
             }
-            stride = Some(s);
         }
+        total_layout = total_layout.pad_to_align(); // unnecessary but just in case
 
         // this must be true because we use layout size as the stride in
         // other methods
