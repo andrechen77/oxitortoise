@@ -30,8 +30,8 @@ pub struct GetTurtleVar {
 }
 
 impl EffectfulNode for GetTurtleVar {
-    fn has_side_effects(&self) -> bool {
-        false
+    fn is_pure(&self) -> bool {
+        true
     }
 
     fn dependencies(&self) -> Vec<NodeId> {
@@ -99,8 +99,8 @@ pub struct SetTurtleVar {
 }
 
 impl EffectfulNode for SetTurtleVar {
-    fn has_side_effects(&self) -> bool {
-        true
+    fn is_pure(&self) -> bool {
+        false
     }
 
     fn dependencies(&self) -> Vec<NodeId> {
@@ -194,8 +194,8 @@ pub struct TurtleIdToIndex {
 }
 
 impl EffectfulNode for TurtleIdToIndex {
-    fn has_side_effects(&self) -> bool {
-        false
+    fn is_pure(&self) -> bool {
+        true
     }
 
     fn dependencies(&self) -> Vec<NodeId> {
@@ -236,8 +236,8 @@ pub struct GetPatchVar {
 }
 
 impl EffectfulNode for GetPatchVar {
-    fn has_side_effects(&self) -> bool {
-        false
+    fn is_pure(&self) -> bool {
+        true
     }
 
     fn dependencies(&self) -> Vec<NodeId> {
@@ -303,8 +303,8 @@ pub struct SetPatchVar {
 }
 
 impl EffectfulNode for SetPatchVar {
-    fn has_side_effects(&self) -> bool {
-        true
+    fn is_pure(&self) -> bool {
+        false
     }
 
     fn dependencies(&self) -> Vec<NodeId> {
@@ -404,8 +404,8 @@ pub struct GetPatchVarAsTurtleOrPatch {
 }
 
 impl EffectfulNode for GetPatchVarAsTurtleOrPatch {
-    fn has_side_effects(&self) -> bool {
-        false
+    fn is_pure(&self) -> bool {
+        true
     }
 
     fn dependencies(&self) -> Vec<NodeId> {
@@ -497,8 +497,8 @@ pub struct SetPatchVarAsTurtleOrPatch {
 }
 
 impl EffectfulNode for SetPatchVarAsTurtleOrPatch {
-    fn has_side_effects(&self) -> bool {
-        true
+    fn is_pure(&self) -> bool {
+        false
     }
 
     fn dependencies(&self) -> Vec<NodeId> {

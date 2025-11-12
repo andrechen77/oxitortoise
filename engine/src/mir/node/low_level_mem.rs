@@ -22,8 +22,8 @@ pub struct MemLoad {
 }
 
 impl EffectfulNode for MemLoad {
-    fn has_side_effects(&self) -> bool {
-        false
+    fn is_pure(&self) -> bool {
+        true
     }
 
     fn dependencies(&self) -> Vec<NodeId> {
@@ -80,8 +80,8 @@ impl EffectfulNode for MemStore {
         vec![self.ptr, self.value]
     }
 
-    fn has_side_effects(&self) -> bool {
-        false
+    fn is_pure(&self) -> bool {
+        true
     }
 
     fn output_type(
@@ -122,8 +122,8 @@ pub struct DeriveField {
 }
 
 impl EffectfulNode for DeriveField {
-    fn has_side_effects(&self) -> bool {
-        false
+    fn is_pure(&self) -> bool {
+        true
     }
 
     fn dependencies(&self) -> Vec<NodeId> {
@@ -166,8 +166,8 @@ pub struct DeriveElement {
 }
 
 impl EffectfulNode for DeriveElement {
-    fn has_side_effects(&self) -> bool {
-        false
+    fn is_pure(&self) -> bool {
+        true
     }
 
     fn dependencies(&self) -> Vec<NodeId> {

@@ -15,8 +15,8 @@ pub struct GetLocalVar {
 }
 
 impl EffectfulNode for GetLocalVar {
-    fn has_side_effects(&self) -> bool {
-        false
+    fn is_pure(&self) -> bool {
+        true
     }
 
     fn dependencies(&self) -> Vec<NodeId> {
@@ -59,8 +59,8 @@ pub struct SetLocalVar {
 }
 
 impl EffectfulNode for SetLocalVar {
-    fn has_side_effects(&self) -> bool {
-        true
+    fn is_pure(&self) -> bool {
+        false
     }
 
     fn dependencies(&self) -> Vec<NodeId> {

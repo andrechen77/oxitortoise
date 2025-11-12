@@ -14,8 +14,8 @@ pub struct CallUserFn {
 }
 
 impl EffectfulNode for CallUserFn {
-    fn has_side_effects(&self) -> bool {
-        true
+    fn is_pure(&self) -> bool {
+        false
     }
 
     fn dependencies(&self) -> Vec<NodeId> {

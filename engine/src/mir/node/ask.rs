@@ -22,8 +22,8 @@ pub struct Ask {
 }
 
 impl EffectfulNode for Ask {
-    fn has_side_effects(&self) -> bool {
-        true
+    fn is_pure(&self) -> bool {
+        false
     }
 
     fn dependencies(&self) -> Vec<NodeId> {

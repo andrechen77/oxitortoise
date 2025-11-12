@@ -814,13 +814,13 @@ fn translate_expression(expr: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) -> NodeI
         other => panic!("expected an expression, got {:?}", other),
     };
 
-    let has_side_effects = mir_node.has_side_effects();
+    let is_pure = mir_node.is_pure();
 
     let node_id = ctx.nodes.insert(mir_node);
 
     // if the node has side effects, then its order of evaluation must be
     // specified
-    if has_side_effects {
+    if !is_pure {
         ctx.current_stmt_block.push(StatementKind::Node(node_id));
     }
 

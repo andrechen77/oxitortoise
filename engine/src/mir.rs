@@ -127,7 +127,7 @@ pub type NodeTransform = Box<dyn Fn(&Program, FunctionId, NodeId) -> bool>;
 /// incorrect to deduplicate nodes; if it doesn't, deduplication is correct.
 #[delegatable_trait]
 pub trait EffectfulNode {
-    fn has_side_effects(&self) -> bool;
+    fn is_pure(&self) -> bool;
 
     fn dependencies(&self) -> Vec<NodeId>;
 

@@ -17,8 +17,8 @@ pub struct Closure {
 }
 
 impl EffectfulNode for Closure {
-    fn has_side_effects(&self) -> bool {
-        false
+    fn is_pure(&self) -> bool {
+        true
     }
 
     fn dependencies(&self) -> Vec<NodeId> {

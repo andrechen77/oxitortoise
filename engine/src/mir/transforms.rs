@@ -11,7 +11,7 @@ use crate::mir::{
 pub struct Placeholder {}
 
 impl EffectfulNode for Placeholder {
-    fn has_side_effects(&self) -> bool {
+    fn is_pure(&self) -> bool {
         panic!()
     }
 

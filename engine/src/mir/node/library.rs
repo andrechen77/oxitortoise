@@ -24,8 +24,8 @@ pub struct ClearAll {
 }
 
 impl EffectfulNode for ClearAll {
-    fn has_side_effects(&self) -> bool {
-        true
+    fn is_pure(&self) -> bool {
+        false
     }
 
     fn dependencies(&self) -> Vec<NodeId> {
@@ -65,8 +65,8 @@ pub struct Diffuse {
 }
 
 impl EffectfulNode for Diffuse {
-    fn has_side_effects(&self) -> bool {
-        true
+    fn is_pure(&self) -> bool {
+        false
     }
 
     fn dependencies(&self) -> Vec<NodeId> {
@@ -100,8 +100,8 @@ pub struct ResetTicks {
 }
 
 impl EffectfulNode for ResetTicks {
-    fn has_side_effects(&self) -> bool {
-        true
+    fn is_pure(&self) -> bool {
+        false
     }
 
     fn dependencies(&self) -> Vec<NodeId> {
@@ -142,8 +142,8 @@ pub struct AdvanceTick {
 }
 
 impl EffectfulNode for AdvanceTick {
-    fn has_side_effects(&self) -> bool {
-        true
+    fn is_pure(&self) -> bool {
+        false
     }
 
     fn dependencies(&self) -> Vec<NodeId> {
@@ -168,8 +168,8 @@ pub struct GetTick {
 }
 
 impl EffectfulNode for GetTick {
-    fn has_side_effects(&self) -> bool {
-        false
+    fn is_pure(&self) -> bool {
+        true
     }
 
     fn dependencies(&self) -> Vec<NodeId> {
@@ -200,8 +200,8 @@ pub struct CreateTurtles {
 }
 
 impl EffectfulNode for CreateTurtles {
-    fn has_side_effects(&self) -> bool {
-        true
+    fn is_pure(&self) -> bool {
+        false
     }
 
     fn dependencies(&self) -> Vec<NodeId> {
@@ -257,8 +257,8 @@ pub struct Of {
 }
 
 impl EffectfulNode for Of {
-    fn has_side_effects(&self) -> bool {
-        true
+    fn is_pure(&self) -> bool {
+        false
     }
 
     fn dependencies(&self) -> Vec<NodeId> {
@@ -293,8 +293,8 @@ pub struct TurtleRotate {
 }
 
 impl EffectfulNode for TurtleRotate {
-    fn has_side_effects(&self) -> bool {
-        true
+    fn is_pure(&self) -> bool {
+        false
     }
 
     fn dependencies(&self) -> Vec<NodeId> {
@@ -323,8 +323,8 @@ pub struct TurtleForward {
 }
 
 impl EffectfulNode for TurtleForward {
-    fn has_side_effects(&self) -> bool {
-        true
+    fn is_pure(&self) -> bool {
+        false
     }
 
     fn dependencies(&self) -> Vec<NodeId> {
@@ -353,8 +353,8 @@ pub struct CanMove {
 }
 
 impl EffectfulNode for CanMove {
-    fn has_side_effects(&self) -> bool {
-        false
+    fn is_pure(&self) -> bool {
+        true
     }
 
     fn dependencies(&self) -> Vec<NodeId> {
@@ -395,8 +395,8 @@ pub struct PatchRelative {
 }
 
 impl EffectfulNode for PatchRelative {
-    fn has_side_effects(&self) -> bool {
-        false
+    fn is_pure(&self) -> bool {
+        true
     }
 
     fn dependencies(&self) -> Vec<NodeId> {
@@ -423,8 +423,8 @@ pub struct PatchAt {
 }
 
 impl EffectfulNode for PatchAt {
-    fn has_side_effects(&self) -> bool {
-        false
+    fn is_pure(&self) -> bool {
+        true
     }
 
     fn dependencies(&self) -> Vec<NodeId> {
@@ -453,8 +453,8 @@ pub struct OffsetDistanceByHeading {
 }
 
 impl EffectfulNode for OffsetDistanceByHeading {
-    fn has_side_effects(&self) -> bool {
-        false
+    fn is_pure(&self) -> bool {
+        true
     }
 
     fn dependencies(&self) -> Vec<NodeId> {
@@ -492,8 +492,8 @@ pub struct Distancexy {
 }
 
 impl EffectfulNode for Distancexy {
-    fn has_side_effects(&self) -> bool {
-        false
+    fn is_pure(&self) -> bool {
+        true
     }
 
     fn dependencies(&self) -> Vec<NodeId> {
@@ -518,8 +518,8 @@ pub struct MaxPxcor {
 }
 
 impl EffectfulNode for MaxPxcor {
-    fn has_side_effects(&self) -> bool {
-        false
+    fn is_pure(&self) -> bool {
+        true
     }
 
     fn dependencies(&self) -> Vec<NodeId> {
@@ -544,8 +544,8 @@ pub struct MaxPycor {
 }
 
 impl EffectfulNode for MaxPycor {
-    fn has_side_effects(&self) -> bool {
-        false
+    fn is_pure(&self) -> bool {
+        true
     }
 
     fn dependencies(&self) -> Vec<NodeId> {
@@ -570,8 +570,8 @@ pub struct OneOf {
 }
 
 impl EffectfulNode for OneOf {
-    fn has_side_effects(&self) -> bool {
-        true
+    fn is_pure(&self) -> bool {
+        false
     }
 
     fn dependencies(&self) -> Vec<NodeId> {
@@ -605,8 +605,8 @@ pub struct ScaleColor {
 }
 
 impl EffectfulNode for ScaleColor {
-    fn has_side_effects(&self) -> bool {
-        false
+    fn is_pure(&self) -> bool {
+        true
     }
 
     fn dependencies(&self) -> Vec<NodeId> {
@@ -633,8 +633,8 @@ pub struct RandomInt {
 }
 
 impl EffectfulNode for RandomInt {
-    fn has_side_effects(&self) -> bool {
-        true
+    fn is_pure(&self) -> bool {
+        false
     }
 
     fn dependencies(&self) -> Vec<NodeId> {
@@ -661,8 +661,8 @@ pub struct SetDefaultShape {
 }
 
 impl EffectfulNode for SetDefaultShape {
-    fn has_side_effects(&self) -> bool {
-        true
+    fn is_pure(&self) -> bool {
+        false
     }
 
     fn dependencies(&self) -> Vec<NodeId> {

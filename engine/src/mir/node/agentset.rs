@@ -16,8 +16,8 @@ pub enum Agentset {
 }
 
 impl EffectfulNode for Agentset {
-    fn has_side_effects(&self) -> bool {
-        false
+    fn is_pure(&self) -> bool {
+        true
     }
 
     fn dependencies(&self) -> Vec<NodeId> {

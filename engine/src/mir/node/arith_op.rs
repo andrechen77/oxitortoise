@@ -29,8 +29,8 @@ pub struct BinaryOperation {
 }
 
 impl EffectfulNode for BinaryOperation {
-    fn has_side_effects(&self) -> bool {
-        false
+    fn is_pure(&self) -> bool {
+        true
     }
 
     fn dependencies(&self) -> Vec<NodeId> {
@@ -91,8 +91,8 @@ pub struct UnaryOp {
 }
 
 impl EffectfulNode for UnaryOp {
-    fn has_side_effects(&self) -> bool {
-        false
+    fn is_pure(&self) -> bool {
+        true
     }
 
     fn dependencies(&self) -> Vec<NodeId> {
