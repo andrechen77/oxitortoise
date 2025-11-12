@@ -1,5 +1,6 @@
 // #![feature(if_let_guard, slice_as_array)]
 
+use std::cell::RefCell;
 use std::path::Path;
 use std::{collections::HashMap, fs, rc::Rc};
 
@@ -16,7 +17,6 @@ use engine::{
         value::{NetlogoMachineType, UnpackedDynBox},
     },
     slotmap::{SecondaryMap, SlotMap},
-    util::cell::RefCell,
 };
 use tracing::{instrument, trace};
 

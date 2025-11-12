@@ -1,6 +1,4 @@
-use std::ops::Deref;
-
-use crate::util::cell::RefCell;
+use std::{cell::RefCell, ops::Deref};
 
 mod mersenne_twister;
 

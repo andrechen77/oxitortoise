@@ -1,10 +1,10 @@
 //! Eagerly evaluated agentsets.
 
-use std::{collections::VecDeque, rc::Rc};
+use std::{cell::RefCell, collections::VecDeque, rc::Rc};
 
 use crate::{
     sim::{patch::PatchId, turtle::TurtleId, world::World},
-    util::{cell::RefCell, rng::CanonRng, shuffle_iterator::ShuffledOwned},
+    util::{rng::CanonRng, shuffle_iterator::ShuffledOwned},
 };
 
 pub type TurtleIterator = ShuffledOwned<TurtleId, Rc<RefCell<CanonRng>>>;

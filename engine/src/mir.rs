@@ -1,6 +1,6 @@
 // TODO(doc) all of MIR
 
-use std::rc::Rc;
+use std::{cell::RefCell, rc::Rc};
 
 use ambassador::{Delegate, delegatable_trait};
 use derive_more::derive::{Display, From};
@@ -13,7 +13,6 @@ use crate::{
         turtle::BreedId,
         value::NetlogoMachineType,
     },
-    util::cell::RefCell,
 };
 
 mod build_lir;

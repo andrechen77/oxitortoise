@@ -1,10 +1,6 @@
-use std::rc::Rc;
+use std::{cell::RefCell, rc::Rc};
 
-use crate::{
-    updater::DirtyAggregator,
-    util::{cell::RefCell, rng::CanonRng},
-    workspace::Workspace,
-};
+use crate::{updater::DirtyAggregator, util::rng::CanonRng, workspace::Workspace};
 
 pub mod helpers;
 pub mod jit;

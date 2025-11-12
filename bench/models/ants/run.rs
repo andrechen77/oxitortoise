@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{cell::RefCell, rc::Rc};
 
 use ast_to_mir::{ParseResult, add_cheats, serde_json, write_dot};
 use engine::{
@@ -17,7 +17,7 @@ use engine::{
         world::World,
     },
     slotmap::SlotMap,
-    util::{cell::RefCell, rng::CanonRng},
+    util::rng::CanonRng,
     workspace::Workspace,
 };
 use tracing::{Level, info};

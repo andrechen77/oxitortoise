@@ -1,4 +1,3 @@
-pub mod cell;
 pub mod gen_slot_tracker;
 pub mod rng;
 pub mod row_buffer;
