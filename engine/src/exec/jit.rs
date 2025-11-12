@@ -1,8 +1,6 @@
-use std::{collections::HashMap, marker::PhantomData, sync::LazyLock};
+use std::{collections::HashMap, marker::PhantomData};
 
-use lir::typed_index_collections::TiVec;
-
-use crate::{exec::CanonExecutionContext, mir::HostFunctionIds};
+use crate::exec::CanonExecutionContext;
 
 pub enum InstallLirError {
     /// Installer state was corrupted and cannot be used to install new
@@ -81,50 +79,21 @@ impl<'env, Arg, Ret> JitCallback<'env, Arg, Ret> {
 //
 // TODO(mvp_ants) once the compiler pipeline is done, double-check that the
 // signatures match.
-pub static HOST_FUNCTIONS: LazyLock<(
-    TiVec<lir::HostFunctionId, lir::HostFunction>,
-    HostFunctionIds,
-)> = LazyLock::new(|| {
-    let mut host_functions = TiVec::new();
-    let clear_all = host_functions.push_and_get_key(lir::HostFunction {
-        name: "clear_all",
-        parameter_types: vec![lir::ValType::Ptr],
-        return_type: vec![],
-    });
-    let reset_ticks = host_functions.push_and_get_key(lir::HostFunction {
-        name: "reset_ticks",
-        parameter_types: vec![lir::ValType::Ptr],
-        return_type: vec![],
-    });
-    let create_turtles = host_functions.push_and_get_key(lir::HostFunction {
-        name: "create_turtles",
-        parameter_types: vec![
-            lir::ValType::Ptr,
-            lir::ValType::I32,
-            lir::ValType::I32,
-            lir::ValType::Ptr,
-            lir::ValType::Ptr,
-        ],
-        return_type: vec![],
-    });
-    let ask_all_turtles = host_functions.push_and_get_key(lir::HostFunction {
-        name: "for_all_turtles",
-        parameter_types: vec![lir::ValType::Ptr, lir::ValType::Ptr, lir::ValType::FnPtr],
-        return_type: vec![],
-    });
-    let ask_all_patches = host_functions.push_and_get_key(lir::HostFunction {
-        name: "for_all_patches",
-        parameter_types: vec![lir::ValType::Ptr, lir::ValType::Ptr, lir::ValType::FnPtr],
-        return_type: vec![],
-    });
-    (
-        host_functions,
-        HostFunctionIds {
-            clear_all,
-            reset_ticks,
-            create_turtles,
-            ask_all_turtles,
-            ask_all_patches,
-        },
-    )
-});
+pub mod host_fn {
+    use lir::HostFunction as Hf;
+    use lir::ValType::{FnPtr, Ptr};
+
+    pub const CLEAR_ALL: &Hf = &Hf { name: "clear_all", parameter_types: &[Ptr], return_type: &[] };
+
+    pub const RESET_TICKS: &Hf =
+        &Hf { name: "reset_ticks", parameter_types: &[Ptr], return_type: &[] };
+
+    pub const CREATE_TURTLES: &Hf =
+        &Hf { name: "reset_ticks", parameter_types: &[Ptr], return_type: &[] };
+
+    pub const ASK_ALL_TURTLES: &Hf =
+        &Hf { name: "for_all_turtles", parameter_types: &[Ptr, Ptr, FnPtr], return_type: &[] };
+
+    pub const ASK_ALL_PATCHES: &Hf =
+        &Hf { name: "for_all_patches", parameter_types: &[Ptr, Ptr, FnPtr], return_type: &[] };
+}

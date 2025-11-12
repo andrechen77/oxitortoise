@@ -8,9 +8,10 @@ use lir::{ValRef, smallvec::smallvec};
 use slotmap::Key;
 
 use crate::{
+    exec::jit::host_fn,
     mir::{
-        EffectfulNode, EffectfulNodeKind, Function, FunctionId, MirType, NetlogoAbstractType,
-        NodeId, NodeTransform, Nodes, Program, WriteLirError, build_lir::LirInsnBuilder, node,
+        EffectfulNode, Function, MirType, NetlogoAbstractType, NodeId, Nodes, Program,
+        WriteLirError, build_lir::LirInsnBuilder,
     },
     sim::{patch::PatchVarDesc, turtle::BreedId},
 };
@@ -44,11 +45,10 @@ impl EffectfulNode for ClearAll {
         let &[ctx_ptr] = lir_builder.get_node_results(nodes, self.context) else {
             panic!("expected node outputting context pointer to be a single LIR value")
         };
-        lir_builder.push_lir_insn(lir::InsnKind::CallHostFunction {
-            function: lir_builder.program_builder.host_function_ids.clear_all,
-            output_type: smallvec![],
-            args: Box::new([ctx_ptr]),
-        });
+        lir_builder.push_lir_insn(lir::generate_host_function_call(
+            host_fn::CLEAR_ALL,
+            Box::new([ctx_ptr]),
+        ));
         Ok(())
     }
 }
@@ -126,11 +126,10 @@ impl EffectfulNode for ResetTicks {
         let &[ctx_ptr] = lir_builder.get_node_results(nodes, self.context) else {
             panic!("expected node outputting context pointer to be a single LIR value")
         };
-        lir_builder.push_lir_insn(lir::InsnKind::CallHostFunction {
-            function: lir_builder.program_builder.host_function_ids.reset_ticks,
-            output_type: smallvec![],
-            args: Box::new([ctx_ptr]),
-        });
+        lir_builder.push_lir_insn(lir::generate_host_function_call(
+            host_fn::RESET_TICKS,
+            Box::new([ctx_ptr]),
+        ));
         Ok(())
     }
 }
@@ -237,11 +236,10 @@ impl EffectfulNode for CreateTurtles {
         let &[env_ptr, fn_ptr] = lir_builder.get_node_results(nodes, self.body) else {
             panic!("expected node outputting closure body to be two LIR values");
         };
-        let pc = lir_builder.push_lir_insn(lir::InsnKind::CallHostFunction {
-            function: lir_builder.program_builder.host_function_ids.create_turtles,
-            output_type: smallvec![],
-            args: Box::new([ctx_ptr, ValRef(breed_id, 0), num_turtles, env_ptr, fn_ptr]),
-        });
+        let pc = lir_builder.push_lir_insn(lir::generate_host_function_call(
+            host_fn::CREATE_TURTLES,
+            Box::new([ctx_ptr, ValRef(breed_id, 0), num_turtles, env_ptr, fn_ptr]),
+        ));
         lir_builder.node_to_lir.insert(my_node_id, smallvec![ValRef(pc, 0)]);
         Ok(())
     }

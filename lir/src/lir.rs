@@ -56,11 +56,7 @@ mod macros;
 pub struct Program {
     pub entrypoints: Vec<FunctionId>,
     pub user_functions: SecondaryMap<FunctionId, Function>,
-    pub host_functions: TiVec<HostFunctionId, HostFunction>,
 }
-
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, From, Into)]
-pub struct HostFunctionId(pub usize);
 
 new_key_type! {
     pub struct FunctionId;
@@ -68,8 +64,8 @@ new_key_type! {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct HostFunction {
-    pub parameter_types: Vec<ValType>,
-    pub return_type: Vec<ValType>,
+    pub parameter_types: &'static [ValType],
+    pub return_type: &'static [ValType],
     /// Import the function by this name in Wasm.
     pub name: &'static str,
 }
@@ -202,7 +198,7 @@ pub enum InsnKind {
     },
     #[display("call_host_fn({:?}, -> {:?})({:?})", function, output_type, args)]
     CallHostFunction {
-        function: HostFunctionId,
+        function: &'static HostFunction,
         output_type: SmallVec<[ValType; 1]>,
         args: Box<[ValRef]>,
     },
@@ -508,4 +504,12 @@ fn infer_binary_op_output_type(op: BinaryOpcode, lhs: ValType, rhs: ValType) -> 
             _ => panic!("Invalid operand types for operation {:?}: {:?} and {:?}", op, lhs, rhs),
         },
     }
+}
+
+pub fn generate_host_function_call(
+    function: &'static HostFunction,
+    args: Box<[ValRef]>,
+) -> InsnKind {
+    // TODO(mvp) validate that the types and number of arguments match
+    InsnKind::CallHostFunction { function, output_type: function.return_type.into(), args }
 }

@@ -7,11 +7,9 @@ use super::*;
 
 impl Display for Program {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let Program { entrypoints, user_functions, host_functions } = self;
+        let Program { entrypoints, user_functions } = self;
         write!(f, "Program {{ entrypoints: ")?;
         entrypoints.fmt(f)?;
-        write!(f, ", host_functions: ")?;
-        host_functions.fmt(f)?;
         write!(f, ", user_functions: {{")?;
         let mut iter = user_functions.iter();
         if let Some((id, func)) = iter.next() {

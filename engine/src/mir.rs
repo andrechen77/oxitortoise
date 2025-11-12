@@ -21,7 +21,7 @@ mod graphviz;
 pub mod node;
 pub mod transforms;
 
-pub use build_lir::{HostFunctionIds, LirProgramBuilder, mir_to_lir};
+pub use build_lir::{LirProgramBuilder, mir_to_lir};
 
 new_key_type! {
     #[derive(Display)]

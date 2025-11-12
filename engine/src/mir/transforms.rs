@@ -1,5 +1,5 @@
 use derive_more::derive::Display;
-use tracing::{debug, trace};
+use tracing::trace;
 
 use crate::mir::{
     ClosureType, EffectfulNode, EffectfulNodeKind, Function, FunctionId, MirType, MirVisitor,

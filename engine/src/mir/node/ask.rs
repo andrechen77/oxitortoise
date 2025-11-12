@@ -1,9 +1,12 @@
 use derive_more::derive::Display;
 use lir::smallvec::smallvec;
 
-use crate::mir::{
-    EffectfulNode, EffectfulNodeKind, FunctionId, MirType, NetlogoAbstractType, NodeId,
-    NodeTransform, Nodes, Program, WriteLirError, build_lir::LirInsnBuilder, node,
+use crate::{
+    exec::jit::host_fn,
+    mir::{
+        EffectfulNode, EffectfulNodeKind, FunctionId, MirType, NetlogoAbstractType, NodeId,
+        NodeTransform, Nodes, Program, WriteLirError, build_lir::LirInsnBuilder, node,
+    },
 };
 
 /// A node representing an "ask" construct.
@@ -93,20 +96,15 @@ impl EffectfulNode for Ask {
             panic!("expected node outputting closure body to be two LIR values");
         };
 
-        // TODO(mvp) consult registry of host functions to find signatures.
-        // there should be a registry of host functions that we can consult
-        // which abstracts the details of the signatures of each function.
         let lir_insn = match self.recipients {
-            AskRecipient::AllTurtles => lir::InsnKind::CallHostFunction {
-                function: lir_builder.program_builder.host_function_ids.ask_all_turtles,
-                output_type: smallvec![],
-                args: Box::new([ctx_ptr, env_ptr, fn_ptr]),
-            },
-            AskRecipient::AllPatches => lir::InsnKind::CallHostFunction {
-                function: lir_builder.program_builder.host_function_ids.ask_all_patches,
-                output_type: smallvec![],
-                args: Box::new([ctx_ptr, env_ptr, fn_ptr]),
-            },
+            AskRecipient::AllTurtles => lir::generate_host_function_call(
+                host_fn::ASK_ALL_TURTLES,
+                Box::new([ctx_ptr, env_ptr, fn_ptr]),
+            ),
+            AskRecipient::AllPatches => lir::generate_host_function_call(
+                host_fn::ASK_ALL_PATCHES,
+                Box::new([ctx_ptr, env_ptr, fn_ptr]),
+            ),
             _ => todo!("TODO(mvp) write LIR code to call a host function"),
         };
 

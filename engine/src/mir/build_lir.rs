@@ -11,26 +11,18 @@ use lir::{
 use slotmap::{SecondaryMap, SlotMap};
 use tracing::{error, instrument, trace};
 
-use crate::{
-    exec::jit::HOST_FUNCTIONS,
-    mir::{self, EffectfulNode, Nodes},
-};
+use crate::mir::{self, EffectfulNode, Nodes};
 
 #[derive(Debug)]
 pub struct LirProgramBuilder {
     pub available_user_functions: HashMap<mir::FunctionId, lir::FunctionId>,
-    pub host_function_ids: HostFunctionIds,
     pub function_signatures:
         HashMap<lir::FunctionId, (Vec<lir::ValType>, SmallVec<[lir::ValType; 1]>)>,
 }
 
 pub fn mir_to_lir(mir: &mir::Program) -> lir::Program {
-    // generate host function signatures (always the same)
-    let (host_functions, host_function_ids) = HOST_FUNCTIONS.clone();
-
     let mut builder = LirProgramBuilder {
         available_user_functions: HashMap::new(),
-        host_function_ids,
         function_signatures: HashMap::new(),
     };
 
@@ -58,7 +50,6 @@ pub fn mir_to_lir(mir: &mir::Program) -> lir::Program {
     lir::Program {
         entrypoints: vec![], // TODO choose entrypoints, probably add a field to MIR program
         user_functions: lir_fn_bodies,
-        host_functions,
     }
 }
 
@@ -130,15 +121,6 @@ impl<'a> LirInsnBuilder<'a> {
         let insn_idx = insn_seq.push_and_get_key(insn);
         lir::InsnPc(insn_seq_id, insn_idx)
     }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct HostFunctionIds {
-    pub clear_all: lir::HostFunctionId,
-    pub reset_ticks: lir::HostFunctionId,
-    pub create_turtles: lir::HostFunctionId,
-    pub ask_all_turtles: lir::HostFunctionId,
-    pub ask_all_patches: lir::HostFunctionId,
 }
 
 #[instrument(skip_all)]

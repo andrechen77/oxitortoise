@@ -28,8 +28,25 @@ struct CodegenModuleCtx<'a, A> {
     fn_table_allocated_slots: HashMap<lir::FunctionId, usize>,
     /// A map from LIR function ids to Walrus function ids.
     user_fn_ids: HashMap<lir::FunctionId, walrus::FunctionId>,
-    /// A map from LIR imported function ids to Walrus function ids.
-    imported_fn_ids: HashMap<lir::HostFunctionId, walrus::FunctionId>,
+    /// A map from LIR host functions to Walrus function ids. This uses pointers
+    /// so that we can compare by object identity, but the pointers are never
+    /// dereferenced.
+    host_fn_ids: HashMap<*const lir::HostFunction, walrus::FunctionId>,
+}
+
+impl<'a, A> CodegenModuleCtx<'a, A> {
+    fn lookup_host_fn(&mut self, host_fn: &'static lir::HostFunction) -> walrus::FunctionId {
+        *self.host_fn_ids.entry(host_fn).or_insert_with(|| {
+            let param_types: Vec<_> =
+                host_fn.parameter_types.iter().copied().map(translate_val_type).collect();
+            let return_types: Vec<_> =
+                host_fn.return_type.iter().copied().map(translate_val_type).collect();
+            let func_type = self.module.types.add(&param_types, &return_types);
+            let (w_func_id, _) = self.module.add_import_func("env", host_fn.name, func_type);
+            self.module.funcs.get_mut(w_func_id).name = Some(host_fn.name.to_string());
+            w_func_id
+        })
+    }
 }
 
 pub trait FnTableSlotAllocator {
@@ -83,19 +100,6 @@ pub fn lir_to_wasm(
         walrus::RefType::Funcref,
     );
 
-    // add imported functions
-    let mut imported_fn_ids = HashMap::new();
-    for (imported_function_id, imported_function) in lir.host_functions.iter_enumerated() {
-        let param_types: Vec<_> =
-            imported_function.parameter_types.iter().copied().map(translate_val_type).collect();
-        let return_types: Vec<_> =
-            imported_function.return_type.iter().copied().map(translate_val_type).collect();
-        let func_type = module.types.add(&param_types, &return_types);
-        let (w_func_id, _) = module.add_import_func("env", imported_function.name, func_type);
-        module.funcs.get_mut(w_func_id).name = Some(imported_function.name.to_string());
-        imported_fn_ids.insert(imported_function_id, w_func_id);
-    }
-
     let mut ctx = CodegenModuleCtx {
         module,
         mem_id,
@@ -104,7 +108,7 @@ pub fn lir_to_wasm(
         fn_table_slot_allocator,
         fn_table_allocated_slots: HashMap::new(),
         user_fn_ids: HashMap::new(),
-        imported_fn_ids,
+        host_fn_ids: HashMap::new(),
     };
 
     // allocate slots in the function table for entrypoint functions
@@ -438,7 +442,7 @@ fn add_function<A: FnTableSlotAllocator>(
                         .binop(wir::BinaryOp::I32Add);
                 }
                 I::CallHostFunction { function, args: _, output_type: _ } => {
-                    let callee = ctx.mod_ctx.imported_fn_ids[function];
+                    let callee = ctx.mod_ctx.lookup_host_fn(function);
                     insn_builder.call(callee);
                 }
                 I::CallUserFunction { function, args: _, output_type: _ } => {
@@ -813,18 +817,18 @@ mod tests {
     #[test]
     fn call_host_function() {
         let mut lir = lir::Program::default();
-        let imported_func_id = lir.host_functions.push_and_get_key(lir::HostFunction {
+        let host_fn = &lir::HostFunction {
             name: "defined_elsewhere",
-            parameter_types: vec![lir::ValType::I32, lir::ValType::F64],
-            return_type: vec![lir::ValType::F64, lir::ValType::I32],
-        });
+            parameter_types: &[lir::ValType::I32, lir::ValType::F64],
+            return_type: &[lir::ValType::F64, lir::ValType::I32],
+        };
 
         lir_function! {
             fn my_function() -> [F64, I32],
             vars: [],
             stack_space: 0,
             main: {
-                [a, b] = call_host_fn(imported_func_id -> [F64, I32])(
+                [a, b] = call_host_fn(host_fn -> [F64, I32])(
                     constant(I32, 10),
                     constant(F64, 20)
                 );
