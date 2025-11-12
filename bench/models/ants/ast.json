@@ -21,1517 +21,1512 @@
 			"args": [],
 			"returnType": "unit",
 			"agentClass": "O---",
-			"statements": [
-				{
-					"type": "command-app",
-					"name": "CLEAR-ALL",
-					"args": []
-				},
-				{
-					"type": "command-app",
-					"name": "SET-DEFAULT-SHAPE",
-					"args": [
-						{
-							"type": "reporter-call",
-							"name": "TURTLES",
-							"args": []
-						},
-						{
-							"type": "string",
-							"value": "bug"
-						}
-					]
-				},
-				{
-					"type": "command-app",
-					"name": "CREATE-TURTLES",
-					"args": [
-						{
-							"type": "reporter-call",
-							"name": "POPULATION",
-							"args": []
-						},
-						{
-							"type": "command-block",
-							"statements": [
-								{
-									"type": "command-app",
-									"name": "SET",
-									"args": [
-										{
-											"type": "reporter-call",
-											"name": "SIZE",
-											"args": []
-										},
-										{
-											"type": "number",
-											"value": 2
-										}
-									]
-								},
-								{
-									"type": "command-app",
-									"name": "SET",
-									"args": [
-										{
-											"type": "reporter-call",
-											"name": "COLOR",
-											"args": []
-										},
-										{
-											"type": "number",
-											"value": 15
-										}
-									]
-								}
-							]
-						}
-					]
-				},
-				{
-					"type": "command-app",
-					"name": "SETUP-PATCHES",
-					"args": []
-				},
-				{
-					"type": "command-app",
-					"name": "RESET-TICKS",
-					"args": []
-				}
-			]
+			"body": {
+				"type": "command-block",
+				"statements": [
+					{
+						"type": "command-call",
+						"name": "CLEAR-ALL",
+						"args": []
+					},
+					{
+						"type": "command-call",
+						"name": "SET-DEFAULT-SHAPE",
+						"args": [
+							{
+								"type": "reporter-call",
+								"name": "TURTLES",
+								"args": []
+							},
+							{
+								"type": "string",
+								"value": "bug"
+							}
+						]
+					},
+					{
+						"type": "command-call",
+						"name": "CREATE-TURTLES",
+						"args": [
+							{
+								"type": "global-var",
+								"name": "POPULATION"
+							},
+							{
+								"type": "command-block",
+								"statements": [
+									{
+										"type": "command-call",
+										"name": "SET",
+										"args": [
+											{
+												"type": "turtle-var",
+												"name": "SIZE"
+											},
+											{
+												"type": "number",
+												"value": 2
+											}
+										]
+									},
+									{
+										"type": "command-call",
+										"name": "SET",
+										"args": [
+											{
+												"type": "turtle-or-link-var",
+												"name": "COLOR"
+											},
+											{
+												"type": "number",
+												"value": 15
+											}
+										]
+									}
+								]
+							}
+						]
+					},
+					{
+						"type": "command-proc-call",
+						"name": "SETUP-PATCHES",
+						"args": []
+					},
+					{
+						"type": "command-call",
+						"name": "RESET-TICKS",
+						"args": []
+					}
+				]
+			}
 		},
 		{
 			"name": "SETUP-PATCHES",
 			"args": [],
 			"returnType": "unit",
 			"agentClass": "OTPL",
-			"statements": [
-				{
-					"type": "command-app",
-					"name": "ASK",
-					"args": [
-						{
-							"type": "reporter-call",
-							"name": "PATCHES",
-							"args": []
-						},
-						{
-							"type": "command-block",
-							"statements": [
-								{
-									"type": "command-app",
-									"name": "SETUP-NEST",
-									"args": []
-								},
-								{
-									"type": "command-app",
-									"name": "SETUP-FOOD",
-									"args": []
-								},
-								{
-									"type": "command-app",
-									"name": "RECOLOR-PATCH",
-									"args": []
-								}
-							]
-						}
-					]
-				}
-			]
+			"body": {
+				"type": "command-block",
+				"statements": [
+					{
+						"type": "command-call",
+						"name": "ASK",
+						"args": [
+							{
+								"type": "reporter-call",
+								"name": "PATCHES",
+								"args": []
+							},
+							{
+								"type": "command-block",
+								"statements": [
+									{
+										"type": "command-proc-call",
+										"name": "SETUP-NEST",
+										"args": []
+									},
+									{
+										"type": "command-proc-call",
+										"name": "SETUP-FOOD",
+										"args": []
+									},
+									{
+										"type": "command-proc-call",
+										"name": "RECOLOR-PATCH",
+										"args": []
+									}
+								]
+							}
+						]
+					}
+				]
+			}
 		},
 		{
 			"name": "SETUP-NEST",
 			"args": [],
 			"returnType": "unit",
 			"agentClass": "-TP-",
-			"statements": [
-				{
-					"type": "command-app",
-					"name": "SET",
-					"args": [
-						{
-							"type": "reporter-call",
-							"name": "NEST?",
-							"args": []
-						},
-						{
-							"type": "reporter-call",
-							"name": "<",
-							"args": [
-								{
-									"type": "reporter-call",
-									"name": "DISTANCEXY",
-									"args": [
-										{
-											"type": "number",
-											"value": 0
-										},
-										{
-											"type": "number",
-											"value": 0
-										}
-									]
-								},
-								{
-									"type": "number",
-									"value": 5
-								}
-							]
-						}
-					]
-				},
-				{
-					"type": "command-app",
-					"name": "SET",
-					"args": [
-						{
-							"type": "reporter-call",
-							"name": "NEST-SCENT",
-							"args": []
-						},
-						{
-							"type": "reporter-call",
-							"name": "-",
-							"args": [
-								{
-									"type": "number",
-									"value": 200
-								},
-								{
-									"type": "reporter-call",
-									"name": "DISTANCEXY",
-									"args": [
-										{
-											"type": "number",
-											"value": 0
-										},
-										{
-											"type": "number",
-											"value": 0
-										}
-									]
-								}
-							]
-						}
-					]
-				}
-			]
+			"body": {
+				"type": "command-block",
+				"statements": [
+					{
+						"type": "command-call",
+						"name": "SET",
+						"args": [
+							{
+								"type": "patch-var",
+								"name": "NEST?"
+							},
+							{
+								"type": "reporter-call",
+								"name": "<",
+								"args": [
+									{
+										"type": "reporter-call",
+										"name": "DISTANCEXY",
+										"args": [
+											{
+												"type": "number",
+												"value": 0
+											},
+											{
+												"type": "number",
+												"value": 0
+											}
+										]
+									},
+									{
+										"type": "number",
+										"value": 5
+									}
+								]
+							}
+						]
+					},
+					{
+						"type": "command-call",
+						"name": "SET",
+						"args": [
+							{
+								"type": "patch-var",
+								"name": "NEST-SCENT"
+							},
+							{
+								"type": "reporter-call",
+								"name": "-",
+								"args": [
+									{
+										"type": "number",
+										"value": 200
+									},
+									{
+										"type": "reporter-call",
+										"name": "DISTANCEXY",
+										"args": [
+											{
+												"type": "number",
+												"value": 0
+											},
+											{
+												"type": "number",
+												"value": 0
+											}
+										]
+									}
+								]
+							}
+						]
+					}
+				]
+			}
 		},
 		{
 			"name": "SETUP-FOOD",
 			"args": [],
 			"returnType": "unit",
 			"agentClass": "-TP-",
-			"statements": [
-				{
-					"type": "command-app",
-					"name": "IF",
-					"args": [
-						{
-							"type": "reporter-call",
-							"name": "<",
-							"args": [
-								{
-									"type": "reporter-call",
-									"name": "DISTANCEXY",
-									"args": [
-										{
-											"type": "reporter-call",
-											"name": "*",
-											"args": [
-												{
-													"type": "number",
-													"value": 0.6
-												},
-												{
-													"type": "reporter-call",
-													"name": "MAX-PXCOR",
-													"args": []
-												}
-											]
-										},
-										{
-											"type": "number",
-											"value": 0
-										}
-									]
-								},
-								{
-									"type": "number",
-									"value": 5
-								}
-							]
-						},
-						{
-							"type": "command-block",
-							"statements": [
-								{
-									"type": "command-app",
-									"name": "SET",
-									"args": [
-										{
-											"type": "reporter-call",
-											"name": "FOOD-SOURCE-NUMBER",
-											"args": []
-										},
-										{
-											"type": "number",
-											"value": 1
-										}
-									]
-								}
-							]
-						}
-					]
-				},
-				{
-					"type": "command-app",
-					"name": "IF",
-					"args": [
-						{
-							"type": "reporter-call",
-							"name": "<",
-							"args": [
-								{
-									"type": "reporter-call",
-									"name": "DISTANCEXY",
-									"args": [
-										{
-											"type": "reporter-call",
-											"name": "*",
-											"args": [
-												{
-													"type": "number",
-													"value": -0.6
-												},
-												{
-													"type": "reporter-call",
-													"name": "MAX-PXCOR",
-													"args": []
-												}
-											]
-										},
-										{
-											"type": "reporter-call",
-											"name": "*",
-											"args": [
-												{
-													"type": "number",
-													"value": -0.6
-												},
-												{
-													"type": "reporter-call",
-													"name": "MAX-PYCOR",
-													"args": []
-												}
-											]
-										}
-									]
-								},
-								{
-									"type": "number",
-									"value": 5
-								}
-							]
-						},
-						{
-							"type": "command-block",
-							"statements": [
-								{
-									"type": "command-app",
-									"name": "SET",
-									"args": [
-										{
-											"type": "reporter-call",
-											"name": "FOOD-SOURCE-NUMBER",
-											"args": []
-										},
-										{
-											"type": "number",
-											"value": 2
-										}
-									]
-								}
-							]
-						}
-					]
-				},
-				{
-					"type": "command-app",
-					"name": "IF",
-					"args": [
-						{
-							"type": "reporter-call",
-							"name": "<",
-							"args": [
-								{
-									"type": "reporter-call",
-									"name": "DISTANCEXY",
-									"args": [
-										{
-											"type": "reporter-call",
-											"name": "*",
-											"args": [
-												{
-													"type": "number",
-													"value": -0.8
-												},
-												{
-													"type": "reporter-call",
-													"name": "MAX-PXCOR",
-													"args": []
-												}
-											]
-										},
-										{
-											"type": "reporter-call",
-											"name": "*",
-											"args": [
-												{
-													"type": "number",
-													"value": 0.8
-												},
-												{
-													"type": "reporter-call",
-													"name": "MAX-PYCOR",
-													"args": []
-												}
-											]
-										}
-									]
-								},
-								{
-									"type": "number",
-									"value": 5
-								}
-							]
-						},
-						{
-							"type": "command-block",
-							"statements": [
-								{
-									"type": "command-app",
-									"name": "SET",
-									"args": [
-										{
-											"type": "reporter-call",
-											"name": "FOOD-SOURCE-NUMBER",
-											"args": []
-										},
-										{
-											"type": "number",
-											"value": 3
-										}
-									]
-								}
-							]
-						}
-					]
-				},
-				{
-					"type": "command-app",
-					"name": "IF",
-					"args": [
-						{
-							"type": "reporter-call",
-							"name": ">",
-							"args": [
-								{
-									"type": "reporter-call",
-									"name": "FOOD-SOURCE-NUMBER",
-									"args": []
-								},
-								{
-									"type": "number",
-									"value": 0
-								}
-							]
-						},
-						{
-							"type": "command-block",
-							"statements": [
-								{
-									"type": "command-app",
-									"name": "SET",
-									"args": [
-										{
-											"type": "reporter-call",
-											"name": "FOOD",
-											"args": []
-										},
-										{
-											"type": "reporter-call",
-											"name": "ONE-OF",
-											"args": [
-												{
-													"type": "list",
-													"items": [
-														{
-															"type": "number",
-															"value": 1
-														},
-														{
-															"type": "number",
-															"value": 2
-														}
-													]
-												}
-											]
-										}
-									]
-								}
-							]
-						}
-					]
-				}
-			]
+			"body": {
+				"type": "command-block",
+				"statements": [
+					{
+						"type": "command-call",
+						"name": "IF",
+						"args": [
+							{
+								"type": "reporter-call",
+								"name": "<",
+								"args": [
+									{
+										"type": "reporter-call",
+										"name": "DISTANCEXY",
+										"args": [
+											{
+												"type": "reporter-call",
+												"name": "*",
+												"args": [
+													{
+														"type": "number",
+														"value": 0.6
+													},
+													{
+														"type": "reporter-call",
+														"name": "MAX-PXCOR",
+														"args": []
+													}
+												]
+											},
+											{
+												"type": "number",
+												"value": 0
+											}
+										]
+									},
+									{
+										"type": "number",
+										"value": 5
+									}
+								]
+							},
+							{
+								"type": "command-block",
+								"statements": [
+									{
+										"type": "command-call",
+										"name": "SET",
+										"args": [
+											{
+												"type": "patch-var",
+												"name": "FOOD-SOURCE-NUMBER"
+											},
+											{
+												"type": "number",
+												"value": 1
+											}
+										]
+									}
+								]
+							}
+						]
+					},
+					{
+						"type": "command-call",
+						"name": "IF",
+						"args": [
+							{
+								"type": "reporter-call",
+								"name": "<",
+								"args": [
+									{
+										"type": "reporter-call",
+										"name": "DISTANCEXY",
+										"args": [
+											{
+												"type": "reporter-call",
+												"name": "*",
+												"args": [
+													{
+														"type": "number",
+														"value": -0.6
+													},
+													{
+														"type": "reporter-call",
+														"name": "MAX-PXCOR",
+														"args": []
+													}
+												]
+											},
+											{
+												"type": "reporter-call",
+												"name": "*",
+												"args": [
+													{
+														"type": "number",
+														"value": -0.6
+													},
+													{
+														"type": "reporter-call",
+														"name": "MAX-PYCOR",
+														"args": []
+													}
+												]
+											}
+										]
+									},
+									{
+										"type": "number",
+										"value": 5
+									}
+								]
+							},
+							{
+								"type": "command-block",
+								"statements": [
+									{
+										"type": "command-call",
+										"name": "SET",
+										"args": [
+											{
+												"type": "patch-var",
+												"name": "FOOD-SOURCE-NUMBER"
+											},
+											{
+												"type": "number",
+												"value": 2
+											}
+										]
+									}
+								]
+							}
+						]
+					},
+					{
+						"type": "command-call",
+						"name": "IF",
+						"args": [
+							{
+								"type": "reporter-call",
+								"name": "<",
+								"args": [
+									{
+										"type": "reporter-call",
+										"name": "DISTANCEXY",
+										"args": [
+											{
+												"type": "reporter-call",
+												"name": "*",
+												"args": [
+													{
+														"type": "number",
+														"value": -0.8
+													},
+													{
+														"type": "reporter-call",
+														"name": "MAX-PXCOR",
+														"args": []
+													}
+												]
+											},
+											{
+												"type": "reporter-call",
+												"name": "*",
+												"args": [
+													{
+														"type": "number",
+														"value": 0.8
+													},
+													{
+														"type": "reporter-call",
+														"name": "MAX-PYCOR",
+														"args": []
+													}
+												]
+											}
+										]
+									},
+									{
+										"type": "number",
+										"value": 5
+									}
+								]
+							},
+							{
+								"type": "command-block",
+								"statements": [
+									{
+										"type": "command-call",
+										"name": "SET",
+										"args": [
+											{
+												"type": "patch-var",
+												"name": "FOOD-SOURCE-NUMBER"
+											},
+											{
+												"type": "number",
+												"value": 3
+											}
+										]
+									}
+								]
+							}
+						]
+					},
+					{
+						"type": "command-call",
+						"name": "IF",
+						"args": [
+							{
+								"type": "reporter-call",
+								"name": ">",
+								"args": [
+									{
+										"type": "patch-var",
+										"name": "FOOD-SOURCE-NUMBER"
+									},
+									{
+										"type": "number",
+										"value": 0
+									}
+								]
+							},
+							{
+								"type": "command-block",
+								"statements": [
+									{
+										"type": "command-call",
+										"name": "SET",
+										"args": [
+											{
+												"type": "patch-var",
+												"name": "FOOD"
+											},
+											{
+												"type": "reporter-call",
+												"name": "ONE-OF",
+												"args": [
+													{
+														"type": "list",
+														"items": [
+															{
+																"type": "number",
+																"value": 1
+															},
+															{
+																"type": "number",
+																"value": 2
+															}
+														]
+													}
+												]
+											}
+										]
+									}
+								]
+							}
+						]
+					}
+				]
+			}
 		},
 		{
 			"name": "RECOLOR-PATCH",
 			"args": [],
 			"returnType": "unit",
 			"agentClass": "-TP-",
-			"statements": [
-				{
-					"type": "command-app",
-					"name": "IFELSE",
-					"args": [
-						{
-							"type": "reporter-call",
-							"name": "NEST?",
-							"args": []
-						},
-						{
-							"type": "command-block",
-							"statements": [
-								{
-									"type": "command-app",
-									"name": "SET",
-									"args": [
-										{
-											"type": "reporter-call",
-											"name": "PCOLOR",
-											"args": []
-										},
-										{
-											"type": "number",
-											"value": 115
-										}
-									]
-								}
-							]
-						},
-						{
-							"type": "command-block",
-							"statements": [
-								{
-									"type": "command-app",
-									"name": "IFELSE",
-									"args": [
-										{
-											"type": "reporter-call",
-											"name": ">",
-											"args": [
-												{
-													"type": "reporter-call",
-													"name": "FOOD",
-													"args": []
-												},
-												{
-													"type": "number",
-													"value": 0
-												}
-											]
-										},
-										{
-											"type": "command-block",
-											"statements": [
-												{
-													"type": "command-app",
-													"name": "IF",
-													"args": [
-														{
-															"type": "reporter-call",
-															"name": "=",
-															"args": [
-																{
-																	"type": "reporter-call",
-																	"name": "FOOD-SOURCE-NUMBER",
-																	"args": []
-																},
-																{
-																	"type": "number",
-																	"value": 1
-																}
-															]
-														},
-														{
-															"type": "command-block",
-															"statements": [
-																{
-																	"type": "command-app",
-																	"name": "SET",
-																	"args": [
-																		{
-																			"type": "reporter-call",
-																			"name": "PCOLOR",
-																			"args": []
-																		},
-																		{
-																			"type": "number",
-																			"value": 85
-																		}
-																	]
-																}
-															]
-														}
-													]
-												},
-												{
-													"type": "command-app",
-													"name": "IF",
-													"args": [
-														{
-															"type": "reporter-call",
-															"name": "=",
-															"args": [
-																{
-																	"type": "reporter-call",
-																	"name": "FOOD-SOURCE-NUMBER",
-																	"args": []
-																},
-																{
-																	"type": "number",
-																	"value": 2
-																}
-															]
-														},
-														{
-															"type": "command-block",
-															"statements": [
-																{
-																	"type": "command-app",
-																	"name": "SET",
-																	"args": [
-																		{
-																			"type": "reporter-call",
-																			"name": "PCOLOR",
-																			"args": []
-																		},
-																		{
-																			"type": "number",
-																			"value": 95
-																		}
-																	]
-																}
-															]
-														}
-													]
-												},
-												{
-													"type": "command-app",
-													"name": "IF",
-													"args": [
-														{
-															"type": "reporter-call",
-															"name": "=",
-															"args": [
-																{
-																	"type": "reporter-call",
-																	"name": "FOOD-SOURCE-NUMBER",
-																	"args": []
-																},
-																{
-																	"type": "number",
-																	"value": 3
-																}
-															]
-														},
-														{
-															"type": "command-block",
-															"statements": [
-																{
-																	"type": "command-app",
-																	"name": "SET",
-																	"args": [
-																		{
-																			"type": "reporter-call",
-																			"name": "PCOLOR",
-																			"args": []
-																		},
-																		{
-																			"type": "number",
-																			"value": 105
-																		}
-																	]
-																}
-															]
-														}
-													]
-												}
-											]
-										},
-										{
-											"type": "command-block",
-											"statements": [
-												{
-													"type": "command-app",
-													"name": "SET",
-													"args": [
-														{
-															"type": "reporter-call",
-															"name": "PCOLOR",
-															"args": []
-														},
-														{
-															"type": "reporter-call",
-															"name": "SCALE-COLOR",
-															"args": [
-																{
-																	"type": "number",
-																	"value": 55
-																},
-																{
-																	"type": "reporter-call",
-																	"name": "CHEMICAL",
-																	"args": []
-																},
-																{
-																	"type": "number",
-																	"value": 0.1
-																},
-																{
-																	"type": "number",
-																	"value": 5
-																}
-															]
-														}
-													]
-												}
-											]
-										}
-									]
-								}
-							]
-						}
-					]
-				}
-			]
+			"body": {
+				"type": "command-block",
+				"statements": [
+					{
+						"type": "command-call",
+						"name": "IFELSE",
+						"args": [
+							{
+								"type": "patch-var",
+								"name": "NEST?"
+							},
+							{
+								"type": "command-block",
+								"statements": [
+									{
+										"type": "command-call",
+										"name": "SET",
+										"args": [
+											{
+												"type": "patch-var",
+												"name": "PCOLOR"
+											},
+											{
+												"type": "number",
+												"value": 115
+											}
+										]
+									}
+								]
+							},
+							{
+								"type": "command-block",
+								"statements": [
+									{
+										"type": "command-call",
+										"name": "IFELSE",
+										"args": [
+											{
+												"type": "reporter-call",
+												"name": ">",
+												"args": [
+													{
+														"type": "patch-var",
+														"name": "FOOD"
+													},
+													{
+														"type": "number",
+														"value": 0
+													}
+												]
+											},
+											{
+												"type": "command-block",
+												"statements": [
+													{
+														"type": "command-call",
+														"name": "IF",
+														"args": [
+															{
+																"type": "reporter-call",
+																"name": "=",
+																"args": [
+																	{
+																		"type": "patch-var",
+																		"name": "FOOD-SOURCE-NUMBER"
+																	},
+																	{
+																		"type": "number",
+																		"value": 1
+																	}
+																]
+															},
+															{
+																"type": "command-block",
+																"statements": [
+																	{
+																		"type": "command-call",
+																		"name": "SET",
+																		"args": [
+																			{
+																				"type": "patch-var",
+																				"name": "PCOLOR"
+																			},
+																			{
+																				"type": "number",
+																				"value": 85
+																			}
+																		]
+																	}
+																]
+															}
+														]
+													},
+													{
+														"type": "command-call",
+														"name": "IF",
+														"args": [
+															{
+																"type": "reporter-call",
+																"name": "=",
+																"args": [
+																	{
+																		"type": "patch-var",
+																		"name": "FOOD-SOURCE-NUMBER"
+																	},
+																	{
+																		"type": "number",
+																		"value": 2
+																	}
+																]
+															},
+															{
+																"type": "command-block",
+																"statements": [
+																	{
+																		"type": "command-call",
+																		"name": "SET",
+																		"args": [
+																			{
+																				"type": "patch-var",
+																				"name": "PCOLOR"
+																			},
+																			{
+																				"type": "number",
+																				"value": 95
+																			}
+																		]
+																	}
+																]
+															}
+														]
+													},
+													{
+														"type": "command-call",
+														"name": "IF",
+														"args": [
+															{
+																"type": "reporter-call",
+																"name": "=",
+																"args": [
+																	{
+																		"type": "patch-var",
+																		"name": "FOOD-SOURCE-NUMBER"
+																	},
+																	{
+																		"type": "number",
+																		"value": 3
+																	}
+																]
+															},
+															{
+																"type": "command-block",
+																"statements": [
+																	{
+																		"type": "command-call",
+																		"name": "SET",
+																		"args": [
+																			{
+																				"type": "patch-var",
+																				"name": "PCOLOR"
+																			},
+																			{
+																				"type": "number",
+																				"value": 105
+																			}
+																		]
+																	}
+																]
+															}
+														]
+													}
+												]
+											},
+											{
+												"type": "command-block",
+												"statements": [
+													{
+														"type": "command-call",
+														"name": "SET",
+														"args": [
+															{
+																"type": "patch-var",
+																"name": "PCOLOR"
+															},
+															{
+																"type": "reporter-call",
+																"name": "SCALE-COLOR",
+																"args": [
+																	{
+																		"type": "number",
+																		"value": 55
+																	},
+																	{
+																		"type": "patch-var",
+																		"name": "CHEMICAL"
+																	},
+																	{
+																		"type": "number",
+																		"value": 0.1
+																	},
+																	{
+																		"type": "number",
+																		"value": 5
+																	}
+																]
+															}
+														]
+													}
+												]
+											}
+										]
+									}
+								]
+							}
+						]
+					}
+				]
+			}
 		},
 		{
 			"name": "GO",
 			"args": [],
 			"returnType": "unit",
 			"agentClass": "O---",
-			"statements": [
-				{
-					"type": "command-app",
-					"name": "ASK",
-					"args": [
-						{
-							"type": "reporter-call",
-							"name": "TURTLES",
-							"args": []
-						},
-						{
-							"type": "command-block",
-							"statements": [
-								{
-									"type": "command-app",
-									"name": "IF",
-									"args": [
-										{
-											"type": "reporter-call",
-											"name": ">=",
-											"args": [
-												{
-													"type": "reporter-call",
-													"name": "WHO",
-													"args": []
-												},
-												{
-													"type": "reporter-call",
-													"name": "TICKS",
-													"args": []
-												}
-											]
-										},
-										{
-											"type": "command-block",
-											"statements": [
-												{
-													"type": "command-app",
-													"name": "STOP",
-													"args": []
-												}
-											]
-										}
-									]
-								},
-								{
-									"type": "command-app",
-									"name": "IFELSE",
-									"args": [
-										{
-											"type": "reporter-call",
-											"name": "=",
-											"args": [
-												{
-													"type": "reporter-call",
-													"name": "COLOR",
-													"args": []
-												},
-												{
-													"type": "number",
-													"value": 15
-												}
-											]
-										},
-										{
-											"type": "command-block",
-											"statements": [
-												{
-													"type": "command-app",
-													"name": "LOOK-FOR-FOOD",
-													"args": []
-												}
-											]
-										},
-										{
-											"type": "command-block",
-											"statements": [
-												{
-													"type": "command-app",
-													"name": "RETURN-TO-NEST",
-													"args": []
-												}
-											]
-										}
-									]
-								},
-								{
-									"type": "command-app",
-									"name": "WIGGLE",
-									"args": []
-								},
-								{
-									"type": "command-app",
-									"name": "FD",
-									"args": [
-										{
-											"type": "number",
-											"value": 1
-										}
-									]
-								}
-							]
-						}
-					]
-				},
-				{
-					"type": "command-app",
-					"name": "DIFFUSE",
-					"args": [
-						{
-							"type": "reporter-call",
-							"name": "CHEMICAL",
-							"args": []
-						},
-						{
-							"type": "reporter-call",
-							"name": "/",
-							"args": [
-								{
-									"type": "reporter-call",
-									"name": "DIFFUSION-RATE",
-									"args": []
-								},
-								{
-									"type": "number",
-									"value": 100
-								}
-							]
-						}
-					]
-				},
-				{
-					"type": "command-app",
-					"name": "ASK",
-					"args": [
-						{
-							"type": "reporter-call",
-							"name": "PATCHES",
-							"args": []
-						},
-						{
-							"type": "command-block",
-							"statements": [
-								{
-									"type": "command-app",
-									"name": "SET",
-									"args": [
-										{
-											"type": "reporter-call",
-											"name": "CHEMICAL",
-											"args": []
-										},
-										{
-											"type": "reporter-call",
-											"name": "/",
-											"args": [
-												{
-													"type": "reporter-call",
-													"name": "*",
-													"args": [
-														{
-															"type": "reporter-call",
-															"name": "CHEMICAL",
-															"args": []
-														},
-														{
-															"type": "reporter-call",
-															"name": "-",
-															"args": [
-																{
-																	"type": "number",
-																	"value": 100
-																},
-																{
-																	"type": "reporter-call",
-																	"name": "EVAPORATION-RATE",
-																	"args": []
-																}
-															]
-														}
-													]
-												},
-												{
-													"type": "number",
-													"value": 100
-												}
-											]
-										}
-									]
-								},
-								{
-									"type": "command-app",
-									"name": "RECOLOR-PATCH",
-									"args": []
-								}
-							]
-						}
-					]
-				},
-				{
-					"type": "command-app",
-					"name": "TICK",
-					"args": []
-				}
-			]
+			"body": {
+				"type": "command-block",
+				"statements": [
+					{
+						"type": "command-call",
+						"name": "ASK",
+						"args": [
+							{
+								"type": "reporter-call",
+								"name": "TURTLES",
+								"args": []
+							},
+							{
+								"type": "command-block",
+								"statements": [
+									{
+										"type": "command-call",
+										"name": "IF",
+										"args": [
+											{
+												"type": "reporter-call",
+												"name": ">=",
+												"args": [
+													{
+														"type": "turtle-var",
+														"name": "WHO"
+													},
+													{
+														"type": "reporter-call",
+														"name": "TICKS",
+														"args": []
+													}
+												]
+											},
+											{
+												"type": "command-block",
+												"statements": [
+													{
+														"type": "command-call",
+														"name": "STOP",
+														"args": []
+													}
+												]
+											}
+										]
+									},
+									{
+										"type": "command-call",
+										"name": "IFELSE",
+										"args": [
+											{
+												"type": "reporter-call",
+												"name": "=",
+												"args": [
+													{
+														"type": "turtle-or-link-var",
+														"name": "COLOR"
+													},
+													{
+														"type": "number",
+														"value": 15
+													}
+												]
+											},
+											{
+												"type": "command-block",
+												"statements": [
+													{
+														"type": "command-proc-call",
+														"name": "LOOK-FOR-FOOD",
+														"args": []
+													}
+												]
+											},
+											{
+												"type": "command-block",
+												"statements": [
+													{
+														"type": "command-proc-call",
+														"name": "RETURN-TO-NEST",
+														"args": []
+													}
+												]
+											}
+										]
+									},
+									{
+										"type": "command-proc-call",
+										"name": "WIGGLE",
+										"args": []
+									},
+									{
+										"type": "command-call",
+										"name": "FD",
+										"args": [
+											{
+												"type": "number",
+												"value": 1
+											}
+										]
+									}
+								]
+							}
+						]
+					},
+					{
+						"type": "command-call",
+						"name": "DIFFUSE",
+						"args": [
+							{
+								"type": "patch-var",
+								"name": "CHEMICAL"
+							},
+							{
+								"type": "reporter-call",
+								"name": "/",
+								"args": [
+									{
+										"type": "global-var",
+										"name": "DIFFUSION-RATE"
+									},
+									{
+										"type": "number",
+										"value": 100
+									}
+								]
+							}
+						]
+					},
+					{
+						"type": "command-call",
+						"name": "ASK",
+						"args": [
+							{
+								"type": "reporter-call",
+								"name": "PATCHES",
+								"args": []
+							},
+							{
+								"type": "command-block",
+								"statements": [
+									{
+										"type": "command-call",
+										"name": "SET",
+										"args": [
+											{
+												"type": "patch-var",
+												"name": "CHEMICAL"
+											},
+											{
+												"type": "reporter-call",
+												"name": "/",
+												"args": [
+													{
+														"type": "reporter-call",
+														"name": "*",
+														"args": [
+															{
+																"type": "patch-var",
+																"name": "CHEMICAL"
+															},
+															{
+																"type": "reporter-call",
+																"name": "-",
+																"args": [
+																	{
+																		"type": "number",
+																		"value": 100
+																	},
+																	{
+																		"type": "global-var",
+																		"name": "EVAPORATION-RATE"
+																	}
+																]
+															}
+														]
+													},
+													{
+														"type": "number",
+														"value": 100
+													}
+												]
+											}
+										]
+									},
+									{
+										"type": "command-proc-call",
+										"name": "RECOLOR-PATCH",
+										"args": []
+									}
+								]
+							}
+						]
+					},
+					{
+						"type": "command-call",
+						"name": "TICK",
+						"args": []
+					}
+				]
+			}
 		},
 		{
 			"name": "RETURN-TO-NEST",
 			"args": [],
 			"returnType": "unit",
 			"agentClass": "-T--",
-			"statements": [
-				{
-					"type": "command-app",
-					"name": "IFELSE",
-					"args": [
-						{
-							"type": "reporter-call",
-							"name": "NEST?",
-							"args": []
-						},
-						{
-							"type": "command-block",
-							"statements": [
-								{
-									"type": "command-app",
-									"name": "SET",
-									"args": [
-										{
-											"type": "reporter-call",
-											"name": "COLOR",
-											"args": []
-										},
-										{
-											"type": "number",
-											"value": 15
-										}
-									]
-								},
-								{
-									"type": "command-app",
-									"name": "RT",
-									"args": [
-										{
-											"type": "number",
-											"value": 180
-										}
-									]
-								}
-							]
-						},
-						{
-							"type": "command-block",
-							"statements": [
-								{
-									"type": "command-app",
-									"name": "SET",
-									"args": [
-										{
-											"type": "reporter-call",
-											"name": "CHEMICAL",
-											"args": []
-										},
-										{
-											"type": "reporter-call",
-											"name": "+",
-											"args": [
-												{
-													"type": "reporter-call",
-													"name": "CHEMICAL",
-													"args": []
-												},
-												{
-													"type": "number",
-													"value": 60
-												}
-											]
-										}
-									]
-								},
-								{
-									"type": "command-app",
-									"name": "UPHILL-NEST-SCENT",
-									"args": []
-								}
-							]
-						}
-					]
-				}
-			]
+			"body": {
+				"type": "command-block",
+				"statements": [
+					{
+						"type": "command-call",
+						"name": "IFELSE",
+						"args": [
+							{
+								"type": "patch-var",
+								"name": "NEST?"
+							},
+							{
+								"type": "command-block",
+								"statements": [
+									{
+										"type": "command-call",
+										"name": "SET",
+										"args": [
+											{
+												"type": "turtle-or-link-var",
+												"name": "COLOR"
+											},
+											{
+												"type": "number",
+												"value": 15
+											}
+										]
+									},
+									{
+										"type": "command-call",
+										"name": "RT",
+										"args": [
+											{
+												"type": "number",
+												"value": 180
+											}
+										]
+									}
+								]
+							},
+							{
+								"type": "command-block",
+								"statements": [
+									{
+										"type": "command-call",
+										"name": "SET",
+										"args": [
+											{
+												"type": "patch-var",
+												"name": "CHEMICAL"
+											},
+											{
+												"type": "reporter-call",
+												"name": "+",
+												"args": [
+													{
+														"type": "patch-var",
+														"name": "CHEMICAL"
+													},
+													{
+														"type": "number",
+														"value": 60
+													}
+												]
+											}
+										]
+									},
+									{
+										"type": "command-proc-call",
+										"name": "UPHILL-NEST-SCENT",
+										"args": []
+									}
+								]
+							}
+						]
+					}
+				]
+			}
 		},
 		{
 			"name": "LOOK-FOR-FOOD",
 			"args": [],
 			"returnType": "unit",
 			"agentClass": "-T--",
-			"statements": [
-				{
-					"type": "command-app",
-					"name": "IF",
-					"args": [
-						{
-							"type": "reporter-call",
-							"name": ">",
-							"args": [
-								{
-									"type": "reporter-call",
-									"name": "FOOD",
-									"args": []
-								},
-								{
-									"type": "number",
-									"value": 0
-								}
-							]
-						},
-						{
-							"type": "command-block",
-							"statements": [
-								{
-									"type": "command-app",
-									"name": "SET",
-									"args": [
-										{
-											"type": "reporter-call",
-											"name": "COLOR",
-											"args": []
-										},
-										{
-											"type": "reporter-call",
-											"name": "+",
-											"args": [
-												{
-													"type": "number",
-													"value": 25
-												},
-												{
-													"type": "number",
-													"value": 1
-												}
-											]
-										}
-									]
-								},
-								{
-									"type": "command-app",
-									"name": "SET",
-									"args": [
-										{
-											"type": "reporter-call",
-											"name": "FOOD",
-											"args": []
-										},
-										{
-											"type": "reporter-call",
-											"name": "-",
-											"args": [
-												{
-													"type": "reporter-call",
-													"name": "FOOD",
-													"args": []
-												},
-												{
-													"type": "number",
-													"value": 1
-												}
-											]
-										}
-									]
-								},
-								{
-									"type": "command-app",
-									"name": "RT",
-									"args": [
-										{
-											"type": "number",
-											"value": 180
-										}
-									]
-								},
-								{
-									"type": "command-app",
-									"name": "STOP",
-									"args": []
-								}
-							]
-						}
-					]
-				},
-				{
-					"type": "command-app",
-					"name": "IF",
-					"args": [
-						{
-							"type": "reporter-call",
-							"name": "AND",
-							"args": [
-								{
-									"type": "reporter-call",
-									"name": ">=",
-									"args": [
-										{
-											"type": "reporter-call",
-											"name": "CHEMICAL",
-											"args": []
-										},
-										{
-											"type": "number",
-											"value": 0.05
-										}
-									]
-								},
-								{
-									"type": "reporter-call",
-									"name": "<",
-									"args": [
-										{
-											"type": "reporter-call",
-											"name": "CHEMICAL",
-											"args": []
-										},
-										{
-											"type": "number",
-											"value": 2
-										}
-									]
-								}
-							]
-						},
-						{
-							"type": "command-block",
-							"statements": [
-								{
-									"type": "command-app",
-									"name": "UPHILL-CHEMICAL",
-									"args": []
-								}
-							]
-						}
-					]
-				}
-			]
+			"body": {
+				"type": "command-block",
+				"statements": [
+					{
+						"type": "command-call",
+						"name": "IF",
+						"args": [
+							{
+								"type": "reporter-call",
+								"name": ">",
+								"args": [
+									{
+										"type": "patch-var",
+										"name": "FOOD"
+									},
+									{
+										"type": "number",
+										"value": 0
+									}
+								]
+							},
+							{
+								"type": "command-block",
+								"statements": [
+									{
+										"type": "command-call",
+										"name": "SET",
+										"args": [
+											{
+												"type": "turtle-or-link-var",
+												"name": "COLOR"
+											},
+											{
+												"type": "reporter-call",
+												"name": "+",
+												"args": [
+													{
+														"type": "number",
+														"value": 25
+													},
+													{
+														"type": "number",
+														"value": 1
+													}
+												]
+											}
+										]
+									},
+									{
+										"type": "command-call",
+										"name": "SET",
+										"args": [
+											{
+												"type": "patch-var",
+												"name": "FOOD"
+											},
+											{
+												"type": "reporter-call",
+												"name": "-",
+												"args": [
+													{
+														"type": "patch-var",
+														"name": "FOOD"
+													},
+													{
+														"type": "number",
+														"value": 1
+													}
+												]
+											}
+										]
+									},
+									{
+										"type": "command-call",
+										"name": "RT",
+										"args": [
+											{
+												"type": "number",
+												"value": 180
+											}
+										]
+									},
+									{
+										"type": "command-call",
+										"name": "STOP",
+										"args": []
+									}
+								]
+							}
+						]
+					},
+					{
+						"type": "command-call",
+						"name": "IF",
+						"args": [
+							{
+								"type": "reporter-call",
+								"name": "AND",
+								"args": [
+									{
+										"type": "reporter-call",
+										"name": ">=",
+										"args": [
+											{
+												"type": "patch-var",
+												"name": "CHEMICAL"
+											},
+											{
+												"type": "number",
+												"value": 0.05
+											}
+										]
+									},
+									{
+										"type": "reporter-call",
+										"name": "<",
+										"args": [
+											{
+												"type": "patch-var",
+												"name": "CHEMICAL"
+											},
+											{
+												"type": "number",
+												"value": 2
+											}
+										]
+									}
+								]
+							},
+							{
+								"type": "command-block",
+								"statements": [
+									{
+										"type": "command-proc-call",
+										"name": "UPHILL-CHEMICAL",
+										"args": []
+									}
+								]
+							}
+						]
+					}
+				]
+			}
 		},
 		{
 			"name": "UPHILL-CHEMICAL",
 			"args": [],
 			"returnType": "unit",
 			"agentClass": "-T--",
-			"statements": [
-				{
-					"type": "let-binding",
-					"varName": "SCENT-AHEAD",
-					"value": {
-						"type": "reporter-proc-call",
-						"name": "CHEMICAL-SCENT-AT-ANGLE",
-						"args": [
-							{
-								"type": "number",
-								"value": 0
-							}
-						]
-					}
-				},
-				{
-					"type": "let-binding",
-					"varName": "SCENT-RIGHT",
-					"value": {
-						"type": "reporter-proc-call",
-						"name": "CHEMICAL-SCENT-AT-ANGLE",
-						"args": [
-							{
-								"type": "number",
-								"value": 45
-							}
-						]
-					}
-				},
-				{
-					"type": "let-binding",
-					"varName": "SCENT-LEFT",
-					"value": {
-						"type": "reporter-proc-call",
-						"name": "CHEMICAL-SCENT-AT-ANGLE",
-						"args": [
-							{
-								"type": "number",
-								"value": -45
-							}
-						]
-					}
-				},
-				{
-					"type": "command-app",
-					"name": "IF",
-					"args": [
-						{
-							"type": "reporter-call",
-							"name": "OR",
+			"body": {
+				"type": "command-block",
+				"statements": [
+					{
+						"type": "let-binding",
+						"varName": "SCENT-AHEAD",
+						"value": {
+							"type": "reporter-proc-call",
+							"name": "CHEMICAL-SCENT-AT-ANGLE",
 							"args": [
 								{
-									"type": "reporter-call",
-									"name": ">",
-									"args": [
-										{
-											"type": "let-ref",
-											"name": "SCENT-RIGHT"
-										},
-										{
-											"type": "let-ref",
-											"name": "SCENT-AHEAD"
-										}
-									]
-								},
-								{
-									"type": "reporter-call",
-									"name": ">",
-									"args": [
-										{
-											"type": "let-ref",
-											"name": "SCENT-LEFT"
-										},
-										{
-											"type": "let-ref",
-											"name": "SCENT-AHEAD"
-										}
-									]
-								}
-							]
-						},
-						{
-							"type": "command-block",
-							"statements": [
-								{
-									"type": "command-app",
-									"name": "IFELSE",
-									"args": [
-										{
-											"type": "reporter-call",
-											"name": ">",
-											"args": [
-												{
-													"type": "let-ref",
-													"name": "SCENT-RIGHT"
-												},
-												{
-													"type": "let-ref",
-													"name": "SCENT-LEFT"
-												}
-											]
-										},
-										{
-											"type": "command-block",
-											"statements": [
-												{
-													"type": "command-app",
-													"name": "RT",
-													"args": [
-														{
-															"type": "number",
-															"value": 45
-														}
-													]
-												}
-											]
-										},
-										{
-											"type": "command-block",
-											"statements": [
-												{
-													"type": "command-app",
-													"name": "LT",
-													"args": [
-														{
-															"type": "number",
-															"value": 45
-														}
-													]
-												}
-											]
-										}
-									]
+									"type": "number",
+									"value": 0
 								}
 							]
 						}
-					]
-				}
-			]
+					},
+					{
+						"type": "let-binding",
+						"varName": "SCENT-RIGHT",
+						"value": {
+							"type": "reporter-proc-call",
+							"name": "CHEMICAL-SCENT-AT-ANGLE",
+							"args": [
+								{
+									"type": "number",
+									"value": 45
+								}
+							]
+						}
+					},
+					{
+						"type": "let-binding",
+						"varName": "SCENT-LEFT",
+						"value": {
+							"type": "reporter-proc-call",
+							"name": "CHEMICAL-SCENT-AT-ANGLE",
+							"args": [
+								{
+									"type": "number",
+									"value": -45
+								}
+							]
+						}
+					},
+					{
+						"type": "command-call",
+						"name": "IF",
+						"args": [
+							{
+								"type": "reporter-call",
+								"name": "OR",
+								"args": [
+									{
+										"type": "reporter-call",
+										"name": ">",
+										"args": [
+											{
+												"type": "let-ref",
+												"name": "SCENT-RIGHT"
+											},
+											{
+												"type": "let-ref",
+												"name": "SCENT-AHEAD"
+											}
+										]
+									},
+									{
+										"type": "reporter-call",
+										"name": ">",
+										"args": [
+											{
+												"type": "let-ref",
+												"name": "SCENT-LEFT"
+											},
+											{
+												"type": "let-ref",
+												"name": "SCENT-AHEAD"
+											}
+										]
+									}
+								]
+							},
+							{
+								"type": "command-block",
+								"statements": [
+									{
+										"type": "command-call",
+										"name": "IFELSE",
+										"args": [
+											{
+												"type": "reporter-call",
+												"name": ">",
+												"args": [
+													{
+														"type": "let-ref",
+														"name": "SCENT-RIGHT"
+													},
+													{
+														"type": "let-ref",
+														"name": "SCENT-LEFT"
+													}
+												]
+											},
+											{
+												"type": "command-block",
+												"statements": [
+													{
+														"type": "command-call",
+														"name": "RT",
+														"args": [
+															{
+																"type": "number",
+																"value": 45
+															}
+														]
+													}
+												]
+											},
+											{
+												"type": "command-block",
+												"statements": [
+													{
+														"type": "command-call",
+														"name": "LT",
+														"args": [
+															{
+																"type": "number",
+																"value": 45
+															}
+														]
+													}
+												]
+											}
+										]
+									}
+								]
+							}
+						]
+					}
+				]
+			}
 		},
 		{
 			"name": "UPHILL-NEST-SCENT",
 			"args": [],
 			"returnType": "unit",
 			"agentClass": "-T--",
-			"statements": [
-				{
-					"type": "let-binding",
-					"varName": "SCENT-AHEAD",
-					"value": {
-						"type": "reporter-proc-call",
-						"name": "NEST-SCENT-AT-ANGLE",
-						"args": [
-							{
-								"type": "number",
-								"value": 0
-							}
-						]
-					}
-				},
-				{
-					"type": "let-binding",
-					"varName": "SCENT-RIGHT",
-					"value": {
-						"type": "reporter-proc-call",
-						"name": "NEST-SCENT-AT-ANGLE",
-						"args": [
-							{
-								"type": "number",
-								"value": 45
-							}
-						]
-					}
-				},
-				{
-					"type": "let-binding",
-					"varName": "SCENT-LEFT",
-					"value": {
-						"type": "reporter-proc-call",
-						"name": "NEST-SCENT-AT-ANGLE",
-						"args": [
-							{
-								"type": "number",
-								"value": -45
-							}
-						]
-					}
-				},
-				{
-					"type": "command-app",
-					"name": "IF",
-					"args": [
-						{
-							"type": "reporter-call",
-							"name": "OR",
+			"body": {
+				"type": "command-block",
+				"statements": [
+					{
+						"type": "let-binding",
+						"varName": "SCENT-AHEAD",
+						"value": {
+							"type": "reporter-proc-call",
+							"name": "NEST-SCENT-AT-ANGLE",
 							"args": [
 								{
-									"type": "reporter-call",
-									"name": ">",
-									"args": [
-										{
-											"type": "let-ref",
-											"name": "SCENT-RIGHT"
-										},
-										{
-											"type": "let-ref",
-											"name": "SCENT-AHEAD"
-										}
-									]
-								},
-								{
-									"type": "reporter-call",
-									"name": ">",
-									"args": [
-										{
-											"type": "let-ref",
-											"name": "SCENT-LEFT"
-										},
-										{
-											"type": "let-ref",
-											"name": "SCENT-AHEAD"
-										}
-									]
-								}
-							]
-						},
-						{
-							"type": "command-block",
-							"statements": [
-								{
-									"type": "command-app",
-									"name": "IFELSE",
-									"args": [
-										{
-											"type": "reporter-call",
-											"name": ">",
-											"args": [
-												{
-													"type": "let-ref",
-													"name": "SCENT-RIGHT"
-												},
-												{
-													"type": "let-ref",
-													"name": "SCENT-LEFT"
-												}
-											]
-										},
-										{
-											"type": "command-block",
-											"statements": [
-												{
-													"type": "command-app",
-													"name": "RT",
-													"args": [
-														{
-															"type": "number",
-															"value": 45
-														}
-													]
-												}
-											]
-										},
-										{
-											"type": "command-block",
-											"statements": [
-												{
-													"type": "command-app",
-													"name": "LT",
-													"args": [
-														{
-															"type": "number",
-															"value": 45
-														}
-													]
-												}
-											]
-										}
-									]
+									"type": "number",
+									"value": 0
 								}
 							]
 						}
-					]
-				}
-			]
+					},
+					{
+						"type": "let-binding",
+						"varName": "SCENT-RIGHT",
+						"value": {
+							"type": "reporter-proc-call",
+							"name": "NEST-SCENT-AT-ANGLE",
+							"args": [
+								{
+									"type": "number",
+									"value": 45
+								}
+							]
+						}
+					},
+					{
+						"type": "let-binding",
+						"varName": "SCENT-LEFT",
+						"value": {
+							"type": "reporter-proc-call",
+							"name": "NEST-SCENT-AT-ANGLE",
+							"args": [
+								{
+									"type": "number",
+									"value": -45
+								}
+							]
+						}
+					},
+					{
+						"type": "command-call",
+						"name": "IF",
+						"args": [
+							{
+								"type": "reporter-call",
+								"name": "OR",
+								"args": [
+									{
+										"type": "reporter-call",
+										"name": ">",
+										"args": [
+											{
+												"type": "let-ref",
+												"name": "SCENT-RIGHT"
+											},
+											{
+												"type": "let-ref",
+												"name": "SCENT-AHEAD"
+											}
+										]
+									},
+									{
+										"type": "reporter-call",
+										"name": ">",
+										"args": [
+											{
+												"type": "let-ref",
+												"name": "SCENT-LEFT"
+											},
+											{
+												"type": "let-ref",
+												"name": "SCENT-AHEAD"
+											}
+										]
+									}
+								]
+							},
+							{
+								"type": "command-block",
+								"statements": [
+									{
+										"type": "command-call",
+										"name": "IFELSE",
+										"args": [
+											{
+												"type": "reporter-call",
+												"name": ">",
+												"args": [
+													{
+														"type": "let-ref",
+														"name": "SCENT-RIGHT"
+													},
+													{
+														"type": "let-ref",
+														"name": "SCENT-LEFT"
+													}
+												]
+											},
+											{
+												"type": "command-block",
+												"statements": [
+													{
+														"type": "command-call",
+														"name": "RT",
+														"args": [
+															{
+																"type": "number",
+																"value": 45
+															}
+														]
+													}
+												]
+											},
+											{
+												"type": "command-block",
+												"statements": [
+													{
+														"type": "command-call",
+														"name": "LT",
+														"args": [
+															{
+																"type": "number",
+																"value": 45
+															}
+														]
+													}
+												]
+											}
+										]
+									}
+								]
+							}
+						]
+					}
+				]
+			}
 		},
 		{
 			"name": "WIGGLE",
 			"args": [],
 			"returnType": "unit",
 			"agentClass": "-T--",
-			"statements": [
-				{
-					"type": "command-app",
-					"name": "RT",
-					"args": [
-						{
-							"type": "reporter-call",
-							"name": "RANDOM",
-							"args": [
-								{
-									"type": "number",
-									"value": 40
-								}
-							]
-						}
-					]
-				},
-				{
-					"type": "command-app",
-					"name": "LT",
-					"args": [
-						{
-							"type": "reporter-call",
-							"name": "RANDOM",
-							"args": [
-								{
-									"type": "number",
-									"value": 40
-								}
-							]
-						}
-					]
-				},
-				{
-					"type": "command-app",
-					"name": "IF",
-					"args": [
-						{
-							"type": "reporter-call",
-							"name": "NOT",
-							"args": [
-								{
-									"type": "reporter-call",
-									"name": "CAN-MOVE?",
-									"args": [
-										{
-											"type": "number",
-											"value": 1
-										}
-									]
-								}
-							]
-						},
-						{
-							"type": "command-block",
-							"statements": [
-								{
-									"type": "command-app",
-									"name": "RT",
-									"args": [
-										{
-											"type": "number",
-											"value": 180
-										}
-									]
-								}
-							]
-						}
-					]
-				}
-			]
+			"body": {
+				"type": "command-block",
+				"statements": [
+					{
+						"type": "command-call",
+						"name": "RT",
+						"args": [
+							{
+								"type": "reporter-call",
+								"name": "RANDOM",
+								"args": [
+									{
+										"type": "number",
+										"value": 40
+									}
+								]
+							}
+						]
+					},
+					{
+						"type": "command-call",
+						"name": "LT",
+						"args": [
+							{
+								"type": "reporter-call",
+								"name": "RANDOM",
+								"args": [
+									{
+										"type": "number",
+										"value": 40
+									}
+								]
+							}
+						]
+					},
+					{
+						"type": "command-call",
+						"name": "IF",
+						"args": [
+							{
+								"type": "reporter-call",
+								"name": "NOT",
+								"args": [
+									{
+										"type": "reporter-call",
+										"name": "CAN-MOVE?",
+										"args": [
+											{
+												"type": "number",
+												"value": 1
+											}
+										]
+									}
+								]
+							},
+							{
+								"type": "command-block",
+								"statements": [
+									{
+										"type": "command-call",
+										"name": "RT",
+										"args": [
+											{
+												"type": "number",
+												"value": 180
+											}
+										]
+									}
+								]
+							}
+						]
+					}
+				]
+			}
 		},
 		{
 			"name": "NEST-SCENT-AT-ANGLE",
@@ -1540,94 +1535,86 @@
 			],
 			"returnType": "wildcard",
 			"agentClass": "-T--",
-			"statements": [
-				{
-					"type": "let-binding",
-					"varName": "P",
-					"value": {
-						"type": "reporter-call",
-						"name": "PATCH-RIGHT-AND-AHEAD",
+			"body": {
+				"type": "command-block",
+				"statements": [
+					{
+						"type": "let-binding",
+						"varName": "P",
+						"value": {
+							"type": "reporter-call",
+							"name": "PATCH-RIGHT-AND-AHEAD",
+							"args": [
+								{
+									"type": "procedure-arg-ref",
+									"name": "ANGLE"
+								},
+								{
+									"type": "number",
+									"value": 1
+								}
+							]
+						}
+					},
+					{
+						"type": "command-call",
+						"name": "IF",
 						"args": [
 							{
-								"type": "procedure-arg-ref",
-								"name": "ANGLE"
+								"type": "reporter-call",
+								"name": "=",
+								"args": [
+									{
+										"type": "let-ref",
+										"name": "P"
+									},
+									{
+										"type": "nobody"
+									}
+								]
 							},
 							{
-								"type": "number",
-								"value": 1
+								"type": "command-block",
+								"statements": [
+									{
+										"type": "command-call",
+										"name": "REPORT",
+										"args": [
+											{
+												"type": "number",
+												"value": 0
+											}
+										]
+									}
+								]
+							}
+						]
+					},
+					{
+						"type": "command-call",
+						"name": "REPORT",
+						"args": [
+							{
+								"type": "reporter-call",
+								"name": "OF",
+								"args": [
+									{
+										"type": "reporter-block",
+										"reporterApp": {
+											"type": "patch-var",
+											"name": "NEST-SCENT"
+										}
+									},
+									{
+										"type": "let-ref",
+										"name": "P"
+									}
+								]
 							}
 						]
 					}
-				},
-				{
-					"type": "command-app",
-					"name": "IF",
-					"args": [
-						{
-							"type": "reporter-call",
-							"name": "=",
-							"args": [
-								{
-									"type": "let-ref",
-									"name": "P"
-								},
-								{
-									"type": "nobody"
-								}
-							]
-						},
-						{
-							"type": "command-block",
-							"statements": [
-								{
-									"type": "command-app",
-									"name": "REPORT",
-									"args": [
-										{
-											"type": "number",
-											"value": 0
-										}
-									]
-								}
-							]
-						}
-					]
-				},
-				{
-					"type": "command-app",
-					"name": "REPORT",
-					"args": [
-						{
-							"type": "reporter-call",
-							"name": "OF",
-							"args": [
-								{
-									"type": "reporter-block",
-									"reporterApp": {
-										"type": "reporter-call",
-										"name": "NEST-SCENT",
-										"args": []
-									}
-								},
-								{
-									"type": "reporter-call",
-									"name": "PATCH-RIGHT-AND-AHEAD",
-									"args": [
-										{
-											"type": "procedure-arg-ref",
-											"name": "ANGLE"
-										},
-										{
-											"type": "number",
-											"value": 1
-										}
-									]
-								}
-							]
-						}
-					]
-				}
-			]
+				]
+			}
 		},
 		{
 			"name": "CHEMICAL-SCENT-AT-ANGLE",
@@ -1636,94 +1623,86 @@
 			],
 			"returnType": "wildcard",
 			"agentClass": "-T--",
-			"statements": [
-				{
-					"type": "let-binding",
-					"varName": "P",
-					"value": {
-						"type": "reporter-call",
-						"name": "PATCH-RIGHT-AND-AHEAD",
+			"body": {
+				"type": "command-block",
+				"statements": [
+					{
+						"type": "let-binding",
+						"varName": "P",
+						"value": {
+							"type": "reporter-call",
+							"name": "PATCH-RIGHT-AND-AHEAD",
+							"args": [
+								{
+									"type": "procedure-arg-ref",
+									"name": "ANGLE"
+								},
+								{
+									"type": "number",
+									"value": 1
+								}
+							]
+						}
+					},
+					{
+						"type": "command-call",
+						"name": "IF",
 						"args": [
 							{
-								"type": "procedure-arg-ref",
-								"name": "ANGLE"
+								"type": "reporter-call",
+								"name": "=",
+								"args": [
+									{
+										"type": "let-ref",
+										"name": "P"
+									},
+									{
+										"type": "nobody"
+									}
+								]
 							},
 							{
-								"type": "number",
-								"value": 1
+								"type": "command-block",
+								"statements": [
+									{
+										"type": "command-call",
+										"name": "REPORT",
+										"args": [
+											{
+												"type": "number",
+												"value": 0
+											}
+										]
+									}
+								]
+							}
+						]
+					},
+					{
+						"type": "command-call",
+						"name": "REPORT",
+						"args": [
+							{
+								"type": "reporter-call",
+								"name": "OF",
+								"args": [
+									{
+										"type": "reporter-block",
+										"reporterApp": {
+											"type": "patch-var",
+											"name": "CHEMICAL"
+										}
+									},
+									{
+										"type": "let-ref",
+										"name": "P"
+									}
+								]
 							}
 						]
 					}
-				},
-				{
-					"type": "command-app",
-					"name": "IF",
-					"args": [
-						{
-							"type": "reporter-call",
-							"name": "=",
-							"args": [
-								{
-									"type": "let-ref",
-									"name": "P"
-								},
-								{
-									"type": "nobody"
-								}
-							]
-						},
-						{
-							"type": "command-block",
-							"statements": [
-								{
-									"type": "command-app",
-									"name": "REPORT",
-									"args": [
-										{
-											"type": "number",
-											"value": 0
-										}
-									]
-								}
-							]
-						}
-					]
-				},
-				{
-					"type": "command-app",
-					"name": "REPORT",
-					"args": [
-						{
-							"type": "reporter-call",
-							"name": "OF",
-							"args": [
-								{
-									"type": "reporter-block",
-									"reporterApp": {
-										"type": "reporter-call",
-										"name": "CHEMICAL",
-										"args": []
-									}
-								},
-								{
-									"type": "reporter-call",
-									"name": "PATCH-RIGHT-AND-AHEAD",
-									"args": [
-										{
-											"type": "procedure-arg-ref",
-											"name": "ANGLE"
-										},
-										{
-											"type": "number",
-											"value": 1
-										}
-									]
-								}
-							]
-						}
-					]
-				}
-			]
+				]
+			}
 		}
 	],
 	"widgets": [
@@ -1733,12 +1712,18 @@
 			"setup": {
 				"returnType": "unit",
 				"agentClass": "O---",
-				"statements": []
+				"body": {
+					"type": "command-block",
+					"statements": []
+				}
 			},
 			"update": {
 				"returnType": "unit",
 				"agentClass": "O---",
-				"statements": []
+				"body": {
+					"type": "command-block",
+					"statements": []
+				}
 			},
 			"pens": [
 				{
@@ -1746,73 +1731,77 @@
 					"setup": {
 						"returnType": "unit",
 						"agentClass": "O---",
-						"statements": []
+						"body": {
+							"type": "command-block",
+							"statements": []
+						}
 					},
 					"update": {
 						"returnType": "unit",
 						"agentClass": "O---",
-						"statements": [
-							{
-								"type": "command-app",
-								"name": "PLOTXY",
-								"args": [
-									{
-										"type": "reporter-call",
-										"name": "TICKS",
-										"args": []
-									},
-									{
-										"type": "reporter-call",
-										"name": "SUM",
-										"args": [
-											{
-												"type": "reporter-call",
-												"name": "OF",
-												"args": [
-													{
-														"type": "reporter-block",
-														"reporterApp": {
-															"type": "reporter-call",
-															"name": "FOOD",
-															"args": []
-														}
-													},
-													{
-														"type": "reporter-call",
-														"name": "WITH",
-														"args": [
-															{
-																"type": "reporter-call",
-																"name": "PATCHES",
-																"args": []
-															},
-															{
-																"type": "reporter-block",
-																"reporterApp": {
-																	"type": "reporter-call",
-																	"name": "=",
-																	"args": [
-																		{
-																			"type": "reporter-call",
-																			"name": "PCOLOR",
-																			"args": []
-																		},
-																		{
-																			"type": "number",
-																			"value": 85
-																		}
-																	]
-																}
+						"body": {
+							"type": "command-block",
+							"statements": [
+								{
+									"type": "command-call",
+									"name": "PLOTXY",
+									"args": [
+										{
+											"type": "reporter-call",
+											"name": "TICKS",
+											"args": []
+										},
+										{
+											"type": "reporter-call",
+											"name": "SUM",
+											"args": [
+												{
+													"type": "reporter-call",
+													"name": "OF",
+													"args": [
+														{
+															"type": "reporter-block",
+															"reporterApp": {
+																"type": "patch-var",
+																"name": "FOOD"
 															}
-														]
-													}
-												]
-											}
-										]
-									}
-								]
-							}
-						]
+														},
+														{
+															"type": "reporter-call",
+															"name": "WITH",
+															"args": [
+																{
+																	"type": "reporter-call",
+																	"name": "PATCHES",
+																	"args": []
+																},
+																{
+																	"type": "reporter-block",
+																	"reporterApp": {
+																		"type": "reporter-call",
+																		"name": "=",
+																		"args": [
+																			{
+																				"type": "patch-var",
+																				"name": "PCOLOR"
+																			},
+																			{
+																				"type": "number",
+																				"value": 85
+																			}
+																		]
+																	}
+																}
+															]
+														}
+													]
+												}
+											]
+										}
+									]
+								}
+							]
+						}
 					}
 				},
 				{
@@ -1820,73 +1809,77 @@
 					"setup": {
 						"returnType": "unit",
 						"agentClass": "O---",
-						"statements": []
+						"body": {
+							"type": "command-block",
+							"statements": []
+						}
 					},
 					"update": {
 						"returnType": "unit",
 						"agentClass": "O---",
-						"statements": [
-							{
-								"type": "command-app",
-								"name": "PLOTXY",
-								"args": [
-									{
-										"type": "reporter-call",
-										"name": "TICKS",
-										"args": []
-									},
-									{
-										"type": "reporter-call",
-										"name": "SUM",
-										"args": [
-											{
-												"type": "reporter-call",
-												"name": "OF",
-												"args": [
-													{
-														"type": "reporter-block",
-														"reporterApp": {
-															"type": "reporter-call",
-															"name": "FOOD",
-															"args": []
-														}
-													},
-													{
-														"type": "reporter-call",
-														"name": "WITH",
-														"args": [
-															{
-																"type": "reporter-call",
-																"name": "PATCHES",
-																"args": []
-															},
-															{
-																"type": "reporter-block",
-																"reporterApp": {
-																	"type": "reporter-call",
-																	"name": "=",
-																	"args": [
-																		{
-																			"type": "reporter-call",
-																			"name": "PCOLOR",
-																			"args": []
-																		},
-																		{
-																			"type": "number",
-																			"value": 95
-																		}
-																	]
-																}
+						"body": {
+							"type": "command-block",
+							"statements": [
+								{
+									"type": "command-call",
+									"name": "PLOTXY",
+									"args": [
+										{
+											"type": "reporter-call",
+											"name": "TICKS",
+											"args": []
+										},
+										{
+											"type": "reporter-call",
+											"name": "SUM",
+											"args": [
+												{
+													"type": "reporter-call",
+													"name": "OF",
+													"args": [
+														{
+															"type": "reporter-block",
+															"reporterApp": {
+																"type": "patch-var",
+																"name": "FOOD"
 															}
-														]
-													}
-												]
-											}
-										]
-									}
-								]
-							}
-						]
+														},
+														{
+															"type": "reporter-call",
+															"name": "WITH",
+															"args": [
+																{
+																	"type": "reporter-call",
+																	"name": "PATCHES",
+																	"args": []
+																},
+																{
+																	"type": "reporter-block",
+																	"reporterApp": {
+																		"type": "reporter-call",
+																		"name": "=",
+																		"args": [
+																			{
+																				"type": "patch-var",
+																				"name": "PCOLOR"
+																			},
+																			{
+																				"type": "number",
+																				"value": 95
+																			}
+																		]
+																	}
+																}
+															]
+														}
+													]
+												}
+											]
+										}
+									]
+								}
+							]
+						}
 					}
 				},
 				{
@@ -1894,73 +1887,77 @@
 					"setup": {
 						"returnType": "unit",
 						"agentClass": "O---",
-						"statements": []
+						"body": {
+							"type": "command-block",
+							"statements": []
+						}
 					},
 					"update": {
 						"returnType": "unit",
 						"agentClass": "O---",
-						"statements": [
-							{
-								"type": "command-app",
-								"name": "PLOTXY",
-								"args": [
-									{
-										"type": "reporter-call",
-										"name": "TICKS",
-										"args": []
-									},
-									{
-										"type": "reporter-call",
-										"name": "SUM",
-										"args": [
-											{
-												"type": "reporter-call",
-												"name": "OF",
-												"args": [
-													{
-														"type": "reporter-block",
-														"reporterApp": {
-															"type": "reporter-call",
-															"name": "FOOD",
-															"args": []
-														}
-													},
-													{
-														"type": "reporter-call",
-														"name": "WITH",
-														"args": [
-															{
-																"type": "reporter-call",
-																"name": "PATCHES",
-																"args": []
-															},
-															{
-																"type": "reporter-block",
-																"reporterApp": {
-																	"type": "reporter-call",
-																	"name": "=",
-																	"args": [
-																		{
-																			"type": "reporter-call",
-																			"name": "PCOLOR",
-																			"args": []
-																		},
-																		{
-																			"type": "number",
-																			"value": 105
-																		}
-																	]
-																}
+						"body": {
+							"type": "command-block",
+							"statements": [
+								{
+									"type": "command-call",
+									"name": "PLOTXY",
+									"args": [
+										{
+											"type": "reporter-call",
+											"name": "TICKS",
+											"args": []
+										},
+										{
+											"type": "reporter-call",
+											"name": "SUM",
+											"args": [
+												{
+													"type": "reporter-call",
+													"name": "OF",
+													"args": [
+														{
+															"type": "reporter-block",
+															"reporterApp": {
+																"type": "patch-var",
+																"name": "FOOD"
 															}
-														]
-													}
-												]
-											}
-										]
-									}
-								]
-							}
-						]
+														},
+														{
+															"type": "reporter-call",
+															"name": "WITH",
+															"args": [
+																{
+																	"type": "reporter-call",
+																	"name": "PATCHES",
+																	"args": []
+																},
+																{
+																	"type": "reporter-block",
+																	"reporterApp": {
+																		"type": "reporter-call",
+																		"name": "=",
+																		"args": [
+																			{
+																				"type": "patch-var",
+																				"name": "PCOLOR"
+																			},
+																			{
+																				"type": "number",
+																				"value": 105
+																			}
+																		]
+																	}
+																}
+															]
+														}
+													]
+												}
+											]
+										}
+									]
+								}
+							]
+						}
 					}
 				}
 			]
@@ -1971,50 +1968,59 @@
 			"getMin": {
 				"returnType": "wildcard",
 				"agentClass": "O---",
-				"statements": [
-					{
-						"type": "command-app",
-						"name": "REPORT",
-						"args": [
-							{
-								"type": "number",
-								"value": 0
-							}
-						]
-					}
-				]
+				"body": {
+					"type": "command-block",
+					"statements": [
+						{
+							"type": "command-call",
+							"name": "REPORT",
+							"args": [
+								{
+									"type": "number",
+									"value": 0
+								}
+							]
+						}
+					]
+				}
 			},
 			"getMax": {
 				"returnType": "wildcard",
 				"agentClass": "O---",
-				"statements": [
-					{
-						"type": "command-app",
-						"name": "REPORT",
-						"args": [
-							{
-								"type": "number",
-								"value": 99
-							}
-						]
-					}
-				]
+				"body": {
+					"type": "command-block",
+					"statements": [
+						{
+							"type": "command-call",
+							"name": "REPORT",
+							"args": [
+								{
+									"type": "number",
+									"value": 99
+								}
+							]
+						}
+					]
+				}
 			},
 			"getStep": {
 				"returnType": "wildcard",
 				"agentClass": "O---",
-				"statements": [
-					{
-						"type": "command-app",
-						"name": "REPORT",
-						"args": [
-							{
-								"type": "number",
-								"value": 1
-							}
-						]
-					}
-				]
+				"body": {
+					"type": "command-block",
+					"statements": [
+						{
+							"type": "command-call",
+							"name": "REPORT",
+							"args": [
+								{
+									"type": "number",
+									"value": 1
+								}
+							]
+						}
+					]
+				}
 			}
 		},
 		{
@@ -2023,50 +2029,59 @@
 			"getMin": {
 				"returnType": "wildcard",
 				"agentClass": "O---",
-				"statements": [
-					{
-						"type": "command-app",
-						"name": "REPORT",
-						"args": [
-							{
-								"type": "number",
-								"value": 0
-							}
-						]
-					}
-				]
+				"body": {
+					"type": "command-block",
+					"statements": [
+						{
+							"type": "command-call",
+							"name": "REPORT",
+							"args": [
+								{
+									"type": "number",
+									"value": 0
+								}
+							]
+						}
+					]
+				}
 			},
 			"getMax": {
 				"returnType": "wildcard",
 				"agentClass": "O---",
-				"statements": [
-					{
-						"type": "command-app",
-						"name": "REPORT",
-						"args": [
-							{
-								"type": "number",
-								"value": 200
-							}
-						]
-					}
-				]
+				"body": {
+					"type": "command-block",
+					"statements": [
+						{
+							"type": "command-call",
+							"name": "REPORT",
+							"args": [
+								{
+									"type": "number",
+									"value": 200
+								}
+							]
+						}
+					]
+				}
 			},
 			"getStep": {
 				"returnType": "wildcard",
 				"agentClass": "O---",
-				"statements": [
-					{
-						"type": "command-app",
-						"name": "REPORT",
-						"args": [
-							{
-								"type": "number",
-								"value": 1
-							}
-						]
-					}
-				]
+				"body": {
+					"type": "command-block",
+					"statements": [
+						{
+							"type": "command-call",
+							"name": "REPORT",
+							"args": [
+								{
+									"type": "number",
+									"value": 1
+								}
+							]
+						}
+					]
+				}
 			}
 		},
 		{
@@ -2075,50 +2090,59 @@
 			"getMin": {
 				"returnType": "wildcard",
 				"agentClass": "O---",
-				"statements": [
-					{
-						"type": "command-app",
-						"name": "REPORT",
-						"args": [
-							{
-								"type": "number",
-								"value": 0
-							}
-						]
-					}
-				]
+				"body": {
+					"type": "command-block",
+					"statements": [
+						{
+							"type": "command-call",
+							"name": "REPORT",
+							"args": [
+								{
+									"type": "number",
+									"value": 0
+								}
+							]
+						}
+					]
+				}
 			},
 			"getMax": {
 				"returnType": "wildcard",
 				"agentClass": "O---",
-				"statements": [
-					{
-						"type": "command-app",
-						"name": "REPORT",
-						"args": [
-							{
-								"type": "number",
-								"value": 99
-							}
-						]
-					}
-				]
+				"body": {
+					"type": "command-block",
+					"statements": [
+						{
+							"type": "command-call",
+							"name": "REPORT",
+							"args": [
+								{
+									"type": "number",
+									"value": 99
+								}
+							]
+						}
+					]
+				}
 			},
 			"getStep": {
 				"returnType": "wildcard",
 				"agentClass": "O---",
-				"statements": [
-					{
-						"type": "command-app",
-						"name": "REPORT",
-						"args": [
-							{
-								"type": "number",
-								"value": 1
-							}
-						]
-					}
-				]
+				"body": {
+					"type": "command-block",
+					"statements": [
+						{
+							"type": "command-call",
+							"name": "REPORT",
+							"args": [
+								{
+									"type": "number",
+									"value": 1
+								}
+							]
+						}
+					]
+				}
 			}
 		},
 		{
@@ -2127,13 +2151,16 @@
 			"onClick": {
 				"returnType": "unit",
 				"agentClass": "O---",
-				"statements": [
-					{
-						"type": "command-app",
-						"name": "SETUP",
-						"args": []
-					}
-				]
+				"body": {
+					"type": "command-block",
+					"statements": [
+						{
+							"type": "command-proc-call",
+							"name": "SETUP",
+							"args": []
+						}
+					]
+				}
 			}
 		},
 		{
@@ -2142,13 +2169,16 @@
 			"onClick": {
 				"returnType": "unit",
 				"agentClass": "O---",
-				"statements": [
-					{
-						"type": "command-app",
-						"name": "GO",
-						"args": []
-					}
-				]
+				"body": {
+					"type": "command-block",
+					"statements": [
+						{
+							"type": "command-proc-call",
+							"name": "GO",
+							"args": []
+						}
+					]
+				}
 			}
 		}
 	]

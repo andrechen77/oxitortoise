@@ -27,7 +27,7 @@ pub struct Procedure {
     pub arg_names: Vec<String>,
     pub return_type: ReturnType,
     pub agent_class: AgentClass,
-    pub statements: Vec<Node>,
+    pub body: CommandBlock,
 }
 
 #[derive(Deserialize, Debug)]
@@ -62,15 +62,28 @@ impl<'de> Deserialize<'de> for AgentClass {
 }
 
 #[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct CommandBlock {
+    pub statements: Vec<Node>,
+}
+
+#[derive(Deserialize, Debug)]
 #[serde(tag = "type", rename_all = "kebab-case", rename_all_fields = "camelCase")]
 pub enum Node {
-    CommandApp(CommandApp),
+    CommandProcCall { name: String, args: Vec<Node> },
+    CommandCall(CommandCall),
     ReporterCall(ReporterCall),
     ReporterProcCall { name: String, args: Vec<Node> },
-    CommandBlock { statements: Vec<Node> },
+    CommandBlock(CommandBlock),
     ReporterBlock { reporter_app: Box<Node> },
     LetBinding { var_name: String, value: Box<Node> },
     LetRef { name: String },
+    GlobalVar { name: String },
+    TurtleVar { name: String },
+    TurtleOrLinkVar { name: String },
+    PatchVar { name: String },
+    LinkVar { name: String },
+    TurtleOrPatchVar { name: String },
     ProcedureArgRef { name: String },
     Number { value: Number },
     String { value: String },
@@ -82,7 +95,7 @@ type Bn = Box<Node>;
 
 #[derive(Deserialize, Debug)]
 #[serde(tag = "name", rename_all = "SCREAMING-KEBAB-CASE", content = "args")]
-pub enum CommandApp {
+pub enum CommandCall {
     Stop([Bn; 0]),
     ClearAll([Bn; 0]),
     SetDefaultShape([Bn; 2]),
@@ -101,11 +114,6 @@ pub enum CommandApp {
     Diffuse([Bn; 2]),
     Tick([Bn; 0]),
     Report([Bn; 1]),
-    #[serde(untagged)]
-    UserProcCall {
-        name: String,
-        args: Vec<Node>,
-    },
 }
 
 #[derive(Deserialize, Debug)]
@@ -144,8 +152,6 @@ pub enum ReporterCall {
     ScaleColor([Bn; 4]),
     Ticks([Bn; 0]),
     Random([Bn; 1]),
-    #[serde(untagged)]
-    VarAccess {
-        name: String,
-    },
+    Turtles([Bn; 0]),
+    Patches([Bn; 0]),
 }
