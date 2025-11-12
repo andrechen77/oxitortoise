@@ -6,8 +6,8 @@ use std::{
 use crate::{
     sim::value::NlFloat,
     util::{
+        reflection::{ConcreteTy, Reflect, TypeInfo, TypeInfoOptions},
         rng::Rng,
-        type_registry::{Reflect, TypeInfo, TypeInfoOptions},
     },
 };
 
@@ -76,7 +76,7 @@ static COLOR_TYPE_INFO: TypeInfo = TypeInfo::new::<Color>(TypeInfoOptions {
 });
 
 impl Reflect for Color {
-    const TYPE_INFO: &TypeInfo = &COLOR_TYPE_INFO;
+    const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&COLOR_TYPE_INFO);
 }
 
 const COLOR_MAX: f64 = 140.0;

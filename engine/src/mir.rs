@@ -10,9 +10,12 @@ use crate::{
     mir::build_lir::LirInsnBuilder,
     sim::{
         agent_schema::{PatchSchema, TurtleSchema},
-        turtle::BreedId,
-        value::NlMachineTy,
+        color::Color,
+        patch::PatchId,
+        turtle::{BreedId, TurtleId},
+        value::{DynBox, NlBool, NlFloat, NlString},
     },
+    util::reflection::{ConcreteTy, Reflect},
 };
 
 mod build_lir;
@@ -244,16 +247,16 @@ pub enum EffectfulNodeKind {
 #[derive(Clone, Debug, PartialEq)]
 pub enum MirTy {
     Abstract(NlAbstractTy),
-    Machine(NlMachineTy),
+    Concrete(ConcreteTy),
     /// The "no one cares what type this is" value
     Other,
 }
 
 impl MirTy {
-    pub fn repr(&self) -> NlMachineTy {
+    pub fn repr(&self) -> ConcreteTy {
         match self {
             MirTy::Abstract(ty) => ty.repr(),
-            MirTy::Machine(ty) => *ty,
+            MirTy::Concrete(ty) => *ty,
             MirTy::Other => unimplemented!(),
         }
     }
@@ -261,7 +264,7 @@ impl MirTy {
     pub fn as_abstract(self) -> NlAbstractTy {
         match self {
             MirTy::Abstract(ty) => ty,
-            MirTy::Machine(_) => panic!("cannot convert machine type to abstract type"),
+            MirTy::Concrete(_) => panic!("cannot convert machine type to abstract type"),
             MirTy::Other => unimplemented!(),
         }
     }
@@ -303,19 +306,19 @@ impl NlAbstractTy {
         todo!("TODO(mvp) calculate common subtype")
     }
 
-    pub fn repr(&self) -> NlMachineTy {
+    pub fn repr(&self) -> ConcreteTy {
         // TODO(mvp) add machine types for all abstract types
         match self {
-            Self::Unit => NlMachineTy::UNIT,
-            Self::Top => NlMachineTy::DYN_BOX,
-            Self::Numeric => NlMachineTy::FLOAT,
-            Self::Color => NlMachineTy::COLOR,
-            Self::Float => NlMachineTy::FLOAT,
-            Self::Boolean => NlMachineTy::BOOLEAN,
-            Self::String => NlMachineTy::STRING,
-            Self::Agent => NlMachineTy::DYN_BOX,
-            Self::Patch => NlMachineTy::PATCH_ID,
-            Self::Turtle => NlMachineTy::TURTLE_ID,
+            Self::Unit => <()>::CONCRETE_TY,
+            Self::Top => DynBox::CONCRETE_TY,
+            Self::Numeric => NlFloat::CONCRETE_TY,
+            Self::Color => Color::CONCRETE_TY,
+            Self::Float => NlFloat::CONCRETE_TY,
+            Self::Boolean => NlBool::CONCRETE_TY,
+            Self::String => NlString::CONCRETE_TY,
+            Self::Agent => DynBox::CONCRETE_TY,
+            Self::Patch => PatchId::CONCRETE_TY,
+            Self::Turtle => TurtleId::CONCRETE_TY,
             Self::Link => todo!(""),
             Self::Agentset { agent_type: _ } => todo!(""),
             Self::Nobody => todo!(),

@@ -1,6 +1,10 @@
 use crate::{
-    sim::{patch::PatchId, turtle::TurtleId, value::NlMachineTy},
-    util::type_registry::{Reflect, TypeInfo, TypeInfoOptions},
+    sim::{
+        patch::PatchId,
+        turtle::TurtleId,
+        value::{NlBool, NlFloat},
+    },
+    util::reflection::{ConcreteTy, Reflect, TypeInfo, TypeInfoOptions},
 };
 
 /// An 8-byte box that can hold a value of any type.
@@ -89,7 +93,7 @@ static DYN_BOX_TYPE_INFO: TypeInfo = TypeInfo::new::<DynBox>(TypeInfoOptions {
 });
 
 impl Reflect for DynBox {
-    const TYPE_INFO: &TypeInfo = &DYN_BOX_TYPE_INFO;
+    const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&DYN_BOX_TYPE_INFO);
 }
 
 impl std::fmt::Debug for DynBox {
@@ -99,13 +103,13 @@ impl std::fmt::Debug for DynBox {
 }
 
 impl UnpackedDynBox {
-    pub fn ty(&self) -> NlMachineTy {
+    pub fn ty(&self) -> ConcreteTy {
         match self {
-            UnpackedDynBox::Bool(_) => NlMachineTy::BOOLEAN,
-            UnpackedDynBox::Float(_) => NlMachineTy::FLOAT,
-            UnpackedDynBox::Nobody => NlMachineTy::BOOLEAN,
-            UnpackedDynBox::Turtle(_) => NlMachineTy::TURTLE_ID,
-            UnpackedDynBox::Patch(_) => NlMachineTy::PATCH_ID,
+            UnpackedDynBox::Bool(_) => NlBool::CONCRETE_TY,
+            UnpackedDynBox::Float(_) => NlFloat::CONCRETE_TY,
+            UnpackedDynBox::Nobody => NlBool::CONCRETE_TY,
+            UnpackedDynBox::Turtle(_) => TurtleId::CONCRETE_TY,
+            UnpackedDynBox::Patch(_) => PatchId::CONCRETE_TY,
             UnpackedDynBox::Link(_) => todo!("add link id"),
             UnpackedDynBox::Other(_) => todo!("match on the inner type"),
         }

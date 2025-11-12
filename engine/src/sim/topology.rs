@@ -1,6 +1,6 @@
 use std::{fmt, mem::offset_of};
 
-use crate::util::type_registry::{Reflect, TypeInfo, TypeInfoOptions};
+use crate::util::reflection::{ConcreteTy, Reflect, TypeInfo, TypeInfoOptions};
 
 use super::{patch::PatchId, value};
 
@@ -54,7 +54,7 @@ static POINT_TYPE_INFO: TypeInfo = TypeInfo::new::<Point>(TypeInfoOptions {
 });
 
 impl Reflect for Point {
-    const TYPE_INFO: &TypeInfo = &POINT_TYPE_INFO;
+    const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&POINT_TYPE_INFO);
 }
 
 impl fmt::Display for Point {

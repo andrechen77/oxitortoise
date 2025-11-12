@@ -7,7 +7,7 @@ use lir::smallvec::smallvec;
 
 use crate::{
     mir::{EffectfulNode, MirTy, NodeId, Nodes, WriteLirError},
-    sim::value::NlMachineTy,
+    util::reflection::{ConcreteTy, Reflect},
 };
 
 #[derive(Debug, Display)]
@@ -18,7 +18,7 @@ pub struct MemLoad {
     /// The byte offset of the field to load.
     pub offset: usize,
     /// The type of the value to load.
-    pub ty: NlMachineTy,
+    pub ty: ConcreteTy,
 }
 
 impl EffectfulNode for MemLoad {
@@ -137,7 +137,7 @@ impl EffectfulNode for DeriveField {
         _function: &crate::mir::Function,
         _nodes: &crate::mir::Nodes,
     ) -> crate::mir::MirTy {
-        MirTy::Machine(NlMachineTy::UNTYPED_PTR)
+        MirTy::Concrete(<*mut u8 as Reflect>::CONCRETE_TY)
     }
 
     fn write_lir_execution(
@@ -181,7 +181,7 @@ impl EffectfulNode for DeriveElement {
         _function: &crate::mir::Function,
         _nodes: &crate::mir::Nodes,
     ) -> crate::mir::MirTy {
-        MirTy::Machine(NlMachineTy::UNTYPED_PTR)
+        MirTy::Concrete(<*mut u8 as Reflect>::CONCRETE_TY)
     }
 
     fn write_lir_execution(

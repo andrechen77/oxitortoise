@@ -1,6 +1,6 @@
 use derive_more::derive::{From, Not};
 
-use crate::util::type_registry::{Reflect, TypeInfo, TypeInfoOptions};
+use crate::util::reflection::{ConcreteTy, Reflect, TypeInfo, TypeInfoOptions};
 
 #[derive(Debug, Clone, Copy, From, PartialEq, Eq, PartialOrd, Ord, Not)]
 #[repr(transparent)]
@@ -13,5 +13,5 @@ static NL_BOOL_TYPE_INFO: TypeInfo = TypeInfo::new::<NlBool>(TypeInfoOptions {
 });
 
 impl Reflect for NlBool {
-    const TYPE_INFO: &TypeInfo = &NL_BOOL_TYPE_INFO;
+    const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&NL_BOOL_TYPE_INFO);
 }

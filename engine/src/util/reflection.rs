@@ -10,7 +10,7 @@ pub trait Reflect: 'static {
     /// N.B. This should be defined as a reference to an actual static object,
     /// as in the following.
     /// ```rust
-    /// use oxitortoise_engine::util::type_registry::{Reflect, TypeInfo, TypeInfoOptions};
+    /// use oxitortoise_engine::util::reflection::{ConcreteTy, Reflect, TypeInfo, TypeInfoOptions};
     ///
     /// struct MyType;
     /// static MY_TYPE_INFO: TypeInfo = TypeInfo::new::<MyType>(TypeInfoOptions {
@@ -19,25 +19,25 @@ pub trait Reflect: 'static {
     ///     lir_repr: None,
     /// });
     /// impl Reflect for MyType {
-    ///     const TYPE_INFO: &TypeInfo = &MY_TYPE_INFO;
+    ///     const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&MY_TYPE_INFO);
     /// }
     /// ```
     /// DO NOT define it like the following.
     /// ```rust
-    /// use oxitortoise_engine::util::type_registry::{Reflect, TypeInfo, TypeInfoOptions};
+    /// use oxitortoise_engine::util::reflection::{ConcreteTy, Reflect, TypeInfo, TypeInfoOptions};
     ///
     /// struct MyType;
     /// impl Reflect for MyType {
-    ///     const TYPE_INFO: &TypeInfo = &TypeInfo::new::<MyType>(TypeInfoOptions {
+    ///     const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&TypeInfo::new::<MyType>(TypeInfoOptions {
     ///        debug_name: "MyType",
     ///         is_zeroable: true,
     ///         lir_repr: None,
-    ///     });
+    ///     }));
     /// }
     /// ```
     /// Defining it like the above may create references to different objects
     /// each time the constant is used; these objects will not compare equal.
-    const TYPE_INFO: &TypeInfo;
+    const CONCRETE_TY: ConcreteTy;
 }
 
 /// Information about a type that is used by the engine to generate code that
@@ -45,7 +45,6 @@ pub trait Reflect: 'static {
 #[derive(Debug)]
 pub struct TypeInfo {
     pub debug_name: &'static str,
-    // pub type_id: TypeId,
     pub layout: Layout,
     /// Whether this type is valid at the all-zero bit pattern *and* represents
     /// the numeric value 0.0.
@@ -86,7 +85,6 @@ impl TypeInfo {
 
         Self {
             debug_name,
-            // type_id: TypeId::of::<T>(),
             layout: Layout::new::<T>(),
             is_zeroable,
             drop_fn: drop_impl::<T>,
@@ -95,58 +93,23 @@ impl TypeInfo {
     }
 }
 
-// static REGISTRY: RwLock<Option<HashMap<TypeId, &'static TypeInfo>>> = RwLock::new(None);
+/// A concrete type representation in the NetLogo engine. The same NetLogo
+/// language type may have multiple concrete type representation.
+#[derive(Debug, Clone, Copy)]
+pub struct ConcreteTy(&'static TypeInfo);
 
-// pub fn register_type_info<T: Reflect>() {
-//     let type_info: &'static TypeInfo = Box::leak(Box::new(TypeInfo::new::<T>()));
+impl ConcreteTy {
+    pub const fn new(info: &'static TypeInfo) -> Self {
+        Self(info)
+    }
 
-//     let mut reg_guard = REGISTRY.write().unwrap();
-//     reg_guard.get_or_insert_default().insert(TypeId::of::<T>(), type_info);
-// }
+    pub const fn info(&self) -> &'static TypeInfo {
+        self.0
+    }
+}
 
-// pub unsafe fn register_type_info_unchecked(type_info: &'static TypeInfo) {
-//     let mut reg_guard = REGISTRY.write().unwrap();
-//     reg_guard.get_or_insert_default().insert()
-// }
-
-// pub fn get_type_info(r#type: TypeId) -> &'static TypeInfo {
-//     let reg_guard = REGISTRY.read().unwrap(); // TODO handle error
-//     reg_guard
-//         .as_ref()
-//         .and_then(|reg| reg.get(&r#type))
-//         .unwrap_or_else(|| panic!("type info not found in registry for type {:?}", r#type))
-// }
-
-// fn init_type_info_registry() -> HashMap<TypeId, Arc<TypeInfo>> {
-//     let mut m = HashMap::new();
-//     macro_rules! reg {
-//         ($t:ty, $is_zeroable:expr) => {
-//             m.insert(TypeId::of::<$t>(), Arc::new(generate_type_info::<$t>($is_zeroable)));
-//         };
-//     }
-//     reg!(u8, true);
-//     reg!(u16, true);
-//     reg!(u32, true);
-//     reg!(u64, true);
-//     reg!(i8, true);
-//     reg!(i16, true);
-//     reg!(i32, true);
-//     reg!(i64, true);
-//     reg!(f32, true);
-//     reg!(f64, true);
-//     reg!(bool, true);
-//     reg!(String, false);
-//     reg!(crate::sim::value::Float, true);
-//     reg!(crate::sim::topology::Heading, true);
-//     reg!(crate::sim::topology::Point, true);
-//     reg!(crate::sim::color::Color, true);
-//     reg!(crate::sim::turtle::TurtleId, true);
-//     reg!(crate::sim::patch::PatchId, true);
-//     reg!(crate::sim::value::Boolean, true);
-//     reg!(crate::sim::turtle::TurtleBaseData, false);
-//     reg!(crate::sim::patch::PatchBaseData, false);
-
-//     // println!("type registry: {:?}", m);
-
-//     m
-// }
+impl PartialEq for ConcreteTy {
+    fn eq(&self, other: &Self) -> bool {
+        std::ptr::eq(self.0 as *const TypeInfo, other.0 as *const TypeInfo)
+    }
+}

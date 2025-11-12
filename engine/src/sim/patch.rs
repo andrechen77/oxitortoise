@@ -10,11 +10,11 @@ use crate::{
         agent_schema::{AgentFieldDescriptor, AgentSchemaField, PatchSchema},
         color::Color,
         topology::{CoordFloat, PointInt, TopologySpec},
-        value::{DynBox, NlFloat, NlMachineTy},
+        value::{DynBox, NlFloat},
     },
     util::{
+        reflection::{ConcreteTy, Reflect, TypeInfo, TypeInfoOptions},
         row_buffer::{self, RowBuffer, RowSchema},
-        type_registry::{Reflect, TypeInfo, TypeInfoOptions},
     },
 };
 
@@ -48,7 +48,7 @@ static PATCH_ID_TYPE_INFO: TypeInfo = TypeInfo::new::<PatchId>(TypeInfoOptions {
 });
 
 impl Reflect for PatchId {
-    const TYPE_INFO: &TypeInfo = &PATCH_ID_TYPE_INFO;
+    const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&PATCH_ID_TYPE_INFO);
 }
 
 pub const OFFSET_PATCHES_TO_DATA: usize = offset_of!(Patches, data);
@@ -274,7 +274,7 @@ static PATCH_BASE_DATA_TYPE_INFO: TypeInfo = TypeInfo::new::<PatchBaseData>(Type
 });
 
 impl Reflect for PatchBaseData {
-    const TYPE_INFO: &TypeInfo = &PATCH_BASE_DATA_TYPE_INFO;
+    const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&PATCH_BASE_DATA_TYPE_INFO);
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -317,9 +317,9 @@ pub fn calc_patch_var_offset(mir: &mir::Program, var: PatchVarDesc) -> (usize, u
     (buffer_offset, stride, field_offset)
 }
 
-pub fn patch_var_type(schema: &PatchSchema, var: PatchVarDesc) -> NlMachineTy {
+pub fn patch_var_type(schema: &PatchSchema, var: PatchVarDesc) -> ConcreteTy {
     match var {
-        PatchVarDesc::Pcolor => NlMachineTy::COLOR,
+        PatchVarDesc::Pcolor => Color::CONCRETE_TY,
         PatchVarDesc::Custom(field) => {
             let AgentSchemaField::Other(ty) = schema[schema.custom_fields()[field]] else {
                 unreachable!("this is a custom field, so it cannot be part of the base data");

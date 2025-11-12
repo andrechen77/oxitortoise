@@ -4,8 +4,8 @@ use super::CoordFloat;
 use crate::{
     sim::value::{self, NlFloat},
     util::{
+        reflection::{ConcreteTy, Reflect, TypeInfo, TypeInfoOptions},
         rng::Rng,
-        type_registry::{Reflect, TypeInfo, TypeInfoOptions},
     },
 };
 
@@ -75,5 +75,5 @@ static HEADING_TYPE_INFO: TypeInfo = TypeInfo::new::<Heading>(TypeInfoOptions {
 });
 
 impl Reflect for Heading {
-    const TYPE_INFO: &TypeInfo = &HEADING_TYPE_INFO;
+    const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&HEADING_TYPE_INFO);
 }

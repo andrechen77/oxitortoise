@@ -13,8 +13,9 @@ use crate::{
     sim::{
         patch::{PatchVarDesc, calc_patch_var_offset},
         turtle::{TurtleVarDesc, calc_turtle_var_offset},
-        value::NlMachineTy,
+        value::AGENT_INDEX_CONCRETE_TY,
     },
+    util::reflection::Reflect,
     workspace::Workspace,
 };
 
@@ -164,14 +165,14 @@ fn context_to_turtle_data(
     let workspace_ptr = nodes.insert(EffectfulNodeKind::from(node::MemLoad {
         ptr: context,
         offset: offset_of!(CanonExecutionContext, workspace),
-        ty: NlMachineTy::UNTYPED_PTR,
+        ty: <*mut u8 as Reflect>::CONCRETE_TY,
     }));
 
     // insert a node that gets the row buffer
     let row_buffer = nodes.insert(EffectfulNodeKind::from(node::MemLoad {
         ptr: workspace_ptr,
         offset: offset_of!(Workspace, world) + buffer_offset,
-        ty: NlMachineTy::UNTYPED_PTR,
+        ty: <*mut u8 as Reflect>::CONCRETE_TY,
     }));
 
     // insert a node that gets the agent index
@@ -204,7 +205,7 @@ impl EffectfulNode for TurtleIdToIndex {
     }
 
     fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
-        MirTy::Machine(NlMachineTy::AGENT_INDEX)
+        MirTy::Concrete(AGENT_INDEX_CONCRETE_TY)
     }
 
     fn write_lir_execution(
@@ -368,14 +369,14 @@ fn context_to_patch_data(
     let workspace_ptr = nodes.insert(EffectfulNodeKind::from(node::MemLoad {
         ptr: context,
         offset: offset_of!(CanonExecutionContext, workspace),
-        ty: NlMachineTy::UNTYPED_PTR,
+        ty: <*mut u8 as Reflect>::CONCRETE_TY,
     }));
 
     // insert a node that gets the row buffer
     let row_buffer = nodes.insert(EffectfulNodeKind::from(node::MemLoad {
         ptr: workspace_ptr,
         offset: offset_of!(Workspace, world) + buffer_offset,
-        ty: NlMachineTy::UNTYPED_PTR,
+        ty: <*mut u8 as Reflect>::CONCRETE_TY,
     }));
 
     // insert a node that gets the agent index

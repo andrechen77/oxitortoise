@@ -1,4 +1,4 @@
-use crate::util::type_registry::{Reflect, TypeInfo, TypeInfoOptions};
+use crate::util::reflection::{ConcreteTy, Reflect, TypeInfo, TypeInfoOptions};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct NlString(Box<()>);
@@ -30,5 +30,5 @@ static NL_STRING_TYPE_INFO: TypeInfo = TypeInfo::new::<NlString>(TypeInfoOptions
 });
 
 impl Reflect for NlString {
-    const TYPE_INFO: &TypeInfo = &NL_STRING_TYPE_INFO;
+    const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&NL_STRING_TYPE_INFO);
 }

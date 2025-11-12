@@ -2,8 +2,8 @@ use derive_more::derive::Display;
 use tracing::trace;
 
 use crate::mir::{
-    ClosureType, EffectfulNode, EffectfulNodeKind, Function, FunctionId, MirTy, MirVisitor,
-    NodeId, NodeTransform, Nodes, Program, visit_mir_function,
+    ClosureType, EffectfulNode, EffectfulNodeKind, Function, FunctionId, MirTy, MirVisitor, NodeId,
+    NodeTransform, Nodes, Program, visit_mir_function,
 };
 
 #[derive(Debug, Display)]

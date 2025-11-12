@@ -16,10 +16,10 @@ use crate::mir;
 use crate::sim::agent_schema::{AgentFieldDescriptor, AgentSchemaField, TurtleSchema};
 use crate::sim::topology::Heading;
 use crate::sim::value::agentset::TurtleSet;
-use crate::sim::value::{DynBox, NlMachineTy};
+use crate::sim::value::{DynBox, NlFloat};
 use crate::util::gen_slot_tracker::{GenIndex, GenSlotTracker};
+use crate::util::reflection::{ConcreteTy, Reflect, TypeInfo, TypeInfoOptions};
 use crate::util::row_buffer::{RowBuffer, RowSchema};
-use crate::util::type_registry::{Reflect, TypeInfo, TypeInfoOptions};
 use crate::{
     sim::{color::Color, topology::Point, value},
     util::rng::Rng,
@@ -70,7 +70,7 @@ static TURTLE_ID_TYPE_INFO: TypeInfo = TypeInfo::new::<TurtleId>(TypeInfoOptions
 });
 
 impl Reflect for TurtleId {
-    const TYPE_INFO: &TypeInfo = &TURTLE_ID_TYPE_INFO;
+    const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&TURTLE_ID_TYPE_INFO);
 }
 
 pub const OFFSET_TURTLES_TO_DATA: usize = offset_of!(Turtles, data);
@@ -317,7 +317,7 @@ static TURTLE_BASE_DATA_TYPE_INFO: TypeInfo = TypeInfo::new::<TurtleBaseData>(Ty
 });
 
 impl Reflect for TurtleBaseData {
-    const TYPE_INFO: &TypeInfo = &TURTLE_BASE_DATA_TYPE_INFO;
+    const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&TURTLE_BASE_DATA_TYPE_INFO);
 }
 
 slotmap::new_key_type! {
@@ -393,13 +393,13 @@ pub fn calc_turtle_var_offset(mir: &mir::Program, var: TurtleVarDesc) -> (usize,
     (buffer_offset, stride, field_offset)
 }
 
-pub fn turtle_var_type(schema: &TurtleSchema, var: TurtleVarDesc) -> NlMachineTy {
+pub fn turtle_var_type(schema: &TurtleSchema, var: TurtleVarDesc) -> ConcreteTy {
     match var {
-        TurtleVarDesc::Who => NlMachineTy::FLOAT,
-        TurtleVarDesc::Color => NlMachineTy::COLOR,
-        TurtleVarDesc::Size => NlMachineTy::FLOAT,
-        TurtleVarDesc::Xcor => NlMachineTy::FLOAT,
-        TurtleVarDesc::Ycor => NlMachineTy::FLOAT,
+        TurtleVarDesc::Who => NlFloat::CONCRETE_TY,
+        TurtleVarDesc::Color => Color::CONCRETE_TY,
+        TurtleVarDesc::Size => NlFloat::CONCRETE_TY,
+        TurtleVarDesc::Xcor => NlFloat::CONCRETE_TY,
+        TurtleVarDesc::Ycor => NlFloat::CONCRETE_TY,
         TurtleVarDesc::Custom(field) => {
             let AgentSchemaField::Other(ty) = schema[schema.custom_fields()[field]] else {
                 unreachable!("this is a custom field, so it cannot be part of the base data");

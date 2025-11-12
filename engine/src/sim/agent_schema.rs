@@ -1,10 +1,11 @@
 use std::ops::Index;
 
+use crate::sim::color::Color;
 use crate::sim::patch::PatchBaseData;
-use crate::util::type_registry::Reflect;
+use crate::sim::topology::{Heading, Point};
+use crate::util::reflection::Reflect;
 use crate::{
-    sim::{turtle::TurtleBaseData, value::NlMachineTy},
-    util::row_buffer::RowSchema,
+    sim::turtle::TurtleBaseData, util::reflection::ConcreteTy, util::row_buffer::RowSchema,
 };
 
 // TODO(mvp) make better, actual documentation for how the agents are laid out
@@ -31,7 +32,7 @@ impl TurtleSchema {
     pub fn new(
         heading_buffer_idx: u8,
         position_buffer_idx: u8,
-        custom_fields: &[(NlMachineTy, u8)],
+        custom_fields: &[(ConcreteTy, u8)],
         avoid_occupancy_bitfield: &[u8],
     ) -> Self {
         // create field groups vector and add base data group
@@ -55,10 +56,10 @@ impl TurtleSchema {
         // add heading and position fields
         let heading_group = &mut field_groups[heading_buffer_idx as usize];
         let heading_field_idx = heading_group.fields.len() as u8;
-        heading_group.fields.push(AgentSchemaField::Other(NlMachineTy::HEADING));
+        heading_group.fields.push(AgentSchemaField::Other(Heading::CONCRETE_TY));
         let position_group = &mut field_groups[position_buffer_idx as usize];
         let position_field_idx = position_group.fields.len() as u8;
-        position_group.fields.push(AgentSchemaField::Other(NlMachineTy::POINT));
+        position_group.fields.push(AgentSchemaField::Other(Point::CONCRETE_TY));
 
         // add custom fields
         let mut custom_field_descriptors = Vec::new();
@@ -145,7 +146,7 @@ pub struct PatchSchema {
 impl PatchSchema {
     pub fn new(
         pcolor_buffer_idx: u8,
-        custom_fields: &[(NlMachineTy, u8)],
+        custom_fields: &[(ConcreteTy, u8)],
         avoid_occupancy_bitfield: &[u8],
     ) -> Self {
         // create field groups vector and add base data group
@@ -168,7 +169,7 @@ impl PatchSchema {
         // add pcolor field
         field_groups[pcolor_buffer_idx as usize]
             .fields
-            .push(AgentSchemaField::Other(NlMachineTy::COLOR));
+            .push(AgentSchemaField::Other(Color::CONCRETE_TY));
 
         // add custom fields and collect their descriptors
         let mut custom_field_descriptors = Vec::new();
@@ -249,7 +250,7 @@ pub enum AgentSchemaField {
     BaseData,
     /// A variable stored anywhere other than the first field of the first
     /// buffer.
-    Other(NlMachineTy),
+    Other(ConcreteTy),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -281,7 +282,7 @@ fn make_row_schemas_impl<A: Reflect, const N: usize>(
             let type_id = match buffer_field {
                 AgentSchemaField::BaseData => {
                     if (buffer_idx, field_idx) == (0, 0) {
-                        NlMachineTy::new(A::TYPE_INFO)
+                        A::CONCRETE_TY
                     } else {
                         panic!("Base data can only be the first field in the first buffer.");
                     }

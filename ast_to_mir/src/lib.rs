@@ -5,6 +5,7 @@ use std::path::Path;
 use std::{collections::HashMap, fs, rc::Rc};
 
 use engine::mir::{EffectfulNode as _, Nodes};
+use engine::util::reflection::Reflect;
 use engine::{
     mir::{
         self, CustomVarDecl, EffectfulNodeKind, Function, FunctionId, GlobalId, LocalDeclaration,
@@ -14,7 +15,7 @@ use engine::{
     sim::{
         patch::PatchVarDesc,
         turtle::{BreedId, TurtleVarDesc},
-        value::{NlMachineTy, UnpackedDynBox},
+        value::UnpackedDynBox,
     },
     slotmap::{SecondaryMap, SlotMap},
 };
@@ -340,7 +341,7 @@ fn create_procedure_skeleton(
     // always add the context parameter TODO this shouldn't be always
     let context_param = locals.insert(LocalDeclaration {
         debug_name: Some("context".into()),
-        ty: MirTy::Machine(NlMachineTy::UNTYPED_PTR),
+        ty: MirTy::Concrete(<*mut u8 as Reflect>::CONCRETE_TY),
         storage: LocalStorage::Register,
     });
     parameter_locals.push(context_param);
@@ -893,7 +894,7 @@ fn translate_ephemeral_closure(
     // add the environment pointer
     let env_param = locals.insert(LocalDeclaration {
         debug_name: Some("env".into()),
-        ty: MirTy::Machine(NlMachineTy::UNTYPED_PTR),
+        ty: MirTy::Concrete(<*mut u8 as Reflect>::CONCRETE_TY),
         storage: LocalStorage::Register,
     });
     parameter_locals.push(env_param);
@@ -902,7 +903,7 @@ fn translate_ephemeral_closure(
     // add the context parameter
     let context_param = locals.insert(LocalDeclaration {
         debug_name: Some("context".into()),
-        ty: MirTy::Machine(NlMachineTy::UNTYPED_PTR),
+        ty: MirTy::Concrete(<*mut u8 as Reflect>::CONCRETE_TY),
         storage: LocalStorage::Register,
     });
     parameter_locals.push(context_param);
