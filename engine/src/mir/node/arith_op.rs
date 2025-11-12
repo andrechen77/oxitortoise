@@ -1,7 +1,7 @@
 use derive_more::derive::Display;
 
 use crate::mir::{
-    EffectfulNode, Function, MirType, NetlogoAbstractType, NodeId, Nodes, Program, WriteLirError,
+    EffectfulNode, Function, MirTy, NlAbstractTy, NodeId, Nodes, Program, WriteLirError,
 };
 
 #[derive(Debug, Display)]
@@ -37,32 +37,19 @@ impl EffectfulNode for BinaryOperation {
         vec![self.lhs, self.rhs]
     }
 
-    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirType {
-        let int_type = NetlogoAbstractType::Integer;
-        let mir_int = MirType::Abstract(int_type.clone());
-
-        let type_of = |node_id| _nodes[node_id].output_type(_program, _function, _nodes);
-
-        let int_preserving_type = || {
-            if type_of(self.lhs) == mir_int && type_of(self.rhs) == mir_int {
-                int_type
-            } else {
-                NetlogoAbstractType::Numeric
-            }
-        };
-
-        MirType::Abstract(match self.op {
-            BinaryOpcode::Add => int_preserving_type(),
-            BinaryOpcode::Sub => int_preserving_type(),
-            BinaryOpcode::Mul => int_preserving_type(),
-            BinaryOpcode::Div => NetlogoAbstractType::Numeric,
-            BinaryOpcode::Lt => NetlogoAbstractType::Boolean,
-            BinaryOpcode::Lte => NetlogoAbstractType::Boolean,
-            BinaryOpcode::Gt => NetlogoAbstractType::Boolean,
-            BinaryOpcode::Gte => NetlogoAbstractType::Boolean,
-            BinaryOpcode::Eq => NetlogoAbstractType::Boolean,
-            BinaryOpcode::And => NetlogoAbstractType::Boolean,
-            BinaryOpcode::Or => NetlogoAbstractType::Boolean,
+    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
+        MirTy::Abstract(match self.op {
+            BinaryOpcode::Add => NlAbstractTy::Numeric,
+            BinaryOpcode::Sub => NlAbstractTy::Numeric,
+            BinaryOpcode::Mul => NlAbstractTy::Numeric,
+            BinaryOpcode::Div => NlAbstractTy::Numeric,
+            BinaryOpcode::Lt => NlAbstractTy::Boolean,
+            BinaryOpcode::Lte => NlAbstractTy::Boolean,
+            BinaryOpcode::Gt => NlAbstractTy::Boolean,
+            BinaryOpcode::Gte => NlAbstractTy::Boolean,
+            BinaryOpcode::Eq => NlAbstractTy::Boolean,
+            BinaryOpcode::And => NlAbstractTy::Boolean,
+            BinaryOpcode::Or => NlAbstractTy::Boolean,
         })
     }
 
@@ -99,10 +86,10 @@ impl EffectfulNode for UnaryOp {
         vec![self.operand]
     }
 
-    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirType {
-        MirType::Abstract(match self.op {
-            UnaryOpcode::Neg => NetlogoAbstractType::Numeric,
-            UnaryOpcode::Not => NetlogoAbstractType::Boolean,
+    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
+        MirTy::Abstract(match self.op {
+            UnaryOpcode::Neg => NlAbstractTy::Numeric,
+            UnaryOpcode::Not => NlAbstractTy::Boolean,
         })
     }
 

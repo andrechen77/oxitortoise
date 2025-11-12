@@ -2,8 +2,11 @@ use std::ops::{Add, AddAssign};
 
 use super::CoordFloat;
 use crate::{
-    sim::value::{self, Float},
-    util::rng::Rng,
+    sim::value::{self, NlFloat},
+    util::{
+        rng::Rng,
+        type_registry::{Reflect, TypeInfo, TypeInfoOptions},
+    },
 };
 
 /// A heading. This is a floating point value representing some 2D angle in
@@ -40,27 +43,37 @@ impl Heading {
         Heading(rng.next_int(360) as f64)
     }
 
-    pub fn to_float(self) -> Float {
-        Float::new(self.0)
+    pub fn to_float(self) -> NlFloat {
+        NlFloat::new(self.0)
     }
 }
 
-impl Add<value::Float> for Heading {
+impl Add<value::NlFloat> for Heading {
     type Output = Heading;
 
-    fn add(self, rhs: value::Float) -> Self::Output {
+    fn add(self, rhs: value::NlFloat) -> Self::Output {
         Heading((self.0 + rhs.get()) % HEADING_MAX)
     }
 }
 
-impl AddAssign<value::Float> for Heading {
-    fn add_assign(&mut self, rhs: value::Float) {
+impl AddAssign<value::NlFloat> for Heading {
+    fn add_assign(&mut self, rhs: value::NlFloat) {
         *self = *self + rhs;
     }
 }
 
-impl From<Float> for Heading {
-    fn from(value: Float) -> Self {
+impl From<NlFloat> for Heading {
+    fn from(value: NlFloat) -> Self {
         Heading(value.get() % HEADING_MAX)
     }
+}
+
+static HEADING_TYPE_INFO: TypeInfo = TypeInfo::new::<Heading>(TypeInfoOptions {
+    debug_name: "Heading",
+    is_zeroable: true,
+    lir_repr: Some(&[lir::ValType::F64]),
+});
+
+impl Reflect for Heading {
+    const TYPE_INFO: &TypeInfo = &HEADING_TYPE_INFO;
 }

@@ -7,13 +7,13 @@ use slotmap::SlotMap;
 use crate::{
     exec::CanonExecutionContext,
     mir::{
-        EffectfulNode, EffectfulNodeKind, Function, FunctionId, MirType, NetlogoAbstractType,
-        NodeId, NodeTransform, Nodes, Program, WriteLirError, build_lir::LirInsnBuilder, node,
+        EffectfulNode, EffectfulNodeKind, Function, FunctionId, MirTy, NlAbstractTy, NodeId,
+        NodeTransform, Nodes, Program, WriteLirError, build_lir::LirInsnBuilder, node,
     },
     sim::{
         patch::{PatchVarDesc, calc_patch_var_offset},
         turtle::{TurtleVarDesc, calc_turtle_var_offset},
-        value::NetlogoMachineType,
+        value::NlMachineTy,
     },
     workspace::Workspace,
 };
@@ -39,14 +39,14 @@ impl EffectfulNode for GetTurtleVar {
         vec![self.context, self.turtle]
     }
 
-    fn output_type(&self, program: &Program, _function: &Function, _nodes: &Nodes) -> MirType {
+    fn output_type(&self, program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
         // TODO(wishlist) this should probably be refactored into a function
-        MirType::Abstract(match self.var {
-            TurtleVarDesc::Who => NetlogoAbstractType::Integer,
-            TurtleVarDesc::Color => NetlogoAbstractType::Color,
-            TurtleVarDesc::Size => NetlogoAbstractType::Float,
-            TurtleVarDesc::Xcor => NetlogoAbstractType::Float,
-            TurtleVarDesc::Ycor => NetlogoAbstractType::Float,
+        MirTy::Abstract(match self.var {
+            TurtleVarDesc::Who => NlAbstractTy::Float,
+            TurtleVarDesc::Color => NlAbstractTy::Color,
+            TurtleVarDesc::Size => NlAbstractTy::Float,
+            TurtleVarDesc::Xcor => NlAbstractTy::Float,
+            TurtleVarDesc::Ycor => NlAbstractTy::Float,
             TurtleVarDesc::Custom(field) => program.custom_turtle_vars[field].ty.clone(),
         })
     }
@@ -107,8 +107,8 @@ impl EffectfulNode for SetTurtleVar {
     fn dependencies(&self) -> Vec<NodeId> {
         vec![self.context, self.turtle, self.value]
     }
-    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirType {
-        MirType::Abstract(NetlogoAbstractType::Unit)
+    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
+        MirTy::Abstract(NlAbstractTy::Unit)
     }
 
     fn lowering_expand(
@@ -164,14 +164,14 @@ fn context_to_turtle_data(
     let workspace_ptr = nodes.insert(EffectfulNodeKind::from(node::MemLoad {
         ptr: context,
         offset: offset_of!(CanonExecutionContext, workspace),
-        ty: NetlogoMachineType::UNTYPED_PTR,
+        ty: NlMachineTy::UNTYPED_PTR,
     }));
 
     // insert a node that gets the row buffer
     let row_buffer = nodes.insert(EffectfulNodeKind::from(node::MemLoad {
         ptr: workspace_ptr,
         offset: offset_of!(Workspace, world) + buffer_offset,
-        ty: NetlogoMachineType::UNTYPED_PTR,
+        ty: NlMachineTy::UNTYPED_PTR,
     }));
 
     // insert a node that gets the agent index
@@ -203,8 +203,8 @@ impl EffectfulNode for TurtleIdToIndex {
         vec![self.turtle_id]
     }
 
-    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirType {
-        MirType::Machine(NetlogoMachineType::AGENT_INDEX)
+    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
+        MirTy::Machine(NlMachineTy::AGENT_INDEX)
     }
 
     fn write_lir_execution(
@@ -245,11 +245,11 @@ impl EffectfulNode for GetPatchVar {
         vec![self.context, self.patch]
     }
 
-    fn output_type(&self, program: &Program, _function: &Function, _nodes: &Nodes) -> MirType {
+    fn output_type(&self, program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
         match self.var {
-            PatchVarDesc::Pcolor => MirType::Abstract(NetlogoAbstractType::Color),
+            PatchVarDesc::Pcolor => MirTy::Abstract(NlAbstractTy::Color),
             PatchVarDesc::Custom(field) => {
-                MirType::Abstract(program.custom_patch_vars[field].ty.clone())
+                MirTy::Abstract(program.custom_patch_vars[field].ty.clone())
             }
         }
     }
@@ -312,8 +312,8 @@ impl EffectfulNode for SetPatchVar {
         vec![self.context, self.patch, self.value]
     }
 
-    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirType {
-        MirType::Abstract(NetlogoAbstractType::Unit)
+    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
+        MirTy::Abstract(NlAbstractTy::Unit)
     }
 
     fn lowering_expand(
@@ -368,14 +368,14 @@ fn context_to_patch_data(
     let workspace_ptr = nodes.insert(EffectfulNodeKind::from(node::MemLoad {
         ptr: context,
         offset: offset_of!(CanonExecutionContext, workspace),
-        ty: NetlogoMachineType::UNTYPED_PTR,
+        ty: NlMachineTy::UNTYPED_PTR,
     }));
 
     // insert a node that gets the row buffer
     let row_buffer = nodes.insert(EffectfulNodeKind::from(node::MemLoad {
         ptr: workspace_ptr,
         offset: offset_of!(Workspace, world) + buffer_offset,
-        ty: NetlogoMachineType::UNTYPED_PTR,
+        ty: NlMachineTy::UNTYPED_PTR,
     }));
 
     // insert a node that gets the agent index
@@ -413,13 +413,13 @@ impl EffectfulNode for GetPatchVarAsTurtleOrPatch {
         vec![self.context, self.agent]
     }
 
-    fn output_type(&self, program: &Program, _function: &Function, _nodes: &Nodes) -> MirType {
+    fn output_type(&self, program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
         // TODO(wishlist) refactor to deduplicate with GetPatchVar
         match self.var {
             PatchVarDesc::Custom(field) => {
-                MirType::Abstract(program.custom_patch_vars[field].ty.clone())
+                MirTy::Abstract(program.custom_patch_vars[field].ty.clone())
             }
-            PatchVarDesc::Pcolor => MirType::Abstract(NetlogoAbstractType::Color),
+            PatchVarDesc::Pcolor => MirTy::Abstract(NlAbstractTy::Color),
         }
     }
 
@@ -447,15 +447,13 @@ fn decompose_get_patch_var(program: &Program, fn_id: FunctionId, my_node_id: Nod
     };
 
     match nodes_borrowed[agent].output_type(program, &function, &nodes_borrowed) {
-        MirType::Abstract(NetlogoAbstractType::Patch)
-        | MirType::Machine(NetlogoMachineType::PATCH_ID) => {
+        MirTy::Abstract(NlAbstractTy::Patch) => {
             drop(nodes_borrowed);
             function.nodes.borrow_mut()[my_node_id] =
                 EffectfulNodeKind::from(node::GetPatchVar { context, patch: agent, var });
             true
         }
-        MirType::Abstract(NetlogoAbstractType::Turtle)
-        | MirType::Machine(NetlogoMachineType::TURTLE_ID) => {
+        MirTy::Abstract(NlAbstractTy::Turtle) => {
             drop(nodes_borrowed);
             let mut nodes = function.nodes.borrow_mut();
 
@@ -506,8 +504,8 @@ impl EffectfulNode for SetPatchVarAsTurtleOrPatch {
         vec![self.context, self.agent, self.value]
     }
 
-    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirType {
-        MirType::Abstract(NetlogoAbstractType::Unit)
+    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
+        MirTy::Abstract(NlAbstractTy::Unit)
     }
 
     fn peephole_transform(
@@ -524,8 +522,7 @@ impl EffectfulNode for SetPatchVarAsTurtleOrPatch {
             let function = program.functions[fn_id].borrow();
             let nodes_borrowed = function.nodes.borrow();
             match nodes_borrowed[agent].output_type(program, &function, &nodes_borrowed) {
-                MirType::Abstract(NetlogoAbstractType::Patch)
-                | MirType::Machine(NetlogoMachineType::PATCH_ID) => {
+                MirTy::Abstract(NlAbstractTy::Patch) => {
                     drop(nodes_borrowed);
                     function.nodes.borrow_mut()[my_node_id] =
                         EffectfulNodeKind::from(node::SetPatchVar {
@@ -536,8 +533,7 @@ impl EffectfulNode for SetPatchVarAsTurtleOrPatch {
                         });
                     true
                 }
-                MirType::Abstract(NetlogoAbstractType::Turtle)
-                | MirType::Machine(NetlogoMachineType::TURTLE_ID) => {
+                MirTy::Abstract(NlAbstractTy::Turtle) => {
                     drop(nodes_borrowed);
                     let mut nodes = function.nodes.borrow_mut();
 

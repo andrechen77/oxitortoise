@@ -1,74 +1,66 @@
-use std::any::TypeId;
-
-use lir::smallvec::{SmallVec, smallvec};
+use crate::{
+    sim::{
+        color::Color,
+        patch::PatchId,
+        topology::{Heading, Point},
+        turtle::TurtleId,
+        value::{DynBox, NlBool, NlFloat, NlString},
+    },
+    util::type_registry::{Reflect as _, TypeInfo, TypeInfoOptions},
+};
 
 /// A concrete type representation in the NetLogo engine. The same NetLogo
 /// language type may have multiple concrete type representation.
-#[derive(Debug, PartialEq, Clone)]
-pub struct NetlogoMachineType(u8);
+#[derive(Debug, Clone, Copy)]
+pub struct NlMachineTy(&'static TypeInfo);
 
-impl NetlogoMachineType {
-    pub const FLOAT: Self = Self(0);
-    pub const INTEGER: Self = Self(1);
-    pub const STRING: Self = Self(2);
-    pub const BOOLEAN: Self = Self(3);
-    pub const TURTLE_ID: Self = Self(5);
-    pub const PATCH_ID: Self = Self(6);
-    pub const POINT: Self = Self(7);
-    pub const HEADING: Self = Self(8);
-    pub const COLOR: Self = Self(9);
-    pub const UNTYPED_PTR: Self = Self(10);
-    pub const AGENT_INDEX: Self = Self(11);
-    /// A closure that can be passed to `ask`, `create-turtles`, etc.
-    pub const ASK_CLOSURE: Self = Self(12);
-    pub const DYN_BOX: Self = Self(13);
-    pub const UNIT: Self = Self(14);
-
-    /// Returns whether this type is valid and represents the numeric value 0.0
-    /// at the all-zero bit pattern, i.e. whether the all-zero bit pattern
-    /// is valid as the default value for a NetLogo variable of this type.
-    pub fn is_numeric_zeroable(&self) -> bool {
-        matches!(self, &Self::FLOAT | &Self::INTEGER | &Self::POINT | &Self::COLOR | &Self::UNIT)
-    }
-
-    pub fn to_lir_type(&self) -> SmallVec<[lir::ValType; 1]> {
-        match *self {
-            Self::DYN_BOX => smallvec![lir::ValType::F64],
-            Self::FLOAT => smallvec![lir::ValType::F64],
-            Self::INTEGER => smallvec![lir::ValType::I64],
-            Self::BOOLEAN => smallvec![lir::ValType::I8],
-            Self::TURTLE_ID => smallvec![lir::ValType::I64],
-            Self::PATCH_ID => smallvec![lir::ValType::I32],
-            Self::POINT => smallvec![lir::ValType::F64, lir::ValType::F64],
-            Self::HEADING => smallvec![lir::ValType::F64],
-            Self::UNTYPED_PTR => smallvec![lir::ValType::Ptr],
-            Self::UNIT => smallvec![],
-            _ => unimplemented!(),
-        }
+impl NlMachineTy {
+    pub fn new(info: &'static TypeInfo) -> Self {
+        Self(info)
     }
 }
 
-impl From<&NetlogoMachineType> for TypeId {
-    fn from(value: &NetlogoMachineType) -> Self {
-        use crate::sim::{
-            color::Color,
-            patch::PatchId,
-            topology::{Heading, Point},
-            turtle::TurtleId,
-            value::{Boolean, Float},
-        };
+impl PartialEq for NlMachineTy {
+    fn eq(&self, other: &Self) -> bool {
+        std::ptr::eq(self.0 as *const TypeInfo, other.0 as *const TypeInfo)
+    }
+}
 
-        match *value {
-            NetlogoMachineType::FLOAT => TypeId::of::<Float>(),
-            NetlogoMachineType::INTEGER => TypeId::of::<i32>(),
-            NetlogoMachineType::STRING => TypeId::of::<String>(),
-            NetlogoMachineType::BOOLEAN => TypeId::of::<Boolean>(),
-            NetlogoMachineType::TURTLE_ID => TypeId::of::<TurtleId>(),
-            NetlogoMachineType::PATCH_ID => TypeId::of::<PatchId>(),
-            NetlogoMachineType::POINT => TypeId::of::<Point>(),
-            NetlogoMachineType::HEADING => TypeId::of::<Heading>(),
-            NetlogoMachineType::COLOR => TypeId::of::<Color>(),
-            _ => panic!("Unknown NetLogo internal type: {:?}", value),
-        }
+const UNTYPED_PTR_INFO: &TypeInfo = &TypeInfo::new::<*mut u8>(TypeInfoOptions {
+    debug_name: "UntypedPtr",
+    is_zeroable: false,
+    lir_repr: Some(&[lir::ValType::Ptr]),
+});
+
+const UNIT_INFO: &TypeInfo = &TypeInfo::new::<()>(TypeInfoOptions {
+    debug_name: "Unit",
+    is_zeroable: false,
+    lir_repr: Some(&[]),
+});
+
+// QUESTION should this type even exist? if so, we'd need a unified place to
+// put all information about it such as the fact that it's 32 bits.
+const AGENT_INDEX_INFO: &TypeInfo = &TypeInfo::new::<u32>(TypeInfoOptions {
+    debug_name: "AgentIndex",
+    is_zeroable: false,
+    lir_repr: Some(&[lir::ValType::I32]),
+});
+
+impl NlMachineTy {
+    pub const FLOAT: Self = Self(NlFloat::TYPE_INFO);
+    pub const STRING: Self = Self(NlString::TYPE_INFO);
+    pub const BOOLEAN: Self = Self(NlBool::TYPE_INFO);
+    pub const TURTLE_ID: Self = Self(TurtleId::TYPE_INFO);
+    pub const PATCH_ID: Self = Self(PatchId::TYPE_INFO);
+    pub const POINT: Self = Self(Point::TYPE_INFO);
+    pub const HEADING: Self = Self(Heading::TYPE_INFO);
+    pub const COLOR: Self = Self(Color::TYPE_INFO);
+    pub const UNTYPED_PTR: Self = Self(UNTYPED_PTR_INFO);
+    pub const AGENT_INDEX: Self = Self(AGENT_INDEX_INFO);
+    pub const DYN_BOX: Self = Self(DynBox::TYPE_INFO);
+    pub const UNIT: Self = Self(UNIT_INFO);
+
+    pub fn info(&self) -> &'static TypeInfo {
+        self.0
     }
 }

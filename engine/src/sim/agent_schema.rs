@@ -1,8 +1,9 @@
-use std::{any::TypeId, ops::Index};
+use std::ops::Index;
 
 use crate::sim::patch::PatchBaseData;
+use crate::util::type_registry::Reflect;
 use crate::{
-    sim::{turtle::TurtleBaseData, value::NetlogoMachineType},
+    sim::{turtle::TurtleBaseData, value::NlMachineTy},
     util::row_buffer::RowSchema,
 };
 
@@ -30,7 +31,7 @@ impl TurtleSchema {
     pub fn new(
         heading_buffer_idx: u8,
         position_buffer_idx: u8,
-        custom_fields: &[(NetlogoMachineType, u8)],
+        custom_fields: &[(NlMachineTy, u8)],
         avoid_occupancy_bitfield: &[u8],
     ) -> Self {
         // create field groups vector and add base data group
@@ -54,17 +55,17 @@ impl TurtleSchema {
         // add heading and position fields
         let heading_group = &mut field_groups[heading_buffer_idx as usize];
         let heading_field_idx = heading_group.fields.len() as u8;
-        heading_group.fields.push(AgentSchemaField::Other(NetlogoMachineType::HEADING));
+        heading_group.fields.push(AgentSchemaField::Other(NlMachineTy::HEADING));
         let position_group = &mut field_groups[position_buffer_idx as usize];
         let position_field_idx = position_group.fields.len() as u8;
-        position_group.fields.push(AgentSchemaField::Other(NetlogoMachineType::POINT));
+        position_group.fields.push(AgentSchemaField::Other(NlMachineTy::POINT));
 
         // add custom fields
         let mut custom_field_descriptors = Vec::new();
         for (field_type, buffer_idx) in custom_fields {
             let field_group = &mut field_groups[usize::from(*buffer_idx)];
             let idx_within_buffer = field_group.fields.len();
-            field_group.fields.push(AgentSchemaField::Other(field_type.clone()));
+            field_group.fields.push(AgentSchemaField::Other(*field_type));
             custom_field_descriptors.push(AgentFieldDescriptor {
                 buffer_idx: *buffer_idx,
                 field_idx: idx_within_buffer as u8,
@@ -144,7 +145,7 @@ pub struct PatchSchema {
 impl PatchSchema {
     pub fn new(
         pcolor_buffer_idx: u8,
-        custom_fields: &[(NetlogoMachineType, u8)],
+        custom_fields: &[(NlMachineTy, u8)],
         avoid_occupancy_bitfield: &[u8],
     ) -> Self {
         // create field groups vector and add base data group
@@ -167,15 +168,13 @@ impl PatchSchema {
         // add pcolor field
         field_groups[pcolor_buffer_idx as usize]
             .fields
-            .push(AgentSchemaField::Other(NetlogoMachineType::COLOR));
+            .push(AgentSchemaField::Other(NlMachineTy::COLOR));
 
         // add custom fields and collect their descriptors
         let mut custom_field_descriptors = Vec::new();
         for (field_type, buffer_idx) in custom_fields {
             let field_idx = field_groups[*buffer_idx as usize].fields.len() as u8;
-            field_groups[*buffer_idx as usize]
-                .fields
-                .push(AgentSchemaField::Other(field_type.clone()));
+            field_groups[*buffer_idx as usize].fields.push(AgentSchemaField::Other(*field_type));
             custom_field_descriptors
                 .push(AgentFieldDescriptor { buffer_idx: *buffer_idx, field_idx });
         }
@@ -250,7 +249,7 @@ pub enum AgentSchemaField {
     BaseData,
     /// A variable stored anywhere other than the first field of the first
     /// buffer.
-    Other(NetlogoMachineType),
+    Other(NlMachineTy),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -266,7 +265,7 @@ impl AgentFieldDescriptor {
     pub const BASE_DATA: Self = Self { buffer_idx: 0, field_idx: 0 };
 }
 
-fn make_row_schemas_impl<A: 'static, const N: usize>(
+fn make_row_schemas_impl<A: Reflect, const N: usize>(
     field_groups: &[AgentSchemaFieldGroup],
 ) -> [Option<RowSchema>; N] {
     let AgentSchemaField::BaseData = field_groups[0].fields[0] else {
@@ -282,12 +281,12 @@ fn make_row_schemas_impl<A: 'static, const N: usize>(
             let type_id = match buffer_field {
                 AgentSchemaField::BaseData => {
                     if (buffer_idx, field_idx) == (0, 0) {
-                        TypeId::of::<A>()
+                        NlMachineTy::new(A::TYPE_INFO)
                     } else {
                         panic!("Base data can only be the first field in the first buffer.");
                     }
                 }
-                AgentSchemaField::Other(r#type) => r#type.into(),
+                AgentSchemaField::Other(r#type) => *r#type,
             };
             field_types.push(type_id);
         }

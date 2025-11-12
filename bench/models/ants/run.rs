@@ -13,7 +13,7 @@ use engine::{
         tick::Tick,
         topology::{Topology, TopologySpec},
         turtle::{Breed, BreedId, Turtles},
-        value::NetlogoMachineType,
+        value::NlMachineTy,
         world::World,
     },
     slotmap::SlotMap,
@@ -39,11 +39,11 @@ fn create_workspace() -> (Workspace, BreedId) {
     let patch_schema = PatchSchema::new(
         1,
         &[
-            (NetlogoMachineType::FLOAT, 2),   // chemical
-            (NetlogoMachineType::FLOAT, 0),   // food
-            (NetlogoMachineType::BOOLEAN, 0), // nest?
-            (NetlogoMachineType::FLOAT, 0),   // nest-scent
-            (NetlogoMachineType::FLOAT, 0),   // food-source-number
+            (NlMachineTy::FLOAT, 2),   // chemical
+            (NlMachineTy::FLOAT, 0),   // food
+            (NlMachineTy::BOOLEAN, 0), // nest?
+            (NlMachineTy::FLOAT, 0),   // nest-scent
+            (NlMachineTy::FLOAT, 0),   // food-source-number
         ],
         &[1, 2],
     );

@@ -6,13 +6,12 @@
 //!
 use std::{
     alloc::{Layout, alloc_zeroed, dealloc},
-    any::TypeId,
     marker::PhantomData,
     ops::{Deref, DerefMut},
     ptr::NonNull,
 };
 
-use crate::util::type_registry::get_type_info;
+use crate::{sim::value::NlMachineTy, util::type_registry::Reflect};
 
 #[derive(Debug)]
 #[repr(C)]
@@ -97,12 +96,12 @@ pub struct RowSchema {
 #[derive(Debug)]
 pub struct RowSchemaField {
     pub offset: usize,
-    pub r#type: TypeId,
+    pub r#type: NlMachineTy,
     pub size: usize,
 }
 
 impl RowSchema {
-    pub fn new(types_and_layouts: &[TypeId], occupancy_bitfield: bool) -> Self {
+    pub fn new(types_and_layouts: &[NlMachineTy], occupancy_bitfield: bool) -> Self {
         let mut fields = Vec::new();
 
         // find the length of the bitfield to hold whether each column is
@@ -117,7 +116,7 @@ impl RowSchema {
         for &field_type in types_and_layouts {
             // safety relies on the fact that this function returns a correct
             // answer
-            let field_layout = get_type_info(field_type).layout;
+            let field_layout = field_type.info().layout;
 
             // append this field to the current layout
             let (new_layout, offset) = overall_layout
@@ -132,7 +131,7 @@ impl RowSchema {
         Self { occupancy_bitfield_len, fields, layout: overall_layout }
     }
 
-    pub fn can_reinterpret_as<T: 'static>(&self) -> bool {
+    pub fn can_reinterpret_as<T: Reflect>(&self) -> bool {
         // must have no occupancy bitfield (all fields always present)
         if self.occupancy_bitfield_len != 0 {
             return false;
@@ -145,7 +144,7 @@ impl RowSchema {
         let field = &self.fields[0];
 
         // field must be of type T and at offset 0
-        if field.r#type != TypeId::of::<T>() || field.offset != 0 {
+        if field.r#type != NlMachineTy::new(T::TYPE_INFO) || field.offset != 0 {
             return false;
         }
 
@@ -177,9 +176,13 @@ impl<'a, B: AsRef<[u8]> + 'a> Row<'a, B> {
         unsafe { base_ptr.byte_add(field_offset) }
     }
 
-    pub fn get<T: 'static>(&self, field_idx: usize) -> Option<&'a T> {
+    pub fn get<T: Reflect>(&self, field_idx: usize) -> Option<&'a T> {
         // verify that the type tag matches
-        assert_eq!(self.schema.fields[field_idx].r#type, TypeId::of::<T>(), "type mismatch");
+        assert_eq!(
+            self.schema.fields[field_idx].r#type,
+            NlMachineTy::new(T::TYPE_INFO),
+            "type mismatch"
+        );
 
         let ptr = self.get_ptr(field_idx);
         // check if the field is actually present
@@ -216,9 +219,13 @@ impl<'a, B: AsRef<[u8]> + AsMut<[u8]> + 'a> Row<'a, B> {
         unsafe { base_ptr.byte_add(field_offset) }
     }
 
-    pub fn get_mut<T: 'static>(&mut self, field_idx: usize) -> Option<&'a mut T> {
+    pub fn get_mut<T: Reflect>(&mut self, field_idx: usize) -> Option<&'a mut T> {
         // same implementation as self.get
-        assert_eq!(self.schema.fields[field_idx].r#type, TypeId::of::<T>(), "type mismatch");
+        assert_eq!(
+            self.schema.fields[field_idx].r#type,
+            NlMachineTy::new(T::TYPE_INFO),
+            "type mismatch"
+        );
 
         let ptr = self.get_ptr_mut(field_idx);
         if self.has_field(field_idx) {
@@ -229,8 +236,12 @@ impl<'a, B: AsRef<[u8]> + AsMut<[u8]> + 'a> Row<'a, B> {
         }
     }
 
-    pub fn insert<T: 'static>(&mut self, field_idx: usize, value: T) {
-        assert_eq!(self.schema.fields[field_idx].r#type, TypeId::of::<T>(), "type mismatch");
+    pub fn insert<T: Reflect>(&mut self, field_idx: usize, value: T) {
+        assert_eq!(
+            self.schema.fields[field_idx].r#type,
+            NlMachineTy::new(T::TYPE_INFO),
+            "type mismatch"
+        );
 
         // if the field is already present, panic. we could technically just
         // drop the existing value, or return the new value to the caller, but
@@ -254,7 +265,7 @@ impl<'a, B: AsRef<[u8]> + AsMut<[u8]> + 'a> Row<'a, B> {
     /// the field is not present, then the field's memory is already zeroed out,
     /// which should be valid for the type at the given index.
     pub fn insert_zeroable(&mut self, field_idx: usize) {
-        let type_info = get_type_info(self.schema.fields[field_idx].r#type);
+        let type_info = self.schema.fields[field_idx].r#type.info();
         if !type_info.is_zeroable {
             panic!("field at index {} is not zeroable", field_idx);
         }
@@ -265,8 +276,12 @@ impl<'a, B: AsRef<[u8]> + AsMut<[u8]> + 'a> Row<'a, B> {
         self.mark_present(field_idx);
     }
 
-    pub fn take<T: 'static>(&mut self, field_idx: usize) -> Option<T> {
-        assert_eq!(self.schema.fields[field_idx].r#type, TypeId::of::<T>(), "type mismatch");
+    pub fn take<T: Reflect>(&mut self, field_idx: usize) -> Option<T> {
+        assert_eq!(
+            self.schema.fields[field_idx].r#type,
+            NlMachineTy::new(T::TYPE_INFO),
+            "type mismatch"
+        );
 
         if self.schema.occupancy_bitfield_len == 0 {
             panic!("cannot take a field if the occupancy bitfield is omitted");
@@ -299,7 +314,7 @@ impl<'a, B: AsRef<[u8]> + AsMut<[u8]> + 'a> Row<'a, B> {
             }
 
             let field_type = self.schema.fields[field_idx].r#type;
-            let drop_fn = get_type_info(field_type).drop_fn;
+            let drop_fn = field_type.info().drop_fn;
             // SAFETY: we used the type tag for this field to get the right
             // function to call to drop the value. we know this value is
             // actually present. this value will not be read again because the
@@ -402,8 +417,7 @@ impl RowBuffer {
         // then they must already be valid at the zero bit pattern
         if schema.occupancy_bitfield_len == 0 {
             for (field_idx, field) in schema.fields.iter().enumerate() {
-                let type_info = get_type_info(field.r#type);
-                if !type_info.is_zeroable {
+                if !field.r#type.info().is_zeroable {
                     panic!(
                         "cannot initialize an always-present row buffer when field at index {} is not zeroable",
                         field_idx
@@ -480,7 +494,7 @@ impl RowBuffer {
     ///
     /// For simplicity of implementation this only needs to work if the schema
     /// has a single field of type `T`, and has the same alignment/stride as `T`.
-    pub fn take_array<T: Copy + 'static>(&mut self) -> Array<T> {
+    pub fn take_array<T: Copy + Reflect>(&mut self) -> Array<T> {
         if !self.schema.can_reinterpret_as::<T>() {
             panic!(
                 "cannot reinterpret the row buffer as an array of type {}",
@@ -499,7 +513,7 @@ impl RowBuffer {
         Array { bytes: old_bytes, _phantom: PhantomData }
     }
 
-    pub fn as_mut_array<T: Copy + 'static>(&mut self) -> &mut [T] {
+    pub fn as_mut_array<T: Copy + Reflect>(&mut self) -> &mut [T] {
         if !self.schema.can_reinterpret_as::<T>() {
             panic!(
                 "cannot reinterpret the row buffer as an array of type {}",
@@ -602,14 +616,48 @@ impl<T: Copy> std::ops::IndexMut<usize> for Array<T> {
 
 #[cfg(test)]
 mod tests {
-    use std::any::TypeId;
+    use crate::util::type_registry::{TypeInfo, TypeInfoOptions};
 
     use super::*;
+
+    // provide these impls for testing purposes only
+    static U32_TYPE_INFO: TypeInfo = TypeInfo::new::<u32>(TypeInfoOptions {
+        debug_name: "u32",
+        is_zeroable: true,
+        lir_repr: Some(&[lir::ValType::I32]),
+    });
+    impl Reflect for u32 {
+        const TYPE_INFO: &TypeInfo = &U32_TYPE_INFO;
+    }
+    static STRING_TYPE_INFO: TypeInfo = TypeInfo::new::<String>(TypeInfoOptions {
+        debug_name: "String",
+        is_zeroable: false,
+        lir_repr: None,
+    });
+    impl Reflect for String {
+        const TYPE_INFO: &TypeInfo = &STRING_TYPE_INFO;
+    }
+    static F64_TYPE_INFO: TypeInfo = TypeInfo::new::<f64>(TypeInfoOptions {
+        debug_name: "f64",
+        is_zeroable: true,
+        lir_repr: Some(&[lir::ValType::F64]),
+    });
+    impl Reflect for f64 {
+        const TYPE_INFO: &TypeInfo = &F64_TYPE_INFO;
+    }
+    static BOOL_TYPE_INFO: TypeInfo = TypeInfo::new::<bool>(TypeInfoOptions {
+        debug_name: "bool",
+        is_zeroable: true,
+        lir_repr: Some(&[lir::ValType::I8]),
+    });
+    impl Reflect for bool {
+        const TYPE_INFO: &TypeInfo = &BOOL_TYPE_INFO;
+    }
 
     #[test]
     fn test_basic_insert_retrieve() {
         // Schema with a single u32 field
-        let schema = RowSchema::new(&[TypeId::of::<u32>()], true);
+        let schema = RowSchema::new(&[NlMachineTy::new(u32::TYPE_INFO)], true);
         let mut buffer = RowBuffer::new(schema);
         buffer.ensure_capacity(1);
         {
@@ -623,7 +671,11 @@ mod tests {
     #[test]
     fn test_heterogeneous_fields() {
         let schema = RowSchema::new(
-            &[TypeId::of::<u32>(), TypeId::of::<String>(), TypeId::of::<f64>()],
+            &[
+                NlMachineTy::new(u32::TYPE_INFO),
+                NlMachineTy::new(String::TYPE_INFO),
+                NlMachineTy::new(f64::TYPE_INFO),
+            ],
             true,
         );
         let mut buffer = RowBuffer::new(schema);
@@ -647,10 +699,10 @@ mod tests {
         // create a schema with 4 fields but only insert 2 of them
         let schema = RowSchema::new(
             &[
-                TypeId::of::<u32>(),
-                TypeId::of::<String>(),
-                TypeId::of::<f64>(),
-                TypeId::of::<bool>(),
+                NlMachineTy::new(u32::TYPE_INFO),
+                NlMachineTy::new(String::TYPE_INFO),
+                NlMachineTy::new(f64::TYPE_INFO),
+                NlMachineTy::new(bool::TYPE_INFO),
             ],
             true,
         );
@@ -684,7 +736,11 @@ mod tests {
     #[test]
     fn test_insert_and_take() {
         let schema = RowSchema::new(
-            &[TypeId::of::<u32>(), TypeId::of::<String>(), TypeId::of::<f64>()],
+            &[
+                NlMachineTy::new(u32::TYPE_INFO),
+                NlMachineTy::new(String::TYPE_INFO),
+                NlMachineTy::new(f64::TYPE_INFO),
+            ],
             true,
         );
         let mut buffer = RowBuffer::new(schema);
@@ -728,7 +784,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "type mismatch")]
     fn test_type_mismatch_present_field() {
-        let schema = RowSchema::new(&[TypeId::of::<u32>()], true);
+        let schema = RowSchema::new(&[NlMachineTy::new(u32::TYPE_INFO)], true);
         let mut buffer = RowBuffer::new(schema);
         buffer.ensure_capacity(1);
 
@@ -745,7 +801,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "type mismatch")]
     fn test_type_mismatch_absent_field() {
-        let schema = RowSchema::new(&[TypeId::of::<u32>()], true);
+        let schema = RowSchema::new(&[NlMachineTy::new(u32::TYPE_INFO)], true);
         let mut buffer = RowBuffer::new(schema);
         buffer.ensure_capacity(1);
 
@@ -757,7 +813,11 @@ mod tests {
     #[test]
     fn test_capacity_expansion_preserves_data() {
         let schema = RowSchema::new(
-            &[TypeId::of::<u32>(), TypeId::of::<String>(), TypeId::of::<f64>()],
+            &[
+                NlMachineTy::new(u32::TYPE_INFO),
+                NlMachineTy::new(String::TYPE_INFO),
+                NlMachineTy::new(f64::TYPE_INFO),
+            ],
             true,
         );
         let mut buffer = RowBuffer::new(schema);
@@ -818,11 +878,11 @@ mod tests {
     fn test_massive_row_count() {
         let schema = RowSchema::new(
             &[
-                TypeId::of::<bool>(),
-                TypeId::of::<bool>(),
-                TypeId::of::<u32>(),
-                TypeId::of::<f64>(),
-                TypeId::of::<String>(),
+                NlMachineTy::new(bool::TYPE_INFO),
+                NlMachineTy::new(bool::TYPE_INFO),
+                NlMachineTy::new(u32::TYPE_INFO),
+                NlMachineTy::new(f64::TYPE_INFO),
+                NlMachineTy::new(String::TYPE_INFO),
             ],
             true,
         );
@@ -865,7 +925,10 @@ mod tests {
     #[test]
     fn test_change_schema() {
         // create initial buffer with (u32, String) schema
-        let old_schema = RowSchema::new(&[TypeId::of::<u32>(), TypeId::of::<String>()], true);
+        let old_schema = RowSchema::new(
+            &[NlMachineTy::new(u32::TYPE_INFO), NlMachineTy::new(String::TYPE_INFO)],
+            true,
+        );
         let mut buffer = RowBuffer::new_with_capacity(old_schema, 3);
 
         // populate with some data
@@ -886,7 +949,10 @@ mod tests {
         }
 
         // create new schema with (String, u32) - reversed order
-        let new_schema = RowSchema::new(&[TypeId::of::<String>(), TypeId::of::<u32>()], true);
+        let new_schema = RowSchema::new(
+            &[NlMachineTy::new(String::TYPE_INFO), NlMachineTy::new(u32::TYPE_INFO)],
+            true,
+        );
 
         // change schema, taking ownership of values
         buffer.change_schema(new_schema, |mut old_row, mut new_row| {
@@ -911,7 +977,7 @@ mod tests {
 
     #[test]
     fn test_insert_zeroable() {
-        let schema = RowSchema::new(&[TypeId::of::<u32>()], true);
+        let schema = RowSchema::new(&[NlMachineTy::new(u32::TYPE_INFO)], true);
         let mut buffer = RowBuffer::new(schema);
         buffer.ensure_capacity(1);
 
@@ -936,7 +1002,11 @@ mod tests {
     #[test]
     fn test_clear() {
         let schema = RowSchema::new(
-            &[TypeId::of::<u32>(), TypeId::of::<String>(), TypeId::of::<f64>()],
+            &[
+                NlMachineTy::new(u32::TYPE_INFO),
+                NlMachineTy::new(String::TYPE_INFO),
+                NlMachineTy::new(f64::TYPE_INFO),
+            ],
             true,
         );
         let mut buffer = RowBuffer::new_with_capacity(schema, 3);
@@ -1003,7 +1073,7 @@ mod tests {
 
     #[test]
     fn test_basic_always_present() {
-        let schema = RowSchema::new(&[TypeId::of::<u32>()], false);
+        let schema = RowSchema::new(&[NlMachineTy::new(u32::TYPE_INFO)], false);
         let mut buffer = RowBuffer::new(schema);
         buffer.ensure_capacity(1);
         {
@@ -1018,7 +1088,11 @@ mod tests {
     #[test]
     fn test_heterogeneous_always_present() {
         let schema = RowSchema::new(
-            &[TypeId::of::<u32>(), TypeId::of::<bool>(), TypeId::of::<f64>()],
+            &[
+                NlMachineTy::new(u32::TYPE_INFO),
+                NlMachineTy::new(bool::TYPE_INFO),
+                NlMachineTy::new(f64::TYPE_INFO),
+            ],
             false,
         );
         let mut buffer = RowBuffer::new(schema);
@@ -1038,7 +1112,12 @@ mod tests {
     #[test]
     fn test_massive_always_present() {
         let schema = RowSchema::new(
-            &[TypeId::of::<bool>(), TypeId::of::<bool>(), TypeId::of::<u32>(), TypeId::of::<f64>()],
+            &[
+                NlMachineTy::new(bool::TYPE_INFO),
+                NlMachineTy::new(bool::TYPE_INFO),
+                NlMachineTy::new(u32::TYPE_INFO),
+                NlMachineTy::new(f64::TYPE_INFO),
+            ],
             false,
         );
         let mut buffer = RowBuffer::new(schema);
@@ -1062,7 +1141,7 @@ mod tests {
 
     #[test]
     fn test_insert_zeroable_always_present() {
-        let schema = RowSchema::new(&[TypeId::of::<u32>()], false);
+        let schema = RowSchema::new(&[NlMachineTy::new(u32::TYPE_INFO)], false);
         let mut buffer = RowBuffer::new(schema);
         buffer.ensure_capacity(1);
         {
@@ -1080,14 +1159,14 @@ mod tests {
     )]
     fn test_panic_nonzeroable_always_present() {
         // String is not zeroable
-        let schema = RowSchema::new(&[TypeId::of::<String>()], false);
+        let schema = RowSchema::new(&[NlMachineTy::new(String::TYPE_INFO)], false);
         let _ = RowBuffer::new(schema);
     }
 
     #[test]
     #[should_panic(expected = "cannot take a field if the occupancy bitfield is omitted")]
     fn test_panic_take_always_present() {
-        let schema = RowSchema::new(&[TypeId::of::<u32>()], false);
+        let schema = RowSchema::new(&[NlMachineTy::new(u32::TYPE_INFO)], false);
         let mut buffer = RowBuffer::new(schema);
         buffer.ensure_capacity(1);
         let mut row = buffer.row_mut(0);
@@ -1097,7 +1176,7 @@ mod tests {
     #[test]
     fn test_take_array() {
         // create a schema with a single u32 field, always present
-        let schema = RowSchema::new(&[TypeId::of::<u32>()], false);
+        let schema = RowSchema::new(&[NlMachineTy::new(u32::TYPE_INFO)], false);
         let mut buffer = RowBuffer::new_with_capacity(schema, 5);
 
         // populate the buffer with some values
@@ -1132,7 +1211,7 @@ mod tests {
     #[should_panic(expected = "cannot reinterpret the row buffer as an array of type u32")]
     fn test_take_array_wrong_type() {
         // create a schema with a single f64 field, always present
-        let schema = RowSchema::new(&[TypeId::of::<f64>()], false);
+        let schema = RowSchema::new(&[NlMachineTy::new(f64::TYPE_INFO)], false);
         let mut buffer = RowBuffer::new_with_capacity(schema, 3);
 
         // try to take as u32 - should panic
@@ -1143,7 +1222,10 @@ mod tests {
     #[should_panic(expected = "cannot reinterpret the row buffer as an array of type u32")]
     fn test_take_array_multiple_fields() {
         // create a schema with multiple fields, always present
-        let schema = RowSchema::new(&[TypeId::of::<u32>(), TypeId::of::<f64>()], false);
+        let schema = RowSchema::new(
+            &[NlMachineTy::new(u32::TYPE_INFO), NlMachineTy::new(f64::TYPE_INFO)],
+            false,
+        );
         let mut buffer = RowBuffer::new_with_capacity(schema, 3);
 
         // try to take as u32 - should panic because there are multiple fields
@@ -1154,7 +1236,7 @@ mod tests {
     #[should_panic(expected = "cannot reinterpret the row buffer as an array of type u32")]
     fn test_take_array_with_occupancy_bitfield() {
         // create a schema with occupancy bitfield (sparse fields)
-        let schema = RowSchema::new(&[TypeId::of::<u32>()], true);
+        let schema = RowSchema::new(&[NlMachineTy::new(u32::TYPE_INFO)], true);
         let mut buffer = RowBuffer::new_with_capacity(schema, 3);
 
         // try to take as u32 - should panic because there's an occupancy bitfield

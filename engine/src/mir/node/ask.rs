@@ -4,8 +4,8 @@ use lir::smallvec::smallvec;
 use crate::{
     exec::jit::host_fn,
     mir::{
-        EffectfulNode, EffectfulNodeKind, FunctionId, MirType, NetlogoAbstractType, NodeId,
-        NodeTransform, Nodes, Program, WriteLirError, build_lir::LirInsnBuilder, node,
+        EffectfulNode, EffectfulNodeKind, FunctionId, MirTy, NlAbstractTy, NodeId, NodeTransform,
+        Nodes, Program, WriteLirError, build_lir::LirInsnBuilder, node,
     },
 };
 
@@ -39,8 +39,8 @@ impl EffectfulNode for Ask {
         _program: &crate::mir::Program,
         _function: &crate::mir::Function,
         _nodes: &crate::mir::Nodes,
-    ) -> MirType {
-        MirType::Abstract(NetlogoAbstractType::Unit)
+    ) -> MirTy {
+        MirTy::Abstract(NlAbstractTy::Unit)
     }
 
     fn peephole_transform(

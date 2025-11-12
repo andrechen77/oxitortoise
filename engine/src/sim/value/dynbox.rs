@@ -1,4 +1,7 @@
-use crate::sim::{patch::PatchId, turtle::TurtleId, value::NetlogoMachineType};
+use crate::{
+    sim::{patch::PatchId, turtle::TurtleId, value::NlMachineTy},
+    util::type_registry::{Reflect, TypeInfo, TypeInfoOptions},
+};
 
 /// An 8-byte box that can hold a value of any type.
 ///
@@ -32,7 +35,6 @@ const NAN_BASE: u64 = 0x7FF8000000000000;
 #[derive(Debug)]
 pub enum UnpackedDynBox {
     Float(f64),
-    Int(i64),
     Bool(bool),
     Nobody,
     Turtle(TurtleId),
@@ -63,7 +65,6 @@ impl DynBox {
 
         // TODO(mvp) complete all cases for unpacking a DynBox
         match tag {
-            0b000 => UnpackedDynBox::Int(value as i64), // FIXME this should sign extend
             0b001 => match value {
                 0 => UnpackedDynBox::Bool(false),
                 1 => UnpackedDynBox::Bool(true),
@@ -81,6 +82,16 @@ impl DynBox {
     }
 }
 
+static DYN_BOX_TYPE_INFO: TypeInfo = TypeInfo::new::<DynBox>(TypeInfoOptions {
+    debug_name: "DynBox",
+    is_zeroable: true,
+    lir_repr: Some(&[lir::ValType::F64]),
+});
+
+impl Reflect for DynBox {
+    const TYPE_INFO: &TypeInfo = &DYN_BOX_TYPE_INFO;
+}
+
 impl std::fmt::Debug for DynBox {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "DynBox({:?})", self.unpack())
@@ -88,14 +99,13 @@ impl std::fmt::Debug for DynBox {
 }
 
 impl UnpackedDynBox {
-    pub fn ty(&self) -> NetlogoMachineType {
+    pub fn ty(&self) -> NlMachineTy {
         match self {
-            UnpackedDynBox::Bool(_) => NetlogoMachineType::BOOLEAN,
-            UnpackedDynBox::Int(_) => NetlogoMachineType::INTEGER,
-            UnpackedDynBox::Float(_) => NetlogoMachineType::FLOAT,
-            UnpackedDynBox::Nobody => NetlogoMachineType::BOOLEAN,
-            UnpackedDynBox::Turtle(_) => NetlogoMachineType::TURTLE_ID,
-            UnpackedDynBox::Patch(_) => NetlogoMachineType::PATCH_ID,
+            UnpackedDynBox::Bool(_) => NlMachineTy::BOOLEAN,
+            UnpackedDynBox::Float(_) => NlMachineTy::FLOAT,
+            UnpackedDynBox::Nobody => NlMachineTy::BOOLEAN,
+            UnpackedDynBox::Turtle(_) => NlMachineTy::TURTLE_ID,
+            UnpackedDynBox::Patch(_) => NlMachineTy::PATCH_ID,
             UnpackedDynBox::Link(_) => todo!("add link id"),
             UnpackedDynBox::Other(_) => todo!("match on the inner type"),
         }
@@ -106,7 +116,6 @@ impl Clone for UnpackedDynBox {
     fn clone(&self) -> Self {
         match self {
             UnpackedDynBox::Float(value) => UnpackedDynBox::Float(*value),
-            UnpackedDynBox::Int(value) => UnpackedDynBox::Int(*value),
             UnpackedDynBox::Bool(value) => UnpackedDynBox::Bool(*value),
             UnpackedDynBox::Turtle(value) => UnpackedDynBox::Turtle(*value),
             _ => unimplemented!(),

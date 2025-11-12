@@ -10,8 +10,8 @@ use slotmap::Key;
 use crate::{
     exec::jit::host_fn,
     mir::{
-        EffectfulNode, Function, MirType, NetlogoAbstractType, NodeId, Nodes, Program,
-        WriteLirError, build_lir::LirInsnBuilder,
+        EffectfulNode, Function, MirTy, NlAbstractTy, NodeId, Nodes, Program, WriteLirError,
+        build_lir::LirInsnBuilder,
     },
     sim::{patch::PatchVarDesc, turtle::BreedId},
 };
@@ -32,8 +32,8 @@ impl EffectfulNode for ClearAll {
         vec![self.context]
     }
 
-    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirType {
-        MirType::Abstract(NetlogoAbstractType::Unit)
+    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
+        MirTy::Abstract(NlAbstractTy::Unit)
     }
 
     fn write_lir_execution(
@@ -78,8 +78,8 @@ impl EffectfulNode for Diffuse {
         _program: &crate::mir::Program,
         _function: &crate::mir::Function,
         _nodes: &crate::mir::Nodes,
-    ) -> MirType {
-        MirType::Abstract(NetlogoAbstractType::Unit)
+    ) -> MirTy {
+        MirTy::Abstract(NlAbstractTy::Unit)
     }
 
     fn write_lir_execution(
@@ -113,8 +113,8 @@ impl EffectfulNode for ResetTicks {
         _program: &crate::mir::Program,
         _function: &crate::mir::Function,
         _nodes: &crate::mir::Nodes,
-    ) -> MirType {
-        MirType::Abstract(NetlogoAbstractType::Unit)
+    ) -> MirTy {
+        MirTy::Abstract(NlAbstractTy::Unit)
     }
 
     fn write_lir_execution(
@@ -155,8 +155,8 @@ impl EffectfulNode for AdvanceTick {
         _program: &crate::mir::Program,
         _function: &crate::mir::Function,
         _nodes: &crate::mir::Nodes,
-    ) -> MirType {
-        MirType::Abstract(NetlogoAbstractType::Unit)
+    ) -> MirTy {
+        MirTy::Abstract(NlAbstractTy::Unit)
     }
 }
 
@@ -181,8 +181,8 @@ impl EffectfulNode for GetTick {
         _program: &crate::mir::Program,
         _function: &crate::mir::Function,
         _nodes: &crate::mir::Nodes,
-    ) -> MirType {
-        MirType::Abstract(NetlogoAbstractType::Float)
+    ) -> MirTy {
+        MirTy::Abstract(NlAbstractTy::Float)
     }
 }
 
@@ -213,8 +213,8 @@ impl EffectfulNode for CreateTurtles {
         _program: &crate::mir::Program,
         _function: &crate::mir::Function,
         _nodes: &crate::mir::Nodes,
-    ) -> MirType {
-        MirType::Abstract(NetlogoAbstractType::Unit)
+    ) -> MirTy {
+        MirTy::Abstract(NlAbstractTy::Unit)
     }
 
     fn write_lir_execution(
@@ -270,14 +270,14 @@ impl EffectfulNode for Of {
         program: &crate::mir::Program,
         function: &crate::mir::Function,
         nodes: &crate::mir::Nodes,
-    ) -> MirType {
-        let MirType::Abstract(NetlogoAbstractType::Closure(closure)) =
+    ) -> MirTy {
+        let MirTy::Abstract(NlAbstractTy::Closure(closure)) =
             nodes[self.body].output_type(program, function, nodes)
         else {
             panic!("expected node outputting closure body to be a closure")
         };
 
-        MirType::Abstract(*closure.return_ty)
+        MirTy::Abstract(*closure.return_ty)
     }
 }
 
@@ -306,8 +306,8 @@ impl EffectfulNode for TurtleRotate {
         _program: &crate::mir::Program,
         _function: &crate::mir::Function,
         _nodes: &crate::mir::Nodes,
-    ) -> MirType {
-        MirType::Abstract(NetlogoAbstractType::Unit)
+    ) -> MirTy {
+        MirTy::Abstract(NlAbstractTy::Unit)
     }
 }
 
@@ -336,8 +336,8 @@ impl EffectfulNode for TurtleForward {
         _program: &crate::mir::Program,
         _function: &crate::mir::Function,
         _nodes: &crate::mir::Nodes,
-    ) -> MirType {
-        MirType::Abstract(NetlogoAbstractType::Unit)
+    ) -> MirTy {
+        MirTy::Abstract(NlAbstractTy::Unit)
     }
 }
 
@@ -366,8 +366,8 @@ impl EffectfulNode for CanMove {
         _program: &crate::mir::Program,
         _function: &crate::mir::Function,
         _nodes: &crate::mir::Nodes,
-    ) -> MirType {
-        MirType::Abstract(NetlogoAbstractType::Boolean)
+    ) -> MirTy {
+        MirTy::Abstract(NlAbstractTy::Boolean)
     }
 
     // TODO(mvp_ants) add transformation to turn the node into "patch ahead != nobody"
@@ -408,8 +408,8 @@ impl EffectfulNode for PatchRelative {
         _program: &crate::mir::Program,
         _function: &crate::mir::Function,
         _nodes: &crate::mir::Nodes,
-    ) -> MirType {
-        MirType::Abstract(NetlogoAbstractType::Patch)
+    ) -> MirTy {
+        MirTy::Abstract(NlAbstractTy::Patch)
     }
 }
 
@@ -436,8 +436,8 @@ impl EffectfulNode for PatchAt {
         _program: &crate::mir::Program,
         _function: &crate::mir::Function,
         _nodes: &crate::mir::Nodes,
-    ) -> MirType {
-        MirType::Abstract(NetlogoAbstractType::Patch)
+    ) -> MirTy {
+        MirTy::Abstract(NlAbstractTy::Patch)
     }
 }
 
@@ -466,7 +466,7 @@ impl EffectfulNode for OffsetDistanceByHeading {
         _program: &crate::mir::Program,
         _function: &crate::mir::Function,
         _nodes: &crate::mir::Nodes,
-    ) -> MirType {
+    ) -> MirTy {
         todo!("TODO(mvp) return Point type")
     }
 
@@ -505,8 +505,8 @@ impl EffectfulNode for Distancexy {
         _program: &crate::mir::Program,
         _function: &crate::mir::Function,
         _nodes: &crate::mir::Nodes,
-    ) -> MirType {
-        MirType::Abstract(NetlogoAbstractType::Float)
+    ) -> MirTy {
+        MirTy::Abstract(NlAbstractTy::Float)
     }
 }
 
@@ -531,8 +531,8 @@ impl EffectfulNode for MaxPxcor {
         _program: &crate::mir::Program,
         _function: &crate::mir::Function,
         _nodes: &crate::mir::Nodes,
-    ) -> MirType {
-        MirType::Abstract(NetlogoAbstractType::Integer)
+    ) -> MirTy {
+        MirTy::Abstract(NlAbstractTy::Float)
     }
 }
 
@@ -557,8 +557,8 @@ impl EffectfulNode for MaxPycor {
         _program: &crate::mir::Program,
         _function: &crate::mir::Function,
         _nodes: &crate::mir::Nodes,
-    ) -> MirType {
-        MirType::Abstract(NetlogoAbstractType::Integer)
+    ) -> MirTy {
+        MirTy::Abstract(NlAbstractTy::Float)
     }
 }
 
@@ -583,14 +583,14 @@ impl EffectfulNode for OneOf {
         _program: &crate::mir::Program,
         _function: &crate::mir::Function,
         _nodes: &crate::mir::Nodes,
-    ) -> MirType {
+    ) -> MirTy {
         let out_type = match _nodes[self.xs].output_type(_program, _function, _nodes) {
-            MirType::Abstract(NetlogoAbstractType::Agentset { agent_type }) => agent_type,
-            MirType::Abstract(NetlogoAbstractType::List { element_ty }) => element_ty,
+            MirTy::Abstract(NlAbstractTy::Agentset { agent_type }) => agent_type,
+            MirTy::Abstract(NlAbstractTy::List { element_ty }) => element_ty,
             x => panic!("Impossible argument type for `one-of`: {:?}", x),
         };
 
-        MirType::Abstract(*out_type)
+        MirTy::Abstract(*out_type)
     }
 }
 
@@ -618,8 +618,8 @@ impl EffectfulNode for ScaleColor {
         _program: &crate::mir::Program,
         _function: &crate::mir::Function,
         _nodes: &crate::mir::Nodes,
-    ) -> MirType {
-        MirType::Abstract(NetlogoAbstractType::Color)
+    ) -> MirTy {
+        MirTy::Abstract(NlAbstractTy::Color)
     }
 }
 
@@ -646,8 +646,8 @@ impl EffectfulNode for RandomInt {
         _program: &crate::mir::Program,
         _function: &crate::mir::Function,
         _nodes: &crate::mir::Nodes,
-    ) -> MirType {
-        MirType::Abstract(NetlogoAbstractType::Integer)
+    ) -> MirTy {
+        MirTy::Abstract(NlAbstractTy::Float)
     }
 }
 
@@ -674,8 +674,8 @@ impl EffectfulNode for SetDefaultShape {
         _program: &crate::mir::Program,
         _function: &crate::mir::Function,
         _nodes: &crate::mir::Nodes,
-    ) -> MirType {
-        MirType::Abstract(NetlogoAbstractType::Unit)
+    ) -> MirTy {
+        MirTy::Abstract(NlAbstractTy::Unit)
     }
 
     fn write_lir_execution(

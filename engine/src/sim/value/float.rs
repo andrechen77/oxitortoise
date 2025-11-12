@@ -2,7 +2,10 @@ use derive_more::derive::{
     Add, AddAssign, Display, Div, DivAssign, From, Mul, MulAssign, Neg, Sub, SubAssign,
 };
 
-use crate::sim::{color::Color, topology::CoordInt, turtle::TurtleWho};
+use crate::{
+    sim::{color::Color, topology::CoordInt, turtle::TurtleWho},
+    util::type_registry::{Reflect, TypeInfo, TypeInfoOptions},
+};
 
 /// A double-precision floating-point number which is guaranteed to be finite
 /// (not Infinity or NaN).
@@ -11,9 +14,9 @@ use crate::sim::{color::Color, topology::CoordInt, turtle::TurtleWho};
 #[mul(forward)]
 #[div(forward)]
 #[repr(transparent)]
-pub struct Float(f64);
+pub struct NlFloat(f64);
 
-impl Float {
+impl NlFloat {
     pub const fn new(value: f64) -> Self {
         debug_assert!(value.is_finite());
         Self(value)
@@ -24,25 +27,35 @@ impl Float {
     }
 }
 
-impl From<CoordInt> for Float {
+static NL_FLOAT_TYPE_INFO: TypeInfo = TypeInfo::new::<NlFloat>(TypeInfoOptions {
+    debug_name: "NlFloat",
+    is_zeroable: true,
+    lir_repr: Some(&[lir::ValType::F64]),
+});
+
+impl Reflect for NlFloat {
+    const TYPE_INFO: &TypeInfo = &NL_FLOAT_TYPE_INFO;
+}
+
+impl From<CoordInt> for NlFloat {
     fn from(value: CoordInt) -> Self {
-        Float(value as f64)
+        NlFloat(value as f64)
     }
 }
 
-impl From<Color> for Float {
+impl From<Color> for NlFloat {
     fn from(value: Color) -> Self {
         value.to_float()
     }
 }
 
-impl From<TurtleWho> for Float {
+impl From<TurtleWho> for NlFloat {
     fn from(value: TurtleWho) -> Self {
-        Float(value.0 as f64)
+        NlFloat(value.0 as f64)
     }
 }
 
-impl Float {
+impl NlFloat {
     /// Extracts an `u64` from the value. If the value is a fractional value, it
     /// is rounded down. Negative values are truncated to zero.
     pub fn to_u64_round_to_zero(&self) -> u64 {

@@ -16,9 +16,10 @@ use crate::mir;
 use crate::sim::agent_schema::{AgentFieldDescriptor, AgentSchemaField, TurtleSchema};
 use crate::sim::topology::Heading;
 use crate::sim::value::agentset::TurtleSet;
-use crate::sim::value::{DynBox, NetlogoMachineType};
+use crate::sim::value::{DynBox, NlMachineTy};
 use crate::util::gen_slot_tracker::{GenIndex, GenSlotTracker};
 use crate::util::row_buffer::{RowBuffer, RowSchema};
+use crate::util::type_registry::{Reflect, TypeInfo, TypeInfoOptions};
 use crate::{
     sim::{color::Color, topology::Point, value},
     util::rng::Rng,
@@ -60,6 +61,16 @@ impl TurtleId {
     pub const fn index(&self) -> usize {
         self.0.index as usize
     }
+}
+
+static TURTLE_ID_TYPE_INFO: TypeInfo = TypeInfo::new::<TurtleId>(TypeInfoOptions {
+    debug_name: "TurtleId",
+    is_zeroable: false,
+    lir_repr: Some(&[lir::ValType::I64]),
+});
+
+impl Reflect for TurtleId {
+    const TYPE_INFO: &TypeInfo = &TURTLE_ID_TYPE_INFO;
 }
 
 pub const OFFSET_TURTLES_TO_DATA: usize = offset_of!(Turtles, data);
@@ -148,7 +159,7 @@ impl Turtles {
                 label: String::new(),
                 label_color: color, // FIXME use a default label color
                 hidden: false,
-                size: value::Float::new(1.0),
+                size: value::NlFloat::new(1.0),
                 shape_name,
             };
             self.data[0].as_mut().unwrap().row_mut(id.0.index as usize).insert(0, base_data);
@@ -173,7 +184,7 @@ impl Turtles {
                 let AgentSchemaField::Other(r#type) = &self.turtle_schema[field] else {
                     panic!("field at index {:?} should be a custom field", field);
                 };
-                if r#type.is_numeric_zeroable() {
+                if r#type.info().is_zeroable {
                     self.data[field.buffer_idx as usize]
                         .as_mut()
                         .unwrap()
@@ -200,7 +211,7 @@ impl Turtles {
 
     /// Get a reference to a field of a turtle. Returns `None` if the
     /// turtle does not exist.
-    pub fn get_turtle_field<T: 'static>(
+    pub fn get_turtle_field<T: Reflect>(
         &self,
         id: TurtleId,
         field: AgentFieldDescriptor,
@@ -238,7 +249,7 @@ impl Turtles {
 
     /// Get a mutable reference to a field of a turtle. Returns `None` if the
     /// turtle does not exist.
-    pub fn get_turtle_field_mut<T: 'static>(
+    pub fn get_turtle_field_mut<T: Reflect>(
         &mut self,
         id: TurtleId,
         field: AgentFieldDescriptor,
@@ -296,7 +307,17 @@ pub struct TurtleBaseData {
     pub label: String, // FIXME consider using the netlogo version of string for this
     pub label_color: Color,
     pub hidden: bool,
-    pub size: value::Float,
+    pub size: value::NlFloat,
+}
+
+static TURTLE_BASE_DATA_TYPE_INFO: TypeInfo = TypeInfo::new::<TurtleBaseData>(TypeInfoOptions {
+    debug_name: "TurtleBaseData",
+    is_zeroable: false,
+    lir_repr: None,
+});
+
+impl Reflect for TurtleBaseData {
+    const TYPE_INFO: &TypeInfo = &TURTLE_BASE_DATA_TYPE_INFO;
 }
 
 slotmap::new_key_type! {
@@ -372,18 +393,18 @@ pub fn calc_turtle_var_offset(mir: &mir::Program, var: TurtleVarDesc) -> (usize,
     (buffer_offset, stride, field_offset)
 }
 
-pub fn turtle_var_type(schema: &TurtleSchema, var: TurtleVarDesc) -> NetlogoMachineType {
+pub fn turtle_var_type(schema: &TurtleSchema, var: TurtleVarDesc) -> NlMachineTy {
     match var {
-        TurtleVarDesc::Who => NetlogoMachineType::INTEGER,
-        TurtleVarDesc::Color => NetlogoMachineType::COLOR,
-        TurtleVarDesc::Size => NetlogoMachineType::FLOAT,
-        TurtleVarDesc::Xcor => NetlogoMachineType::FLOAT,
-        TurtleVarDesc::Ycor => NetlogoMachineType::FLOAT,
+        TurtleVarDesc::Who => NlMachineTy::FLOAT,
+        TurtleVarDesc::Color => NlMachineTy::COLOR,
+        TurtleVarDesc::Size => NlMachineTy::FLOAT,
+        TurtleVarDesc::Xcor => NlMachineTy::FLOAT,
+        TurtleVarDesc::Ycor => NlMachineTy::FLOAT,
         TurtleVarDesc::Custom(field) => {
-            let AgentSchemaField::Other(ty) = &schema[schema.custom_fields()[field]] else {
+            let AgentSchemaField::Other(ty) = schema[schema.custom_fields()[field]] else {
                 unreachable!("this is a custom field, so it cannot be part of the base data");
             };
-            ty.clone()
+            ty
         }
     }
 }

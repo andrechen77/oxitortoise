@@ -6,8 +6,8 @@ use derive_more::derive::Display;
 use lir::smallvec::smallvec;
 
 use crate::{
-    mir::{EffectfulNode, MirType, NodeId, Nodes, WriteLirError},
-    sim::value::NetlogoMachineType,
+    mir::{EffectfulNode, MirTy, NodeId, Nodes, WriteLirError},
+    sim::value::NlMachineTy,
 };
 
 #[derive(Debug, Display)]
@@ -18,7 +18,7 @@ pub struct MemLoad {
     /// The byte offset of the field to load.
     pub offset: usize,
     /// The type of the value to load.
-    pub ty: NetlogoMachineType,
+    pub ty: NlMachineTy,
 }
 
 impl EffectfulNode for MemLoad {
@@ -35,8 +35,8 @@ impl EffectfulNode for MemLoad {
         _program: &crate::mir::Program,
         _function: &crate::mir::Function,
         _nodes: &crate::mir::Nodes,
-    ) -> crate::mir::MirType {
-        MirType::Other
+    ) -> crate::mir::MirTy {
+        MirTy::Other
     }
 
     fn write_lir_execution(
@@ -45,7 +45,8 @@ impl EffectfulNode for MemLoad {
         nodes: &Nodes,
         lir_builder: &mut crate::mir::build_lir::LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
-        let &[lir_type] = self.ty.to_lir_type().as_slice() else {
+        let &[lir_type] = self.ty.info().lir_repr.expect("mem load type must have known ABI")
+        else {
             // this panic is purely a limitation of this implementation; there's
             // no inherent limitation that makes insertion of multiple mem load
             // instructions impossible
@@ -89,8 +90,8 @@ impl EffectfulNode for MemStore {
         _program: &crate::mir::Program,
         _function: &crate::mir::Function,
         _nodes: &crate::mir::Nodes,
-    ) -> crate::mir::MirType {
-        MirType::Other
+    ) -> crate::mir::MirTy {
+        MirTy::Other
     }
 
     fn write_lir_execution(
@@ -135,8 +136,8 @@ impl EffectfulNode for DeriveField {
         _program: &crate::mir::Program,
         _function: &crate::mir::Function,
         _nodes: &crate::mir::Nodes,
-    ) -> crate::mir::MirType {
-        MirType::Machine(NetlogoMachineType::UNTYPED_PTR)
+    ) -> crate::mir::MirTy {
+        MirTy::Machine(NlMachineTy::UNTYPED_PTR)
     }
 
     fn write_lir_execution(
@@ -179,8 +180,8 @@ impl EffectfulNode for DeriveElement {
         _program: &crate::mir::Program,
         _function: &crate::mir::Function,
         _nodes: &crate::mir::Nodes,
-    ) -> crate::mir::MirType {
-        MirType::Machine(NetlogoMachineType::UNTYPED_PTR)
+    ) -> crate::mir::MirTy {
+        MirTy::Machine(NlMachineTy::UNTYPED_PTR)
     }
 
     fn write_lir_execution(

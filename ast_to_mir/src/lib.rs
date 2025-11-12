@@ -8,13 +8,13 @@ use engine::mir::{EffectfulNode as _, Nodes};
 use engine::{
     mir::{
         self, CustomVarDecl, EffectfulNodeKind, Function, FunctionId, GlobalId, LocalDeclaration,
-        LocalId, LocalStorage, MirType, NetlogoAbstractType, NodeId, StatementBlock, StatementKind,
+        LocalId, LocalStorage, MirTy, NlAbstractTy, NodeId, StatementBlock, StatementKind,
         node::{self, AskRecipient, BinaryOpcode, PatchLocRelation, UnaryOpcode},
     },
     sim::{
         patch::PatchVarDesc,
         turtle::{BreedId, TurtleVarDesc},
-        value::{NetlogoMachineType, UnpackedDynBox},
+        value::{NlMachineTy, UnpackedDynBox},
     },
     slotmap::{SecondaryMap, SlotMap},
 };
@@ -84,7 +84,7 @@ impl GlobalScope {
                     EffectfulNodeKind::from(node::Constant { value: UnpackedDynBox::Float(115.0) })
                 }),
                 ("POPULATION", || {
-                    EffectfulNodeKind::from(node::Constant { value: UnpackedDynBox::Int(125) })
+                    EffectfulNodeKind::from(node::Constant { value: UnpackedDynBox::Float(125.0) })
                 }),
                 ("DIFFUSION-RATE", || {
                     EffectfulNodeKind::from(node::Constant { value: UnpackedDynBox::Float(50.0) })
@@ -188,8 +188,7 @@ pub fn ast_to_mir(ast: Ast) -> anyhow::Result<ParseResult> {
         let patch_var_id = PatchVarDesc::Custom(i);
         trace!("Adding patch variable `{}` with id {:?}", patch_var_name, patch_var_id);
         global_scope.patch_vars.insert(patch_var_name.clone(), patch_var_id);
-        custom_patch_vars
-            .push(CustomVarDecl { name: patch_var_name, ty: NetlogoAbstractType::Top });
+        custom_patch_vars.push(CustomVarDecl { name: patch_var_name, ty: NlAbstractTy::Top });
     }
     // add custom turtle variables
     for (i, turtle_var_name) in turtle_var_names.into_iter().enumerate() {
@@ -197,8 +196,7 @@ pub fn ast_to_mir(ast: Ast) -> anyhow::Result<ParseResult> {
         let turtle_var_id = TurtleVarDesc::Custom(i);
         trace!("Adding turtle variable `{}` with id {:?}", turtle_var_name, turtle_var_id);
         global_scope.turtle_vars.insert(turtle_var_name.clone(), turtle_var_id);
-        custom_turtle_vars
-            .push(CustomVarDecl { name: turtle_var_name, ty: NetlogoAbstractType::Top });
+        custom_turtle_vars.push(CustomVarDecl { name: turtle_var_name, ty: NlAbstractTy::Top });
     }
 
     let mut functions: SlotMap<FunctionId, Function> = SlotMap::with_key();
@@ -342,7 +340,7 @@ fn create_procedure_skeleton(
     // always add the context parameter TODO this shouldn't be always
     let context_param = locals.insert(LocalDeclaration {
         debug_name: Some("context".into()),
-        ty: MirType::Machine(NetlogoMachineType::UNTYPED_PTR),
+        ty: MirTy::Machine(NlMachineTy::UNTYPED_PTR),
         storage: LocalStorage::Register,
     });
     parameter_locals.push(context_param);
@@ -355,7 +353,7 @@ fn create_procedure_skeleton(
         AgentClass::Turtle => {
             let local_id = locals.insert(LocalDeclaration {
                 debug_name: Some("self_turtle_id".into()),
-                ty: MirType::Machine(NetlogoMachineType::TURTLE_ID),
+                ty: MirTy::Abstract(NlAbstractTy::Turtle),
                 storage: LocalStorage::Register,
             });
             parameter_locals.push(local_id);
@@ -365,7 +363,7 @@ fn create_procedure_skeleton(
         AgentClass::Patch => {
             let local_id = locals.insert(LocalDeclaration {
                 debug_name: Some("self_patch_id".into()),
-                ty: MirType::Machine(NetlogoMachineType::PATCH_ID),
+                ty: MirTy::Abstract(NlAbstractTy::Patch),
                 storage: LocalStorage::Register,
             });
             parameter_locals.push(local_id);
@@ -379,7 +377,7 @@ fn create_procedure_skeleton(
         let arg_name: Rc<str> = Rc::from(arg_name);
         let local_id = locals.insert(LocalDeclaration {
             debug_name: Some(arg_name.clone()),
-            ty: MirType::Abstract(NetlogoAbstractType::Top),
+            ty: MirTy::Abstract(NlAbstractTy::Top),
             storage: LocalStorage::Register,
         });
         trace!("Adding positional parameter {} with local_id: {:?}", arg_name, local_id);
@@ -390,8 +388,8 @@ fn create_procedure_skeleton(
 
     // calculate the function return type
     let return_ty = match procedure_ast.return_type {
-        ast::ReturnType::Unit => NetlogoAbstractType::Unit,
-        ast::ReturnType::Wildcard => NetlogoAbstractType::Top,
+        ast::ReturnType::Unit => NlAbstractTy::Unit,
+        ast::ReturnType::Wildcard => NlAbstractTy::Top,
     };
     trace!("calculated return type: {:?}", return_ty);
 
@@ -399,7 +397,7 @@ fn create_procedure_skeleton(
     let function = Function {
         debug_name: Some(proc_name),
         parameters: parameter_locals,
-        return_ty: MirType::Abstract(return_ty),
+        return_ty: MirTy::Abstract(return_ty),
         locals,
         // cfg and nodes are defaulted values and will be filled in later
         cfg: StatementBlock { statements: vec![] },
@@ -442,7 +440,7 @@ fn build_body(
     let function = &mut mir_builder.functions[fn_id];
     function.cfg = statements;
     function.nodes = RefCell::new(nodes);
-    function.return_ty = MirType::Abstract(return_ty);
+    function.return_ty = MirTy::Abstract(return_ty);
 
     trace!("finished building body");
     Ok(())
@@ -830,12 +828,12 @@ fn translate_expression(expr: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) -> NodeI
 fn translate_statement_block(
     statements_ast: ast::Node,
     mut ctx: FnBodyBuilderCtx<'_>,
-) -> (StatementBlock, NetlogoAbstractType) {
+) -> (StatementBlock, NlAbstractTy) {
     let (statements, return_ty) = match statements_ast {
-        ast::Node::CommandBlock { statements } => (statements, NetlogoAbstractType::Unit),
+        ast::Node::CommandBlock { statements } => (statements, NlAbstractTy::Unit),
         ast::Node::ReporterBlock { reporter_app } => {
             let statements = vec![ast::Node::CommandApp(ast::CommandApp::Report([reporter_app]))];
-            (statements, NetlogoAbstractType::Top)
+            (statements, NlAbstractTy::Top)
         }
         _ => panic!("expected a command block or reporter block, got {:?}", statements_ast),
     };
@@ -855,7 +853,7 @@ fn translate_let_binding(
 ) -> StatementKind {
     let local_id = ctx.mir.functions[ctx.fn_id].locals.insert(LocalDeclaration {
         debug_name: Some(name.clone()),
-        ty: MirType::Abstract(NetlogoAbstractType::Top),
+        ty: MirTy::Abstract(NlAbstractTy::Top),
         storage: LocalStorage::Register,
     });
     ctx.mir.fn_info[ctx.fn_id].local_names.insert(name, local_id);
@@ -895,7 +893,7 @@ fn translate_ephemeral_closure(
     // add the environment pointer
     let env_param = locals.insert(LocalDeclaration {
         debug_name: Some("env".into()),
-        ty: MirType::Machine(NetlogoMachineType::UNTYPED_PTR),
+        ty: MirTy::Machine(NlMachineTy::UNTYPED_PTR),
         storage: LocalStorage::Register,
     });
     parameter_locals.push(env_param);
@@ -904,7 +902,7 @@ fn translate_ephemeral_closure(
     // add the context parameter
     let context_param = locals.insert(LocalDeclaration {
         debug_name: Some("context".into()),
-        ty: MirType::Machine(NetlogoMachineType::UNTYPED_PTR),
+        ty: MirTy::Machine(NlMachineTy::UNTYPED_PTR),
         storage: LocalStorage::Register,
     });
     parameter_locals.push(context_param);
@@ -918,7 +916,7 @@ fn translate_ephemeral_closure(
         AgentClass::Turtle => {
             let local_id = locals.insert(LocalDeclaration {
                 debug_name: Some("self_turtle_id".into()),
-                ty: MirType::Machine(NetlogoMachineType::TURTLE_ID),
+                ty: MirTy::Abstract(NlAbstractTy::Turtle),
                 storage: LocalStorage::Register,
             });
             parameter_locals.push(local_id);
@@ -928,7 +926,7 @@ fn translate_ephemeral_closure(
         AgentClass::Patch => {
             let local_id = locals.insert(LocalDeclaration {
                 debug_name: Some("self_patch_id".into()),
-                ty: MirType::Machine(NetlogoMachineType::PATCH_ID),
+                ty: MirTy::Abstract(NlAbstractTy::Patch),
                 storage: LocalStorage::Register,
             });
             parameter_locals.push(local_id);
@@ -939,7 +937,7 @@ fn translate_ephemeral_closure(
         AgentClass::Any => {
             let local_id = locals.insert(LocalDeclaration {
                 debug_name: Some("self_any".into()),
-                ty: MirType::Abstract(NetlogoAbstractType::Top),
+                ty: MirTy::Abstract(NlAbstractTy::Top),
                 storage: LocalStorage::Register,
             });
             parameter_locals.push(local_id);
@@ -954,7 +952,7 @@ fn translate_ephemeral_closure(
         parameters: parameter_locals,
         locals,
         // cfg, nodes, and return_ty are defaulted and will be filled in later
-        return_ty: MirType::Other,
+        return_ty: MirTy::Other,
         cfg: StatementBlock::default(),
         nodes: RefCell::default(),
     };

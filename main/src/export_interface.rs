@@ -5,7 +5,7 @@ use engine::{
         patch::PatchId,
         topology::{Heading, Point, PointInt},
         turtle::BreedId,
-        value::Float,
+        value::NlFloat,
         world::World,
     },
     slotmap::{Key as _, KeyData},
@@ -18,9 +18,9 @@ pub extern "C" fn oxitortoise_is_nan(value: f64) -> bool {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn oxitortoise_round(value: Float) -> Float {
+pub extern "C" fn oxitortoise_round(value: NlFloat) -> NlFloat {
     // FIXME is it possible for this to go from finite to non-finite?
-    Float::new(value.get().round())
+    NlFloat::new(value.get().round())
 }
 
 #[unsafe(no_mangle)]
@@ -34,7 +34,7 @@ pub extern "C" fn oxitortoise_reset_ticks(world: &mut World) {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn oxitortoise_get_ticks(world: &mut World) -> Float {
+pub extern "C" fn oxitortoise_get_ticks(world: &mut World) -> NlFloat {
     world.tick_counter.get().unwrap() // TODO(mvp) handle error
 }
 
@@ -81,7 +81,7 @@ pub extern "C" fn oxitortoise_distance_euclidean_no_wrap(
     a_y: f64,
     b_x: f64,
     b_y: f64,
-) -> Float {
+) -> NlFloat {
     let a = Point { x: a_x, y: a_y };
     let b = Point { x: b_x, y: b_y };
     engine::sim::topology::euclidean_distance_no_wrap(a, b)
@@ -92,7 +92,7 @@ pub extern "C" fn oxitortoise_offset_distance_by_heading(
     world: &World,
     point: Point,
     heading: Heading,
-    distance: Float,
+    distance: NlFloat,
 ) -> Point {
     world
         .topology
@@ -106,7 +106,7 @@ pub extern "C" fn oxitortoise_patch_at(world: &World, point: PointInt) -> PatchI
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn oxitortoise_normalize_heading(heading: Float) -> Heading {
+pub extern "C" fn oxitortoise_normalize_heading(heading: NlFloat) -> Heading {
     heading.into()
 }
 
@@ -114,18 +114,18 @@ pub extern "C" fn oxitortoise_normalize_heading(heading: Float) -> Heading {
 pub extern "C" fn oxitortoise_diffuse_8(
     world: &mut World,
     field: AgentFieldDescriptor,
-    diffusion_rate: Float,
+    diffusion_rate: NlFloat,
 ) {
     engine::sim::topology::diffuse::diffuse_8_single_variable_buffer(world, field, diffusion_rate);
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn oxitortoise_scale_color(
-    color: Float,
-    value: Float,
-    min: Float,
-    max: Float,
-) -> Float {
+    color: NlFloat,
+    value: NlFloat,
+    min: NlFloat,
+    max: NlFloat,
+) -> NlFloat {
     engine::sim::color::scale_color(color.into(), value, min, max).into()
 }
 

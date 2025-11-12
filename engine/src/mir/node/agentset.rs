@@ -1,8 +1,8 @@
 use derive_more::derive::Display;
 
 use crate::mir::{
-    EffectfulNode, Function, MirType, NetlogoAbstractType,
-    NetlogoAbstractType::{Patch, Turtle},
+    EffectfulNode, Function, MirTy, NlAbstractTy,
+    NlAbstractTy::{Patch, Turtle},
     NodeId, Nodes, Program, WriteLirError,
 };
 
@@ -27,12 +27,12 @@ impl EffectfulNode for Agentset {
         }
     }
 
-    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirType {
+    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
         let typ = match self {
             Agentset::AllTurtles => Turtle,
             Agentset::AllPatches => Patch,
         };
-        MirType::Abstract(NetlogoAbstractType::Agentset { agent_type: Box::new(typ) })
+        MirTy::Abstract(NlAbstractTy::Agentset { agent_type: Box::new(typ) })
     }
 
     fn write_lir_execution(

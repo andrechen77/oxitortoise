@@ -3,7 +3,13 @@ use std::{
     sync::OnceLock,
 };
 
-use crate::{sim::value::Float, util::rng::Rng};
+use crate::{
+    sim::value::NlFloat,
+    util::{
+        rng::Rng,
+        type_registry::{Reflect, TypeInfo, TypeInfoOptions},
+    },
+};
 
 /// A NetLogo color. This is a floating point value guaranteed to be in the
 /// range 0.0..140.0. Values with more than one decimal place of precision are
@@ -38,29 +44,39 @@ impl Color {
         Color((self.0 / SHADE_RANGE).floor() * SHADE_RANGE)
     }
 
-    pub fn to_float(self) -> Float {
-        Float::new(self.0)
+    pub fn to_float(self) -> NlFloat {
+        NlFloat::new(self.0)
     }
 }
 
-impl From<Float> for Color {
-    fn from(value: Float) -> Self {
+impl From<NlFloat> for Color {
+    fn from(value: NlFloat) -> Self {
         Color(value.get() % COLOR_MAX)
     }
 }
 
-impl Add<Float> for Color {
+impl Add<NlFloat> for Color {
     type Output = Color;
 
-    fn add(self, rhs: Float) -> Self::Output {
+    fn add(self, rhs: NlFloat) -> Self::Output {
         Color((self.0 + rhs.get()) % COLOR_MAX)
     }
 }
 
-impl AddAssign<Float> for Color {
-    fn add_assign(&mut self, rhs: Float) {
+impl AddAssign<NlFloat> for Color {
+    fn add_assign(&mut self, rhs: NlFloat) {
         *self = *self + rhs;
     }
+}
+
+static COLOR_TYPE_INFO: TypeInfo = TypeInfo::new::<Color>(TypeInfoOptions {
+    debug_name: "Color",
+    is_zeroable: true,
+    lir_repr: Some(&[lir::ValType::F64]),
+});
+
+impl Reflect for Color {
+    const TYPE_INFO: &TypeInfo = &COLOR_TYPE_INFO;
 }
 
 const COLOR_MAX: f64 = 140.0;
@@ -81,7 +97,12 @@ pub fn base_colors() -> &'static [Color] {
 // When range1 is less than or equal to range2, then the larger the number, the lighter the shade of color. However, if range2 is less than range1, the color scaling is inverted.
 // Let min-range be the minimum of range1 and range2. If number is less than or equal to min-range, then the result is the same as if number was equal to min-range. Let max-range be the maximum of range1 and range2. If number is greater than max-range, then the result is the same as if number was equal to max-range.
 // Note: for color shade is irrelevant, e.g. green and green + 2 are equivalent, and the same spectrum of colors will be used.
-pub fn scale_color(color: Color, number: Float, range_start: Float, range_end: Float) -> Color {
+pub fn scale_color(
+    color: Color,
+    number: NlFloat,
+    range_start: NlFloat,
+    range_end: NlFloat,
+) -> Color {
     let range_start = range_start.get();
     let range_end = range_end.get();
     let number = number.get();

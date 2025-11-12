@@ -2,8 +2,7 @@ use derive_more::derive::Display;
 use lir::smallvec::smallvec;
 
 use crate::mir::{
-    EffectfulNode, Function, LocalId, MirType, NetlogoAbstractType, NodeId, Nodes, Program,
-    WriteLirError,
+    EffectfulNode, Function, LocalId, MirTy, NlAbstractTy, NodeId, Nodes, Program, WriteLirError,
     build_lir::{LirInsnBuilder, LocalLocation},
 };
 
@@ -23,7 +22,7 @@ impl EffectfulNode for GetLocalVar {
         vec![]
     }
 
-    fn output_type(&self, _program: &Program, function: &Function, _nodes: &Nodes) -> MirType {
+    fn output_type(&self, _program: &Program, function: &Function, _nodes: &Nodes) -> MirTy {
         function.locals[self.local_id].ty.clone()
     }
 
@@ -67,7 +66,7 @@ impl EffectfulNode for SetLocalVar {
         vec![self.value]
     }
 
-    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirType {
-        MirType::Abstract(NetlogoAbstractType::Unit)
+    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
+        MirTy::Abstract(NlAbstractTy::Unit)
     }
 }

@@ -11,7 +11,7 @@ use crate::{
     sim::{
         agent_schema::{PatchSchema, TurtleSchema},
         turtle::BreedId,
-        value::NetlogoMachineType,
+        value::NlMachineTy,
     },
 };
 
@@ -50,7 +50,7 @@ pub struct Program {
 #[derive(Debug)]
 pub struct CustomVarDecl {
     pub name: Rc<str>,
-    pub ty: NetlogoAbstractType,
+    pub ty: NlAbstractTy,
 }
 
 pub type Nodes = SlotMap<NodeId, EffectfulNodeKind>;
@@ -62,7 +62,7 @@ pub struct Function {
     /// includes implicit parameters such as the closure environment, the
     /// context pointer, and the executing agent.
     pub parameters: Vec<LocalId>,
-    pub return_ty: MirType,
+    pub return_ty: MirTy,
     /// The set of all local variables used by the function.
     pub locals: SlotMap<LocalId, LocalDeclaration>,
     /// The structured control flow of the function
@@ -85,7 +85,7 @@ new_key_type! {
 #[derive(Debug)]
 pub struct LocalDeclaration {
     pub debug_name: Option<Rc<str>>,
-    pub ty: MirType,
+    pub ty: MirTy,
     pub storage: LocalStorage,
 }
 
@@ -132,7 +132,7 @@ pub trait EffectfulNode {
 
     /// For certain low level nodes it doesn't make sense to have an abstract
     /// output type; those should return `None`.
-    fn output_type(&self, program: &Program, function: &Function, nodes: &Nodes) -> MirType;
+    fn output_type(&self, program: &Program, function: &Function, nodes: &Nodes) -> MirTy;
 
     /// Returns a possible local transformation that could apply to this node.
     /// This can return at most one transformation, even if multiple are
@@ -242,40 +242,39 @@ pub enum EffectfulNodeKind {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum MirType {
-    Abstract(NetlogoAbstractType),
-    Machine(NetlogoMachineType),
+pub enum MirTy {
+    Abstract(NlAbstractTy),
+    Machine(NlMachineTy),
     /// The "no one cares what type this is" value
     Other,
 }
 
-impl MirType {
-    pub fn repr(&self) -> NetlogoMachineType {
+impl MirTy {
+    pub fn repr(&self) -> NlMachineTy {
         match self {
-            MirType::Abstract(ty) => ty.repr(),
-            MirType::Machine(ty) => ty.clone(),
-            MirType::Other => unimplemented!(),
+            MirTy::Abstract(ty) => ty.repr(),
+            MirTy::Machine(ty) => *ty,
+            MirTy::Other => unimplemented!(),
         }
     }
 
-    pub fn as_abstract(self) -> NetlogoAbstractType {
+    pub fn as_abstract(self) -> NlAbstractTy {
         match self {
-            MirType::Abstract(ty) => ty,
-            MirType::Machine(_) => panic!("cannot convert machine type to abstract type"),
-            MirType::Other => unimplemented!(),
+            MirTy::Abstract(ty) => ty,
+            MirTy::Machine(_) => panic!("cannot convert machine type to abstract type"),
+            MirTy::Other => unimplemented!(),
         }
     }
 }
 
 /// A representation of an element of the lattice making up all NetLogo types.
 #[derive(PartialEq, Debug, Clone)]
-pub enum NetlogoAbstractType {
+pub enum NlAbstractTy {
     Unit,
     /// Top doesn't actually include everything
     Top,
     Numeric,
     Color,
-    Integer,
     Float,
     Boolean,
     String,
@@ -284,40 +283,39 @@ pub enum NetlogoAbstractType {
     Turtle,
     Link,
     Agentset {
-        agent_type: Box<NetlogoAbstractType>,
+        agent_type: Box<NlAbstractTy>,
     },
     Nobody,
     Closure(ClosureType),
     List {
-        element_ty: Box<NetlogoAbstractType>,
+        element_ty: Box<NlAbstractTy>,
     },
 }
 
-impl NetlogoAbstractType {
-    pub fn join(&self, other: &NetlogoAbstractType) -> NetlogoAbstractType {
+impl NlAbstractTy {
+    pub fn join(&self, other: &NlAbstractTy) -> NlAbstractTy {
         let _ = other;
         todo!("TODO(mvp) calculate common supertype")
     }
 
-    pub fn meet(&self, other: &NetlogoAbstractType) -> NetlogoAbstractType {
+    pub fn meet(&self, other: &NlAbstractTy) -> NlAbstractTy {
         let _ = other;
         todo!("TODO(mvp) calculate common subtype")
     }
 
-    pub fn repr(&self) -> NetlogoMachineType {
+    pub fn repr(&self) -> NlMachineTy {
         // TODO(mvp) add machine types for all abstract types
         match self {
-            Self::Unit => NetlogoMachineType::UNIT,
-            Self::Top => NetlogoMachineType::DYN_BOX,
-            Self::Numeric => NetlogoMachineType::FLOAT,
-            Self::Color => NetlogoMachineType::COLOR,
-            Self::Integer => NetlogoMachineType::INTEGER,
-            Self::Float => NetlogoMachineType::FLOAT,
-            Self::Boolean => NetlogoMachineType::BOOLEAN,
-            Self::String => NetlogoMachineType::STRING,
-            Self::Agent => NetlogoMachineType::DYN_BOX,
-            Self::Patch => NetlogoMachineType::PATCH_ID,
-            Self::Turtle => NetlogoMachineType::TURTLE_ID,
+            Self::Unit => NlMachineTy::UNIT,
+            Self::Top => NlMachineTy::DYN_BOX,
+            Self::Numeric => NlMachineTy::FLOAT,
+            Self::Color => NlMachineTy::COLOR,
+            Self::Float => NlMachineTy::FLOAT,
+            Self::Boolean => NlMachineTy::BOOLEAN,
+            Self::String => NlMachineTy::STRING,
+            Self::Agent => NlMachineTy::DYN_BOX,
+            Self::Patch => NlMachineTy::PATCH_ID,
+            Self::Turtle => NlMachineTy::TURTLE_ID,
             Self::Link => todo!(""),
             Self::Agentset { agent_type: _ } => todo!(""),
             Self::Nobody => todo!(),
@@ -329,8 +327,8 @@ impl NetlogoAbstractType {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct ClosureType {
-    pub arg_ty: Box<NetlogoAbstractType>,
-    pub return_ty: Box<NetlogoAbstractType>,
+    pub arg_ty: Box<NlAbstractTy>,
+    pub return_ty: Box<NlAbstractTy>,
 }
 
 impl ClosureType {

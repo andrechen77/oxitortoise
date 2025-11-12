@@ -2,7 +2,7 @@ use derive_more::derive::Display;
 use tracing::trace;
 
 use crate::mir::{
-    ClosureType, EffectfulNode, EffectfulNodeKind, Function, FunctionId, MirType, MirVisitor,
+    ClosureType, EffectfulNode, EffectfulNodeKind, Function, FunctionId, MirTy, MirVisitor,
     NodeId, NodeTransform, Nodes, Program, visit_mir_function,
 };
 
@@ -19,7 +19,7 @@ impl EffectfulNode for Placeholder {
         panic!()
     }
 
-    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirType {
+    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
         panic!()
     }
 

@@ -60,11 +60,23 @@ fn translate_function_signature(
     let mut params = Vec::new();
     for parameter in &function.parameters {
         trace!("adding parameter {:?} with type {:?}", parameter, function.locals[*parameter].ty);
-        params.extend(function.locals[*parameter].ty.repr().to_lir_type());
+        params.extend(
+            function.locals[*parameter]
+                .ty
+                .repr()
+                .info()
+                .lir_repr
+                .expect("function parameter must have known ABI"),
+        );
     }
     trace!("adding return value with type {:?}", function.return_ty);
-    let return_value = function.return_ty.repr().to_lir_type();
-    (params, return_value)
+    let return_value = function
+        .return_ty
+        .repr()
+        .info()
+        .lir_repr
+        .expect("function return type must have known ABI");
+    (params, return_value.into())
 }
 
 #[derive(Debug)]
@@ -136,7 +148,9 @@ fn translate_function_body(
         let local_decl = &function.locals[local_id];
         assert_eq!(local_decl.storage, mir::LocalStorage::Register);
 
-        let &[lir_type] = local_decl.ty.repr().to_lir_type().as_slice() else {
+        let &[lir_type] =
+            local_decl.ty.repr().info().lir_repr.expect("function parameter must have known ABI")
+        else {
             unimplemented!("handle local variables that take up multiple LIR values")
         };
         let lir_var_id = lir_local_var_types.push_and_get_key(lir_type);
@@ -152,7 +166,13 @@ fn translate_function_body(
         }
         match local_decl.storage {
             mir::LocalStorage::Register => {
-                let &[lir_type] = local_decl.ty.repr().to_lir_type().as_slice() else {
+                let &[lir_type] = local_decl
+                    .ty
+                    .repr()
+                    .info()
+                    .lir_repr
+                    .expect("local variable must have known ABI")
+                else {
                     unimplemented!("handle local variables that take up multiple LIR values")
                 };
                 let lir_var_id = lir_local_var_types.push_and_get_key(lir_type);
@@ -170,8 +190,16 @@ fn translate_function_body(
     // initialize the LIR function and its associated metadata
     let mut insn_seqs = TiVec::new();
     let main_body = insn_seqs.push_and_get_key(TiVec::new());
-    let body_block =
-        lir::Block { output_type: function.return_ty.repr().to_lir_type(), body: main_body };
+    let body_block = lir::Block {
+        output_type: function
+            .return_ty
+            .repr()
+            .info()
+            .lir_repr
+            .expect("function return type must have known ABI")
+            .into(),
+        body: main_body,
+    };
     let lir_function = lir::Function {
         local_vars: lir_local_var_types,
         num_parameters: num_lir_parameters,

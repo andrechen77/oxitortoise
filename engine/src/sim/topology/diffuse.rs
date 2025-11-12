@@ -1,30 +1,30 @@
 use std::ops::{Index, IndexMut};
 
 use crate::sim::{
-    agent_schema::AgentFieldDescriptor, topology::TopologySpec, value::Float, world::World,
+    agent_schema::AgentFieldDescriptor, topology::TopologySpec, value::NlFloat, world::World,
 };
 
 /// Diffuses the value of the single variable in the specified buffer.
 pub fn diffuse_8_single_variable_buffer(
     world: &mut World,
     patch_field: AgentFieldDescriptor,
-    fraction: Float,
+    fraction: NlFloat,
 ) {
     let old_values = world.patches.take_patch_values(patch_field);
-    let new_values = world.patches.patch_field_as_mut_array::<Float>(patch_field);
+    let new_values = world.patches.patch_field_as_mut_array::<NlFloat>(patch_field);
     diffuse_8(world.topology.spec(), &old_values, new_values, fraction);
 }
 
-fn diffuse_8<R, W>(topology: &TopologySpec, old_values: &R, new_values: &mut W, fraction: Float)
+fn diffuse_8<R, W>(topology: &TopologySpec, old_values: &R, new_values: &mut W, fraction: NlFloat)
 where
-    R: Index<usize, Output = Float> + ?Sized,
-    W: IndexMut<usize, Output = Float> + ?Sized,
+    R: Index<usize, Output = NlFloat> + ?Sized,
+    W: IndexMut<usize, Output = NlFloat> + ?Sized,
 {
-    let calculate_single_patch_value = |idx: usize, mine: Float, neighbors: [Float; 8]| {
+    let calculate_single_patch_value = |idx: usize, mine: NlFloat, neighbors: [NlFloat; 8]| {
         // the order in which we sum them is important, apparently
         // https://github.com/NetLogo/Tortoise/blob/master/engine/src/main/coffee/engine/core/topology/diffuser.coffee#L8
         let neighbors_sum = idiosyncratic_sum_8(neighbors);
-        let new_val = mine + fraction * (neighbors_sum / Float::new(8.0) - mine);
+        let new_val = mine + fraction * (neighbors_sum / NlFloat::new(8.0) - mine);
 
         new_values[idx] = new_val;
     };
@@ -38,8 +38,8 @@ where
 /// E, N, S, W, NE, NW, SE, SW.
 pub fn run_with_neighbors8<R, F>(topology: &TopologySpec, old_values: &R, mut f: F)
 where
-    R: Index<usize, Output = Float> + ?Sized,
-    F: FnMut(usize, Float, [Float; 8]),
+    R: Index<usize, Output = NlFloat> + ?Sized,
+    F: FnMut(usize, NlFloat, [NlFloat; 8]),
 {
     let w = topology.patches_width as usize;
     let h = topology.patches_height as usize;
@@ -271,7 +271,7 @@ where
     }
 }
 
-fn idiosyncratic_sum_8(nums: [Float; 8]) -> Float {
+fn idiosyncratic_sum_8(nums: [NlFloat; 8]) -> NlFloat {
     idiosyncratic_sum_4(nums[0..4].try_into().expect("size should be correct"))
         + idiosyncratic_sum_4(nums[4..8].try_into().expect("size should be correct"))
 }
@@ -279,7 +279,7 @@ fn idiosyncratic_sum_8(nums: [Float; 8]) -> Float {
 /// Sums 4 numbers identically to
 /// https://github.com/NetLogo/Tortoise/blob/master/engine/src/main/coffee/engine/core/topology/diffuser.coffee#L253.
 /// I'm really not sure why it was done this way.
-fn idiosyncratic_sum_4(nums: [Float; 4]) -> Float {
+fn idiosyncratic_sum_4(nums: [NlFloat; 4]) -> NlFloat {
     let (low1, high1) = if nums[0] < nums[1] { (nums[0], nums[1]) } else { (nums[1], nums[0]) };
     let (low2, high2) = if nums[2] < nums[3] { (nums[2], nums[3]) } else { (nums[3], nums[2]) };
     if low2 < high1 && low1 < high2 {
@@ -354,8 +354,8 @@ mod test {
     /// remapping).
     fn test_run_with_neighbors8(
         topology: TopologySpec,
-        values: Vec<Float>,
-        expected_neighbors_row_major: Vec<[Float; 8]>,
+        values: Vec<NlFloat>,
+        expected_neighbors_row_major: Vec<[NlFloat; 8]>,
     ) {
         let w = topology.patches_width as usize;
         let h = topology.patches_height as usize;
@@ -396,7 +396,7 @@ mod test {
             0, 1, 2,
             3, 4, 5,
             6, 7, 8,
-        ].map(Float::from));
+        ].map(NlFloat::from));
         #[rustfmt::skip]
         let expected_neighbors = Vec::from([
             [
@@ -444,7 +444,7 @@ mod test {
                 7,    8,
                 8, 8, 8,
             ]
-        ].map(|row| row.map(Float::from)));
+        ].map(|row| row.map(NlFloat::from)));
 
         test_run_with_neighbors8(topology, values, expected_neighbors);
     }
@@ -465,7 +465,7 @@ mod test {
             0, 1, 2,
             3, 4, 5,
             6, 7, 8,
-        ].map(Float::from));
+        ].map(NlFloat::from));
         #[rustfmt::skip]
         let expected_neighbors = Vec::from([
             [
@@ -513,7 +513,7 @@ mod test {
                 7,    6,
                 8, 8, 8,
             ]
-        ].map(|row| row.map(Float::from)));
+        ].map(|row| row.map(NlFloat::from)));
 
         test_run_with_neighbors8(topology, values, expected_neighbors);
     }

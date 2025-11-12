@@ -1,11 +1,10 @@
 use std::collections::HashMap;
 
 use engine::{
-    mir::{self, FunctionId, MirType, NetlogoAbstractType},
+    mir::{self, FunctionId, MirTy, NlAbstractTy},
     sim::{
         agent_schema::{PatchSchema, TurtleSchema},
         patch::PatchVarDesc,
-        value::NetlogoMachineType,
     },
     slotmap::SecondaryMap,
 };
@@ -67,10 +66,10 @@ pub fn add_cheats(
     global_names: &GlobalScope,
     fn_info: &SecondaryMap<FunctionId, FnInfo>,
 ) {
-    fn translate_var_type_name(var_type: &CheatVarType) -> NetlogoAbstractType {
+    fn translate_var_type_name(var_type: &CheatVarType) -> NlAbstractTy {
         match var_type {
-            CheatVarType::Float => NetlogoAbstractType::Float,
-            CheatVarType::Boolean => NetlogoAbstractType::Boolean,
+            CheatVarType::Float => NlAbstractTy::Float,
+            CheatVarType::Boolean => NlAbstractTy::Boolean,
         }
     }
 
@@ -126,8 +125,8 @@ pub fn add_cheats(
                 let ty =
                     &mut mir.functions[*fn_id].borrow_mut().locals[fn_info.self_param.unwrap()].ty;
                 *ty = match self_param_type {
-                    CheatSelfParamType::Patch => MirType::Machine(NetlogoMachineType::PATCH_ID),
-                    CheatSelfParamType::Turtle => MirType::Machine(NetlogoMachineType::TURTLE_ID),
+                    CheatSelfParamType::Patch => MirTy::Abstract(NlAbstractTy::Patch),
+                    CheatSelfParamType::Turtle => MirTy::Abstract(NlAbstractTy::Turtle),
                 }
             }
         }

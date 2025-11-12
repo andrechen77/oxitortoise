@@ -1,5 +1,7 @@
 use std::{fmt, mem::offset_of};
 
+use crate::util::type_registry::{Reflect, TypeInfo, TypeInfoOptions};
+
 use super::{patch::PatchId, value};
 
 pub mod diffuse;
@@ -43,6 +45,16 @@ impl Point {
     pub fn round_to_int(self) -> PointInt {
         PointInt { x: self.x.round() as CoordInt, y: self.y.round() as CoordInt }
     }
+}
+
+static POINT_TYPE_INFO: TypeInfo = TypeInfo::new::<Point>(TypeInfoOptions {
+    debug_name: "Point",
+    is_zeroable: true,
+    lir_repr: Some(&[lir::ValType::F64, lir::ValType::F64]),
+});
+
+impl Reflect for Point {
+    const TYPE_INFO: &TypeInfo = &POINT_TYPE_INFO;
 }
 
 impl fmt::Display for Point {
@@ -251,7 +263,7 @@ impl Topology {
         &self,
         point: Point,
         heading: Heading,
-        distance: value::Float,
+        distance: value::NlFloat,
     ) -> Option<Point> {
         let (dx, dy) = heading.dx_and_dy();
         let new_x = point.x + dx * distance.get();
@@ -268,8 +280,8 @@ fn wrap_coordinate(coord: CoordFloat, min: CoordFloat, len: CoordFloat) -> Coord
     min + offset_from_min
 }
 
-pub fn euclidean_distance_no_wrap(a: Point, b: Point) -> value::Float {
+pub fn euclidean_distance_no_wrap(a: Point, b: Point) -> value::NlFloat {
     let dx = a.x - b.x;
     let dy = a.y - b.y;
-    value::Float::new((dx * dx + dy * dy).sqrt())
+    value::NlFloat::new((dx * dx + dy * dy).sqrt())
 }

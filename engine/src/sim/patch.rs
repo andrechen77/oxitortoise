@@ -10,9 +10,12 @@ use crate::{
         agent_schema::{AgentFieldDescriptor, AgentSchemaField, PatchSchema},
         color::Color,
         topology::{CoordFloat, PointInt, TopologySpec},
-        value::{DynBox, Float, NetlogoMachineType},
+        value::{DynBox, NlFloat, NlMachineTy},
     },
-    util::row_buffer::{self, RowBuffer, RowSchema},
+    util::{
+        row_buffer::{self, RowBuffer, RowSchema},
+        type_registry::{Reflect, TypeInfo, TypeInfoOptions},
+    },
 };
 
 // TODO(doc) the patch id uses -1 as a sentinel value for nobody.
@@ -36,6 +39,16 @@ impl Default for PatchId {
     fn default() -> Self {
         Self(u32::MAX)
     }
+}
+
+static PATCH_ID_TYPE_INFO: TypeInfo = TypeInfo::new::<PatchId>(TypeInfoOptions {
+    debug_name: "PatchId",
+    is_zeroable: false,
+    lir_repr: Some(&[lir::ValType::I32]),
+});
+
+impl Reflect for PatchId {
+    const TYPE_INFO: &TypeInfo = &PATCH_ID_TYPE_INFO;
 }
 
 pub const OFFSET_PATCHES_TO_DATA: usize = offset_of!(Patches, data);
@@ -104,7 +117,7 @@ impl Patches {
                     let AgentSchemaField::Other(r#type) = &patches.patch_schema[field] else {
                         panic!("field at index {:?} should be a custom field", field);
                     };
-                    if r#type.is_numeric_zeroable() {
+                    if r#type.info().is_zeroable {
                         patches.data[field.buffer_idx as usize]
                             .as_mut()
                             .unwrap()
@@ -129,7 +142,7 @@ impl Patches {
 
     /// Get a reference to a field of a patch. Returns `None` if the
     /// patch does not exist.
-    pub fn get_patch_field<T: 'static>(
+    pub fn get_patch_field<T: Reflect>(
         &self,
         id: PatchId,
         field: AgentFieldDescriptor,
@@ -163,7 +176,7 @@ impl Patches {
 
     /// Get a mutable reference to a field of a patch. Returns `None` if the
     /// patch does not exist.
-    pub fn get_patch_field_mut<T: 'static>(
+    pub fn get_patch_field_mut<T: Reflect>(
         &mut self,
         id: PatchId,
         field: AgentFieldDescriptor,
@@ -195,7 +208,7 @@ impl Patches {
             .map(|either| either.expect_left("pcolor should always exist in the row buffer"))
     }
 
-    pub fn set_patch_field<T: 'static>(
+    pub fn set_patch_field<T: Reflect>(
         &mut self,
         id: PatchId,
         field: AgentFieldDescriptor,
@@ -218,7 +231,7 @@ impl Patches {
     ///
     /// Panics if the field cannot be interpreted as a float or if it wasn't
     /// put into its own field group with no occupancy bitfield.
-    pub fn take_patch_values(&mut self, field: AgentFieldDescriptor) -> row_buffer::Array<Float> {
+    pub fn take_patch_values(&mut self, field: AgentFieldDescriptor) -> row_buffer::Array<NlFloat> {
         // FIXME when taking patch values, we should make sure that patches
         // don't have fallback values for this field
         self.data[field.buffer_idx as usize].as_mut().unwrap().take_array()
@@ -229,7 +242,7 @@ impl Patches {
     /// Panics if the field cannot be reinterpreted as an array of the specified
     /// type or if it wasn't put into its own field group with no occupancy
     /// bitfield.
-    pub fn patch_field_as_mut_array<T: Copy + 'static>(
+    pub fn patch_field_as_mut_array<T: Copy + Reflect>(
         &mut self,
         field: AgentFieldDescriptor,
     ) -> &mut [T] {
@@ -252,6 +265,16 @@ pub struct PatchBaseData {
     pub plabel: String, // FIXME consider using the netlogo version of string for this
     pub plabel_color: Color,
     // TODO add some way of tracking what turtles are on this patch.
+}
+
+static PATCH_BASE_DATA_TYPE_INFO: TypeInfo = TypeInfo::new::<PatchBaseData>(TypeInfoOptions {
+    debug_name: "PatchBaseData",
+    is_zeroable: false,
+    lir_repr: None,
+});
+
+impl Reflect for PatchBaseData {
+    const TYPE_INFO: &TypeInfo = &PATCH_BASE_DATA_TYPE_INFO;
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -294,14 +317,14 @@ pub fn calc_patch_var_offset(mir: &mir::Program, var: PatchVarDesc) -> (usize, u
     (buffer_offset, stride, field_offset)
 }
 
-pub fn patch_var_type(schema: &PatchSchema, var: PatchVarDesc) -> NetlogoMachineType {
+pub fn patch_var_type(schema: &PatchSchema, var: PatchVarDesc) -> NlMachineTy {
     match var {
-        PatchVarDesc::Pcolor => NetlogoMachineType::COLOR,
+        PatchVarDesc::Pcolor => NlMachineTy::COLOR,
         PatchVarDesc::Custom(field) => {
-            let AgentSchemaField::Other(ty) = &schema[schema.custom_fields()[field]] else {
+            let AgentSchemaField::Other(ty) = schema[schema.custom_fields()[field]] else {
                 unreachable!("this is a custom field, so it cannot be part of the base data");
             };
-            ty.clone()
+            ty
         }
     }
 }

@@ -8,7 +8,7 @@ use crate::sim::{
     tick::Tick,
     topology::{Heading, Point, TopologySpec},
     turtle::TurtleWho,
-    value::Float,
+    value::NlFloat,
 };
 
 // TODO(mvp) add updater fields for the observer's perspective and target agent
@@ -78,7 +78,7 @@ pub struct AliveTurtleUpdate {
     pub pen_mode_and_size: Option<(bool, f64)>,
     pub hidden: Option<bool>,
     pub shape_name: Option<String>,
-    pub size: Option<Float>,
+    pub size: Option<NlFloat>,
     pub position: Option<Point>,
 }
 
