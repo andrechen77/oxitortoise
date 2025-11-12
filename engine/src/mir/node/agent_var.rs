@@ -30,8 +30,9 @@ pub struct GetTurtleVar {
 }
 
 impl EffectfulNode for GetTurtleVar {
+    // Not pure!  Its value depends on `set` calls within the same block.  --Jason B. (11/12/25)
     fn is_pure(&self) -> bool {
-        true
+        false
     }
 
     fn dependencies(&self) -> Vec<NodeId> {
@@ -237,7 +238,7 @@ pub struct GetPatchVar {
 
 impl EffectfulNode for GetPatchVar {
     fn is_pure(&self) -> bool {
-        true
+        false
     }
 
     fn dependencies(&self) -> Vec<NodeId> {
@@ -405,7 +406,7 @@ pub struct GetPatchVarAsTurtleOrPatch {
 
 impl EffectfulNode for GetPatchVarAsTurtleOrPatch {
     fn is_pure(&self) -> bool {
-        true
+        false
     }
 
     fn dependencies(&self) -> Vec<NodeId> {
