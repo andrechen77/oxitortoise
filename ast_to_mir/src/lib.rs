@@ -681,13 +681,13 @@ fn translate_expression(expr: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) -> NodeI
                 args.into_iter().map(|arg| translate_expression(arg, ctx.reborrow())).collect();
             EffectfulNodeKind::from(node::CallUserFn { target, args })
         }
-        N::GlobalVar { name } => {
-            match ctx.mir.global_names.lookup(&name) {
-                Some(NameReferent::Global(_global_id)) => todo!("TODO(mvp_ants) add accessing global variables"),
-                Some(NameReferent::Constant(mk_node)) => mk_node(),
-                _ => panic!("unknown global variable access `{}`", name)
+        N::GlobalVar { name } => match ctx.mir.global_names.lookup(&name) {
+            Some(NameReferent::Global(_global_id)) => {
+                todo!("TODO(mvp_ants) add accessing global variables")
             }
-        }
+            Some(NameReferent::Constant(mk_node)) => mk_node(),
+            _ => panic!("unknown global variable access `{}`", name),
+        },
         N::TurtleVar { name } => {
             let Some(NameReferent::TurtleVar(var)) = ctx.mir.global_names.lookup(&name) else {
                 panic!("unknown turtle variable access `{}`", name);
@@ -702,25 +702,16 @@ fn translate_expression(expr: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) -> NodeI
             };
             let context = ctx.get_context();
             let patch = ctx.get_self_agent();
-            EffectfulNodeKind::from(node::GetPatchVar {
-                context,
-                patch,
-                var,
-            })
+            EffectfulNodeKind::from(node::GetPatchVar { context, patch, var })
         }
         N::TurtleOrPatchVar { name } => {
-            let var =
-              match ctx.mir.global_names.lookup(&name) {
-                  Some(NameReferent::PatchVar(v)) => v,
-                  _ => panic!("unknown patch variable access `{}`", name)
-              };
+            let var = match ctx.mir.global_names.lookup(&name) {
+                Some(NameReferent::PatchVar(v)) => v,
+                _ => panic!("unknown patch variable access `{}`", name),
+            };
             let context = ctx.get_context();
             let agent = ctx.get_self_agent();
-            EffectfulNodeKind::from(node::GetPatchVarAsTurtleOrPatch {
-                context,
-                agent,
-                var,
-            })
+            EffectfulNodeKind::from(node::GetPatchVarAsTurtleOrPatch { context, agent, var })
         }
         N::LinkVar { .. } => {
             todo!("TODO(mvp) add accessing link variables")
@@ -837,12 +828,8 @@ fn translate_expression(expr: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) -> NodeI
             let bound = translate_expression(*bound, ctx.reborrow());
             EffectfulNodeKind::from(node::RandomInt { context: ctx.get_context(), bound })
         }
-        N::ReporterCall(R::Patches([])) => {
-            EffectfulNodeKind::from(node::Agentset::AllPatches)
-        }
-        N::ReporterCall(R::Turtles([])) => {
-            EffectfulNodeKind::from(node::Agentset::AllTurtles)
-        }
+        N::ReporterCall(R::Patches([])) => EffectfulNodeKind::from(node::Agentset::AllPatches),
+        N::ReporterCall(R::Turtles([])) => EffectfulNodeKind::from(node::Agentset::AllTurtles),
         other => panic!("expected an expression, got {:?}", other),
     };
 
@@ -899,14 +886,13 @@ fn translate_let_binding(
 
 fn translate_var_reporter_without_read(ast_node: &ast::Node) -> &str {
     match ast_node {
-      ast::Node::GlobalVar { name } => name,
-      ast::Node::TurtleVar { name } => name,
-      ast::Node::TurtleOrLinkVar { name } => name,
-      ast::Node::PatchVar { name } => name,
-      ast::Node::LinkVar { name } => name,
-      ast::Node::TurtleOrPatchVar { name } => name,
-      _ => panic!("expected a variable reporter call, got {:?}", ast_node)
-
+        ast::Node::GlobalVar { name } => name,
+        ast::Node::TurtleVar { name } => name,
+        ast::Node::TurtleOrLinkVar { name } => name,
+        ast::Node::PatchVar { name } => name,
+        ast::Node::LinkVar { name } => name,
+        ast::Node::TurtleOrPatchVar { name } => name,
+        _ => panic!("expected a variable reporter call, got {:?}", ast_node),
     }
 }
 
