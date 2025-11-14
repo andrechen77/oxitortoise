@@ -1,4 +1,12 @@
 {
+	"globals_var_types": {
+		"EVAPORATION-RATE": "float",
+		"POPULATION": "float",
+		"DIFFUSION-RATE": "float"
+	},
+	"globals_schema": {
+		"type": "default"
+	},
 	"patch_var_types": {
 		"CHEMICAL": "float",
 		"FOOD": "float",

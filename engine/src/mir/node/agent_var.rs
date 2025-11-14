@@ -11,6 +11,7 @@ use crate::{
         NodeTransform, Nodes, Program, WriteLirError, build_lir::LirInsnBuilder, node,
     },
     sim::{
+        observer::calc_global_addr,
         patch::{PatchVarDesc, calc_patch_var_offset},
         turtle::{TurtleVarDesc, calc_turtle_var_offset},
         value::AGENT_INDEX_CONCRETE_TY,
@@ -18,6 +19,87 @@ use crate::{
     util::reflection::Reflect,
     workspace::Workspace,
 };
+
+#[derive(Debug, Display, Copy, Clone)]
+#[display("GetGlobalVar {index:?}")]
+pub struct GetGlobalVar {
+    pub context: NodeId,
+    pub index: usize,
+}
+
+impl EffectfulNode for GetGlobalVar {
+    fn is_pure(&self) -> bool {
+        false
+    }
+
+    fn dependencies(&self) -> Vec<NodeId> {
+        vec![self.context]
+    }
+
+    fn output_type(&self, program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
+        let Some(var) = program.globals.get(self.index) else {
+            panic!("Unknown global var index: {:?}", self.index);
+        };
+        MirTy::Abstract(var.ty.clone())
+    }
+
+    fn lowering_expand(
+        &self,
+        _program: &Program,
+        _fn_id: FunctionId,
+        _my_node_id: NodeId,
+    ) -> Option<NodeTransform> {
+        fn lower_get_global_var(program: &Program, fn_id: FunctionId, my_node_id: NodeId) -> bool {
+            let function = program.functions[fn_id].borrow();
+            let EffectfulNodeKind::GetGlobalVar(my_node) = function.nodes.borrow()[my_node_id]
+            else {
+                panic!("expected node to be a GetGlobalVar");
+            };
+
+            let (data_row, field_offset) = context_to_global_data(
+                &mut function.nodes.borrow_mut(),
+                program,
+                my_node.context,
+                my_node.index,
+            );
+
+            let field = EffectfulNodeKind::from(node::MemLoad {
+                ptr: data_row,
+                offset: field_offset,
+                ty: my_node.output_type(program, &function, &function.nodes.borrow()).repr(),
+            });
+            function.nodes.borrow_mut()[my_node_id] = field;
+            true
+        }
+
+        Some(Box::new(lower_get_global_var))
+    }
+}
+
+fn context_to_global_data(
+    nodes: &mut SlotMap<NodeId, EffectfulNodeKind>,
+    program: &Program,
+    context: NodeId,
+    var: usize,
+) -> (NodeId, usize) {
+    let addr = calc_global_addr(program, var);
+
+    // insert a node that gets the workspace pointer
+    let workspace_ptr = nodes.insert(EffectfulNodeKind::from(node::MemLoad {
+        ptr: context,
+        offset: offset_of!(CanonExecutionContext, workspace),
+        ty: <*mut u8 as Reflect>::CONCRETE_TY,
+    }));
+
+    // insert a node that gets the row buffer
+    let globals = nodes.insert(EffectfulNodeKind::from(node::MemLoad {
+        ptr: workspace_ptr,
+        offset: offset_of!(Workspace, world) + addr.buffer_offset,
+        ty: <*mut u8 as Reflect>::CONCRETE_TY,
+    }));
+
+    (globals, addr.field_offset)
+}
 
 #[derive(Debug, Display, Copy, Clone)]
 #[display("GetTurtleVar {var:?}")]

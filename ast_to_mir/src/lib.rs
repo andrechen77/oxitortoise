@@ -10,8 +10,8 @@ use engine::mir::{EffectfulNode as _, Nodes};
 use engine::util::reflection::Reflect;
 use engine::{
     mir::{
-        self, CustomVarDecl, EffectfulNodeKind, Function, FunctionId, GlobalId, LocalDeclaration,
-        LocalId, LocalStorage, MirTy, NlAbstractTy, NodeId, StatementBlock, StatementKind,
+        self, CustomVarDecl, EffectfulNodeKind, Function, FunctionId, LocalDeclaration, LocalId,
+        LocalStorage, MirTy, NlAbstractTy, NodeId, StatementBlock, StatementKind,
         node::{self, AskRecipient, BinaryOpcode, PatchLocRelation, UnaryOpcode},
     },
     sim::{
@@ -35,7 +35,7 @@ use crate::ast::Ast;
 #[derive(Debug)]
 pub struct GlobalScope {
     constants: HashMap<&'static str, fn() -> EffectfulNodeKind>,
-    global_vars: HashMap<Rc<str>, GlobalId>,
+    global_vars: HashMap<Rc<str>, usize>,
     patch_vars: HashMap<Rc<str>, PatchVarDesc>,
     turtle_vars: HashMap<Rc<str>, TurtleVarDesc>,
     /// The default turtle breed is represented by the empty string.
@@ -48,7 +48,7 @@ pub struct GlobalScope {
 #[derive(Debug)]
 enum NameReferent {
     Constant(fn() -> EffectfulNodeKind),
-    Global(GlobalId),
+    Global(usize),
     TurtleVar(TurtleVarDesc),
     PatchVar(PatchVarDesc),
     #[allow(dead_code)] // remove when turtle breeds are implemented
@@ -85,15 +85,6 @@ impl GlobalScope {
                 }),
                 ("VIOLET", || {
                     EffectfulNodeKind::from(node::Constant { value: UnpackedDynBox::Float(115.0) })
-                }),
-                ("POPULATION", || {
-                    EffectfulNodeKind::from(node::Constant { value: UnpackedDynBox::Float(125.0) })
-                }),
-                ("DIFFUSION-RATE", || {
-                    EffectfulNodeKind::from(node::Constant { value: UnpackedDynBox::Float(50.0) })
-                }),
-                ("EVAPORATION-RATE", || {
-                    EffectfulNodeKind::from(node::Constant { value: UnpackedDynBox::Float(10.0) })
                 }),
             ]),
             global_vars: HashMap::new(),
@@ -141,7 +132,6 @@ impl GlobalScope {
 
 #[derive(Debug)]
 struct MirBuilder {
-    globals: SlotMap<GlobalId, ()>,
     turtle_breeds: SlotMap<BreedId, ()>,
     functions: SlotMap<FunctionId, Function>,
     fn_info: SecondaryMap<FunctionId, FnInfo>,
@@ -157,7 +147,7 @@ pub struct ParseResult {
 pub fn ast_to_mir(ast: Ast) -> anyhow::Result<ParseResult> {
     trace!("Starting AST to MIR conversion");
 
-    let mut global_vars: SlotMap<GlobalId, ()> = SlotMap::with_key();
+    let mut global_var_buffer = Vec::<CustomVarDecl>::new();
     let mut custom_patch_vars = Vec::new();
     let mut custom_turtle_vars = Vec::new();
 
@@ -177,12 +167,14 @@ pub fn ast_to_mir(ast: Ast) -> anyhow::Result<ParseResult> {
         link_vars: _link_var_names,
     } = global_names;
 
-    for global_name in global_var_names {
-        let global_name: Rc<str> = Rc::from(global_name);
-        let global_id = global_vars.insert(());
-        trace!("Adding global variable `{}` with id {:?}", global_name, global_id);
-        global_scope.global_vars.insert(global_name, global_id);
+    for name in global_var_names {
+        let upper = name.to_uppercase();
+        let decl = CustomVarDecl { name: name.clone().into(), ty: NlAbstractTy::Top };
+        global_var_buffer.push(decl);
+        trace!("Adding global variable `{}` at index {:?}", name, global_var_buffer.len() - 1);
+        global_scope.global_vars.insert(upper.into(), usize::from(global_var_buffer.len() - 1));
     }
+
     // add custom patch variables
     for (i, patch_var_name) in patch_var_names.into_iter().enumerate() {
         let patch_var_name: Rc<str> = Rc::from(patch_var_name);
@@ -245,7 +237,6 @@ pub fn ast_to_mir(ast: Ast) -> anyhow::Result<ParseResult> {
     }
 
     let mut mir_builder = MirBuilder {
-        globals: global_vars,
         turtle_breeds,
         functions,
         fn_info,
@@ -262,7 +253,8 @@ pub fn ast_to_mir(ast: Ast) -> anyhow::Result<ParseResult> {
 
     Ok(ParseResult {
         program: mir::Program {
-            globals: mir_builder.globals,
+            globals: global_var_buffer.into(),
+            globals_schema: None,
             turtle_breeds: mir_builder.turtle_breeds,
             custom_turtle_vars,
             custom_patch_vars,
@@ -682,8 +674,9 @@ fn translate_expression(expr: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) -> NodeI
             EffectfulNodeKind::from(node::CallUserFn { target, args })
         }
         N::GlobalVar { name } => match ctx.mir.global_names.lookup(&name) {
-            Some(NameReferent::Global(_global_id)) => {
-                todo!("TODO(mvp_ants) add accessing global variables")
+            Some(NameReferent::Global(index)) => {
+                let context = ctx.get_context();
+                EffectfulNodeKind::from(node::GetGlobalVar { context, index })
             }
             Some(NameReferent::Constant(mk_node)) => mk_node(),
             _ => panic!("unknown global variable access `{}`", name),

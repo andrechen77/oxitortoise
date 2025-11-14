@@ -9,7 +9,7 @@ use slotmap::{SecondaryMap, SlotMap, new_key_type};
 use crate::{
     mir::build_lir::LirInsnBuilder,
     sim::{
-        agent_schema::{PatchSchema, TurtleSchema},
+        agent_schema::{GlobalsSchema, PatchSchema, TurtleSchema},
         color::Color,
         patch::PatchId,
         turtle::{BreedId, TurtleId},
@@ -28,18 +28,13 @@ pub use build_lir::{LirProgramBuilder, mir_to_lir};
 new_key_type! {
     #[derive(Display)]
     #[display("{_0:?}")]
-    pub struct GlobalId;
-}
-
-new_key_type! {
-    #[derive(Display)]
-    #[display("{_0:?}")]
     pub struct FunctionId;
 }
 
 #[derive(Default, Debug)]
 pub struct Program {
-    pub globals: SlotMap<GlobalId, ()>,
+    pub globals: Box<[CustomVarDecl]>,
+    pub globals_schema: Option<GlobalsSchema>,
     pub turtle_breeds: SlotMap<BreedId, ()>,
     pub custom_turtle_vars: Vec<CustomVarDecl>,
     /// None if the turtle schema has not been calculated yet.
@@ -215,6 +210,7 @@ pub enum EffectfulNodeKind {
     DeriveField(DeriveField),
     Diffuse(Diffuse),
     Distancexy(Distancexy),
+    GetGlobalVar(GetGlobalVar),
     GetLocalVar(GetLocalVar),
     GetPatchVar(GetPatchVar),
     GetPatchVarAsTurtleOrPatch(GetPatchVarAsTurtleOrPatch),

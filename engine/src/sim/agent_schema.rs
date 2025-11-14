@@ -21,6 +21,21 @@ use crate::{
 // for an agent is always stored in the first buffer.
 
 #[derive(Debug)]
+pub struct GlobalsSchema {
+    row_schema: RowSchema,
+}
+
+impl GlobalsSchema {
+    pub fn new(field_types: &[ConcreteTy]) -> Self {
+        Self { row_schema: RowSchema::new(&field_types, true) }
+    }
+
+    pub fn row_schema(&self) -> &RowSchema {
+        &self.row_schema
+    }
+}
+
+#[derive(Debug)]
 pub struct TurtleSchema {
     position: AgentFieldDescriptor,
     heading: AgentFieldDescriptor,
@@ -232,7 +247,7 @@ impl Index<AgentFieldDescriptor> for PatchSchema {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct AgentSchemaFieldGroup {
     /// Whether the fields in this group should have an occupancy bitfield
     /// indicating their presence. Indicating `true` subjects the fields to
@@ -243,7 +258,7 @@ pub struct AgentSchemaFieldGroup {
     pub fields: Vec<AgentSchemaField>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum AgentSchemaField {
     /// The "field" which holds base data as built-in agent variables. This
     /// is always the first field in the first row buffer.

@@ -1,2 +1,23 @@
-// TODO(mvp_ants) implement the observer properly.
-// we can use the same variable system as the agents (i.e. row buffers)
+use std::mem::offset_of;
+
+use crate::{mir, util::row_buffer::RowBuffer};
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct GlobalVarAddress {
+    pub buffer_offset: usize,
+    pub field_offset: usize,
+}
+
+pub fn calc_global_addr(mir: &mir::Program, var: usize) -> GlobalVarAddress {
+    let globals_schema = mir.globals_schema.as_ref().unwrap();
+    let row_schema = globals_schema.row_schema();
+    GlobalVarAddress {
+        buffer_offset: offset_of!(Globals, data),
+        field_offset: row_schema.field(var).offset,
+    }
+}
+
+#[derive(Debug)]
+pub struct Globals {
+    data: RowBuffer,
+}
