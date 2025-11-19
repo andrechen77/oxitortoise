@@ -2,15 +2,17 @@
 
 pub mod agentset;
 mod boolean;
+mod r#box;
 mod dynbox;
 mod float;
-mod string;
+mod list;
 
 pub use boolean::NlBool;
+pub use r#box::NlBox;
 pub use dynbox::DynBox;
 pub use dynbox::UnpackedDynBox;
 pub use float::NlFloat;
-pub use string::NlString;
+pub use list::NlList;
 
 use crate::util::reflection::ConcreteTy;
 use crate::util::reflection::Reflect;

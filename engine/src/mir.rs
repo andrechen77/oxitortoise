@@ -14,7 +14,7 @@ use crate::{
         patch::PatchId,
         topology::Point,
         turtle::{BreedId, TurtleId},
-        value::{DynBox, NlBool, NlFloat, NlString},
+        value::{DynBox, NlBool, NlFloat},
     },
     util::reflection::{ConcreteTy, Reflect},
 };
@@ -324,7 +324,7 @@ impl NlAbstractTy {
             Self::Color => Color::CONCRETE_TY,
             Self::Float => NlFloat::CONCRETE_TY,
             Self::Boolean => NlBool::CONCRETE_TY,
-            Self::String => NlString::CONCRETE_TY,
+            Self::String => todo!(),
             Self::Point => Point::CONCRETE_TY,
             Self::Agent => DynBox::CONCRETE_TY,
             Self::Patch => PatchId::CONCRETE_TY,
