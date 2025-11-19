@@ -3,9 +3,9 @@
 use derive_more::derive::Display;
 
 use crate::mir::{
-    Node, Function, MirTy,
+    Function, MirTy,
     NlAbstractTy::{self, Patch, Turtle},
-    NodeId, Nodes, Program, WriteLirError,
+    Node, NodeId, Nodes, Program, WriteLirError,
     build_lir::LirInsnBuilder,
 };
 

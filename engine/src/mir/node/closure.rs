@@ -4,8 +4,8 @@ use derive_more::derive::Display;
 use lir::smallvec::smallvec;
 
 use crate::mir::{
-    ClosureType, Node, Function, FunctionId, LocalId, MirTy, NlAbstractTy, NodeId, Nodes,
-    Program, WriteLirError, build_lir::LirInsnBuilder,
+    ClosureType, Function, FunctionId, LocalId, MirTy, NlAbstractTy, Node, NodeId, Nodes, Program,
+    WriteLirError, build_lir::LirInsnBuilder,
 };
 
 #[derive(Debug, Display)]

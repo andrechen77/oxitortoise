@@ -2,7 +2,7 @@
 
 use derive_more::derive::Display;
 
-use crate::mir::{Node, Function, MirTy, NlAbstractTy, NodeId, Nodes, Program};
+use crate::mir::{Function, MirTy, NlAbstractTy, Node, NodeId, Nodes, Program};
 
 /// Returns a random integer between 0 (inclusive) and bound (exclusive)
 #[derive(Debug, Display)]

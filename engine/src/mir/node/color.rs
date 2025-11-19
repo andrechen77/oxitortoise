@@ -2,7 +2,7 @@
 
 use derive_more::derive::Display;
 
-use crate::mir::{Node, Function, MirTy, NlAbstractTy, NodeId, Nodes, Program};
+use crate::mir::{Function, MirTy, NlAbstractTy, Node, NodeId, Nodes, Program};
 
 /// https://docs.netlogo.org/dict/scale-color.html
 #[derive(Debug, Display)]

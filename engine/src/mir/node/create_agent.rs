@@ -7,7 +7,7 @@ use slotmap::Key as _;
 use crate::{
     exec::jit::host_fn,
     mir::{
-        Node, Function, MirTy, NlAbstractTy, NodeId, Nodes, Program, WriteLirError,
+        Function, MirTy, NlAbstractTy, Node, NodeId, Nodes, Program, WriteLirError,
         build_lir::LirInsnBuilder,
     },
     sim::turtle::BreedId,

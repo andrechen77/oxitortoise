@@ -3,7 +3,7 @@
 use derive_more::derive::Display;
 
 use crate::mir::{
-    Node, Function, FunctionId, MirTy, NodeId, Nodes, Program, WriteLirError,
+    Function, FunctionId, MirTy, Node, NodeId, Nodes, Program, WriteLirError,
     build_lir::LirInsnBuilder,
 };
 

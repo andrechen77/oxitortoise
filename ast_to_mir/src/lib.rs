@@ -10,8 +10,8 @@ use engine::mir::{Node as _, Nodes};
 use engine::util::reflection::Reflect;
 use engine::{
     mir::{
-        self, CustomVarDecl, NodeKind, Function, FunctionId, LocalDeclaration, LocalId,
-        LocalStorage, MirTy, NlAbstractTy, NodeId, StatementBlock, StatementKind,
+        self, CustomVarDecl, Function, FunctionId, LocalDeclaration, LocalId, LocalStorage, MirTy,
+        NlAbstractTy, NodeId, NodeKind, StatementBlock, StatementKind,
         node::{self, AskRecipient, BinaryOpcode, PatchLocRelation, UnaryOpcode},
     },
     sim::{
@@ -62,27 +62,16 @@ impl GlobalScope {
             constants: HashMap::from([
                 (
                     "RED",
-                    (|| {
-                        NodeKind::from(node::Constant {
-                            value: UnpackedDynBox::Float(15.0),
-                        })
-                    }) as fn() -> NodeKind,
+                    (|| NodeKind::from(node::Constant { value: UnpackedDynBox::Float(15.0) }))
+                        as fn() -> NodeKind,
                 ),
                 ("ORANGE", || {
                     NodeKind::from(node::Constant { value: UnpackedDynBox::Float(25.0) })
                 }),
-                ("GREEN", || {
-                    NodeKind::from(node::Constant { value: UnpackedDynBox::Float(55.0) })
-                }),
-                ("CYAN", || {
-                    NodeKind::from(node::Constant { value: UnpackedDynBox::Float(85.0) })
-                }),
-                ("SKY", || {
-                    NodeKind::from(node::Constant { value: UnpackedDynBox::Float(95.0) })
-                }),
-                ("BLUE", || {
-                    NodeKind::from(node::Constant { value: UnpackedDynBox::Float(105.0) })
-                }),
+                ("GREEN", || NodeKind::from(node::Constant { value: UnpackedDynBox::Float(55.0) })),
+                ("CYAN", || NodeKind::from(node::Constant { value: UnpackedDynBox::Float(85.0) })),
+                ("SKY", || NodeKind::from(node::Constant { value: UnpackedDynBox::Float(95.0) })),
+                ("BLUE", || NodeKind::from(node::Constant { value: UnpackedDynBox::Float(105.0) })),
                 ("VIOLET", || {
                     NodeKind::from(node::Constant { value: UnpackedDynBox::Float(115.0) })
                 }),
@@ -648,9 +637,9 @@ fn translate_expression(expr: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) -> NodeI
             };
             NodeKind::from(node::GetLocalVar { local_id })
         }
-        N::Number { value } => NodeKind::from(node::Constant {
-            value: UnpackedDynBox::Float(value.as_f64().unwrap()),
-        }),
+        N::Number { value } => {
+            NodeKind::from(node::Constant { value: UnpackedDynBox::Float(value.as_f64().unwrap()) })
+        }
         N::String { value: _ } => {
             // TODO(mvp_ants) implement string literals
             NodeKind::from(node::Constant { value: UnpackedDynBox::Float(0.0) })
@@ -788,13 +777,7 @@ fn translate_expression(expr: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) -> NodeI
             let turtle = ctx.get_self_agent();
             let heading = translate_expression(*heading, ctx.reborrow());
             let distance = translate_expression(*distance, ctx.reborrow());
-            NodeKind::from(node::PatchRelative {
-                context,
-                turtle,
-                relative_loc,
-                heading,
-                distance,
-            })
+            NodeKind::from(node::PatchRelative { context, turtle, relative_loc, heading, distance })
         }
         N::ReporterCall(R::MaxPxcor([])) => {
             NodeKind::from(node::MaxPxcor { context: ctx.get_context() })
@@ -872,9 +855,7 @@ fn translate_let_binding(
     });
     ctx.mir.fn_info[ctx.fn_id].local_names.insert(name, local_id);
     let value = translate_expression(value, ctx.reborrow());
-    StatementKind::Node(
-        ctx.nodes.insert(NodeKind::from(node::SetLocalVar { local_id, value })),
-    )
+    StatementKind::Node(ctx.nodes.insert(NodeKind::from(node::SetLocalVar { local_id, value })))
 }
 
 fn translate_var_reporter_without_read(ast_node: &ast::Node) -> &str {
