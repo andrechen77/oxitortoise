@@ -1,3 +1,5 @@
+//! The `ask` command.
+
 use derive_more::derive::Display;
 use lir::smallvec::smallvec;
 
@@ -34,12 +36,7 @@ impl EffectfulNode for Ask {
         deps
     }
 
-    fn output_type(
-        &self,
-        _program: &crate::mir::Program,
-        _function: &crate::mir::Function,
-        _nodes: &crate::mir::Nodes,
-    ) -> MirTy {
+    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
         MirTy::Abstract(NlAbstractTy::Unit)
     }
 

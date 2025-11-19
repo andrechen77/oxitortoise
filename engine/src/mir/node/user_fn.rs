@@ -2,7 +2,10 @@
 
 use derive_more::derive::Display;
 
-use crate::mir::{EffectfulNode, FunctionId, MirTy, NodeId};
+use crate::mir::{
+    EffectfulNode, Function, FunctionId, MirTy, NodeId, Nodes, Program, WriteLirError,
+    build_lir::LirInsnBuilder,
+};
 
 #[derive(Debug, Display)]
 #[display("CallUserFn {target:?}")]
@@ -22,23 +25,18 @@ impl EffectfulNode for CallUserFn {
         self.args.clone()
     }
 
-    fn output_type(
-        &self,
-        program: &crate::mir::Program,
-        _function: &crate::mir::Function,
-        _nodes: &crate::mir::Nodes,
-    ) -> MirTy {
+    fn output_type(&self, program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
         program.functions[self.target].borrow().return_ty.clone()
     }
 
     fn write_lir_execution(
         &self,
-        program: &crate::mir::Program,
-        function: &crate::mir::Function,
-        nodes: &crate::mir::Nodes,
+        program: &Program,
+        function: &Function,
+        nodes: &Nodes,
         _my_node_id: NodeId,
-        lir_builder: &mut crate::mir::build_lir::LirInsnBuilder,
-    ) -> Result<(), crate::mir::WriteLirError> {
+        lir_builder: &mut LirInsnBuilder,
+    ) -> Result<(), WriteLirError> {
         let lir_fn_id = lir_builder.program_builder.available_user_functions[&self.target];
         let (_input_type, output_type) =
             &lir_builder.program_builder.function_signatures[&lir_fn_id];

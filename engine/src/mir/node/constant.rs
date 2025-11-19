@@ -1,3 +1,5 @@
+//! Nodes that represent constant/literal values.
+
 use derive_more::derive::Display;
 use lir::smallvec::smallvec;
 

@@ -1,0 +1,93 @@
+//! Primitives for interacting with the tick counter.
+
+use derive_more::derive::Display;
+
+use crate::{
+    exec::jit::host_fn,
+    mir::{
+        EffectfulNode, Function, MirTy, NlAbstractTy, NodeId, Nodes, Program, WriteLirError,
+        build_lir::LirInsnBuilder,
+    },
+};
+
+#[derive(Debug, Display)]
+#[display("ResetTicks {context:?}")]
+pub struct ResetTicks {
+    /// The execution context to use.
+    pub context: NodeId,
+}
+
+impl EffectfulNode for ResetTicks {
+    fn is_pure(&self) -> bool {
+        false
+    }
+
+    fn dependencies(&self) -> Vec<NodeId> {
+        vec![self.context]
+    }
+
+    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
+        MirTy::Abstract(NlAbstractTy::Unit)
+    }
+
+    fn write_lir_execution(
+        &self,
+        program: &Program,
+        function: &Function,
+        nodes: &Nodes,
+        _my_node_id: NodeId,
+        lir_builder: &mut LirInsnBuilder,
+    ) -> Result<(), WriteLirError> {
+        let &[ctx_ptr] = lir_builder.get_node_results(program, function, nodes, self.context)
+        else {
+            panic!("expected node outputting context pointer to be a single LIR value")
+        };
+        lir_builder.push_lir_insn(lir::generate_host_function_call(
+            host_fn::RESET_TICKS,
+            Box::new([ctx_ptr]),
+        ));
+        Ok(())
+    }
+}
+
+#[derive(Debug, Display)]
+#[display("AdvanceTick")]
+pub struct AdvanceTick {
+    /// The context whose tick is being advanced.
+    pub context: NodeId,
+}
+
+impl EffectfulNode for AdvanceTick {
+    fn is_pure(&self) -> bool {
+        false
+    }
+
+    fn dependencies(&self) -> Vec<NodeId> {
+        vec![self.context]
+    }
+
+    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
+        MirTy::Abstract(NlAbstractTy::Unit)
+    }
+}
+
+#[derive(Debug, Display)]
+#[display("GetTick")]
+pub struct GetTick {
+    /// The context whose tick is being gotten.
+    pub context: NodeId,
+}
+
+impl EffectfulNode for GetTick {
+    fn is_pure(&self) -> bool {
+        true
+    }
+
+    fn dependencies(&self) -> Vec<NodeId> {
+        vec![self.context]
+    }
+
+    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
+        MirTy::Abstract(NlAbstractTy::Float)
+    }
+}

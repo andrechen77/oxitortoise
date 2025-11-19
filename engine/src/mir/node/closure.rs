@@ -1,9 +1,11 @@
+//! Nodes to represent closures.
+
 use derive_more::derive::Display;
 use lir::smallvec::smallvec;
 
 use crate::mir::{
-    ClosureType, EffectfulNode, FunctionId, LocalId, MirTy, NlAbstractTy, NodeId, Nodes,
-    WriteLirError, build_lir::LirInsnBuilder,
+    ClosureType, EffectfulNode, Function, FunctionId, LocalId, MirTy, NlAbstractTy, NodeId, Nodes,
+    Program, WriteLirError, build_lir::LirInsnBuilder,
 };
 
 #[derive(Debug, Display)]
@@ -25,12 +27,7 @@ impl EffectfulNode for Closure {
         vec![]
     }
 
-    fn output_type(
-        &self,
-        program: &crate::mir::Program,
-        _function: &crate::mir::Function,
-        _nodes: &crate::mir::Nodes,
-    ) -> crate::mir::MirTy {
+    fn output_type(&self, program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
         let function = program.functions[self.body].borrow();
         let arg_ty = function.locals[function.parameters[ClosureType::PARAM_ARG_IDX]]
             .ty
@@ -45,8 +42,8 @@ impl EffectfulNode for Closure {
 
     fn write_lir_execution(
         &self,
-        _program: &crate::mir::Program,
-        _function: &crate::mir::Function,
+        _program: &Program,
+        _function: &Function,
         _nodes: &Nodes,
         my_node_id: NodeId,
         lir_builder: &mut LirInsnBuilder,

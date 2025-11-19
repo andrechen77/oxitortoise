@@ -1,12 +1,13 @@
-//! Nodes representing the derivation of some "included" value from a larger
-//! "including" value. For example, deriving a pointer to the workspace from a
-//! context pointer.
+//! Nodes representing low-level memory operations.
 
 use derive_more::derive::Display;
 use lir::smallvec::smallvec;
 
 use crate::{
-    mir::{EffectfulNode, MirTy, NodeId, Nodes, WriteLirError},
+    mir::{
+        EffectfulNode, Function, MirTy, NodeId, Nodes, Program, WriteLirError,
+        build_lir::LirInsnBuilder,
+    },
     util::reflection::{ConcreteTy, Reflect},
 };
 
@@ -30,22 +31,17 @@ impl EffectfulNode for MemLoad {
         vec![self.ptr]
     }
 
-    fn output_type(
-        &self,
-        _program: &crate::mir::Program,
-        _function: &crate::mir::Function,
-        _nodes: &crate::mir::Nodes,
-    ) -> crate::mir::MirTy {
+    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
         MirTy::Other
     }
 
     fn write_lir_execution(
         &self,
-        program: &crate::mir::Program,
-        function: &crate::mir::Function,
+        program: &Program,
+        function: &Function,
         nodes: &Nodes,
         my_node_id: NodeId,
-        lir_builder: &mut crate::mir::build_lir::LirInsnBuilder,
+        lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
         let &[lir_type] = self.ty.info().lir_repr.expect("mem load type must have known ABI")
         else {
@@ -87,22 +83,17 @@ impl EffectfulNode for MemStore {
         true
     }
 
-    fn output_type(
-        &self,
-        _program: &crate::mir::Program,
-        _function: &crate::mir::Function,
-        _nodes: &crate::mir::Nodes,
-    ) -> crate::mir::MirTy {
+    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
         MirTy::Other
     }
 
     fn write_lir_execution(
         &self,
-        program: &crate::mir::Program,
-        function: &crate::mir::Function,
+        program: &Program,
+        function: &Function,
         nodes: &Nodes,
         _my_node_id: NodeId,
-        lir_builder: &mut crate::mir::build_lir::LirInsnBuilder,
+        lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
         let &[ptr] = lir_builder.get_node_results(program, function, nodes, self.ptr) else {
             panic!("expected a node that outputs a pointer to be a single LIR value");
@@ -135,22 +126,17 @@ impl EffectfulNode for DeriveField {
         vec![self.ptr]
     }
 
-    fn output_type(
-        &self,
-        _program: &crate::mir::Program,
-        _function: &crate::mir::Function,
-        _nodes: &crate::mir::Nodes,
-    ) -> crate::mir::MirTy {
+    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
         MirTy::Concrete(<*mut u8 as Reflect>::CONCRETE_TY)
     }
 
     fn write_lir_execution(
         &self,
-        program: &crate::mir::Program,
-        function: &crate::mir::Function,
+        program: &Program,
+        function: &Function,
         nodes: &Nodes,
         my_node_id: NodeId,
-        lir_builder: &mut crate::mir::build_lir::LirInsnBuilder,
+        lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
         let &[ptr] = lir_builder.get_node_results(program, function, nodes, self.ptr) else {
             panic!("expected a node that outputs a pointer to be a single LIR value");
@@ -181,22 +167,17 @@ impl EffectfulNode for DeriveElement {
         vec![self.ptr, self.index]
     }
 
-    fn output_type(
-        &self,
-        _program: &crate::mir::Program,
-        _function: &crate::mir::Function,
-        _nodes: &crate::mir::Nodes,
-    ) -> crate::mir::MirTy {
+    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
         MirTy::Concrete(<*mut u8 as Reflect>::CONCRETE_TY)
     }
 
     fn write_lir_execution(
         &self,
-        program: &crate::mir::Program,
-        function: &crate::mir::Function,
+        program: &Program,
+        function: &Function,
         nodes: &Nodes,
         my_node_id: NodeId,
-        lir_builder: &mut crate::mir::build_lir::LirInsnBuilder,
+        lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
         let &[ptr] = lir_builder.get_node_results(program, function, nodes, self.ptr) else {
             panic!("expected a node that outputs a pointer to be a single LIR value");

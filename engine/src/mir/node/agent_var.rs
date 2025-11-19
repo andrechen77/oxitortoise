@@ -1,3 +1,5 @@
+//! Nodes for getting and setting agent and global variables.
+
 use std::mem::offset_of;
 
 use derive_more::derive::Display;

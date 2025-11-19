@@ -1,9 +1,12 @@
+//! Nodes for representing agentsets.
+
 use derive_more::derive::Display;
 
 use crate::mir::{
-    EffectfulNode, Function, MirTy, NlAbstractTy,
-    NlAbstractTy::{Patch, Turtle},
+    EffectfulNode, Function, MirTy,
+    NlAbstractTy::{self, Patch, Turtle},
     NodeId, Nodes, Program, WriteLirError,
+    build_lir::LirInsnBuilder,
 };
 
 #[derive(Debug, Display)]
@@ -41,7 +44,7 @@ impl EffectfulNode for Agentset {
         _function: &Function,
         _nodes: &Nodes,
         _my_node_id: NodeId,
-        _lir_builder: &mut crate::mir::build_lir::LirInsnBuilder,
+        _lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
         todo!("TODO(mvp) write LIR code to generate a value representing the agentset")
     }

@@ -1,3 +1,6 @@
+//! Nodes to represent basic arithmetic operations that should not be host
+//! function calls.
+
 use derive_more::derive::Display;
 
 use crate::{

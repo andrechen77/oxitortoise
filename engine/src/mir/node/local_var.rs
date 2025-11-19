@@ -1,3 +1,5 @@
+//! Nodes for getting and setting local variables.
+
 use derive_more::derive::Display;
 use lir::smallvec::smallvec;
 
