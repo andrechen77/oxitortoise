@@ -5,6 +5,7 @@ use engine::{
     sim::{
         agent_schema::{GlobalsSchema, PatchSchema, TurtleSchema},
         patch::PatchVarDesc,
+        turtle::TurtleVarDesc,
     },
     slotmap::SecondaryMap,
 };
@@ -43,7 +44,15 @@ pub struct CheatPatchSchemaCtor {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum CheatTurtleSchema {
     Default,
-    // TODO(mvp_ants) add ctor type, similar to PatchSchemaCtor
+    Ctor(CheatTurtleSchemaCtor),
+}
+
+#[derive(Deserialize, Debug)]
+pub struct CheatTurtleSchemaCtor {
+    heading_buffer_idx: u8,
+    position_buffer_idx: u8,
+    custom_fields: Vec<u8>,
+    avoid_occupancy_bitfield: Vec<u8>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -65,6 +74,7 @@ pub struct Cheats {
     patch_var_types: Option<HashMap<String, CheatVarType>>,
     patch_schema: Option<CheatPatchSchema>,
     turtle_schema: Option<CheatTurtleSchema>,
+    turtle_var_types: Option<HashMap<String, CheatVarType>>,
     functions: Option<HashMap<String, CheatFunctionInfo>>,
 }
 
@@ -120,8 +130,6 @@ pub fn add_cheats(
         }
     }
 
-    // TODO(mvp_ants) add turtle variable types
-
     if let Some(patch_schema) = &cheats.patch_schema {
         let patch_schema = match patch_schema {
             CheatPatchSchema::Default => PatchSchema::default(),
@@ -143,9 +151,36 @@ pub fn add_cheats(
         program.patch_schema = Some(patch_schema);
     };
 
+    if let Some(turtle_var_types) = &cheats.turtle_var_types {
+        for (var_name, var_type) in turtle_var_types {
+            let TurtleVarDesc::Custom(var_id) =
+                *global_names.turtle_vars.get(var_name.as_str()).unwrap()
+            else {
+                panic!("variable {} is not a custom turtle variable", var_name);
+            };
+            let var_type = translate_var_type_name(var_type);
+            program.custom_turtle_vars[var_id].ty = MirTy::Abstract(var_type);
+        }
+    }
+
     if let Some(turtle_schema) = &cheats.turtle_schema {
         let turtle_schema = match turtle_schema {
             CheatTurtleSchema::Default => TurtleSchema::default(),
+            CheatTurtleSchema::Ctor(ctor_args) => {
+                let custom_fields: Vec<_> = ctor_args
+                    .custom_fields
+                    .iter()
+                    .map(|&buffer_idx| {
+                        (program.custom_turtle_vars[usize::from(buffer_idx)].ty.repr(), buffer_idx)
+                    })
+                    .collect();
+                TurtleSchema::new(
+                    ctor_args.heading_buffer_idx,
+                    ctor_args.position_buffer_idx,
+                    &custom_fields,
+                    &ctor_args.avoid_occupancy_bitfield,
+                )
+            }
         };
         program.turtle_schema = Some(turtle_schema);
     }
