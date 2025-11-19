@@ -265,15 +265,15 @@ impl MirTy {
         match self {
             MirTy::Abstract(ty) => ty.repr(),
             MirTy::Concrete(ty) => *ty,
-            MirTy::Other => unimplemented!(),
+            MirTy::Other => unimplemented!("attempted to get concrete type of unknown type"),
         }
     }
 
     pub fn unwrap_abstract(self) -> NlAbstractTy {
         match self {
             MirTy::Abstract(ty) => ty,
-            MirTy::Concrete(_) => panic!("cannot convert machine type to abstract type"),
-            MirTy::Other => unimplemented!(),
+            MirTy::Concrete(_) => panic!("cannot convert concrete type to abstract type"),
+            MirTy::Other => unimplemented!("cannot convert unknown type to abstract type"),
         }
     }
 }

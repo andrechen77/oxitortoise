@@ -105,7 +105,9 @@ impl<'a> LirInsnBuilder<'a> {
         if !self.node_to_lir.contains_key(&node_id) {
             let node = &nodes[node_id];
             trace!("writing LIR execution for node {:?} {:?}", node_id, node);
-            node.write_lir_execution(program, function, nodes, node_id, self).unwrap();
+            node.write_lir_execution(program, function, nodes, node_id, self).unwrap_or_else(|e| {
+                error!("failed to translate node {:?} to LIR: {:?}", node_id, e);
+            });
         }
         self.node_to_lir
             .get(&node_id)
