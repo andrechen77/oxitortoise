@@ -2,11 +2,14 @@
 
 use derive_more::derive::Display;
 
-use crate::mir::{EffectfulNode, Function, MirTy, NlAbstractTy, NodeId, Nodes, Program};
+use crate::mir::{
+    Node, Function, FunctionId, MirTy, NlAbstractTy, NodeId, NodeTransform, Nodes, Program, node,
+};
 
 #[derive(Debug, Display)]
 #[display("Distancexy {x:?} {y:?}")]
 pub struct Distancexy {
+    pub context: NodeId,
     /// The agent to get the distance from.
     pub agent: NodeId,
     /// The x coordinate.
@@ -15,7 +18,7 @@ pub struct Distancexy {
     pub y: NodeId,
 }
 
-impl EffectfulNode for Distancexy {
+impl Node for Distancexy {
     fn is_pure(&self) -> bool {
         true
     }

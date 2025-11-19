@@ -2,7 +2,7 @@
 
 use derive_more::derive::Display;
 
-use crate::mir::{EffectfulNode, Function, MirTy, NlAbstractTy, NodeId, Nodes, Program};
+use crate::mir::{Node, Function, MirTy, NlAbstractTy, NodeId, Nodes, Program};
 
 #[derive(Debug, Display)]
 #[display("OneOf")]
@@ -11,7 +11,7 @@ pub struct OneOf {
     pub xs: NodeId,
 }
 
-impl EffectfulNode for OneOf {
+impl Node for OneOf {
     fn is_pure(&self) -> bool {
         false
     }

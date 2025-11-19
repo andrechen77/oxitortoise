@@ -5,8 +5,7 @@ use lir::smallvec::smallvec;
 
 use crate::{
     mir::{
-        EffectfulNode, Function, MirTy, NodeId, Nodes, Program, WriteLirError,
-        build_lir::LirInsnBuilder,
+        Function, MirTy, Node, NodeId, Nodes, Program, WriteLirError, build_lir::LirInsnBuilder,
     },
     util::reflection::{ConcreteTy, Reflect},
 };
@@ -22,7 +21,7 @@ pub struct MemLoad {
     pub ty: ConcreteTy,
 }
 
-impl EffectfulNode for MemLoad {
+impl Node for MemLoad {
     fn is_pure(&self) -> bool {
         true
     }
@@ -74,7 +73,7 @@ pub struct MemStore {
     pub value: NodeId,
 }
 
-impl EffectfulNode for MemStore {
+impl Node for MemStore {
     fn dependencies(&self) -> Vec<NodeId> {
         vec![self.ptr, self.value]
     }
@@ -117,7 +116,7 @@ pub struct DeriveField {
     pub offset: usize,
 }
 
-impl EffectfulNode for DeriveField {
+impl Node for DeriveField {
     fn is_pure(&self) -> bool {
         true
     }
@@ -158,7 +157,7 @@ pub struct DeriveElement {
     pub stride: usize,
 }
 
-impl EffectfulNode for DeriveElement {
+impl Node for DeriveElement {
     fn is_pure(&self) -> bool {
         true
     }

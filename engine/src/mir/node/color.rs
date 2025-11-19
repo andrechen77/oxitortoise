@@ -2,7 +2,7 @@
 
 use derive_more::derive::Display;
 
-use crate::mir::{EffectfulNode, Function, MirTy, NlAbstractTy, NodeId, Nodes, Program};
+use crate::mir::{Node, Function, MirTy, NlAbstractTy, NodeId, Nodes, Program};
 
 /// https://docs.netlogo.org/dict/scale-color.html
 #[derive(Debug, Display)]
@@ -14,7 +14,7 @@ pub struct ScaleColor {
     pub range2: NodeId,
 }
 
-impl EffectfulNode for ScaleColor {
+impl Node for ScaleColor {
     fn is_pure(&self) -> bool {
         true
     }

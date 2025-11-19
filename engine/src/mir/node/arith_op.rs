@@ -5,7 +5,7 @@ use derive_more::derive::Display;
 
 use crate::{
     mir::{
-        EffectfulNode, Function, MirTy, NlAbstractTy, NodeId, Nodes, Program, WriteLirError,
+        Node, Function, MirTy, NlAbstractTy, NodeId, Nodes, Program, WriteLirError,
         build_lir::LirInsnBuilder,
     },
     sim::value::NlFloat,
@@ -36,7 +36,7 @@ pub struct BinaryOperation {
     pub rhs: NodeId,
 }
 
-impl EffectfulNode for BinaryOperation {
+impl Node for BinaryOperation {
     fn is_pure(&self) -> bool {
         true
     }
@@ -117,7 +117,7 @@ pub struct UnaryOp {
     pub operand: NodeId,
 }
 
-impl EffectfulNode for UnaryOp {
+impl Node for UnaryOp {
     fn is_pure(&self) -> bool {
         true
     }

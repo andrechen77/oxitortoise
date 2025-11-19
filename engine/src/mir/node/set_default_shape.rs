@@ -3,7 +3,7 @@
 use derive_more::derive::Display;
 
 use crate::mir::{
-    EffectfulNode, Function, MirTy, NlAbstractTy, NodeId, Nodes, Program, WriteLirError,
+    Node, Function, MirTy, NlAbstractTy, NodeId, Nodes, Program, WriteLirError,
     build_lir::LirInsnBuilder,
 };
 
@@ -16,7 +16,7 @@ pub struct SetDefaultShape {
     pub shape: NodeId,
 }
 
-impl EffectfulNode for SetDefaultShape {
+impl Node for SetDefaultShape {
     fn is_pure(&self) -> bool {
         false
     }

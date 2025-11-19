@@ -51,7 +51,7 @@ pub struct CustomVarDecl {
     pub ty: MirTy,
 }
 
-pub type Nodes = SlotMap<NodeId, EffectfulNodeKind>;
+pub type Nodes = SlotMap<NodeId, NodeKind>;
 
 #[derive(derive_more::Debug)]
 pub struct Function {
@@ -123,7 +123,7 @@ pub type NodeTransform = Box<dyn Fn(&Program, FunctionId, NodeId) -> bool>;
 /// The execution of a node may have side effects; if it does, then it is
 /// incorrect to deduplicate nodes; if it doesn't, deduplication is correct.
 #[delegatable_trait]
-pub trait EffectfulNode {
+pub trait Node {
     fn is_pure(&self) -> bool;
 
     fn dependencies(&self) -> Vec<NodeId>;
@@ -151,7 +151,7 @@ pub trait EffectfulNode {
     }
 
     /// Attempt to expand the node into a lower level representation.
-    /// Functionally identical to [`EffectfulNode::transform`], but can assume
+    /// Functionally identical to [`Node::peephole_transform`], but can assume
     /// a later stage of the compilation process (e.g. schemas are defined
     /// and everything).
     fn lowering_expand(
@@ -198,8 +198,8 @@ pub trait EffectfulNode {
 use node::*;
 
 #[derive(Debug, Display, From, Delegate)]
-#[delegate(EffectfulNode)]
-pub enum EffectfulNodeKind {
+#[delegate(Node)]
+pub enum NodeKind {
     Agentset(Agentset),
     AdvanceTick(AdvanceTick),
     Ask(Ask),

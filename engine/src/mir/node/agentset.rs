@@ -3,7 +3,7 @@
 use derive_more::derive::Display;
 
 use crate::mir::{
-    EffectfulNode, Function, MirTy,
+    Node, Function, MirTy,
     NlAbstractTy::{self, Patch, Turtle},
     NodeId, Nodes, Program, WriteLirError,
     build_lir::LirInsnBuilder,
@@ -18,7 +18,7 @@ pub enum Agentset {
     // TODO(mvp) add links
 }
 
-impl EffectfulNode for Agentset {
+impl Node for Agentset {
     fn is_pure(&self) -> bool {
         true
     }

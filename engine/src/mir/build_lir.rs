@@ -11,7 +11,7 @@ use lir::{
 use slotmap::{SecondaryMap, SlotMap};
 use tracing::{error, instrument, trace};
 
-use crate::mir::{self, EffectfulNode, Nodes};
+use crate::mir::{self, Node, Nodes};
 
 #[derive(Debug)]
 pub struct LirProgramBuilder {

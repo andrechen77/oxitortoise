@@ -4,7 +4,7 @@ use derive_more::derive::Display;
 
 use crate::{
     mir::{
-        EffectfulNode, Function, MirTy, NlAbstractTy, NodeId, Nodes, Program, WriteLirError,
+        Node, Function, MirTy, NlAbstractTy, NodeId, Nodes, Program, WriteLirError,
         build_lir::LirInsnBuilder,
     },
     sim::patch::PatchVarDesc,
@@ -21,7 +21,7 @@ pub struct Diffuse {
     pub amt: NodeId,
 }
 
-impl EffectfulNode for Diffuse {
+impl Node for Diffuse {
     fn is_pure(&self) -> bool {
         false
     }

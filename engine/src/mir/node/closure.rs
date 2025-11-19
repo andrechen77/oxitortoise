@@ -4,7 +4,7 @@ use derive_more::derive::Display;
 use lir::smallvec::smallvec;
 
 use crate::mir::{
-    ClosureType, EffectfulNode, Function, FunctionId, LocalId, MirTy, NlAbstractTy, NodeId, Nodes,
+    ClosureType, Node, Function, FunctionId, LocalId, MirTy, NlAbstractTy, NodeId, Nodes,
     Program, WriteLirError, build_lir::LirInsnBuilder,
 };
 
@@ -18,7 +18,7 @@ pub struct Closure {
     pub body: FunctionId,
 }
 
-impl EffectfulNode for Closure {
+impl Node for Closure {
     fn is_pure(&self) -> bool {
         true
     }

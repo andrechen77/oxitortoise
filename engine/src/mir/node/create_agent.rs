@@ -7,7 +7,7 @@ use slotmap::Key as _;
 use crate::{
     exec::jit::host_fn,
     mir::{
-        EffectfulNode, Function, MirTy, NlAbstractTy, NodeId, Nodes, Program, WriteLirError,
+        Node, Function, MirTy, NlAbstractTy, NodeId, Nodes, Program, WriteLirError,
         build_lir::LirInsnBuilder,
     },
     sim::turtle::BreedId,
@@ -26,7 +26,7 @@ pub struct CreateTurtles {
     pub body: NodeId,
 }
 
-impl EffectfulNode for CreateTurtles {
+impl Node for CreateTurtles {
     fn is_pure(&self) -> bool {
         false
     }

@@ -3,7 +3,7 @@
 use derive_more::derive::Display;
 
 use crate::mir::{
-    EffectfulNode, Function, MirTy, NlAbstractTy, NodeId, Nodes, Program, WriteLirError,
+    Function, MirTy, NlAbstractTy, Node, NodeId, Nodes, Program, WriteLirError,
     build_lir::LirInsnBuilder,
 };
 
@@ -18,7 +18,7 @@ pub struct OffsetDistanceByHeading {
     pub heading: NodeId,
 }
 
-impl EffectfulNode for OffsetDistanceByHeading {
+impl Node for OffsetDistanceByHeading {
     fn is_pure(&self) -> bool {
         true
     }
@@ -52,7 +52,7 @@ pub struct PatchAt {
     pub y: NodeId,
 }
 
-impl EffectfulNode for PatchAt {
+impl Node for PatchAt {
     fn is_pure(&self) -> bool {
         true
     }
@@ -73,7 +73,7 @@ pub struct MaxPxcor {
     pub context: NodeId,
 }
 
-impl EffectfulNode for MaxPxcor {
+impl Node for MaxPxcor {
     fn is_pure(&self) -> bool {
         true
     }
@@ -94,7 +94,7 @@ pub struct MaxPycor {
     pub context: NodeId,
 }
 
-impl EffectfulNode for MaxPycor {
+impl Node for MaxPycor {
     fn is_pure(&self) -> bool {
         true
     }

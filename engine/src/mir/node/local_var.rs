@@ -4,7 +4,7 @@ use derive_more::derive::Display;
 use lir::smallvec::smallvec;
 
 use crate::mir::{
-    EffectfulNode, Function, LocalId, MirTy, NlAbstractTy, NodeId, Nodes, Program, WriteLirError,
+    Node, Function, LocalId, MirTy, NlAbstractTy, NodeId, Nodes, Program, WriteLirError,
     build_lir::{LirInsnBuilder, LocalLocation},
 };
 
@@ -15,7 +15,7 @@ pub struct GetLocalVar {
     pub local_id: LocalId,
 }
 
-impl EffectfulNode for GetLocalVar {
+impl Node for GetLocalVar {
     fn is_pure(&self) -> bool {
         true
     }
@@ -61,7 +61,7 @@ pub struct SetLocalVar {
     pub value: NodeId,
 }
 
-impl EffectfulNode for SetLocalVar {
+impl Node for SetLocalVar {
     fn is_pure(&self) -> bool {
         false
     }

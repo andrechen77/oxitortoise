@@ -2,15 +2,15 @@ use derive_more::derive::Display;
 use tracing::trace;
 
 use crate::mir::{
-    ClosureType, EffectfulNode, EffectfulNodeKind, Function, FunctionId, MirTy, MirVisitor, NodeId,
-    NodeTransform, Nodes, Program, visit_mir_function,
+    ClosureType, Function, FunctionId, MirTy, MirVisitor, Node, NodeId, NodeKind, NodeTransform,
+    Nodes, Program, visit_mir_function,
 };
 
 #[derive(Debug, Display)]
 #[display("Placeholder")]
 pub struct Placeholder {}
 
-impl EffectfulNode for Placeholder {
+impl Node for Placeholder {
     fn is_pure(&self) -> bool {
         panic!()
     }
@@ -99,11 +99,11 @@ pub fn optimize_of_agent_type(program: &Program, fn_id: FunctionId) {
             let nodes = function.nodes.borrow();
             let node = &nodes[node_id];
 
-            if let EffectfulNodeKind::Of(of) = &node {
+            if let NodeKind::Of(of) = &node {
                 trace!("Optimizing Of node {:?}", node);
 
                 let recipients = &nodes[of.recipients];
-                let EffectfulNodeKind::Closure(closure) = &nodes[of.body] else {
+                let NodeKind::Closure(closure) = &nodes[of.body] else {
                     return;
                 };
                 let mut body = self.program.functions[closure.body].borrow_mut();

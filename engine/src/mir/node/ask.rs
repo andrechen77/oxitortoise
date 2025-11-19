@@ -6,8 +6,8 @@ use lir::smallvec::smallvec;
 use crate::{
     exec::jit::host_fn,
     mir::{
-        EffectfulNode, EffectfulNodeKind, Function, FunctionId, MirTy, NlAbstractTy, NodeId,
-        NodeTransform, Nodes, Program, WriteLirError, build_lir::LirInsnBuilder, node,
+        Function, FunctionId, MirTy, NlAbstractTy, Node, NodeId, NodeKind, NodeTransform, Nodes,
+        Program, WriteLirError, build_lir::LirInsnBuilder, node,
     },
 };
 
@@ -23,7 +23,7 @@ pub struct Ask {
     pub body: NodeId,
 }
 
-impl EffectfulNode for Ask {
+impl Node for Ask {
     fn is_pure(&self) -> bool {
         false
     }
@@ -55,20 +55,20 @@ impl EffectfulNode for Ask {
             let function = program.functions[fn_id].borrow();
             let mut nodes = function.nodes.borrow_mut();
 
-            let EffectfulNodeKind::Ask(ask) = &nodes[my_node_id] else {
+            let NodeKind::Ask(ask) = &nodes[my_node_id] else {
                 panic!("expected node to be an Ask");
             };
             let AskRecipient::Any(recipients) = ask.recipients else {
                 return false;
             };
 
-            if let EffectfulNodeKind::Agentset(agentset) = &nodes[recipients] {
+            if let NodeKind::Agentset(agentset) = &nodes[recipients] {
                 let new_recipients = match agentset {
                     node::Agentset::AllTurtles => AskRecipient::AllTurtles,
                     node::Agentset::AllPatches => AskRecipient::AllPatches,
                 };
 
-                let EffectfulNodeKind::Ask(ask) = &mut nodes[my_node_id] else {
+                let NodeKind::Ask(ask) = &mut nodes[my_node_id] else {
                     panic!("expected node to be an Ask");
                 };
                 ask.recipients = new_recipients;

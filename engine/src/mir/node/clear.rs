@@ -5,7 +5,7 @@ use derive_more::derive::Display;
 use crate::{
     exec::jit::host_fn,
     mir::{
-        EffectfulNode, Function, MirTy, NlAbstractTy, NodeId, Nodes, Program, WriteLirError,
+        Function, MirTy, NlAbstractTy, Node, NodeId, Nodes, Program, WriteLirError,
         build_lir::LirInsnBuilder,
     },
 };
@@ -17,7 +17,7 @@ pub struct ClearAll {
     pub context: NodeId,
 }
 
-impl EffectfulNode for ClearAll {
+impl Node for ClearAll {
     fn is_pure(&self) -> bool {
         false
     }

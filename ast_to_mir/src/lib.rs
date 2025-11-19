@@ -6,11 +6,11 @@ use std::{collections::HashMap, fs, rc::Rc};
 
 use ast::CommandBlock;
 
-use engine::mir::{EffectfulNode as _, Nodes};
+use engine::mir::{Node as _, Nodes};
 use engine::util::reflection::Reflect;
 use engine::{
     mir::{
-        self, CustomVarDecl, EffectfulNodeKind, Function, FunctionId, LocalDeclaration, LocalId,
+        self, CustomVarDecl, NodeKind, Function, FunctionId, LocalDeclaration, LocalId,
         LocalStorage, MirTy, NlAbstractTy, NodeId, StatementBlock, StatementKind,
         node::{self, AskRecipient, BinaryOpcode, PatchLocRelation, UnaryOpcode},
     },
@@ -34,7 +34,7 @@ use crate::ast::Ast;
 
 #[derive(Debug)]
 pub struct GlobalScope {
-    constants: HashMap<&'static str, fn() -> EffectfulNodeKind>,
+    constants: HashMap<&'static str, fn() -> NodeKind>,
     global_vars: HashMap<Rc<str>, usize>,
     patch_vars: HashMap<Rc<str>, PatchVarDesc>,
     turtle_vars: HashMap<Rc<str>, TurtleVarDesc>,
@@ -47,7 +47,7 @@ pub struct GlobalScope {
 #[non_exhaustive]
 #[derive(Debug)]
 enum NameReferent {
-    Constant(fn() -> EffectfulNodeKind),
+    Constant(fn() -> NodeKind),
     Global(usize),
     TurtleVar(TurtleVarDesc),
     PatchVar(PatchVarDesc),
@@ -63,28 +63,28 @@ impl GlobalScope {
                 (
                     "RED",
                     (|| {
-                        EffectfulNodeKind::from(node::Constant {
+                        NodeKind::from(node::Constant {
                             value: UnpackedDynBox::Float(15.0),
                         })
-                    }) as fn() -> EffectfulNodeKind,
+                    }) as fn() -> NodeKind,
                 ),
                 ("ORANGE", || {
-                    EffectfulNodeKind::from(node::Constant { value: UnpackedDynBox::Float(25.0) })
+                    NodeKind::from(node::Constant { value: UnpackedDynBox::Float(25.0) })
                 }),
                 ("GREEN", || {
-                    EffectfulNodeKind::from(node::Constant { value: UnpackedDynBox::Float(55.0) })
+                    NodeKind::from(node::Constant { value: UnpackedDynBox::Float(55.0) })
                 }),
                 ("CYAN", || {
-                    EffectfulNodeKind::from(node::Constant { value: UnpackedDynBox::Float(85.0) })
+                    NodeKind::from(node::Constant { value: UnpackedDynBox::Float(85.0) })
                 }),
                 ("SKY", || {
-                    EffectfulNodeKind::from(node::Constant { value: UnpackedDynBox::Float(95.0) })
+                    NodeKind::from(node::Constant { value: UnpackedDynBox::Float(95.0) })
                 }),
                 ("BLUE", || {
-                    EffectfulNodeKind::from(node::Constant { value: UnpackedDynBox::Float(105.0) })
+                    NodeKind::from(node::Constant { value: UnpackedDynBox::Float(105.0) })
                 }),
                 ("VIOLET", || {
-                    EffectfulNodeKind::from(node::Constant { value: UnpackedDynBox::Float(115.0) })
+                    NodeKind::from(node::Constant { value: UnpackedDynBox::Float(115.0) })
                 }),
             ]),
             global_vars: HashMap::new(),
@@ -416,7 +416,7 @@ fn build_body(
     trace!("building body");
 
     // the nodes for this function
-    let mut nodes: SlotMap<NodeId, EffectfulNodeKind> = SlotMap::with_key();
+    let mut nodes: SlotMap<NodeId, NodeKind> = SlotMap::with_key();
 
     // the statements of the current control flow construct
     let (statements, return_ty) = translate_statement_block(
@@ -464,7 +464,7 @@ impl<'a> FnBodyBuilderCtx<'a> {
 
     /// Returns a node that gets the context parameter for the current function
     fn get_context(&mut self) -> NodeId {
-        let id = self.nodes.insert(EffectfulNodeKind::from(node::GetLocalVar {
+        let id = self.nodes.insert(NodeKind::from(node::GetLocalVar {
             local_id: self.mir.fn_info[self.fn_id]
                 .context_param
                 .expect("expected context parameter"),
@@ -476,7 +476,7 @@ impl<'a> FnBodyBuilderCtx<'a> {
     /// Returns a node that gets the self parameter.
     fn get_self_agent(&mut self) -> NodeId {
         let self_param = self.mir.fn_info[self.fn_id].self_param.expect("expected self parameter");
-        self.nodes.insert(EffectfulNodeKind::from(node::GetLocalVar { local_id: self_param }))
+        self.nodes.insert(NodeKind::from(node::GetLocalVar { local_id: self_param }))
     }
 }
 
@@ -489,7 +489,7 @@ fn translate_statement(ast_node: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) {
         // match return the node and put it into a statement afterward.. there
         // will be an early break from 'stmt in the big match above if it is a
         // different kind
-        let mir_node: EffectfulNodeKind = match ast_node {
+        let mir_node: NodeKind = match ast_node {
             N::LetBinding { var_name, value } => {
                 break 'stmt translate_let_binding(
                     Rc::from(var_name.as_str()),
@@ -509,7 +509,7 @@ fn translate_statement(ast_node: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) {
                 };
                 let args =
                     args.into_iter().map(|arg| translate_expression(arg, ctx.reborrow())).collect();
-                EffectfulNodeKind::from(node::CallUserFn { target, args })
+                NodeKind::from(node::CallUserFn { target, args })
             }
             N::CommandCall(C::Report([value])) => {
                 let value = translate_expression(*value, ctx.reborrow());
@@ -518,7 +518,7 @@ fn translate_statement(ast_node: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) {
             N::CommandCall(C::Stop([])) => break 'stmt StatementKind::Stop,
             N::CommandCall(C::ClearAll([])) => {
                 let context = ctx.get_context();
-                EffectfulNodeKind::from(node::ClearAll { context })
+                NodeKind::from(node::ClearAll { context })
             }
             N::CommandCall(C::CreateTurtles([population, body])) => {
                 let context = ctx.get_context();
@@ -529,7 +529,7 @@ fn translate_statement(ast_node: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) {
                     AgentClass::Turtle,
                     ctx.reborrow(),
                 );
-                EffectfulNodeKind::from(node::CreateTurtles {
+                NodeKind::from(node::CreateTurtles {
                     context,
                     breed: ctx.mir.global_names.turtle_breeds[""], // TODO(mvp) add creating other turtle breeds
                     num_turtles: population,
@@ -546,12 +546,12 @@ fn translate_statement(ast_node: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) {
                     NameReferent::TurtleVar(var) => {
                         let context = ctx.get_context();
                         let turtle = ctx.get_self_agent();
-                        EffectfulNodeKind::from(node::SetTurtleVar { context, turtle, var, value })
+                        NodeKind::from(node::SetTurtleVar { context, turtle, var, value })
                     }
                     NameReferent::PatchVar(var) => {
                         let context = ctx.get_context();
                         let agent = ctx.get_self_agent();
-                        EffectfulNodeKind::from(node::SetPatchVarAsTurtleOrPatch {
+                        NodeKind::from(node::SetPatchVarAsTurtleOrPatch {
                             context,
                             agent,
                             var,
@@ -566,33 +566,33 @@ fn translate_statement(ast_node: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) {
                 let context = ctx.get_context();
                 let turtle = ctx.get_self_agent();
                 let distance = translate_expression(*distance, ctx.reborrow());
-                EffectfulNodeKind::from(node::TurtleForward { context, turtle, distance })
+                NodeKind::from(node::TurtleForward { context, turtle, distance })
             }
             N::CommandCall(C::Left([heading])) => {
                 let context = ctx.get_context();
                 let turtle = ctx.get_self_agent();
                 let angle_rt = translate_expression(*heading, ctx.reborrow());
-                let angle_lt = ctx.nodes.insert(EffectfulNodeKind::from(node::UnaryOp {
+                let angle_lt = ctx.nodes.insert(NodeKind::from(node::UnaryOp {
                     op: UnaryOpcode::Neg,
                     operand: angle_rt,
                 }));
-                EffectfulNodeKind::from(node::TurtleRotate { context, turtle, angle: angle_lt })
+                NodeKind::from(node::TurtleRotate { context, turtle, angle: angle_lt })
             }
             N::CommandCall(C::Right([heading])) => {
                 let context = ctx.get_context();
                 let turtle = ctx.get_self_agent();
                 let angle = translate_expression(*heading, ctx.reborrow());
-                EffectfulNodeKind::from(node::TurtleRotate { context, turtle, angle })
+                NodeKind::from(node::TurtleRotate { context, turtle, angle })
             }
             N::CommandCall(C::ResetTicks([])) => {
-                EffectfulNodeKind::from(node::ResetTicks { context: ctx.get_context() })
+                NodeKind::from(node::ResetTicks { context: ctx.get_context() })
             }
             N::CommandCall(C::Ask([recipients, body])) => {
                 let context = ctx.get_context();
                 let recipients = translate_expression(*recipients, ctx.reborrow());
                 let body =
                     translate_ephemeral_closure(*body, ctx.fn_id, AgentClass::Any, ctx.reborrow());
-                EffectfulNodeKind::from(node::Ask {
+                NodeKind::from(node::Ask {
                     context,
                     recipients: AskRecipient::Any(recipients),
                     body,
@@ -621,15 +621,15 @@ fn translate_statement(ast_node: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) {
                 };
                 let context = ctx.get_context();
                 let amt = translate_expression(*amt, ctx.reborrow());
-                EffectfulNodeKind::from(node::Diffuse { context, variable: var_desc, amt })
+                NodeKind::from(node::Diffuse { context, variable: var_desc, amt })
             }
             N::CommandCall(C::Tick([])) => {
-                EffectfulNodeKind::from(node::AdvanceTick { context: ctx.get_context() })
+                NodeKind::from(node::AdvanceTick { context: ctx.get_context() })
             }
             N::CommandCall(C::SetDefaultShape([breed, shape])) => {
                 let breed = translate_expression(*breed, ctx.reborrow());
                 let shape = translate_expression(*shape, ctx.reborrow());
-                EffectfulNodeKind::from(node::SetDefaultShape { breed, shape })
+                NodeKind::from(node::SetDefaultShape { breed, shape })
             }
             other => panic!("expected a statement, got {:?}", other),
         };
@@ -641,26 +641,26 @@ fn translate_statement(ast_node: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) {
 fn translate_expression(expr: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) -> NodeId {
     use ast::Node as N;
     use ast::ReporterCall as R;
-    let mir_node: EffectfulNodeKind = match expr {
+    let mir_node: NodeKind = match expr {
         N::LetRef { name } | N::ProcedureArgRef { name } => {
             let Some(&local_id) = ctx.mir.fn_info[ctx.fn_id].local_names.get(name.as_str()) else {
                 unreachable!("unknown variable reference: {}", name);
             };
-            EffectfulNodeKind::from(node::GetLocalVar { local_id })
+            NodeKind::from(node::GetLocalVar { local_id })
         }
-        N::Number { value } => EffectfulNodeKind::from(node::Constant {
+        N::Number { value } => NodeKind::from(node::Constant {
             value: UnpackedDynBox::Float(value.as_f64().unwrap()),
         }),
         N::String { value: _ } => {
             // TODO(mvp_ants) implement string literals
-            EffectfulNodeKind::from(node::Constant { value: UnpackedDynBox::Float(0.0) })
+            NodeKind::from(node::Constant { value: UnpackedDynBox::Float(0.0) })
         }
         N::List { items } => {
             let items =
                 items.into_iter().map(|item| translate_expression(item, ctx.reborrow())).collect();
-            EffectfulNodeKind::from(node::ListLiteral { items })
+            NodeKind::from(node::ListLiteral { items })
         }
-        N::Nobody => EffectfulNodeKind::from(node::Constant { value: UnpackedDynBox::Nobody }),
+        N::Nobody => NodeKind::from(node::Constant { value: UnpackedDynBox::Nobody }),
         N::ReporterProcCall { name, args } => {
             let referent = ctx.mir.global_names.lookup(&name).unwrap_or_else(|| {
                 panic!("unknown reporter procedure {:?}", name);
@@ -670,12 +670,12 @@ fn translate_expression(expr: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) -> NodeI
             };
             let args =
                 args.into_iter().map(|arg| translate_expression(arg, ctx.reborrow())).collect();
-            EffectfulNodeKind::from(node::CallUserFn { target, args })
+            NodeKind::from(node::CallUserFn { target, args })
         }
         N::GlobalVar { name } => match ctx.mir.global_names.lookup(&name) {
             Some(NameReferent::Global(index)) => {
                 let context = ctx.get_context();
-                EffectfulNodeKind::from(node::GetGlobalVar { context, index })
+                NodeKind::from(node::GetGlobalVar { context, index })
             }
             Some(NameReferent::Constant(mk_node)) => mk_node(),
             _ => panic!("unknown global variable access `{}`", name),
@@ -686,7 +686,7 @@ fn translate_expression(expr: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) -> NodeI
             };
             let context = ctx.get_context();
             let turtle = ctx.get_self_agent();
-            EffectfulNodeKind::from(node::GetTurtleVar { context, turtle, var })
+            NodeKind::from(node::GetTurtleVar { context, turtle, var })
         }
         N::PatchVar { name } => {
             let Some(NameReferent::PatchVar(var)) = ctx.mir.global_names.lookup(&name) else {
@@ -694,7 +694,7 @@ fn translate_expression(expr: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) -> NodeI
             };
             let context = ctx.get_context();
             let patch = ctx.get_self_agent();
-            EffectfulNodeKind::from(node::GetPatchVar { context, patch, var })
+            NodeKind::from(node::GetPatchVar { context, patch, var })
         }
         N::TurtleOrPatchVar { name } => {
             let var = match ctx.mir.global_names.lookup(&name) {
@@ -703,7 +703,7 @@ fn translate_expression(expr: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) -> NodeI
             };
             let context = ctx.get_context();
             let agent = ctx.get_self_agent();
-            EffectfulNodeKind::from(node::GetPatchVarAsTurtleOrPatch { context, agent, var })
+            NodeKind::from(node::GetPatchVarAsTurtleOrPatch { context, agent, var })
         }
         N::LinkVar { .. } => {
             todo!("TODO(mvp) add accessing link variables")
@@ -714,14 +714,14 @@ fn translate_expression(expr: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) -> NodeI
             };
             let context = ctx.get_context();
             let turtle = ctx.get_self_agent();
-            EffectfulNodeKind::from(node::GetTurtleVar { context, turtle, var })
+            NodeKind::from(node::GetTurtleVar { context, turtle, var })
         }
         N::ReporterCall(R::Of([body, recipients])) => {
             let context = ctx.get_context();
             let recipients = translate_expression(*recipients, ctx.reborrow());
             let body =
                 translate_ephemeral_closure(*body, ctx.fn_id, AgentClass::Any, ctx.reborrow());
-            EffectfulNodeKind::from(node::Of { context, recipients, body })
+            NodeKind::from(node::Of { context, recipients, body })
         }
         #[rustfmt::skip]
         N::ReporterCall(reporter @ (
@@ -753,23 +753,23 @@ fn translate_expression(expr: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) -> NodeI
             };
             let lhs = translate_expression(*lhs, ctx.reborrow());
             let rhs = translate_expression(*rhs, ctx.reborrow());
-            EffectfulNodeKind::from(node::BinaryOperation { op, lhs, rhs })
+            NodeKind::from(node::BinaryOperation { op, lhs, rhs })
         }
         N::ReporterCall(R::Not([operand])) => {
             let operand = translate_expression(*operand, ctx.reborrow());
-            EffectfulNodeKind::from(node::UnaryOp { op: UnaryOpcode::Not, operand })
+            NodeKind::from(node::UnaryOp { op: UnaryOpcode::Not, operand })
         }
         N::ReporterCall(R::Distancexy([x, y])) => {
             let agent = ctx.get_self_agent();
             let x = translate_expression(*x, ctx.reborrow());
             let y = translate_expression(*y, ctx.reborrow());
-            EffectfulNodeKind::from(node::Distancexy { agent, x, y })
+            NodeKind::from(node::Distancexy { agent, x, y })
         }
         N::ReporterCall(R::CanMove([distance])) => {
             let context = ctx.get_context();
             let turtle = ctx.get_self_agent();
             let distance = translate_expression(*distance, ctx.reborrow());
-            EffectfulNodeKind::from(node::CanMove { context, turtle, distance })
+            NodeKind::from(node::CanMove { context, turtle, distance })
         }
         N::ReporterCall(
             reporter @ (R::PatchRightAndAhead { .. } | R::PatchLeftAndAhead { .. }),
@@ -787,7 +787,7 @@ fn translate_expression(expr: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) -> NodeI
             let turtle = ctx.get_self_agent();
             let heading = translate_expression(*heading, ctx.reborrow());
             let distance = translate_expression(*distance, ctx.reborrow());
-            EffectfulNodeKind::from(node::PatchRelative {
+            NodeKind::from(node::PatchRelative {
                 context,
                 turtle,
                 relative_loc,
@@ -796,32 +796,32 @@ fn translate_expression(expr: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) -> NodeI
             })
         }
         N::ReporterCall(R::MaxPxcor([])) => {
-            EffectfulNodeKind::from(node::MaxPxcor { context: ctx.get_context() })
+            NodeKind::from(node::MaxPxcor { context: ctx.get_context() })
         }
         N::ReporterCall(R::MaxPycor([])) => {
-            EffectfulNodeKind::from(node::MaxPycor { context: ctx.get_context() })
+            NodeKind::from(node::MaxPycor { context: ctx.get_context() })
         }
         N::ReporterCall(R::OneOf([xs])) => {
             let context = ctx.get_context();
             let xs = translate_expression(*xs, ctx.reborrow());
-            EffectfulNodeKind::from(node::OneOf { context, xs })
+            NodeKind::from(node::OneOf { context, xs })
         }
         N::ReporterCall(R::ScaleColor([color, number, range1, range2])) => {
             let color = translate_expression(*color, ctx.reborrow());
             let number = translate_expression(*number, ctx.reborrow());
             let range1 = translate_expression(*range1, ctx.reborrow());
             let range2 = translate_expression(*range2, ctx.reborrow());
-            EffectfulNodeKind::from(node::ScaleColor { color, number, range1, range2 })
+            NodeKind::from(node::ScaleColor { color, number, range1, range2 })
         }
         N::ReporterCall(R::Ticks([])) => {
-            EffectfulNodeKind::from(node::GetTick { context: ctx.get_context() })
+            NodeKind::from(node::GetTick { context: ctx.get_context() })
         }
         N::ReporterCall(R::Random([bound])) => {
             let bound = translate_expression(*bound, ctx.reborrow());
-            EffectfulNodeKind::from(node::RandomInt { context: ctx.get_context(), bound })
+            NodeKind::from(node::RandomInt { context: ctx.get_context(), bound })
         }
-        N::ReporterCall(R::Patches([])) => EffectfulNodeKind::from(node::Agentset::AllPatches),
-        N::ReporterCall(R::Turtles([])) => EffectfulNodeKind::from(node::Agentset::AllTurtles),
+        N::ReporterCall(R::Patches([])) => NodeKind::from(node::Agentset::AllPatches),
+        N::ReporterCall(R::Turtles([])) => NodeKind::from(node::Agentset::AllTurtles),
         other => panic!("expected an expression, got {:?}", other),
     };
 
@@ -872,7 +872,7 @@ fn translate_let_binding(
     ctx.mir.fn_info[ctx.fn_id].local_names.insert(name, local_id);
     let value = translate_expression(value, ctx.reborrow());
     StatementKind::Node(
-        ctx.nodes.insert(EffectfulNodeKind::from(node::SetLocalVar { local_id, value })),
+        ctx.nodes.insert(NodeKind::from(node::SetLocalVar { local_id, value })),
     )
 }
 
@@ -982,7 +982,7 @@ fn translate_ephemeral_closure(
     build_body(expr, fn_id, ctx.mir).unwrap();
 
     // return a closure object
-    ctx.nodes.insert(EffectfulNodeKind::from(node::Closure {
+    ctx.nodes.insert(NodeKind::from(node::Closure {
         captures: vec![], // TODO(mvp) find which variables are captured by the closure
         body: fn_id,
     }))

@@ -5,7 +5,7 @@ use lir::smallvec::smallvec;
 
 use crate::{
     mir::{
-        EffectfulNode, Function, MirTy, NlAbstractTy, NodeId, Nodes, Program, WriteLirError,
+        Function, MirTy, NlAbstractTy, Node, NodeId, Nodes, Program, WriteLirError,
         build_lir::LirInsnBuilder,
     },
     sim::value::UnpackedDynBox,
@@ -17,7 +17,7 @@ pub struct Constant {
     pub value: UnpackedDynBox,
 }
 
-impl EffectfulNode for Constant {
+impl Node for Constant {
     fn is_pure(&self) -> bool {
         true
     }
@@ -62,7 +62,7 @@ pub struct ListLiteral {
     pub items: Vec<NodeId>,
 }
 
-impl EffectfulNode for ListLiteral {
+impl Node for ListLiteral {
     fn is_pure(&self) -> bool {
         true
     }

@@ -2,7 +2,7 @@
 
 use derive_more::derive::Display;
 
-use crate::mir::{EffectfulNode, Function, MirTy, NlAbstractTy, NodeId, Nodes, Program};
+use crate::mir::{Node, Function, MirTy, NlAbstractTy, NodeId, Nodes, Program};
 
 #[derive(Debug, Display)]
 #[display("TurtleRotate")]
@@ -15,7 +15,7 @@ pub struct TurtleRotate {
     pub angle: NodeId,
 }
 
-impl EffectfulNode for TurtleRotate {
+impl Node for TurtleRotate {
     fn is_pure(&self) -> bool {
         false
     }
@@ -40,7 +40,7 @@ pub struct TurtleForward {
     pub distance: NodeId,
 }
 
-impl EffectfulNode for TurtleForward {
+impl Node for TurtleForward {
     fn is_pure(&self) -> bool {
         false
     }
@@ -65,7 +65,7 @@ pub struct CanMove {
     pub distance: NodeId,
 }
 
-impl EffectfulNode for CanMove {
+impl Node for CanMove {
     fn is_pure(&self) -> bool {
         true
     }
@@ -102,7 +102,7 @@ pub struct PatchRelative {
     pub heading: NodeId,
 }
 
-impl EffectfulNode for PatchRelative {
+impl Node for PatchRelative {
     fn is_pure(&self) -> bool {
         true
     }

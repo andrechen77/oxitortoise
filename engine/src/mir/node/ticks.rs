@@ -5,7 +5,7 @@ use derive_more::derive::Display;
 use crate::{
     exec::jit::host_fn,
     mir::{
-        EffectfulNode, Function, MirTy, NlAbstractTy, NodeId, Nodes, Program, WriteLirError,
+        Node, Function, MirTy, NlAbstractTy, NodeId, Nodes, Program, WriteLirError,
         build_lir::LirInsnBuilder,
     },
 };
@@ -17,7 +17,7 @@ pub struct ResetTicks {
     pub context: NodeId,
 }
 
-impl EffectfulNode for ResetTicks {
+impl Node for ResetTicks {
     fn is_pure(&self) -> bool {
         false
     }
@@ -57,7 +57,7 @@ pub struct AdvanceTick {
     pub context: NodeId,
 }
 
-impl EffectfulNode for AdvanceTick {
+impl Node for AdvanceTick {
     fn is_pure(&self) -> bool {
         false
     }
@@ -78,7 +78,7 @@ pub struct GetTick {
     pub context: NodeId,
 }
 
-impl EffectfulNode for GetTick {
+impl Node for GetTick {
     fn is_pure(&self) -> bool {
         true
     }

@@ -1,6 +1,6 @@
 use slotmap::Key as _;
 
-use crate::mir::{EffectfulNode as _, Function, StatementBlock};
+use crate::mir::{Node as _, Function, StatementBlock};
 
 impl Function {
     pub fn to_dot_string(&self) -> String {

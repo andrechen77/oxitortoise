@@ -3,7 +3,7 @@
 use derive_more::derive::Display;
 
 use crate::mir::{
-    EffectfulNode, Function, FunctionId, MirTy, NodeId, Nodes, Program, WriteLirError,
+    Node, Function, FunctionId, MirTy, NodeId, Nodes, Program, WriteLirError,
     build_lir::LirInsnBuilder,
 };
 
@@ -16,7 +16,7 @@ pub struct CallUserFn {
     pub args: Vec<NodeId>,
 }
 
-impl EffectfulNode for CallUserFn {
+impl Node for CallUserFn {
     fn is_pure(&self) -> bool {
         false
     }
