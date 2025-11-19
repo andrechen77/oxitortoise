@@ -1,14 +1,23 @@
 //! Primitives relating purely to the topology of the world.
 
+use std::mem::offset_of;
+
 use derive_more::derive::Display;
 use lir::smallvec::smallvec;
 
 use crate::{
-    exec::jit::host_fn,
+    exec::{CanonExecutionContext, jit::host_fn},
     mir::{
-        Function, MirTy, NlAbstractTy, Node, NodeId, Nodes, Program, WriteLirError,
-        build_lir::LirInsnBuilder,
+        Function, FunctionId, MirTy, NlAbstractTy, Node, NodeId, NodeKind, NodeTransform, Nodes,
+        Program, WriteLirError, build_lir::LirInsnBuilder, node,
     },
+    sim::{
+        topology::{OFFSET_TOPOLOGY_TO_MAX_PXCOR, OFFSET_TOPOLOGY_TO_MAX_PYCOR},
+        value::NlFloat,
+        world::World,
+    },
+    util::reflection::Reflect,
+    workspace::Workspace,
 };
 
 #[derive(Debug, Display)]
@@ -89,6 +98,39 @@ impl Node for MaxPxcor {
     fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
         MirTy::Abstract(NlAbstractTy::Float)
     }
+
+    fn lowering_expand(
+        &self,
+        _program: &Program,
+        _fn_id: FunctionId,
+        _my_node_id: NodeId,
+    ) -> Option<NodeTransform> {
+        fn lower_get_max_pxcor(program: &Program, fn_id: FunctionId, my_node_id: NodeId) -> bool {
+            let function = program.functions[fn_id].borrow();
+            let mut nodes = function.nodes.borrow_mut();
+
+            let &MaxPxcor { context } = (&nodes[my_node_id]).try_into().unwrap();
+
+            // insert a node that gets the workspace pointer
+            let workspace_ptr = nodes.insert(NodeKind::from(node::MemLoad {
+                ptr: context,
+                offset: offset_of!(CanonExecutionContext, workspace),
+                ty: <*mut u8 as Reflect>::CONCRETE_TY,
+            }));
+
+            // insert a node that gets the the desired field
+            nodes[my_node_id] = NodeKind::from(node::MemLoad {
+                ptr: workspace_ptr,
+                offset: offset_of!(Workspace, world)
+                    + offset_of!(World, topology)
+                    + OFFSET_TOPOLOGY_TO_MAX_PXCOR,
+                ty: NlFloat::CONCRETE_TY,
+            });
+
+            true
+        }
+        Some(Box::new(lower_get_max_pxcor))
+    }
 }
 
 #[derive(Debug, Display)]
@@ -109,6 +151,39 @@ impl Node for MaxPycor {
 
     fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
         MirTy::Abstract(NlAbstractTy::Float)
+    }
+
+    fn lowering_expand(
+        &self,
+        _program: &Program,
+        _fn_id: FunctionId,
+        _my_node_id: NodeId,
+    ) -> Option<NodeTransform> {
+        fn lower_get_max_pycor(program: &Program, fn_id: FunctionId, my_node_id: NodeId) -> bool {
+            let function = program.functions[fn_id].borrow();
+            let mut nodes = function.nodes.borrow_mut();
+
+            let &MaxPycor { context } = (&nodes[my_node_id]).try_into().unwrap();
+
+            // insert a node that gets the workspace pointer
+            let workspace_ptr = nodes.insert(NodeKind::from(node::MemLoad {
+                ptr: context,
+                offset: offset_of!(CanonExecutionContext, workspace),
+                ty: <*mut u8 as Reflect>::CONCRETE_TY,
+            }));
+
+            // insert a node that gets the the desired field
+            nodes[my_node_id] = NodeKind::from(node::MemLoad {
+                ptr: workspace_ptr,
+                offset: offset_of!(Workspace, world)
+                    + offset_of!(World, topology)
+                    + OFFSET_TOPOLOGY_TO_MAX_PYCOR,
+                ty: NlFloat::CONCRETE_TY,
+            });
+
+            true
+        }
+        Some(Box::new(lower_get_max_pycor))
     }
 }
 
