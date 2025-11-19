@@ -166,5 +166,5 @@ pub fn add_cheats(
         }
     }
 
-    // TODO(mvp_ants) add types of global and local variables
+    // TODO(mvp_ants) add types of local variables
 }
