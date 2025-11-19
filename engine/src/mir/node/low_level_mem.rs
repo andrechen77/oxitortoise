@@ -1,7 +1,7 @@
 //! Nodes representing low-level memory operations.
 
 use derive_more::derive::Display;
-use lir::smallvec::smallvec;
+use lir::smallvec::{SmallVec, smallvec};
 
 use crate::{
     mir::{
@@ -42,22 +42,21 @@ impl Node for MemLoad {
         my_node_id: NodeId,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
-        let &[lir_type] = self.ty.info().lir_repr.expect("mem load type must have known ABI")
-        else {
-            // this panic is purely a limitation of this implementation; there's
-            // no inherent limitation that makes insertion of multiple mem load
-            // instructions impossible
-            panic!("don't know how to load a value that takes up multiple LIR registers");
-        };
+        let lir_types = self.ty.info().lir_repr.expect("mem load type must have known ABI");
+
         let &[ptr] = lir_builder.get_node_results(program, function, nodes, self.ptr) else {
             panic!("expected a node that outputs a pointer to be a single LIR value");
         };
-        let pc = lir_builder.push_lir_insn(lir::InsnKind::MemLoad {
-            r#type: lir_type,
-            ptr,
-            offset: self.offset,
-        });
-        lir_builder.node_to_lir.insert(my_node_id, smallvec![lir::ValRef(pc, 0)]);
+        let mut val_refs = SmallVec::new();
+        for lir_type in lir_types {
+            let pc = lir_builder.push_lir_insn(lir::InsnKind::MemLoad {
+                r#type: *lir_type,
+                ptr,
+                offset: self.offset,
+            });
+            val_refs.push(lir::ValRef(pc, 0));
+        }
+        lir_builder.node_to_lir.insert(my_node_id, val_refs);
         Ok(())
     }
 }
