@@ -40,7 +40,7 @@ impl EffectfulNode for GetGlobalVar {
         let Some(var) = program.globals.get(self.index) else {
             panic!("Unknown global var index: {:?}", self.index);
         };
-        MirTy::Abstract(var.ty.clone())
+        var.ty.clone()
     }
 
     fn lowering_expand(
@@ -124,14 +124,14 @@ impl EffectfulNode for GetTurtleVar {
 
     fn output_type(&self, program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
         // TODO(wishlist) this should probably be refactored into a function
-        MirTy::Abstract(match self.var {
-            TurtleVarDesc::Who => NlAbstractTy::Float,
-            TurtleVarDesc::Color => NlAbstractTy::Color,
-            TurtleVarDesc::Size => NlAbstractTy::Float,
-            TurtleVarDesc::Xcor => NlAbstractTy::Float,
-            TurtleVarDesc::Ycor => NlAbstractTy::Float,
+        match self.var {
+            TurtleVarDesc::Who => MirTy::Abstract(NlAbstractTy::Float),
+            TurtleVarDesc::Color => MirTy::Abstract(NlAbstractTy::Color),
+            TurtleVarDesc::Size => MirTy::Abstract(NlAbstractTy::Float),
+            TurtleVarDesc::Xcor => MirTy::Abstract(NlAbstractTy::Float),
+            TurtleVarDesc::Ycor => MirTy::Abstract(NlAbstractTy::Float),
             TurtleVarDesc::Custom(field) => program.custom_turtle_vars[field].ty.clone(),
-        })
+        }
     }
 
     fn lowering_expand(
@@ -292,11 +292,14 @@ impl EffectfulNode for TurtleIdToIndex {
 
     fn write_lir_execution(
         &self,
+        program: &Program,
+        function: &Function,
+        nodes: &Nodes,
         my_node_id: NodeId,
-        nodes: &SlotMap<NodeId, EffectfulNodeKind>,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
-        let &[turtle_id] = lir_builder.get_node_results(nodes, self.turtle_id) else {
+        let &[turtle_id] = lir_builder.get_node_results(program, function, nodes, self.turtle_id)
+        else {
             panic!("expected node outputting turtle id to be a single LIR value");
         };
         let pc = lir_builder.push_lir_insn(lir::InsnKind::UnaryOp {
@@ -331,9 +334,7 @@ impl EffectfulNode for GetPatchVar {
     fn output_type(&self, program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
         match self.var {
             PatchVarDesc::Pcolor => MirTy::Abstract(NlAbstractTy::Color),
-            PatchVarDesc::Custom(field) => {
-                MirTy::Abstract(program.custom_patch_vars[field].ty.clone())
-            }
+            PatchVarDesc::Custom(field) => program.custom_patch_vars[field].ty.clone(),
         }
     }
 
@@ -499,10 +500,8 @@ impl EffectfulNode for GetPatchVarAsTurtleOrPatch {
     fn output_type(&self, program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
         // TODO(wishlist) refactor to deduplicate with GetPatchVar
         match self.var {
-            PatchVarDesc::Custom(field) => {
-                MirTy::Abstract(program.custom_patch_vars[field].ty.clone())
-            }
             PatchVarDesc::Pcolor => MirTy::Abstract(NlAbstractTy::Color),
+            PatchVarDesc::Custom(field) => program.custom_patch_vars[field].ty.clone(),
         }
     }
 

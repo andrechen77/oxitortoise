@@ -48,7 +48,7 @@ pub struct Program {
 #[derive(Debug)]
 pub struct CustomVarDecl {
     pub name: Rc<str>,
-    pub ty: NlAbstractTy,
+    pub ty: MirTy,
 }
 
 pub type Nodes = SlotMap<NodeId, EffectfulNodeKind>;
@@ -180,13 +180,17 @@ pub trait EffectfulNode {
     /// `write_lir_execution` if necessary.
     fn write_lir_execution(
         &self,
-        my_node_id: NodeId,
+        program: &Program,
+        function: &Function,
         nodes: &Nodes,
+        my_node_id: NodeId,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
+        let _ = program;
+        let _ = function;
+        let _ = nodes;
         let _ = my_node_id;
         let _ = lir_builder;
-        let _ = nodes;
         Err(WriteLirError)
     }
 }
@@ -242,7 +246,11 @@ pub enum EffectfulNodeKind {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum MirTy {
+    /// An abstract type that conceptually makes sense in the NetLogo virtual
+    /// machine. Prefer using this type when possible.
     Abstract(NlAbstractTy),
+    /// A concrete type. Prefer to use the abstract type if it is available,
+    /// until concrete types are necessary to continue compilation.
     Concrete(ConcreteTy),
     /// The "no one cares what type this is" value
     Other,
@@ -257,7 +265,7 @@ impl MirTy {
         }
     }
 
-    pub fn as_abstract(self) -> NlAbstractTy {
+    pub fn unwrap_abstract(self) -> NlAbstractTy {
         match self {
             MirTy::Abstract(ty) => ty,
             MirTy::Concrete(_) => panic!("cannot convert machine type to abstract type"),

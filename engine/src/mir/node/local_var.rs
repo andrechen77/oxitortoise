@@ -28,8 +28,10 @@ impl EffectfulNode for GetLocalVar {
 
     fn write_lir_execution(
         &self,
-        my_node_id: NodeId,
+        _program: &Program,
+        _function: &Function,
         _nodes: &Nodes,
+        my_node_id: NodeId,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
         match lir_builder.local_to_lir[&self.local_id] {

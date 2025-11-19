@@ -35,18 +35,20 @@ impl EffectfulNode for Closure {
         let arg_ty = function.locals[function.parameters[ClosureType::PARAM_ARG_IDX]]
             .ty
             .clone()
-            .as_abstract();
+            .unwrap_abstract();
         let return_ty = function.return_ty.clone();
         MirTy::Abstract(NlAbstractTy::Closure(ClosureType {
             arg_ty: Box::new(arg_ty),
-            return_ty: Box::new(return_ty.as_abstract()),
+            return_ty: Box::new(return_ty.unwrap_abstract()),
         }))
     }
 
     fn write_lir_execution(
         &self,
-        my_node_id: NodeId,
+        _program: &crate::mir::Program,
+        _function: &crate::mir::Function,
         _nodes: &Nodes,
+        my_node_id: NodeId,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
         // insert an instruction to create the env pointer

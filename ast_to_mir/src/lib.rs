@@ -169,7 +169,8 @@ pub fn ast_to_mir(ast: Ast) -> anyhow::Result<ParseResult> {
 
     for name in global_var_names {
         let upper = name.to_uppercase();
-        let decl = CustomVarDecl { name: name.clone().into(), ty: NlAbstractTy::Top };
+        let decl =
+            CustomVarDecl { name: name.clone().into(), ty: MirTy::Abstract(NlAbstractTy::Top) };
         global_var_buffer.push(decl);
         trace!("Adding global variable `{}` at index {:?}", name, global_var_buffer.len() - 1);
         global_scope.global_vars.insert(upper.into(), usize::from(global_var_buffer.len() - 1));
@@ -181,7 +182,8 @@ pub fn ast_to_mir(ast: Ast) -> anyhow::Result<ParseResult> {
         let patch_var_id = PatchVarDesc::Custom(i);
         trace!("Adding patch variable `{}` with id {:?}", patch_var_name, patch_var_id);
         global_scope.patch_vars.insert(patch_var_name.clone(), patch_var_id);
-        custom_patch_vars.push(CustomVarDecl { name: patch_var_name, ty: NlAbstractTy::Top });
+        custom_patch_vars
+            .push(CustomVarDecl { name: patch_var_name, ty: MirTy::Abstract(NlAbstractTy::Top) });
     }
     // add custom turtle variables
     for (i, turtle_var_name) in turtle_var_names.into_iter().enumerate() {
@@ -189,7 +191,8 @@ pub fn ast_to_mir(ast: Ast) -> anyhow::Result<ParseResult> {
         let turtle_var_id = TurtleVarDesc::Custom(i);
         trace!("Adding turtle variable `{}` with id {:?}", turtle_var_name, turtle_var_id);
         global_scope.turtle_vars.insert(turtle_var_name.clone(), turtle_var_id);
-        custom_turtle_vars.push(CustomVarDecl { name: turtle_var_name, ty: NlAbstractTy::Top });
+        custom_turtle_vars
+            .push(CustomVarDecl { name: turtle_var_name, ty: MirTy::Abstract(NlAbstractTy::Top) });
     }
 
     let mut functions: SlotMap<FunctionId, Function> = SlotMap::with_key();
@@ -236,12 +239,8 @@ pub fn ast_to_mir(ast: Ast) -> anyhow::Result<ParseResult> {
         bodies_to_build.insert(fn_id, body);
     }
 
-    let mut mir_builder = MirBuilder {
-        turtle_breeds,
-        functions,
-        fn_info,
-        global_names: global_scope,
-    };
+    let mut mir_builder =
+        MirBuilder { turtle_breeds, functions, fn_info, global_names: global_scope };
 
     // then go through each procedure and build out the bodies
     for (fn_id, body) in bodies_to_build {

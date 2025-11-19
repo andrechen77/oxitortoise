@@ -42,7 +42,7 @@ pub fn mir_to_lir(mir: &mir::Program) -> lir::Program {
     let mut lir_fn_bodies = SecondaryMap::new();
     for (mir_fn_id, mir_fn) in mir.functions.iter() {
         trace!("translating function body for {}", mir_fn_id);
-        let lir_fn = translate_function_body(&mir_fn.borrow(), &mut builder);
+        let lir_fn = translate_function_body(mir, &mir_fn.borrow(), &mut builder);
         let lir_fn_id = builder.available_user_functions[&mir_fn_id];
         lir_fn_bodies.insert(lir_fn_id, lir_fn);
     }
@@ -95,9 +95,17 @@ pub struct LirInsnBuilder<'a> {
 }
 
 impl<'a> LirInsnBuilder<'a> {
-    pub fn get_node_results(&mut self, nodes: &Nodes, node_id: mir::NodeId) -> &[lir::ValRef] {
+    pub fn get_node_results(
+        &mut self,
+        program: &mir::Program,
+        function: &mir::Function,
+        nodes: &Nodes,
+        node_id: mir::NodeId,
+    ) -> &[lir::ValRef] {
         if !self.node_to_lir.contains_key(&node_id) {
-            nodes[node_id].write_lir_execution(node_id, nodes, self).unwrap();
+            let node = &nodes[node_id];
+            trace!("writing LIR execution for node {:?}", node);
+            node.write_lir_execution(program, function, nodes, node_id, self).unwrap();
         }
         self.node_to_lir.get(&node_id).unwrap().as_slice()
     }
@@ -137,6 +145,7 @@ impl<'a> LirInsnBuilder<'a> {
 
 #[instrument(skip_all)]
 fn translate_function_body(
+    program: &mir::Program,
     function: &mir::Function,
     program_builder: &mut LirProgramBuilder,
 ) -> lir::Function {
@@ -221,9 +230,17 @@ fn translate_function_body(
     // algorithm idea: iterate over all statements. if a node depends on another
     // node which is not rooted in its own statement, then those dependencies
     // are translated first
-    translate_stmt_block(&function.nodes.borrow(), &mut fn_builder, &function.cfg);
+    translate_stmt_block(
+        program,
+        function,
+        &function.nodes.borrow(),
+        &mut fn_builder,
+        &function.cfg,
+    );
 
     fn translate_stmt_block(
+        program: &mir::Program,
+        function: &mir::Function,
         nodes: &Nodes,
         fn_builder: &mut LirInsnBuilder,
         stmt_block: &mir::StatementBlock,
@@ -232,7 +249,7 @@ fn translate_function_body(
             // TODO(mvp) add translation for other statement kinds to LIR
             match stmt {
                 &mir::StatementKind::Node(node_id) => {
-                    nodes[node_id].write_lir_execution(node_id, nodes, fn_builder).inspect_err(|_| {
+                    nodes[node_id].write_lir_execution(program, function, nodes, node_id, fn_builder).inspect_err(|_| {
                         error!("failed to translate node {:?} to LIR", nodes[node_id]);
                     }).expect(
                         "by the time we get to translating to LIR, all nodes should be able to convert to LIR",
@@ -243,13 +260,15 @@ fn translate_function_body(
                     let then_body = fn_builder.product.insn_seqs.push_and_get_key(TiVec::new());
                     let else_body = fn_builder.product.insn_seqs.push_and_get_key(TiVec::new());
                     fn_builder.with_insn_seq(then_body, |fn_builder| {
-                        translate_stmt_block(nodes, fn_builder, then_block)
+                        translate_stmt_block(program, function, nodes, fn_builder, then_block)
                     });
                     fn_builder.with_insn_seq(else_body, |fn_builder| {
-                        translate_stmt_block(nodes, fn_builder, else_block)
+                        translate_stmt_block(program, function, nodes, fn_builder, else_block)
                     });
 
-                    let &[condition] = fn_builder.get_node_results(nodes, *condition) else {
+                    let &[condition] =
+                        fn_builder.get_node_results(program, function, nodes, *condition)
+                    else {
                         panic!("a condition should evaluate to a single LIR value");
                     };
                     fn_builder.push_lir_insn(lir::InsnKind::IfElse(lir::IfElse {
@@ -272,7 +291,9 @@ fn translate_function_body(
                 mir::StatementKind::Return { value } => {
                     let break_insn = lir::InsnKind::Break {
                         target: fn_builder.insn_seqs[0],
-                        values: Box::from(fn_builder.get_node_results(nodes, *value)),
+                        values: Box::from(
+                            fn_builder.get_node_results(program, function, nodes, *value),
+                        ),
                     };
                     fn_builder.push_lir_insn(break_insn);
                 }

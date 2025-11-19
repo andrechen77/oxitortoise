@@ -41,8 +41,10 @@ impl EffectfulNode for MemLoad {
 
     fn write_lir_execution(
         &self,
-        my_node_id: NodeId,
+        program: &crate::mir::Program,
+        function: &crate::mir::Function,
         nodes: &Nodes,
+        my_node_id: NodeId,
         lir_builder: &mut crate::mir::build_lir::LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
         let &[lir_type] = self.ty.info().lir_repr.expect("mem load type must have known ABI")
@@ -52,7 +54,7 @@ impl EffectfulNode for MemLoad {
             // instructions impossible
             panic!("don't know how to load a value that takes up multiple LIR registers");
         };
-        let &[ptr] = lir_builder.get_node_results(nodes, self.ptr) else {
+        let &[ptr] = lir_builder.get_node_results(program, function, nodes, self.ptr) else {
             panic!("expected a node that outputs a pointer to be a single LIR value");
         };
         let pc = lir_builder.push_lir_insn(lir::InsnKind::MemLoad {
@@ -96,14 +98,16 @@ impl EffectfulNode for MemStore {
 
     fn write_lir_execution(
         &self,
-        _my_node_id: NodeId,
+        program: &crate::mir::Program,
+        function: &crate::mir::Function,
         nodes: &Nodes,
+        _my_node_id: NodeId,
         lir_builder: &mut crate::mir::build_lir::LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
-        let &[ptr] = lir_builder.get_node_results(nodes, self.ptr) else {
+        let &[ptr] = lir_builder.get_node_results(program, function, nodes, self.ptr) else {
             panic!("expected a node that outputs a pointer to be a single LIR value");
         };
-        let &[value] = lir_builder.get_node_results(nodes, self.value) else {
+        let &[value] = lir_builder.get_node_results(program, function, nodes, self.value) else {
             panic!(
                 "expected a node that outputs a about-to-be-stored value to be a single LIR value"
             );
@@ -142,11 +146,13 @@ impl EffectfulNode for DeriveField {
 
     fn write_lir_execution(
         &self,
-        my_node_id: NodeId,
+        program: &crate::mir::Program,
+        function: &crate::mir::Function,
         nodes: &Nodes,
+        my_node_id: NodeId,
         lir_builder: &mut crate::mir::build_lir::LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
-        let &[ptr] = lir_builder.get_node_results(nodes, self.ptr) else {
+        let &[ptr] = lir_builder.get_node_results(program, function, nodes, self.ptr) else {
             panic!("expected a node that outputs a pointer to be a single LIR value");
         };
         let pc = lir_builder.push_lir_insn(lir::InsnKind::DeriveField { offset: self.offset, ptr });
@@ -186,14 +192,16 @@ impl EffectfulNode for DeriveElement {
 
     fn write_lir_execution(
         &self,
-        my_node_id: NodeId,
+        program: &crate::mir::Program,
+        function: &crate::mir::Function,
         nodes: &Nodes,
+        my_node_id: NodeId,
         lir_builder: &mut crate::mir::build_lir::LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
-        let &[ptr] = lir_builder.get_node_results(nodes, self.ptr) else {
+        let &[ptr] = lir_builder.get_node_results(program, function, nodes, self.ptr) else {
             panic!("expected a node that outputs a pointer to be a single LIR value");
         };
-        let &[index] = lir_builder.get_node_results(nodes, self.index) else {
+        let &[index] = lir_builder.get_node_results(program, function, nodes, self.index) else {
             panic!("expected a node that outputs an index to be a single LIR value");
         };
         let pc = lir_builder.push_lir_insn(lir::InsnKind::DeriveElement {

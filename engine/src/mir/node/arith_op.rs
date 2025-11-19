@@ -1,7 +1,12 @@
 use derive_more::derive::Display;
 
-use crate::mir::{
-    EffectfulNode, Function, MirTy, NlAbstractTy, NodeId, Nodes, Program, WriteLirError,
+use crate::{
+    mir::{
+        EffectfulNode, Function, MirTy, NlAbstractTy, NodeId, Nodes, Program, WriteLirError,
+        build_lir::LirInsnBuilder,
+    },
+    sim::value::NlFloat,
+    util::reflection::Reflect,
 };
 
 #[derive(Debug, Display)]
@@ -55,11 +60,43 @@ impl EffectfulNode for BinaryOperation {
 
     fn write_lir_execution(
         &self,
+        program: &Program,
+        function: &Function,
+        nodes: &Nodes,
         _my_node_id: NodeId,
-        _nodes: &Nodes,
-        _lir_builder: &mut crate::mir::build_lir::LirInsnBuilder,
+        lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
-        todo!("TODO(mvp_ants) write LIR code to perform the binary operation")
+        // TODO(mvp) be prepared for other possible input types and adjust
+        // the implementation accordingly
+        assert_eq!(
+            nodes[self.lhs].output_type(program, function, nodes).repr(),
+            NlFloat::CONCRETE_TY
+        );
+        assert_eq!(
+            nodes[self.rhs].output_type(program, function, nodes).repr(),
+            NlFloat::CONCRETE_TY
+        );
+
+        let &[lhs] = lir_builder.get_node_results(program, function, nodes, self.lhs) else {
+            unimplemented!();
+        };
+        let &[rhs] = lir_builder.get_node_results(program, function, nodes, self.rhs) else {
+            unimplemented!();
+        };
+        let op = match self.op {
+            BinaryOpcode::Add => lir::BinaryOpcode::FAdd,
+            BinaryOpcode::Sub => lir::BinaryOpcode::FSub,
+            BinaryOpcode::Mul => lir::BinaryOpcode::FMul,
+            BinaryOpcode::Div => lir::BinaryOpcode::FDiv,
+            BinaryOpcode::Lt => lir::BinaryOpcode::FLt,
+            BinaryOpcode::Lte => lir::BinaryOpcode::FLte,
+            BinaryOpcode::Gt => lir::BinaryOpcode::FGt,
+            BinaryOpcode::Gte => lir::BinaryOpcode::FGte,
+            BinaryOpcode::Eq => lir::BinaryOpcode::FEq,
+            _ => todo!("TODO(mvp) implement other binary operations"),
+        };
+        lir_builder.push_lir_insn(lir::InsnKind::BinaryOp { op, lhs, rhs });
+        Ok(())
     }
 }
 
@@ -95,9 +132,11 @@ impl EffectfulNode for UnaryOp {
 
     fn write_lir_execution(
         &self,
-        _my_node_id: NodeId,
+        _program: &Program,
+        _function: &Function,
         _nodes: &Nodes,
-        _lir_builder: &mut crate::mir::build_lir::LirInsnBuilder,
+        _my_node_id: NodeId,
+        _lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
         todo!("TODO(mvp_ants) write LIR code to perform the unary operation")
     }

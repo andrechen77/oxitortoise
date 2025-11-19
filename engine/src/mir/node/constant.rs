@@ -33,8 +33,10 @@ impl EffectfulNode for Constant {
 
     fn write_lir_execution(
         &self,
-        my_node_id: NodeId,
+        _program: &Program,
+        _function: &Function,
         _nodes: &Nodes,
+        my_node_id: NodeId,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
         let _ = my_node_id;

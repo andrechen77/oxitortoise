@@ -94,7 +94,7 @@ pub fn add_cheats(
                 };
                 let typ = translate_var_type_name(var_type);
                 types.push(typ.repr());
-                program.globals[var_id].ty = typ;
+                program.globals[var_id].ty = MirTy::Abstract(typ);
             }
         }
 
@@ -116,7 +116,7 @@ pub fn add_cheats(
 
             let var_type = translate_var_type_name(var_type);
 
-            program.custom_patch_vars[var_id].ty = var_type;
+            program.custom_patch_vars[var_id].ty = MirTy::Abstract(var_type);
         }
     }
 
@@ -155,8 +155,9 @@ pub fn add_cheats(
             let fn_id = global_names.functions.get(fn_name.as_str()).unwrap();
             if let Some(self_param_type) = &fn_cheats.self_param_type {
                 let fn_info = &fn_info[*fn_id];
-                let ty =
-                    &mut program.functions[*fn_id].borrow_mut().locals[fn_info.self_param.unwrap()].ty;
+                let ty = &mut program.functions[*fn_id].borrow_mut().locals
+                    [fn_info.self_param.unwrap()]
+                .ty;
                 *ty = match self_param_type {
                     CheatSelfParamType::Patch => MirTy::Abstract(NlAbstractTy::Patch),
                     CheatSelfParamType::Turtle => MirTy::Abstract(NlAbstractTy::Turtle),

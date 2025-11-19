@@ -38,11 +38,14 @@ impl EffectfulNode for ClearAll {
 
     fn write_lir_execution(
         &self,
-        _my_node_id: NodeId,
+        program: &Program,
+        function: &Function,
         nodes: &Nodes,
+        _my_node_id: NodeId,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
-        let &[ctx_ptr] = lir_builder.get_node_results(nodes, self.context) else {
+        let &[ctx_ptr] = lir_builder.get_node_results(program, function, nodes, self.context)
+        else {
             panic!("expected node outputting context pointer to be a single LIR value")
         };
         lir_builder.push_lir_insn(lir::generate_host_function_call(
@@ -84,8 +87,10 @@ impl EffectfulNode for Diffuse {
 
     fn write_lir_execution(
         &self,
-        _my_node_id: NodeId,
+        _program: &crate::mir::Program,
+        _function: &crate::mir::Function,
         _nodes: &Nodes,
+        _my_node_id: NodeId,
         _lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
         todo!("TODO(mvp_ants) write LIR code to call a host function")
@@ -119,11 +124,14 @@ impl EffectfulNode for ResetTicks {
 
     fn write_lir_execution(
         &self,
-        _my_node_id: NodeId,
+        program: &Program,
+        function: &Function,
         nodes: &Nodes,
+        _my_node_id: NodeId,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
-        let &[ctx_ptr] = lir_builder.get_node_results(nodes, self.context) else {
+        let &[ctx_ptr] = lir_builder.get_node_results(program, function, nodes, self.context)
+        else {
             panic!("expected node outputting context pointer to be a single LIR value")
         };
         lir_builder.push_lir_insn(lir::generate_host_function_call(
@@ -219,21 +227,27 @@ impl EffectfulNode for CreateTurtles {
 
     fn write_lir_execution(
         &self,
-        my_node_id: NodeId,
+        program: &Program,
+        function: &Function,
         nodes: &Nodes,
+        my_node_id: NodeId,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
-        let &[ctx_ptr] = lir_builder.get_node_results(nodes, self.context) else {
+        let &[ctx_ptr] = lir_builder.get_node_results(program, function, nodes, self.context)
+        else {
             panic!("expected node outputting context pointer to be a single LIR value")
         };
         let breed_id = lir_builder.push_lir_insn(lir::InsnKind::Const(lir::Const {
             ty: lir::ValType::I64,
             value: self.breed.data().as_ffi(),
         }));
-        let &[num_turtles] = lir_builder.get_node_results(nodes, self.num_turtles) else {
+        let &[num_turtles] =
+            lir_builder.get_node_results(program, function, nodes, self.num_turtles)
+        else {
             panic!("expected node outputting number of turtles to be a single LIR value")
         };
-        let &[env_ptr, fn_ptr] = lir_builder.get_node_results(nodes, self.body) else {
+        let &[env_ptr, fn_ptr] = lir_builder.get_node_results(program, function, nodes, self.body)
+        else {
             panic!("expected node outputting closure body to be two LIR values");
         };
         let pc = lir_builder.push_lir_insn(lir::generate_host_function_call(
@@ -472,8 +486,10 @@ impl EffectfulNode for OffsetDistanceByHeading {
 
     fn write_lir_execution(
         &self,
-        _my_node_id: NodeId,
+        _program: &crate::mir::Program,
+        _function: &crate::mir::Function,
         _nodes: &Nodes,
+        _my_node_id: NodeId,
         _lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
         todo!("TODO(mvp_ants) write LIR code to call a host function")
@@ -680,8 +696,10 @@ impl EffectfulNode for SetDefaultShape {
 
     fn write_lir_execution(
         &self,
-        _my_node_id: NodeId,
+        _program: &crate::mir::Program,
+        _function: &crate::mir::Function,
         _nodes: &Nodes,
+        _my_node_id: NodeId,
         _lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
         // TODO(mvp) write LIR code to set the default shape for the breed

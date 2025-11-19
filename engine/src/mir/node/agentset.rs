@@ -37,8 +37,10 @@ impl EffectfulNode for Agentset {
 
     fn write_lir_execution(
         &self,
-        _my_node_id: NodeId,
+        _program: &Program,
+        _function: &Function,
         _nodes: &Nodes,
+        _my_node_id: NodeId,
         _lir_builder: &mut crate::mir::build_lir::LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
         todo!("TODO(mvp) write LIR code to generate a value representing the agentset")

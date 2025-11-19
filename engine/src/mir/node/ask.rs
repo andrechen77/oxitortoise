@@ -4,8 +4,8 @@ use lir::smallvec::smallvec;
 use crate::{
     exec::jit::host_fn,
     mir::{
-        EffectfulNode, EffectfulNodeKind, FunctionId, MirTy, NlAbstractTy, NodeId, NodeTransform,
-        Nodes, Program, WriteLirError, build_lir::LirInsnBuilder, node,
+        EffectfulNode, EffectfulNodeKind, Function, FunctionId, MirTy, NlAbstractTy, NodeId,
+        NodeTransform, Nodes, Program, WriteLirError, build_lir::LirInsnBuilder, node,
     },
 };
 
@@ -85,14 +85,18 @@ impl EffectfulNode for Ask {
 
     fn write_lir_execution(
         &self,
-        my_node_id: NodeId,
+        program: &Program,
+        function: &Function,
         nodes: &Nodes,
+        my_node_id: NodeId,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
-        let &[ctx_ptr] = lir_builder.get_node_results(nodes, self.context) else {
+        let &[ctx_ptr] = lir_builder.get_node_results(program, function, nodes, self.context)
+        else {
             panic!("expected node outputting context pointer to be a single LIR value")
         };
-        let &[env_ptr, fn_ptr] = lir_builder.get_node_results(nodes, self.body) else {
+        let &[env_ptr, fn_ptr] = lir_builder.get_node_results(program, function, nodes, self.body)
+        else {
             panic!("expected node outputting closure body to be two LIR values");
         };
 

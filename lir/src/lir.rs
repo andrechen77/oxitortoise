@@ -324,8 +324,11 @@ pub enum BinaryOpcode {
     FAdd,
     FSub,
     FMul,
+    FDiv,
     FLt,
+    FLte,
     FGt,
+    FGte,
     FEq,
 }
 
@@ -495,11 +498,11 @@ fn infer_binary_op_output_type(op: BinaryOpcode, lhs: ValType, rhs: ValType) -> 
             (V::I64, V::I64) => V::I8,
             _ => panic!("Invalid operand types for operation {:?}: {:?} and {:?}", op, lhs, rhs),
         },
-        B::FAdd | B::FSub | B::FMul => match (lhs, rhs) {
+        B::FAdd | B::FSub | B::FMul | B::FDiv => match (lhs, rhs) {
             (V::F64, V::F64) => V::F64,
             _ => panic!("Invalid operand types for operation {:?}: {:?} and {:?}", op, lhs, rhs),
         },
-        B::FLt | B::FGt | B::FEq => match (lhs, rhs) {
+        B::FLt | B::FLte | B::FGt | B::FGte | B::FEq => match (lhs, rhs) {
             (V::F64, V::F64) => V::I8,
             _ => panic!("Invalid operand types for operation {:?}: {:?} and {:?}", op, lhs, rhs),
         },
