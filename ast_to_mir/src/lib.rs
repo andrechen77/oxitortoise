@@ -760,10 +760,11 @@ fn translate_expression(expr: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) -> NodeI
             NodeKind::from(node::UnaryOp { op: UnaryOpcode::Not, operand })
         }
         N::ReporterCall(R::Distancexy([x, y])) => {
+            let context = ctx.get_context();
             let agent = ctx.get_self_agent();
             let x = translate_expression(*x, ctx.reborrow());
             let y = translate_expression(*y, ctx.reborrow());
-            NodeKind::from(node::Distancexy { agent, x, y })
+            NodeKind::from(node::Distancexy { context, agent, x, y })
         }
         N::ReporterCall(R::CanMove([distance])) => {
             let context = ctx.get_context();

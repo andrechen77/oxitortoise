@@ -338,7 +338,16 @@ pub enum TurtleVarDesc {
     Who,
     Size,
     Color,
+    /// The position of the turtle, containing both the x and y coordinates.
+    /// While not visible to the user-level code, this is how it is actually
+    /// stored, and the engine may emit code that reads/writes the entire field
+    /// at once.
+    Pos,
+    /// The x coordinate of the position of the turtle. Aliases the `Pos`
+    /// variable.
     Xcor,
+    /// The y coordinate of the position of the turtle. Aliases the `Pos`
+    /// variable.
     Ycor,
     /// The nth custom field of the turtle.
     Custom(usize),
@@ -382,6 +391,7 @@ pub fn calc_turtle_var_offset(mir: &mir::Program, var: TurtleVarDesc) -> (usize,
             TurtleVarDesc::Who => (turtle_schema.base_data(), offset_of!(TurtleBaseData, who)),
             TurtleVarDesc::Size => (turtle_schema.base_data(), offset_of!(TurtleBaseData, size)),
             TurtleVarDesc::Color => (turtle_schema.base_data(), offset_of!(TurtleBaseData, color)),
+            TurtleVarDesc::Pos => (turtle_schema.position(), 0),
             TurtleVarDesc::Xcor => (turtle_schema.position(), offset_of!(Point, x)),
             TurtleVarDesc::Ycor => (turtle_schema.position(), offset_of!(Point, y)),
         };
@@ -398,6 +408,7 @@ pub fn turtle_var_type(schema: &TurtleSchema, var: TurtleVarDesc) -> ConcreteTy 
         TurtleVarDesc::Who => NlFloat::CONCRETE_TY,
         TurtleVarDesc::Color => Color::CONCRETE_TY,
         TurtleVarDesc::Size => NlFloat::CONCRETE_TY,
+        TurtleVarDesc::Pos => Point::CONCRETE_TY,
         TurtleVarDesc::Xcor => NlFloat::CONCRETE_TY,
         TurtleVarDesc::Ycor => NlFloat::CONCRETE_TY,
         TurtleVarDesc::Custom(field) => {

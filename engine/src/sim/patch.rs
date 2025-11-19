@@ -279,6 +279,7 @@ impl Reflect for PatchBaseData {
 
 #[derive(Debug, Clone, Copy)]
 pub enum PatchVarDesc {
+    Pos,
     Pcolor,
     Custom(usize),
 }
@@ -300,17 +301,14 @@ pub fn calc_patch_var_offset(mir: &mir::Program, var: PatchVarDesc) -> (usize, u
     }
 
     let patch_schema = mir.patch_schema.as_ref().unwrap();
-    let (buffer_idx, stride, field_offset) = match var {
-        PatchVarDesc::Custom(field_id) => {
-            let field_desc = patch_schema.custom_fields()[field_id];
-            let (stride, field_offset) = stride_and_field_offset(patch_schema, field_desc);
-            (field_desc.buffer_idx, stride, field_offset)
-        }
-        PatchVarDesc::Pcolor => {
-            let base_data_desc = patch_schema.base_data();
-            let (stride, field_offset) = stride_and_field_offset(patch_schema, base_data_desc);
-            (base_data_desc.buffer_idx, stride, field_offset)
-        }
+    let (buffer_idx, stride, field_offset) = {
+        let (field_desc, additional_offset) = match var {
+            PatchVarDesc::Pos => (patch_schema.base_data(), offset_of!(PatchBaseData, position)),
+            PatchVarDesc::Pcolor => (patch_schema.pcolor(), 0),
+            PatchVarDesc::Custom(field_id) => (patch_schema.custom_fields()[field_id], 0),
+        };
+        let (stride, field_offset) = stride_and_field_offset(patch_schema, field_desc);
+        (field_desc.buffer_idx, stride, field_offset + additional_offset)
     };
     let buffer_offset =
         offset_of!(Patches, data) + (usize::from(buffer_idx) * size_of::<Option<RowBuffer>>());
@@ -320,6 +318,7 @@ pub fn calc_patch_var_offset(mir: &mir::Program, var: PatchVarDesc) -> (usize, u
 pub fn patch_var_type(schema: &PatchSchema, var: PatchVarDesc) -> ConcreteTy {
     match var {
         PatchVarDesc::Pcolor => Color::CONCRETE_TY,
+        PatchVarDesc::Pos => Point::CONCRETE_TY,
         PatchVarDesc::Custom(field) => {
             let AgentSchemaField::Other(ty) = schema[schema.custom_fields()[field]] else {
                 unreachable!("this is a custom field, so it cannot be part of the base data");

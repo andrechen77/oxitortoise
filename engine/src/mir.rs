@@ -3,7 +3,7 @@
 use std::{cell::RefCell, rc::Rc};
 
 use ambassador::{Delegate, delegatable_trait};
-use derive_more::derive::{Display, From};
+use derive_more::derive::{Display, From, TryInto};
 use slotmap::{SecondaryMap, SlotMap, new_key_type};
 
 use crate::{
@@ -12,6 +12,7 @@ use crate::{
         agent_schema::{GlobalsSchema, PatchSchema, TurtleSchema},
         color::Color,
         patch::PatchId,
+        topology::Point,
         turtle::{BreedId, TurtleId},
         value::{DynBox, NlBool, NlFloat, NlString},
     },
@@ -115,7 +116,7 @@ pub struct WriteLirError;
 /// A local transformation that can be applied to a node. The function
 /// returns `true` if the transformation was successfully applied, `false`
 /// otherwise.
-pub type NodeTransform = Box<dyn Fn(&Program, FunctionId, NodeId) -> bool>;
+pub type NodeTransform = Box<dyn FnOnce(&Program, FunctionId, NodeId) -> bool>;
 
 /// Some kind of computation that takes inputs and produces outputs. The output
 /// of a node is immutable, though may change between instances if the node is
@@ -197,7 +198,8 @@ pub trait Node {
 
 use node::*;
 
-#[derive(Debug, Display, From, Delegate)]
+#[derive(Debug, Display, From, TryInto, Delegate)]
+#[try_into(owned, ref, ref_mut)]
 #[delegate(Node)]
 pub enum NodeKind {
     Agentset(Agentset),
@@ -214,6 +216,7 @@ pub enum NodeKind {
     DeriveField(DeriveField),
     Diffuse(Diffuse),
     Distancexy(Distancexy),
+    EuclideanDistanceNoWrap(EuclideanDistanceNoWrap),
     GetGlobalVar(GetGlobalVar),
     GetLocalVar(GetLocalVar),
     GetPatchVar(GetPatchVar),
@@ -230,6 +233,7 @@ pub enum NodeKind {
     OneOf(OneOf),
     PatchAt(PatchAt),
     PatchRelative(PatchRelative),
+    PointConstructor(PointConstructor),
     RandomInt(RandomInt),
     ResetTicks(ResetTicks),
     ScaleColor(ScaleColor),
@@ -285,6 +289,7 @@ pub enum NlAbstractTy {
     Float,
     Boolean,
     String,
+    Point,
     Agent,
     Patch,
     Turtle,
@@ -320,6 +325,7 @@ impl NlAbstractTy {
             Self::Float => NlFloat::CONCRETE_TY,
             Self::Boolean => NlBool::CONCRETE_TY,
             Self::String => NlString::CONCRETE_TY,
+            Self::Point => Point::CONCRETE_TY,
             Self::Agent => DynBox::CONCRETE_TY,
             Self::Patch => PatchId::CONCRETE_TY,
             Self::Turtle => TurtleId::CONCRETE_TY,

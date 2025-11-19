@@ -129,6 +129,7 @@ impl Node for GetTurtleVar {
             TurtleVarDesc::Who => MirTy::Abstract(NlAbstractTy::Float),
             TurtleVarDesc::Color => MirTy::Abstract(NlAbstractTy::Color),
             TurtleVarDesc::Size => MirTy::Abstract(NlAbstractTy::Float),
+            TurtleVarDesc::Pos => MirTy::Abstract(NlAbstractTy::Point),
             TurtleVarDesc::Xcor => MirTy::Abstract(NlAbstractTy::Float),
             TurtleVarDesc::Ycor => MirTy::Abstract(NlAbstractTy::Float),
             TurtleVarDesc::Custom(field) => program.custom_turtle_vars[field].ty.clone(),
@@ -333,6 +334,7 @@ impl Node for GetPatchVar {
     fn output_type(&self, program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
         match self.var {
             PatchVarDesc::Pcolor => MirTy::Abstract(NlAbstractTy::Color),
+            PatchVarDesc::Pos => MirTy::Abstract(NlAbstractTy::Point),
             PatchVarDesc::Custom(field) => program.custom_patch_vars[field].ty.clone(),
         }
     }
@@ -496,6 +498,7 @@ impl Node for GetPatchVarAsTurtleOrPatch {
         // TODO(wishlist) refactor to deduplicate with GetPatchVar
         match self.var {
             PatchVarDesc::Pcolor => MirTy::Abstract(NlAbstractTy::Color),
+            PatchVarDesc::Pos => MirTy::Abstract(NlAbstractTy::Point),
             PatchVarDesc::Custom(field) => program.custom_patch_vars[field].ty.clone(),
         }
     }

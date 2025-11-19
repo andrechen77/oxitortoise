@@ -55,10 +55,9 @@ impl Node for Ask {
             let function = program.functions[fn_id].borrow();
             let mut nodes = function.nodes.borrow_mut();
 
-            let NodeKind::Ask(ask) = &nodes[my_node_id] else {
-                panic!("expected node to be an Ask");
-            };
-            let AskRecipient::Any(recipients) = ask.recipients else {
+            let &Ask { context: _, recipients, body: _ } = (&nodes[my_node_id]).try_into().unwrap();
+
+            let AskRecipient::Any(recipients) = recipients else {
                 return false;
             };
 

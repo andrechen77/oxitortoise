@@ -107,3 +107,59 @@ impl Node for MaxPycor {
         MirTy::Abstract(NlAbstractTy::Float)
     }
 }
+
+#[derive(Debug, Display)]
+#[display("EuclideanDistanceNoWrap {a:?} {b:?}")]
+pub struct EuclideanDistanceNoWrap {
+    /// The first point.
+    pub a: NodeId,
+    /// The second point.
+    pub b: NodeId,
+}
+
+impl Node for EuclideanDistanceNoWrap {
+    fn is_pure(&self) -> bool {
+        true
+    }
+
+    fn dependencies(&self) -> Vec<NodeId> {
+        vec![self.a, self.b]
+    }
+
+    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
+        MirTy::Abstract(NlAbstractTy::Float)
+    }
+}
+
+/// A node that constructs a point from two floating-point values.
+#[derive(Debug, Display)]
+#[display("PointConstructor")]
+pub struct PointConstructor {
+    pub x: NodeId,
+    pub y: NodeId,
+}
+
+impl Node for PointConstructor {
+    fn is_pure(&self) -> bool {
+        true
+    }
+
+    fn dependencies(&self) -> Vec<NodeId> {
+        vec![self.x, self.y]
+    }
+
+    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
+        MirTy::Abstract(NlAbstractTy::Point)
+    }
+
+    fn write_lir_execution(
+        &self,
+        _program: &Program,
+        _function: &Function,
+        _nodes: &Nodes,
+        _my_node_id: NodeId,
+        _lir_builder: &mut LirInsnBuilder,
+    ) -> Result<(), WriteLirError> {
+        todo!("TODO simply pass through the LIR values")
+    }
+}
