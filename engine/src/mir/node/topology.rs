@@ -1,6 +1,7 @@
 //! Primitives relating purely to the topology of the world.
 
 use derive_more::derive::Display;
+use lir::smallvec::smallvec;
 
 use crate::{
     exec::jit::host_fn,
@@ -176,12 +177,21 @@ impl Node for PointConstructor {
 
     fn write_lir_execution(
         &self,
-        _program: &Program,
-        _function: &Function,
-        _nodes: &Nodes,
-        _my_node_id: NodeId,
-        _lir_builder: &mut LirInsnBuilder,
+        program: &Program,
+        function: &Function,
+        nodes: &Nodes,
+        my_node_id: NodeId,
+        lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
-        todo!("TODO simply pass through the LIR values")
+        // simply pass through the LIR values
+        let Self { x, y } = self;
+        let &[x] = lir_builder.get_node_results(program, function, nodes, *x) else {
+            panic!("expected x value to be a single LIR value");
+        };
+        let &[y] = lir_builder.get_node_results(program, function, nodes, *y) else {
+            panic!("expected y value to be a single LIR value");
+        };
+        lir_builder.node_to_lir.insert(my_node_id, smallvec![x, y]);
+        Ok(())
     }
 }
