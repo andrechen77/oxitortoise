@@ -2,9 +2,12 @@
 
 use derive_more::derive::Display;
 
-use crate::mir::{
-    Function, MirTy, NlAbstractTy, Node, NodeId, Nodes, Program, WriteLirError,
-    build_lir::LirInsnBuilder,
+use crate::{
+    exec::jit::host_fn,
+    mir::{
+        Function, MirTy, NlAbstractTy, Node, NodeId, Nodes, Program, WriteLirError,
+        build_lir::LirInsnBuilder,
+    },
 };
 
 #[derive(Debug, Display)]
@@ -128,6 +131,25 @@ impl Node for EuclideanDistanceNoWrap {
 
     fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
         MirTy::Abstract(NlAbstractTy::Float)
+    }
+
+    fn write_lir_execution(
+        &self,
+        program: &Program,
+        function: &Function,
+        nodes: &Nodes,
+        _my_node_id: NodeId,
+        lir_builder: &mut LirInsnBuilder,
+    ) -> Result<(), WriteLirError> {
+        let mut args = Vec::new();
+        args.extend(lir_builder.get_node_results(program, function, nodes, self.a));
+        args.extend(lir_builder.get_node_results(program, function, nodes, self.b));
+
+        lir_builder.push_lir_insn(lir::generate_host_function_call(
+            host_fn::EUCLIDEAN_DISTANCE_NO_WRAP,
+            args.into_boxed_slice(),
+        ));
+        Ok(())
     }
 }
 

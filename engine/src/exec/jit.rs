@@ -79,21 +79,44 @@ impl<'env, Arg, Ret> JitCallback<'env, Arg, Ret> {
 //
 // TODO(mvp_ants) once the compiler pipeline is done, double-check that the
 // signatures match.
+#[rustfmt::skip] // keep struct definitions over multiple lines
 pub mod host_fn {
     use lir::HostFunction as Hf;
-    use lir::ValType::{FnPtr, Ptr};
+    use lir::ValType::{F64, FnPtr, Ptr};
 
-    pub const CLEAR_ALL: &Hf = &Hf { name: "clear_all", parameter_types: &[Ptr], return_type: &[] };
+    pub const CLEAR_ALL: &Hf = &Hf {
+        name: "clear_all",
+        parameter_types: &[Ptr],
+        return_type: &[],
+    };
 
-    pub const RESET_TICKS: &Hf =
-        &Hf { name: "reset_ticks", parameter_types: &[Ptr], return_type: &[] };
+    pub const RESET_TICKS: &Hf = &Hf {
+        name: "reset_ticks",
+        parameter_types: &[Ptr],
+        return_type: &[],
+    };
 
-    pub const CREATE_TURTLES: &Hf =
-        &Hf { name: "reset_ticks", parameter_types: &[Ptr], return_type: &[] };
+    pub const CREATE_TURTLES: &Hf = &Hf {
+        name: "reset_ticks",
+        parameter_types: &[Ptr],
+        return_type: &[],
+    };
 
-    pub const ASK_ALL_TURTLES: &Hf =
-        &Hf { name: "for_all_turtles", parameter_types: &[Ptr, Ptr, FnPtr], return_type: &[] };
+    pub const ASK_ALL_TURTLES: &Hf = &Hf {
+        name: "for_all_turtles",
+        parameter_types: &[Ptr, Ptr, FnPtr],
+        return_type: &[],
+    };
 
-    pub const ASK_ALL_PATCHES: &Hf =
-        &Hf { name: "for_all_patches", parameter_types: &[Ptr, Ptr, FnPtr], return_type: &[] };
+    pub const ASK_ALL_PATCHES: &Hf = &Hf {
+        name: "for_all_patches",
+        parameter_types: &[Ptr, Ptr, FnPtr],
+        return_type: &[],
+    };
+
+    pub const EUCLIDEAN_DISTANCE_NO_WRAP: &Hf = &Hf {
+        name: "distance_euclidean_no_wrap",
+        parameter_types: &[F64, F64, F64, F64],
+        return_type: &[F64],
+    };
 }
