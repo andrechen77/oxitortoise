@@ -31,7 +31,7 @@ impl Node for MemLoad {
     }
 
     fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
-        MirTy::Other
+        MirTy::Concrete(self.ty)
     }
 
     fn write_lir_execution(
