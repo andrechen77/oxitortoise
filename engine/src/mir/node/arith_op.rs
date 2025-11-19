@@ -2,6 +2,7 @@
 //! function calls.
 
 use derive_more::derive::Display;
+use lir::smallvec::smallvec;
 
 use crate::{
     mir::{
@@ -66,7 +67,7 @@ impl Node for BinaryOperation {
         program: &Program,
         function: &Function,
         nodes: &Nodes,
-        _my_node_id: NodeId,
+        my_node_id: NodeId,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
         // TODO(mvp) be prepared for other possible input types and adjust
@@ -98,7 +99,8 @@ impl Node for BinaryOperation {
             BinaryOpcode::Eq => lir::BinaryOpcode::FEq,
             _ => todo!("TODO(mvp) implement other binary operations"),
         };
-        lir_builder.push_lir_insn(lir::InsnKind::BinaryOp { op, lhs, rhs });
+        let result = lir_builder.push_lir_insn(lir::InsnKind::BinaryOp { op, lhs, rhs });
+        lir_builder.node_to_lir.insert(my_node_id, smallvec![lir::ValRef(result, 0)]);
         Ok(())
     }
 }
