@@ -139,17 +139,18 @@ impl Node for EuclideanDistanceNoWrap {
         program: &Program,
         function: &Function,
         nodes: &Nodes,
-        _my_node_id: NodeId,
+        my_node_id: NodeId,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
         let mut args = Vec::new();
         args.extend(lir_builder.get_node_results(program, function, nodes, self.a));
         args.extend(lir_builder.get_node_results(program, function, nodes, self.b));
 
-        lir_builder.push_lir_insn(lir::generate_host_function_call(
+        let pc = lir_builder.push_lir_insn(lir::generate_host_function_call(
             host_fn::EUCLIDEAN_DISTANCE_NO_WRAP,
             args.into_boxed_slice(),
         ));
+        lir_builder.node_to_lir.insert(my_node_id, smallvec![lir::ValRef(pc, 0)]);
         Ok(())
     }
 }

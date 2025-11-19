@@ -104,10 +104,15 @@ impl<'a> LirInsnBuilder<'a> {
     ) -> &[lir::ValRef] {
         if !self.node_to_lir.contains_key(&node_id) {
             let node = &nodes[node_id];
-            trace!("writing LIR execution for node {:?}", node);
+            trace!("writing LIR execution for node {:?} {:?}", node_id, node);
             node.write_lir_execution(program, function, nodes, node_id, self).unwrap();
         }
-        self.node_to_lir.get(&node_id).unwrap().as_slice()
+        self.node_to_lir
+            .get(&node_id)
+            .unwrap_or_else(|| {
+                panic!("node {:?} should have made its LIR results available but did not", node_id)
+            })
+            .as_slice()
     }
 
     pub fn with_insn_seq(
