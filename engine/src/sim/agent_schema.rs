@@ -27,7 +27,7 @@ pub struct GlobalsSchema {
 
 impl GlobalsSchema {
     pub fn new(field_types: &[ConcreteTy]) -> Self {
-        Self { row_schema: RowSchema::new(&field_types, true) }
+        Self { row_schema: RowSchema::new(field_types, true) }
     }
 
     pub fn row_schema(&self) -> &RowSchema {

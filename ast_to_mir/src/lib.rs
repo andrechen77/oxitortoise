@@ -173,7 +173,7 @@ pub fn ast_to_mir(ast: Ast) -> anyhow::Result<ParseResult> {
             CustomVarDecl { name: name.clone().into(), ty: MirTy::Abstract(NlAbstractTy::Top) };
         global_var_buffer.push(decl);
         trace!("Adding global variable `{}` at index {:?}", name, global_var_buffer.len() - 1);
-        global_scope.global_vars.insert(upper.into(), usize::from(global_var_buffer.len() - 1));
+        global_scope.global_vars.insert(upper.into(), global_var_buffer.len() - 1);
     }
 
     // add custom patch variables
