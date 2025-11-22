@@ -81,14 +81,14 @@ new_key_type! {
     pub struct NodeId;
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct LocalDeclaration {
     pub debug_name: Option<Rc<str>>,
     pub ty: MirTy,
     pub storage: LocalStorage,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum LocalStorage {
     /// The local variable is stored on the stack, so its address can be taken.
     Stack,
@@ -279,7 +279,7 @@ impl MirTy {
 }
 
 /// A representation of an element of the lattice making up all NetLogo types.
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone, Eq, Hash)]
 pub enum NlAbstractTy {
     Unit,
     /// Top doesn't actually include everything
@@ -339,7 +339,7 @@ impl NlAbstractTy {
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Eq, Hash)]
 pub struct ClosureType {
     pub arg_ty: Box<NlAbstractTy>,
     pub return_ty: Box<NlAbstractTy>,

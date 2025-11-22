@@ -1,7 +1,14 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+
+use engine::mir::MirTy::Abstract;
+use engine::mir::StatementKind::{IfElse, Node as NodeStatement, Repeat, Return, Stop};
+use engine::mir::node::SetLocalVar;
 
 use engine::{
-    mir::{self, FunctionId, MirTy, NlAbstractTy},
+    mir::{
+        FunctionId, LocalId, MirTy, NlAbstractTy, Node, NodeId, NodeKind, Program, StatementBlock,
+        StatementKind,
+    },
     sim::{
         agent_schema::GlobalsSchema,
         patch::{PatchSchema, PatchVarDesc},
@@ -79,12 +86,66 @@ pub struct Cheats {
     functions: Option<HashMap<String, CheatFunctionInfo>>,
 }
 
+#[derive(Clone, Eq, Hash, PartialEq)]
+struct LocalVarTypeBinding(LocalId, NlAbstractTy);
+
+fn extract_type_bindings<'a>(
+    program: &mut Program,
+    id: FunctionId,
+) -> HashSet<LocalVarTypeBinding> {
+    struct BC<'a> {
+        // BindingContext
+        program: &'a mut Program,
+        id: FunctionId,
+    }
+
+    fn node_helper(nid: &NodeId, bc: &BC) -> Option<LocalVarTypeBinding> {
+        let binding = bc.program.functions[bc.id].borrow();
+        let nodes = binding.nodes.borrow();
+        match nodes[*nid] {
+            NodeKind::SetLocalVar(SetLocalVar { local_id, value }) => {
+                let output_type = nodes[value].output_type(bc.program, &binding, &nodes);
+                if let Abstract(abs_type) = output_type {
+                    Some(LocalVarTypeBinding(local_id, abs_type))
+                } else {
+                    panic!("Unrecognized output type: {:?}", output_type)
+                }
+            }
+            _ => None,
+        }
+    }
+
+    #[rustfmt::skip]
+    fn structure_helper(statement: &StatementKind, bc: &BC) -> HashSet<LocalVarTypeBinding> {
+        match statement {
+            NodeStatement(node_id) =>
+                node_helper(node_id, bc).into_iter().collect(),
+            IfElse { then_block, else_block, .. } =>
+                block_helper(then_block, bc).union(&block_helper(else_block, bc)).cloned().collect(),
+            Repeat { block, .. } =>
+                block_helper(block, bc),
+            Return { .. } =>
+                HashSet::new(),
+            Stop =>
+                HashSet::new(),
+        }
+    }
+
+    fn block_helper(b: &StatementBlock, bc: &BC) -> HashSet<LocalVarTypeBinding> {
+        b.statements.iter().flat_map(|x| structure_helper(x, bc)).collect()
+    }
+
+    let bc = BC { program, id };
+
+    block_helper(&bc.program.functions[id.clone()].borrow().cfg, &bc)
+}
+
 /// `avoid_occupancy_bitfield` specifies index numbers of variables that will have fully-dense
 /// sequences of values.  Said sequences can be sparse when agents in model can be of mixed or dynamic
 /// breeds. --Jason B. (11/18/25)
 pub fn add_cheats(
     cheats: &Cheats,
-    program: &mut mir::Program,
+    program: &mut Program,
     global_names: &GlobalScope,
     fn_info: &SecondaryMap<FunctionId, FnInfo>,
 ) {
@@ -187,9 +248,9 @@ pub fn add_cheats(
     }
 
     if let Some(fn_cheats) = &cheats.functions {
-        for (fn_name, fn_cheats) in fn_cheats {
+        for (fn_name, info) in fn_cheats {
             let fn_id = global_names.functions.get(fn_name.as_str()).unwrap();
-            if let Some(self_param_type) = &fn_cheats.self_param_type {
+            if let Some(self_param_type) = &info.self_param_type {
                 let fn_info = &fn_info[*fn_id];
                 let ty = &mut program.functions[*fn_id].borrow_mut().locals
                     [fn_info.self_param.unwrap()]
@@ -202,5 +263,31 @@ pub fn add_cheats(
         }
     }
 
-    // TODO(mvp_ants) add types of local variables
+    let func_ids: Vec<FunctionId> = program.functions.keys().collect();
+
+    for func_id in func_ids {
+        let bindings_set = extract_type_bindings(program, func_id);
+
+        let mut func = program.functions[func_id].borrow_mut();
+
+        let mut lid_to_types: HashMap<LocalId, Vec<NlAbstractTy>> =
+            func.locals.clone().into_iter().map(|(k, _)| (k, Vec::new())).collect();
+
+        for LocalVarTypeBinding(local_id, typ) in bindings_set {
+            lid_to_types.get_mut(&local_id).unwrap().push(typ);
+        }
+
+        for (local_id, decl) in func.locals.iter_mut() {
+            let types = &lid_to_types.get(&local_id).as_ref().unwrap()[..];
+            if !types.is_empty() {
+                let abs_type = if let [typ] = types {
+                    typ.clone()
+                } else {
+                    todo!("TODO Maybe find a least upper-bound type, if we're confident in it")
+                };
+                let new_type = &MirTy::Abstract(abs_type);
+                decl.ty = new_type.clone();
+            }
+        }
+    }
 }
