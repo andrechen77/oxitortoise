@@ -787,8 +787,8 @@ fn translate_expression(expr: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) -> NodeI
         }
         N::ReporterCall(R::OneOf([xs])) => {
             let context = ctx.get_context();
-            let xs = translate_expression(*xs, ctx.reborrow());
-            NodeKind::from(node::OneOf { context, xs })
+            let operand = translate_expression(*xs, ctx.reborrow());
+            NodeKind::from(node::OneOf { context, operand })
         }
         N::ReporterCall(R::ScaleColor([color, number, range1, range2])) => {
             let color = translate_expression(*color, ctx.reborrow());

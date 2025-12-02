@@ -119,4 +119,25 @@ pub mod host_fn {
         parameter_types: &[F64, F64, F64, F64],
         return_type: &[F64],
     };
+
+    // fn list_new() -> NlBox<NlList>
+    pub const LIST_NEW: &Hf = &Hf {
+        name: "list_new",
+        parameter_types: &[],
+        return_type: &[Ptr],
+    };
+
+    // fn list_push(list: NlBox<NlList>, element: DynBox) -> NlBox<NlList>
+    pub const LIST_PUSH: &Hf = &Hf {
+        name: "list_push",
+        parameter_types: &[Ptr, F64],
+        return_type: &[Ptr]
+    };
+
+    // fn one_of_list(context: &mut CanonExecutionContext, list: NlBox<NlList>) -> DynBox
+    pub const ONE_OF_LIST: &Hf = &Hf {
+        name: "one_of_list",
+        parameter_types: &[Ptr, Ptr],
+        return_type: &[Ptr],
+    };
 }

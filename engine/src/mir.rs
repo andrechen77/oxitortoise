@@ -14,7 +14,7 @@ use crate::{
         patch::PatchId,
         topology::Point,
         turtle::{BreedId, TurtleId},
-        value::{DynBox, NlBool, NlFloat},
+        value::{DynBox, NlBool, NlBox, NlFloat, NlList},
     },
     util::reflection::{ConcreteTy, Reflect},
 };
@@ -333,6 +333,7 @@ impl NlAbstractTy {
             Self::Agentset { agent_type: _ } => todo!(""),
             Self::Nobody => todo!(),
             Self::Closure(_) => todo!(),
+            Self::List { element_ty } if **element_ty == Self::Top => <NlBox<NlList>>::CONCRETE_TY,
             Self::List { element_ty: _ } => todo!(),
         }
     }
