@@ -140,4 +140,11 @@ pub mod host_fn {
         parameter_types: &[Ptr, Ptr],
         return_type: &[Ptr],
     };
+
+    // fn scale_color(color: Color, number: NlFloat, range1: NlFloat, range2: NlFloat) -> Color
+    pub const SCALE_COLOR: &Hf = &Hf {
+        name: "scale_color",
+        parameter_types: &[F64, F64, F64, F64],
+        return_type: &[F64],
+    };
 }
