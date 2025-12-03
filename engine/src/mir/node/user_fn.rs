@@ -34,7 +34,7 @@ impl Node for CallUserFn {
         program: &Program,
         function: &Function,
         nodes: &Nodes,
-        _my_node_id: NodeId,
+        my_node_id: NodeId,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
         let lir_fn_id = lir_builder.program_builder.available_user_functions[&self.target];
@@ -52,7 +52,9 @@ impl Node for CallUserFn {
             args: args.into_boxed_slice(),
         };
 
-        lir_builder.push_lir_insn(insn);
+        let pc = lir_builder.push_lir_insn(insn);
+        let output_vals = (0..output_type.len()).map(|i| lir::ValRef(pc, i as u8)).collect();
+        lir_builder.node_to_lir.insert(my_node_id, output_vals);
         Ok(())
     }
 }
