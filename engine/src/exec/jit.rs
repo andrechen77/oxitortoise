@@ -82,7 +82,7 @@ impl<'env, Arg, Ret> JitCallback<'env, Arg, Ret> {
 #[rustfmt::skip] // keep struct definitions over multiple lines
 pub mod host_fn {
     use lir::HostFunction as Hf;
-    use lir::ValType::{I16, F64, FnPtr, Ptr};
+    use lir::ValType::{I16, I32, I64, F64, FnPtr, Ptr};
 
     pub const CLEAR_ALL: &Hf = &Hf {
         name: "clear_all",
@@ -153,6 +153,20 @@ pub mod host_fn {
         name: "scale_color",
         parameter_types: &[F64, F64, F64, F64],
         return_type: &[F64],
+    };
+
+    // fn rotate_turtle(context: &mut CanonExecutionContext, turtle_id: TurtleId, angle: NlFloat)
+    pub const ROTATE_TURTLE: &Hf = &Hf {
+        name: "rotate_turtle",
+        parameter_types: &[Ptr, I64, F64],
+        return_type: &[],
+    };
+
+    // fn patch_at(context: &mut CanonExecutionContext, point: Point) -> PatchId
+    pub const PATCH_AT: &Hf = &Hf {
+        name: "patch_at",
+        parameter_types: &[Ptr, F64, F64],
+        return_type: &[I32],
     };
 
     // fn diffuse_8_single_variable_buffer(ctx: &mut CanonExecutionContext, field: AgentFieldDescriptor, fraction: NlFloat)

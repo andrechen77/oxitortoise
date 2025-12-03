@@ -59,6 +59,8 @@ impl Node for OffsetDistanceByHeading {
 #[derive(Debug, Display)]
 #[display("PatchAt {x:?} {y:?}")]
 pub struct PatchAt {
+    // The execution context to use.
+    pub context: NodeId,
     /// The x coordinate.
     pub x: NodeId,
     /// The y coordinate.
@@ -71,11 +73,37 @@ impl Node for PatchAt {
     }
 
     fn dependencies(&self) -> Vec<NodeId> {
-        vec![self.x, self.y]
+        vec![self.context, self.x, self.y]
     }
 
     fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
         MirTy::Abstract(NlAbstractTy::Patch)
+    }
+
+    fn write_lir_execution(
+        &self,
+        program: &Program,
+        function: &Function,
+        nodes: &Nodes,
+        my_node_id: NodeId,
+        lir_builder: &mut LirInsnBuilder,
+    ) -> Result<(), WriteLirError> {
+        let &[ctx_ptr] = lir_builder.get_node_results(program, function, nodes, self.context)
+        else {
+            panic!("expected node outputting context pointer to be a single LIR value")
+        };
+        let &[x] = lir_builder.get_node_results(program, function, nodes, self.x) else {
+            panic!("expected node outputting x coordinate to be a single LIR value")
+        };
+        let &[y] = lir_builder.get_node_results(program, function, nodes, self.y) else {
+            panic!("expected node outputting y coordinate to be a single LIR value")
+        };
+        let pc = lir_builder.push_lir_insn(lir::generate_host_function_call(
+            host_fn::PATCH_AT,
+            Box::new([ctx_ptr, x, y]),
+        ));
+        lir_builder.node_to_lir.insert(my_node_id, smallvec![lir::ValRef(pc, 0)]);
+        Ok(())
     }
 }
 

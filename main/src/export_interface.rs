@@ -4,7 +4,7 @@ use engine::{
         agent_schema::AgentFieldDescriptor,
         patch::PatchId,
         topology::{Heading, Point, PointInt},
-        turtle::BreedId,
+        turtle::{BreedId, TurtleId},
         value::NlFloat,
         world::World,
     },
@@ -108,6 +108,18 @@ pub extern "C" fn oxitortoise_patch_at(world: &World, point: PointInt) -> PatchI
 #[unsafe(no_mangle)]
 pub extern "C" fn oxitortoise_normalize_heading(heading: NlFloat) -> Heading {
     heading.into()
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn oxitortoise_rotate_turtle(
+    context: &mut CanonExecutionContext,
+    turtle_id: u64,
+    angle: NlFloat,
+) {
+    let turtle_id = TurtleId::from_ffi(turtle_id);
+    if let Some(heading) = context.workspace.world.turtles.get_turtle_heading_mut(turtle_id) {
+        *heading += angle;
+    }
 }
 
 #[unsafe(no_mangle)]

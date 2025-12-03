@@ -546,7 +546,8 @@ fn decompose_get_patch_var(program: &Program, fn_id: FunctionId, my_node_id: Nod
                 var: TurtleVarDesc::Ycor,
             }));
 
-            let patch_here = nodes.insert(NodeKind::from(node::PatchAt { x: xcor, y: ycor }));
+            let patch_here =
+                nodes.insert(NodeKind::from(node::PatchAt { context, x: xcor, y: ycor }));
 
             nodes[my_node_id] =
                 NodeKind::from(node::GetPatchVar { context, patch: patch_here, var });
@@ -621,7 +622,7 @@ impl Node for SetPatchVarAsTurtleOrPatch {
                     }));
 
                     let patch_here =
-                        nodes.insert(NodeKind::from(node::PatchAt { x: xcor, y: ycor }));
+                        nodes.insert(NodeKind::from(node::PatchAt { context, x: xcor, y: ycor }));
 
                     nodes[my_node_id] = NodeKind::from(node::SetPatchVar {
                         context,
