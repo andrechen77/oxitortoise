@@ -6,6 +6,7 @@
 use std::collections::HashMap;
 use std::fmt::{self, Debug};
 use std::mem::offset_of;
+use std::ops::Index;
 use std::rc::Rc;
 
 use derive_more::derive::{From, Into};
@@ -13,7 +14,7 @@ use either::Either;
 use slotmap::SlotMap;
 
 use crate::mir;
-use crate::sim::agent_schema::{AgentFieldDescriptor, AgentSchemaField, TurtleSchema};
+use crate::sim::agent_schema::{AgentFieldDescriptor, AgentSchemaField, AgentSchemaFieldGroup};
 use crate::sim::topology::Heading;
 use crate::sim::value::agentset::TurtleSet;
 use crate::sim::value::{DynBox, NlFloat};
@@ -354,6 +355,134 @@ pub enum TurtleVarDesc {
     // TODO(mvp) add other builtin variables
 }
 
+#[derive(Debug)]
+pub struct TurtleSchema {
+    position: AgentFieldDescriptor,
+    heading: AgentFieldDescriptor,
+    field_groups: Vec<AgentSchemaFieldGroup>,
+    custom_fields: Vec<AgentFieldDescriptor>,
+}
+
+impl TurtleSchema {
+    pub fn new(
+        heading_buffer_idx: u8,
+        position_buffer_idx: u8,
+        custom_fields: &[(ConcreteTy, u8)],
+        avoid_occupancy_bitfield: &[u8],
+    ) -> Self {
+        // create field groups vector and add base data group
+        let mut field_groups = Vec::new();
+        field_groups.push(AgentSchemaFieldGroup {
+            avoid_occupancy_bitfield: false,
+            fields: vec![AgentSchemaField::BaseData],
+        });
+
+        // ensure field groups exist up to max needed index
+        let max_buffer_idx = heading_buffer_idx
+            .max(position_buffer_idx)
+            .max(custom_fields.iter().map(|(_, idx)| *idx).max().unwrap_or(0));
+        while field_groups.len() <= max_buffer_idx as usize {
+            field_groups.push(AgentSchemaFieldGroup {
+                avoid_occupancy_bitfield: false,
+                fields: Vec::new(),
+            });
+        }
+
+        // add heading and position fields
+        let heading_group = &mut field_groups[heading_buffer_idx as usize];
+        let heading_field_idx = heading_group.fields.len() as u8;
+        heading_group.fields.push(AgentSchemaField::Other(Heading::CONCRETE_TY));
+        let position_group = &mut field_groups[position_buffer_idx as usize];
+        let position_field_idx = position_group.fields.len() as u8;
+        position_group.fields.push(AgentSchemaField::Other(Point::CONCRETE_TY));
+
+        // add custom fields
+        let mut custom_field_descriptors = Vec::new();
+        for (field_type, buffer_idx) in custom_fields {
+            let field_group = &mut field_groups[usize::from(*buffer_idx)];
+            let idx_within_buffer = field_group.fields.len();
+            field_group.fields.push(AgentSchemaField::Other(*field_type));
+            custom_field_descriptors.push(AgentFieldDescriptor {
+                buffer_idx: *buffer_idx,
+                field_idx: idx_within_buffer as u8,
+            });
+        }
+
+        // set avoid_occupancy_bitfield flags
+        for &buffer_idx in avoid_occupancy_bitfield {
+            assert!(
+                (buffer_idx as usize) < field_groups.len(),
+                "avoid_occupancy_bitfield index out of bounds"
+            );
+            field_groups[buffer_idx as usize].avoid_occupancy_bitfield = true;
+        }
+
+        // verify all field groups are non-empty
+        for (i, group) in field_groups.iter().enumerate() {
+            assert!(!group.fields.is_empty(), "field group at index {} is empty", i);
+        }
+
+        Self {
+            heading: AgentFieldDescriptor {
+                buffer_idx: heading_buffer_idx,
+                field_idx: heading_field_idx,
+            },
+            position: AgentFieldDescriptor {
+                buffer_idx: position_buffer_idx,
+                field_idx: position_field_idx,
+            },
+            field_groups,
+            custom_fields: custom_field_descriptors,
+        }
+    }
+
+    pub fn make_row_schemas<const N: usize>(&self) -> [Option<RowSchema>; N] {
+        super::agent_schema::make_row_schemas::<TurtleBaseData, N>(&self.field_groups)
+    }
+
+    pub fn base_data(&self) -> AgentFieldDescriptor {
+        AgentFieldDescriptor { buffer_idx: 0, field_idx: 0 }
+    }
+
+    pub fn heading(&self) -> AgentFieldDescriptor {
+        self.heading
+    }
+
+    pub fn position(&self) -> AgentFieldDescriptor {
+        self.position
+    }
+
+    pub fn custom_fields(&self) -> &[AgentFieldDescriptor] {
+        &self.custom_fields
+    }
+
+    pub fn field_desc_and_offset(&self, var: TurtleVarDesc) -> (AgentFieldDescriptor, usize) {
+        match var {
+            TurtleVarDesc::Custom(field_id) => (self.custom_fields()[field_id], 0),
+            TurtleVarDesc::Who => (self.base_data(), offset_of!(TurtleBaseData, who)),
+            TurtleVarDesc::Size => (self.base_data(), offset_of!(TurtleBaseData, size)),
+            TurtleVarDesc::Color => (self.base_data(), offset_of!(TurtleBaseData, color)),
+            TurtleVarDesc::Pos => (self.position(), 0),
+            TurtleVarDesc::Xcor => (self.position(), offset_of!(Point, x)),
+            TurtleVarDesc::Ycor => (self.position(), offset_of!(Point, y)),
+        }
+    }
+}
+
+impl Default for TurtleSchema {
+    fn default() -> Self {
+        Self::new(0, 0, &[], &[])
+    }
+}
+
+impl Index<AgentFieldDescriptor> for TurtleSchema {
+    type Output = AgentSchemaField;
+
+    fn index(&self, index: AgentFieldDescriptor) -> &Self::Output {
+        &self.field_groups[index.buffer_idx as usize].fields[index.field_idx as usize]
+    }
+}
+
 /// Returns a tuple indicating how to access a given variable given a pointer
 /// to [`Turtles`]. The first element is the byte offset from the start of the
 /// [`Turtles`] struct to the pointer to row buffer containing the variable.
@@ -386,15 +515,7 @@ pub fn calc_turtle_var_offset(mir: &mir::Program, var: TurtleVarDesc) -> (usize,
 
     let turtle_schema = mir.turtle_schema.as_ref().unwrap();
     let (buffer_idx, stride, field_offset) = {
-        let (field_desc, additional_offset) = match var {
-            TurtleVarDesc::Custom(field_id) => (turtle_schema.custom_fields()[field_id], 0),
-            TurtleVarDesc::Who => (turtle_schema.base_data(), offset_of!(TurtleBaseData, who)),
-            TurtleVarDesc::Size => (turtle_schema.base_data(), offset_of!(TurtleBaseData, size)),
-            TurtleVarDesc::Color => (turtle_schema.base_data(), offset_of!(TurtleBaseData, color)),
-            TurtleVarDesc::Pos => (turtle_schema.position(), 0),
-            TurtleVarDesc::Xcor => (turtle_schema.position(), offset_of!(Point, x)),
-            TurtleVarDesc::Ycor => (turtle_schema.position(), offset_of!(Point, y)),
-        };
+        let (field_desc, additional_offset) = turtle_schema.field_desc_and_offset(var);
         let (stride, field_offset) = stride_and_field_offset(turtle_schema, field_desc);
         (field_desc.buffer_idx, stride, field_offset + additional_offset)
     };

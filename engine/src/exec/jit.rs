@@ -82,7 +82,7 @@ impl<'env, Arg, Ret> JitCallback<'env, Arg, Ret> {
 #[rustfmt::skip] // keep struct definitions over multiple lines
 pub mod host_fn {
     use lir::HostFunction as Hf;
-    use lir::ValType::{F64, FnPtr, Ptr};
+    use lir::ValType::{I16, F64, FnPtr, Ptr};
 
     pub const CLEAR_ALL: &Hf = &Hf {
         name: "clear_all",
@@ -146,5 +146,12 @@ pub mod host_fn {
         name: "scale_color",
         parameter_types: &[F64, F64, F64, F64],
         return_type: &[F64],
+    };
+
+    // fn diffuse_8_single_variable_buffer(ctx: &mut CanonExecutionContext, field: AgentFieldDescriptor, fraction: NlFloat)
+    pub const DIFFUSE_8_SINGLE_VARIABLE_BUFFER: &Hf = &Hf {
+        name: "diffuse_8_single_variable_buffer",
+        parameter_types: &[Ptr, I16, F64],
+        return_type: &[],
     };
 }

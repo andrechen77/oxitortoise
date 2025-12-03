@@ -9,11 +9,11 @@ use slotmap::{SecondaryMap, SlotMap, new_key_type};
 use crate::{
     mir::build_lir::LirInsnBuilder,
     sim::{
-        agent_schema::{GlobalsSchema, PatchSchema, TurtleSchema},
+        agent_schema::GlobalsSchema,
         color::Color,
-        patch::PatchId,
+        patch::{PatchId, PatchSchema},
         topology::Point,
-        turtle::{BreedId, TurtleId},
+        turtle::{BreedId, TurtleId, TurtleSchema},
         value::{DynBox, NlBool, NlBox, NlFloat, NlList},
     },
     util::reflection::{ConcreteTy, Reflect},

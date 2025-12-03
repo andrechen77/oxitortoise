@@ -1,4 +1,4 @@
-use std::{collections::HashMap, mem::offset_of};
+use std::{collections::HashMap, mem::offset_of, ops::Index};
 
 use derive_more::derive::From;
 use either::Either;
@@ -7,7 +7,7 @@ use super::topology::Point;
 use crate::{
     mir,
     sim::{
-        agent_schema::{AgentFieldDescriptor, AgentSchemaField, PatchSchema},
+        agent_schema::{AgentFieldDescriptor, AgentSchemaField, AgentSchemaFieldGroup},
         color::Color,
         topology::{CoordFloat, PointInt, TopologySpec},
         value::{DynBox, NlFloat},
@@ -284,6 +284,110 @@ pub enum PatchVarDesc {
     Custom(usize),
 }
 
+#[derive(Debug)]
+pub struct PatchSchema {
+    pcolor: AgentFieldDescriptor,
+    field_groups: Vec<AgentSchemaFieldGroup>,
+    custom_fields: Vec<AgentFieldDescriptor>,
+}
+
+impl PatchSchema {
+    pub fn new(
+        pcolor_buffer_idx: u8,
+        custom_fields: &[(ConcreteTy, u8)],
+        avoid_occupancy_bitfield: &[u8],
+    ) -> Self {
+        // create field groups vector and add base data group
+        let mut field_groups = Vec::new();
+        field_groups.push(AgentSchemaFieldGroup {
+            avoid_occupancy_bitfield: false,
+            fields: vec![AgentSchemaField::BaseData],
+        });
+
+        // ensure field groups exist up to max needed index
+        let max_buffer_idx =
+            pcolor_buffer_idx.max(custom_fields.iter().map(|(_, idx)| *idx).max().unwrap_or(0));
+        while field_groups.len() <= max_buffer_idx as usize {
+            field_groups.push(AgentSchemaFieldGroup {
+                avoid_occupancy_bitfield: false,
+                fields: Vec::new(),
+            });
+        }
+
+        // add pcolor field
+        field_groups[pcolor_buffer_idx as usize]
+            .fields
+            .push(AgentSchemaField::Other(Color::CONCRETE_TY));
+
+        // add custom fields and collect their descriptors
+        let mut custom_field_descriptors = Vec::new();
+        for (field_type, buffer_idx) in custom_fields {
+            let field_idx = field_groups[*buffer_idx as usize].fields.len() as u8;
+            field_groups[*buffer_idx as usize].fields.push(AgentSchemaField::Other(*field_type));
+            custom_field_descriptors
+                .push(AgentFieldDescriptor { buffer_idx: *buffer_idx, field_idx });
+        }
+
+        // set avoid_occupancy_bitfield flags
+        for &buffer_idx in avoid_occupancy_bitfield {
+            assert!(
+                (buffer_idx as usize) < field_groups.len(),
+                "avoid_occupancy_bitfield index out of bounds"
+            );
+            field_groups[buffer_idx as usize].avoid_occupancy_bitfield = true;
+        }
+
+        // verify all field groups are non-empty
+        for (i, group) in field_groups.iter().enumerate() {
+            assert!(!group.fields.is_empty(), "field group at index {} is empty", i);
+        }
+
+        Self {
+            pcolor: AgentFieldDescriptor { buffer_idx: pcolor_buffer_idx, field_idx: 0 },
+            field_groups,
+            custom_fields: custom_field_descriptors,
+        }
+    }
+
+    pub fn make_row_schemas<const N: usize>(&self) -> [Option<RowSchema>; N] {
+        super::agent_schema::make_row_schemas::<PatchBaseData, N>(&self.field_groups)
+    }
+
+    pub fn base_data(&self) -> AgentFieldDescriptor {
+        AgentFieldDescriptor { buffer_idx: 0, field_idx: 0 }
+    }
+
+    pub fn pcolor(&self) -> AgentFieldDescriptor {
+        self.pcolor
+    }
+
+    pub fn custom_fields(&self) -> &[AgentFieldDescriptor] {
+        &self.custom_fields
+    }
+
+    pub fn field_desc_and_offset(&self, var: PatchVarDesc) -> (AgentFieldDescriptor, usize) {
+        match var {
+            PatchVarDesc::Pos => (self.base_data(), offset_of!(PatchBaseData, position)),
+            PatchVarDesc::Pcolor => (self.pcolor(), 0),
+            PatchVarDesc::Custom(field_id) => (self.custom_fields()[field_id], 0),
+        }
+    }
+}
+
+impl Default for PatchSchema {
+    fn default() -> Self {
+        Self::new(0, &[], &[])
+    }
+}
+
+impl Index<AgentFieldDescriptor> for PatchSchema {
+    type Output = AgentSchemaField;
+
+    fn index(&self, index: AgentFieldDescriptor) -> &Self::Output {
+        &self.field_groups[index.buffer_idx as usize].fields[index.field_idx as usize]
+    }
+}
+
 /// See [`calc_turtle_var_offset`].
 pub fn calc_patch_var_offset(mir: &mir::Program, var: PatchVarDesc) -> (usize, usize, usize) {
     fn stride_and_field_offset(
@@ -302,11 +406,7 @@ pub fn calc_patch_var_offset(mir: &mir::Program, var: PatchVarDesc) -> (usize, u
 
     let patch_schema = mir.patch_schema.as_ref().unwrap();
     let (buffer_idx, stride, field_offset) = {
-        let (field_desc, additional_offset) = match var {
-            PatchVarDesc::Pos => (patch_schema.base_data(), offset_of!(PatchBaseData, position)),
-            PatchVarDesc::Pcolor => (patch_schema.pcolor(), 0),
-            PatchVarDesc::Custom(field_id) => (patch_schema.custom_fields()[field_id], 0),
-        };
+        let (field_desc, additional_offset) = patch_schema.field_desc_and_offset(var);
         let (stride, field_offset) = stride_and_field_offset(patch_schema, field_desc);
         (field_desc.buffer_idx, stride, field_offset + additional_offset)
     };

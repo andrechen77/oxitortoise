@@ -2,12 +2,11 @@ use slotmap::SlotMap;
 
 use super::shapes::Shapes;
 use crate::sim::{
-    agent_schema::{PatchSchema, TurtleSchema},
     // observer::Observer,
-    patch::Patches,
+    patch::{PatchSchema, Patches},
     tick::Tick,
     topology::{Topology, TopologySpec},
-    turtle::{Breed, BreedId, Turtles},
+    turtle::{Breed, BreedId, TurtleSchema, Turtles},
 };
 
 #[derive(Debug)]

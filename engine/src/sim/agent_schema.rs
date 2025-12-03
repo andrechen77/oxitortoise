@@ -1,12 +1,5 @@
-use std::ops::Index;
-
-use crate::sim::color::Color;
-use crate::sim::patch::PatchBaseData;
-use crate::sim::topology::{Heading, Point};
 use crate::util::reflection::Reflect;
-use crate::{
-    sim::turtle::TurtleBaseData, util::reflection::ConcreteTy, util::row_buffer::RowSchema,
-};
+use crate::{util::reflection::ConcreteTy, util::row_buffer::RowSchema};
 
 // TODO(mvp) make better, actual documentation for how the agents are laid out
 // hybrid SoA-AoS model: the set of fields for an agent is organized into
@@ -32,218 +25,6 @@ impl GlobalsSchema {
 
     pub fn row_schema(&self) -> &RowSchema {
         &self.row_schema
-    }
-}
-
-#[derive(Debug)]
-pub struct TurtleSchema {
-    position: AgentFieldDescriptor,
-    heading: AgentFieldDescriptor,
-    field_groups: Vec<AgentSchemaFieldGroup>,
-    custom_fields: Vec<AgentFieldDescriptor>,
-}
-
-impl TurtleSchema {
-    pub fn new(
-        heading_buffer_idx: u8,
-        position_buffer_idx: u8,
-        custom_fields: &[(ConcreteTy, u8)],
-        avoid_occupancy_bitfield: &[u8],
-    ) -> Self {
-        // create field groups vector and add base data group
-        let mut field_groups = Vec::new();
-        field_groups.push(AgentSchemaFieldGroup {
-            avoid_occupancy_bitfield: false,
-            fields: vec![AgentSchemaField::BaseData],
-        });
-
-        // ensure field groups exist up to max needed index
-        let max_buffer_idx = heading_buffer_idx
-            .max(position_buffer_idx)
-            .max(custom_fields.iter().map(|(_, idx)| *idx).max().unwrap_or(0));
-        while field_groups.len() <= max_buffer_idx as usize {
-            field_groups.push(AgentSchemaFieldGroup {
-                avoid_occupancy_bitfield: false,
-                fields: Vec::new(),
-            });
-        }
-
-        // add heading and position fields
-        let heading_group = &mut field_groups[heading_buffer_idx as usize];
-        let heading_field_idx = heading_group.fields.len() as u8;
-        heading_group.fields.push(AgentSchemaField::Other(Heading::CONCRETE_TY));
-        let position_group = &mut field_groups[position_buffer_idx as usize];
-        let position_field_idx = position_group.fields.len() as u8;
-        position_group.fields.push(AgentSchemaField::Other(Point::CONCRETE_TY));
-
-        // add custom fields
-        let mut custom_field_descriptors = Vec::new();
-        for (field_type, buffer_idx) in custom_fields {
-            let field_group = &mut field_groups[usize::from(*buffer_idx)];
-            let idx_within_buffer = field_group.fields.len();
-            field_group.fields.push(AgentSchemaField::Other(*field_type));
-            custom_field_descriptors.push(AgentFieldDescriptor {
-                buffer_idx: *buffer_idx,
-                field_idx: idx_within_buffer as u8,
-            });
-        }
-
-        // set avoid_occupancy_bitfield flags
-        for &buffer_idx in avoid_occupancy_bitfield {
-            assert!(
-                (buffer_idx as usize) < field_groups.len(),
-                "avoid_occupancy_bitfield index out of bounds"
-            );
-            field_groups[buffer_idx as usize].avoid_occupancy_bitfield = true;
-        }
-
-        // verify all field groups are non-empty
-        for (i, group) in field_groups.iter().enumerate() {
-            assert!(!group.fields.is_empty(), "field group at index {} is empty", i);
-        }
-
-        Self {
-            heading: AgentFieldDescriptor {
-                buffer_idx: heading_buffer_idx,
-                field_idx: heading_field_idx,
-            },
-            position: AgentFieldDescriptor {
-                buffer_idx: position_buffer_idx,
-                field_idx: position_field_idx,
-            },
-            field_groups,
-            custom_fields: custom_field_descriptors,
-        }
-    }
-
-    pub fn make_row_schemas<const N: usize>(&self) -> [Option<RowSchema>; N] {
-        make_row_schemas_impl::<TurtleBaseData, N>(&self.field_groups)
-    }
-
-    pub fn base_data(&self) -> AgentFieldDescriptor {
-        AgentFieldDescriptor { buffer_idx: 0, field_idx: 0 }
-    }
-
-    pub fn heading(&self) -> AgentFieldDescriptor {
-        self.heading
-    }
-
-    pub fn position(&self) -> AgentFieldDescriptor {
-        self.position
-    }
-
-    pub fn custom_fields(&self) -> &[AgentFieldDescriptor] {
-        &self.custom_fields
-    }
-}
-
-impl Default for TurtleSchema {
-    fn default() -> Self {
-        Self::new(0, 0, &[], &[])
-    }
-}
-
-impl Index<AgentFieldDescriptor> for TurtleSchema {
-    type Output = AgentSchemaField;
-
-    fn index(&self, index: AgentFieldDescriptor) -> &Self::Output {
-        &self.field_groups[index.buffer_idx as usize].fields[index.field_idx as usize]
-    }
-}
-
-#[derive(Debug)]
-pub struct PatchSchema {
-    pcolor: AgentFieldDescriptor,
-    field_groups: Vec<AgentSchemaFieldGroup>,
-    custom_fields: Vec<AgentFieldDescriptor>,
-}
-
-impl PatchSchema {
-    pub fn new(
-        pcolor_buffer_idx: u8,
-        custom_fields: &[(ConcreteTy, u8)],
-        avoid_occupancy_bitfield: &[u8],
-    ) -> Self {
-        // create field groups vector and add base data group
-        let mut field_groups = Vec::new();
-        field_groups.push(AgentSchemaFieldGroup {
-            avoid_occupancy_bitfield: false,
-            fields: vec![AgentSchemaField::BaseData],
-        });
-
-        // ensure field groups exist up to max needed index
-        let max_buffer_idx =
-            pcolor_buffer_idx.max(custom_fields.iter().map(|(_, idx)| *idx).max().unwrap_or(0));
-        while field_groups.len() <= max_buffer_idx as usize {
-            field_groups.push(AgentSchemaFieldGroup {
-                avoid_occupancy_bitfield: false,
-                fields: Vec::new(),
-            });
-        }
-
-        // add pcolor field
-        field_groups[pcolor_buffer_idx as usize]
-            .fields
-            .push(AgentSchemaField::Other(Color::CONCRETE_TY));
-
-        // add custom fields and collect their descriptors
-        let mut custom_field_descriptors = Vec::new();
-        for (field_type, buffer_idx) in custom_fields {
-            let field_idx = field_groups[*buffer_idx as usize].fields.len() as u8;
-            field_groups[*buffer_idx as usize].fields.push(AgentSchemaField::Other(*field_type));
-            custom_field_descriptors
-                .push(AgentFieldDescriptor { buffer_idx: *buffer_idx, field_idx });
-        }
-
-        // set avoid_occupancy_bitfield flags
-        for &buffer_idx in avoid_occupancy_bitfield {
-            assert!(
-                (buffer_idx as usize) < field_groups.len(),
-                "avoid_occupancy_bitfield index out of bounds"
-            );
-            field_groups[buffer_idx as usize].avoid_occupancy_bitfield = true;
-        }
-
-        // verify all field groups are non-empty
-        for (i, group) in field_groups.iter().enumerate() {
-            assert!(!group.fields.is_empty(), "field group at index {} is empty", i);
-        }
-
-        Self {
-            pcolor: AgentFieldDescriptor { buffer_idx: pcolor_buffer_idx, field_idx: 0 },
-            field_groups,
-            custom_fields: custom_field_descriptors,
-        }
-    }
-
-    pub fn make_row_schemas<const N: usize>(&self) -> [Option<RowSchema>; N] {
-        make_row_schemas_impl::<PatchBaseData, N>(&self.field_groups)
-    }
-
-    pub fn base_data(&self) -> AgentFieldDescriptor {
-        AgentFieldDescriptor { buffer_idx: 0, field_idx: 0 }
-    }
-
-    pub fn pcolor(&self) -> AgentFieldDescriptor {
-        self.pcolor
-    }
-
-    pub fn custom_fields(&self) -> &[AgentFieldDescriptor] {
-        &self.custom_fields
-    }
-}
-
-impl Default for PatchSchema {
-    fn default() -> Self {
-        Self::new(0, &[], &[])
-    }
-}
-
-impl Index<AgentFieldDescriptor> for PatchSchema {
-    type Output = AgentSchemaField;
-
-    fn index(&self, index: AgentFieldDescriptor) -> &Self::Output {
-        &self.field_groups[index.buffer_idx as usize].fields[index.field_idx as usize]
     }
 }
 
@@ -279,9 +60,17 @@ pub struct AgentFieldDescriptor {
 
 impl AgentFieldDescriptor {
     pub const BASE_DATA: Self = Self { buffer_idx: 0, field_idx: 0 };
+
+    pub fn to_u16(&self) -> u16 {
+        (self.field_idx as u16) << 8 | self.buffer_idx as u16
+    }
+
+    pub fn from_u16(value: u16) -> Self {
+        Self { buffer_idx: (value & 0xff) as u8, field_idx: ((value >> 8) & 0xff) as u8 }
+    }
 }
 
-fn make_row_schemas_impl<A: Reflect, const N: usize>(
+pub(crate) fn make_row_schemas<A: Reflect, const N: usize>(
     field_groups: &[AgentSchemaFieldGroup],
 ) -> [Option<RowSchema>; N] {
     let AgentSchemaField::BaseData = field_groups[0].fields[0] else {

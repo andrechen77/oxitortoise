@@ -3,8 +3,9 @@ use std::collections::HashMap;
 use engine::{
     mir::{self, FunctionId, MirTy, NlAbstractTy},
     sim::{
-        agent_schema::{GlobalsSchema, PatchSchema, TurtleSchema},
-        patch::PatchVarDesc,
+        agent_schema::GlobalsSchema,
+        patch::{PatchSchema, PatchVarDesc},
+        turtle::TurtleSchema,
         turtle::TurtleVarDesc,
     },
     slotmap::SecondaryMap,
