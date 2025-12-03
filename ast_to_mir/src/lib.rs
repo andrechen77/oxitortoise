@@ -421,7 +421,13 @@ fn build_body(
     let function = &mut mir_builder.functions[fn_id];
     function.cfg = statements;
     function.nodes = RefCell::new(nodes);
-    function.return_ty = MirTy::Abstract(return_ty);
+    // HACK since translate_statement_block calculates the wrong type, we should
+    // ignore it if the return type is already set. this means all user-defined
+    // procedures should already have the correct return type. we only set the
+    // return type of closure bodies here.
+    if function.return_ty == MirTy::Other {
+        function.return_ty = MirTy::Abstract(return_ty);
+    }
 
     trace!("finished building body");
     Ok(())
@@ -826,6 +832,8 @@ fn translate_statement_block(
     statements_ast: ast::Node,
     mut ctx: FnBodyBuilderCtx<'_>,
 ) -> (StatementBlock, NlAbstractTy) {
+    // FIXME this is wrong. a command block can return a value if it has a
+    // report statement.
     let (statements, return_ty) = match statements_ast {
         ast::Node::CommandBlock(CommandBlock { statements }) => (statements, NlAbstractTy::Unit),
         ast::Node::ReporterBlock { reporter_app } => {

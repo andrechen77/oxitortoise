@@ -253,9 +253,9 @@ fn translate_function_body(
         stmt_block: &mir::StatementBlock,
     ) {
         for stmt in &stmt_block.statements {
-            // TODO(mvp) add translation for other statement kinds to LIR
             match stmt {
                 &mir::StatementKind::Node(node_id) => {
+                    trace!("writing LIR execution for {:?} {:?}", node_id, nodes[node_id]);
                     nodes[node_id].write_lir_execution(program, function, nodes, node_id, fn_builder).inspect_err(|_| {
                         error!("failed to translate node {:?} to LIR", nodes[node_id]);
                     }).expect(
