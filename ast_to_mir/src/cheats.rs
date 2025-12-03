@@ -140,6 +140,58 @@ fn extract_type_bindings<'a>(
     block_helper(&bc.program.functions[id.clone()].borrow().cfg, &bc)
 }
 
+fn extract_report_types<'a>(program: &mut Program, id: FunctionId) -> HashSet<NlAbstractTy> {
+    struct BC<'a> {
+        // BindingContext
+        program: &'a mut Program,
+        id: FunctionId,
+    }
+
+    #[rustfmt::skip]
+    fn structure_helper(statement: &StatementKind, bc: &BC) -> HashSet<NlAbstractTy> {
+        match statement {
+            NodeStatement(..) =>
+                HashSet::new(),
+            IfElse { then_block, else_block, .. } =>
+                block_helper(then_block, bc).union(&block_helper(else_block, bc)).cloned().collect(),
+            Repeat { block, .. } =>
+                block_helper(block, bc),
+            Return { value } => {
+                let binding = bc.program.functions[bc.id].borrow();
+                let nodes = binding.nodes.borrow();
+                let output_type = nodes[*value].output_type(bc.program, &binding, &nodes);
+                if let Abstract(typ) = output_type {
+                    HashSet::from([typ])
+                } else {
+                    panic!("Unrecognized report type: {:?}", output_type)
+                }
+            },
+            Stop =>
+                HashSet::new(),
+        }
+    }
+
+    fn block_helper(b: &StatementBlock, bc: &BC) -> HashSet<NlAbstractTy> {
+        b.statements.iter().flat_map(|x| structure_helper(x, bc)).collect()
+    }
+
+    let bc = BC { program, id };
+
+    block_helper(&bc.program.functions[id.clone()].borrow().cfg, &bc)
+}
+
+fn lub(types: &[NlAbstractTy]) -> NlAbstractTy {
+    return if types.is_empty() {
+        NlAbstractTy::Unit
+    } else if types.iter().any(|t| *t == NlAbstractTy::Unit) {
+        NlAbstractTy::Unit
+    } else if types.iter().any(|t| *t == NlAbstractTy::Top) {
+        NlAbstractTy::Top
+    } else {
+        todo!("TODO Implement least upper bound for other types")
+    };
+}
+
 /// `avoid_occupancy_bitfield` specifies index numbers of variables that will have fully-dense
 /// sequences of values.  Said sequences can be sparse when agents in model can be of mixed or dynamic
 /// breeds. --Jason B. (11/18/25)
@@ -266,28 +318,46 @@ pub fn add_cheats(
     let func_ids: Vec<FunctionId> = program.functions.keys().collect();
 
     for func_id in func_ids {
-        let bindings_set = extract_type_bindings(program, func_id);
+        {
+            let bindings_set = extract_type_bindings(program, func_id);
 
-        let mut func = program.functions[func_id].borrow_mut();
+            let mut func = program.functions[func_id].borrow_mut();
 
-        let mut lid_to_types: HashMap<LocalId, Vec<NlAbstractTy>> =
-            func.locals.clone().into_iter().map(|(k, _)| (k, Vec::new())).collect();
+            let mut lid_to_types: HashMap<LocalId, Vec<NlAbstractTy>> =
+                func.locals.clone().into_iter().map(|(k, _)| (k, Vec::new())).collect();
 
-        for LocalVarTypeBinding(local_id, typ) in bindings_set {
-            lid_to_types.get_mut(&local_id).unwrap().push(typ);
+            for LocalVarTypeBinding(local_id, typ) in bindings_set {
+                lid_to_types.get_mut(&local_id).unwrap().push(typ);
+            }
+
+            for (local_id, decl) in func.locals.iter_mut() {
+                let types = &lid_to_types.get(&local_id).as_ref().unwrap()[..];
+                if !types.is_empty() {
+                    let abs_type = if let [typ] = types {
+                        typ.clone()
+                    } else {
+                        todo!("TODO Maybe find a least upper-bound type, if we're confident in it")
+                    };
+                    let new_type = &MirTy::Abstract(abs_type);
+                    decl.ty = new_type.clone();
+                }
+            }
         }
 
-        for (local_id, decl) in func.locals.iter_mut() {
-            let types = &lid_to_types.get(&local_id).as_ref().unwrap()[..];
-            if !types.is_empty() {
-                let abs_type = if let [typ] = types {
-                    typ.clone()
-                } else {
-                    todo!("TODO Maybe find a least upper-bound type, if we're confident in it")
-                };
-                let new_type = &MirTy::Abstract(abs_type);
-                decl.ty = new_type.clone();
-            }
+        {
+            let report_types_set = extract_report_types(program, func_id);
+            let report_types = &report_types_set.iter().cloned().collect::<Vec<_>>()[..];
+
+            let out_type = if report_types.is_empty() {
+                &MirTy::Abstract(NlAbstractTy::Unit)
+            } else if let [typ] = report_types {
+                &MirTy::Abstract(typ.clone())
+            } else {
+                &MirTy::Abstract(lub(report_types))
+            };
+
+            let mut func = program.functions[func_id].borrow_mut();
+            func.return_ty = out_type.clone();
         }
     }
 }
