@@ -90,7 +90,7 @@ impl Node for BinaryOperation {
             Op::Gte => lir::BinaryOpcode::FGte,
             Op::Eq => lir::BinaryOpcode::FEq,
             Op::And => lir::BinaryOpcode::And,
-            _ => todo!("TODO(mvp) implement other binary operations"),
+            Op::Or => lir::BinaryOpcode::Or,
         };
 
         let result = lir_builder.push_lir_insn(lir::InsnKind::BinaryOp { op, lhs, rhs });

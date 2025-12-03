@@ -672,6 +672,8 @@ fn translate_binary_op(
         (O::FLt, V::F64, V::F64) => Wo::F64Lt,
         (O::FGt, V::F64, V::F64) => Wo::F64Gt,
         (O::FEq, V::F64, V::F64) => Wo::F64Eq,
+        (O::And, V::I32, V::I32) => Wo::I32And,
+        (O::Or, V::I32, V::I32) => Wo::I32Or,
         _ => unimplemented!(
             "unknown combination of op and val types: {:?}, {:?}, {:?}",
             op,
