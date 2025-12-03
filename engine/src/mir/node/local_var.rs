@@ -73,4 +73,44 @@ impl Node for SetLocalVar {
     fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
         MirTy::Abstract(NlAbstractTy::Unit)
     }
+
+    fn write_lir_execution(
+        &self,
+        program: &Program,
+        function: &Function,
+        nodes: &Nodes,
+        _my_node_id: NodeId,
+        lir_builder: &mut LirInsnBuilder,
+    ) -> Result<(), WriteLirError> {
+        // TODO(mvp) this should account for values that take up multiple LIR registers
+        let local_location = *lir_builder.local_to_lir.entry(self.local_id).or_insert_with(|| {
+            // TODO(mvp) sometimes a variable should be stored on the stack
+            let &[lir_type] = function.locals[self.local_id]
+                .ty
+                .repr()
+                .info()
+                .lir_repr
+                .expect("local variable must have known ABI")
+            else {
+                todo!()
+            };
+            let var_id = lir_builder.product.local_vars.push_and_get_key(lir_type);
+            LocalLocation::Var { var_id }
+        });
+
+        let &[value] = lir_builder.get_node_results(program, function, nodes, self.value) else {
+            todo!()
+        };
+
+        match local_location {
+            LocalLocation::Stack { offset: _ } => {
+                todo!("TODO(mvp) write LIR code to load the value from the stack")
+            }
+            LocalLocation::Var { var_id } => {
+                // FIXME this should account for the case the MIR value spans multiple LIR values
+                lir_builder.push_lir_insn(lir::InsnKind::VarStore { var_id, value });
+                Ok(())
+            }
+        }
+    }
 }

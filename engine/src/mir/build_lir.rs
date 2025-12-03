@@ -129,7 +129,7 @@ impl<'a> LirInsnBuilder<'a> {
 }
 
 /// Describes how an MIR local variable is stored in LIR.
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub enum LocalLocation {
     /// The MIR local variable is stored on the stack at the specified offset.
     Stack { offset: usize },
