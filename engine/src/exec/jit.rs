@@ -96,6 +96,13 @@ pub mod host_fn {
         return_type: &[],
     };
 
+    // fn advance_tick(world: &mut World)
+    pub const ADVANCE_TICK: &Hf = &Hf {
+        name: "advance_tick",
+        parameter_types: &[Ptr],
+        return_type: &[],
+    };
+
     pub const CREATE_TURTLES: &Hf = &Hf {
         name: "reset_ticks",
         parameter_types: &[Ptr],
