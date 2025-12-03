@@ -644,6 +644,8 @@ fn infer_mem_arg(r#type: lir::ValType, offset: usize) -> wir::MemArg {
 fn translate_unary_op(op: lir::UnaryOpcode) -> wir::UnaryOp {
     match op {
         lir::UnaryOpcode::I64ToI32 => wir::UnaryOp::I32WrapI64,
+        lir::UnaryOpcode::FNeg => wir::UnaryOp::F64Neg,
+        lir::UnaryOpcode::Not => wir::UnaryOp::I32Eqz,
     }
 }
 

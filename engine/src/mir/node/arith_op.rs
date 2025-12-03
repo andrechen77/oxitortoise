@@ -131,12 +131,22 @@ impl Node for UnaryOp {
 
     fn write_lir_execution(
         &self,
-        _program: &Program,
-        _function: &Function,
-        _nodes: &Nodes,
-        _my_node_id: NodeId,
-        _lir_builder: &mut LirInsnBuilder,
+        program: &Program,
+        function: &Function,
+        nodes: &Nodes,
+        my_node_id: NodeId,
+        lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
-        todo!("TODO(mvp_ants) write LIR code to perform the unary operation")
+        let &[operand] = lir_builder.get_node_results(program, function, nodes, self.operand)
+        else {
+            todo!("TODO(mvp) are there operands that are multi-register values?");
+        };
+        let op = match self.op {
+            UnaryOpcode::Neg => lir::UnaryOpcode::FNeg,
+            UnaryOpcode::Not => lir::UnaryOpcode::Not,
+        };
+        let result = lir_builder.push_lir_insn(lir::InsnKind::UnaryOp { op, operand });
+        lir_builder.node_to_lir.insert(my_node_id, smallvec![lir::ValRef(result, 0)]);
+        Ok(())
     }
 }

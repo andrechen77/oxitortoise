@@ -300,6 +300,8 @@ pub struct Loop {
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Display)]
 pub enum UnaryOpcode {
+    FNeg,
+    Not,
     I64ToI32,
 }
 
