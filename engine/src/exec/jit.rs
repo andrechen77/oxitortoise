@@ -82,7 +82,7 @@ impl<'env, Arg, Ret> JitCallback<'env, Arg, Ret> {
 #[rustfmt::skip] // keep struct definitions over multiple lines
 pub mod host_fn {
     use lir::HostFunction as Hf;
-    use lir::ValType::{I16, I32, I64, F64, FnPtr, Ptr};
+    use lir::ValType::{I8, I16, I32, I64, F64, FnPtr, Ptr};
 
     pub const CLEAR_ALL: &Hf = &Hf {
         name: "clear_all",
@@ -162,10 +162,31 @@ pub mod host_fn {
         return_type: &[],
     };
 
-    // fn patch_at(context: &mut CanonExecutionContext, point: Point) -> PatchId
+    // fn patch_at(context: &mut CanonExecutionContext, point: Point) -> OptionPatchId
     pub const PATCH_AT: &Hf = &Hf {
         name: "patch_at",
         parameter_types: &[Ptr, F64, F64],
+        return_type: &[I32],
+    };
+
+    // fn random_int(context: &mut CanonExecutionContext, max: NlFloat) -> NlFloat
+    pub const RANDOM_INT: &Hf = &Hf {
+        name: "random_int",
+        parameter_types: &[Ptr, F64],
+        return_type: &[F64],
+    };
+
+    // fn dynbox_binary_op(lhs: DynBox, rhs: DynBox, op: u8) -> DynBox
+    pub const DYNBOX_BINARY_OP: &Hf = &Hf {
+        name: "dynbox_binary_op",
+        parameter_types: &[F64, F64, I8],
+        return_type: &[F64],
+    };
+
+    // fn patch_ahead(context: &mut CanonExecutionContext, turtle_id: u64, distance: NlFloat) -> PatchId
+    pub const PATCH_AHEAD: &Hf = &Hf {
+        name: "patch_ahead",
+        parameter_types: &[Ptr, I64, F64],
         return_type: &[I32],
     };
 

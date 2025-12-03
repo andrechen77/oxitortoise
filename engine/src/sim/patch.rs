@@ -18,10 +18,6 @@ use crate::{
     },
 };
 
-// TODO(doc) the patch id uses -1 as a sentinel value for nobody.
-// We must also decide whether the Rust newtype PatchId should allow this
-// sentinel value
-
 /// A reference to a patch.
 ///
 /// The patches in the world are indexed in a row-major order, where the first
@@ -49,6 +45,23 @@ static PATCH_ID_TYPE_INFO: TypeInfo = TypeInfo::new::<PatchId>(TypeInfoOptions {
 
 impl Reflect for PatchId {
     const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&PATCH_ID_TYPE_INFO);
+}
+
+/// Exactly the same as [`PatchId`], but it can represent "nobody" at the -1
+/// value.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, From)]
+#[repr(transparent)]
+pub struct OptionPatchId(pub u32);
+
+// make a copy with a different identity
+static OPTION_PATCH_ID_TYPE_INFO: TypeInfo = PATCH_ID_TYPE_INFO;
+
+impl Reflect for OptionPatchId {
+    const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&OPTION_PATCH_ID_TYPE_INFO);
+}
+
+impl OptionPatchId {
+    pub const NOBODY: Self = Self(u32::MAX);
 }
 
 pub const OFFSET_PATCHES_TO_DATA: usize = offset_of!(Patches, data);

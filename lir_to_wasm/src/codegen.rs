@@ -666,6 +666,7 @@ fn translate_binary_op(
         (O::ULt, V::I32, V::I32) => Wo::I32LtU,
         (O::UGt, V::I32, V::I32) => Wo::I32GtU,
         (O::IEq, V::I32, V::I32) => Wo::I32Eq,
+        (O::INeq, V::I32, V::I32) => Wo::I32Ne,
         (O::FAdd, V::F64, V::F64) => Wo::F64Add,
         (O::FSub, V::F64, V::F64) => Wo::F64Sub,
         (O::FMul, V::F64, V::F64) => Wo::F64Mul,

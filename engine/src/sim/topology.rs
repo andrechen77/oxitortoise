@@ -106,6 +106,7 @@ impl TopologySpec {
         self.max_pycor - self.patches_height + 1
     }
 
+    /// Assumes the patch exists, and returns nonsense if it doesn't.
     #[inline(always)]
     pub fn patch_at(&self, point: PointInt) -> PatchId {
         let width = self.patches_width;

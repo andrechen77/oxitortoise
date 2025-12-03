@@ -42,7 +42,7 @@ pub trait Reflect: 'static {
 
 /// Information about a type that is used by the engine to generate code that
 /// manipulates values of the corresponding type.
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct TypeInfo {
     pub debug_name: &'static str,
     pub layout: Layout,

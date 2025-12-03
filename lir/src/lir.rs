@@ -323,6 +323,7 @@ pub enum BinaryOpcode {
     ULt,
     UGt,
     IEq,
+    INeq,
     FAdd,
     FSub,
     FMul,
@@ -487,7 +488,7 @@ fn infer_binary_op_output_type(op: BinaryOpcode, lhs: ValType, rhs: ValType) -> 
             (V::Ptr, V::Ptr) => V::Ptr,
             _ => panic!("Invalid operand types for operation {:?}: {:?} and {:?}", op, lhs, rhs),
         },
-        B::ULt | B::UGt | B::IEq => match (lhs, rhs) {
+        B::ULt | B::UGt | B::IEq | B::INeq => match (lhs, rhs) {
             (V::I8, V::I8) => V::I8,
             (V::I16, V::I16) => V::I8,
             (V::I32, V::I32) => V::I8,

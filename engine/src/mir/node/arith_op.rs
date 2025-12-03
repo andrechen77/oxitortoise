@@ -4,13 +4,19 @@
 use derive_more::derive::Display;
 use lir::smallvec::smallvec;
 
-use crate::mir::{
-    Function, MirTy, NlAbstractTy, Node, NodeId, Nodes, Program, WriteLirError,
-    build_lir::LirInsnBuilder,
+use crate::{
+    exec::jit::host_fn,
+    mir::{
+        Function, MirTy, NlAbstractTy, Node, NodeId, Nodes, Program, WriteLirError,
+        build_lir::LirInsnBuilder,
+    },
+    sim::value::{DynBox, NlBool, NlFloat},
+    util::reflection::Reflect,
 };
 
-#[derive(Debug, Display)]
+#[derive(Debug, Display, Clone, Copy)]
 #[display("{_0:?}")]
+#[repr(u8)]
 pub enum BinaryOpcode {
     Add,
     Sub,
@@ -21,6 +27,7 @@ pub enum BinaryOpcode {
     Gt,
     Gte,
     Eq,
+    Neq,
     And,
     Or,
 }
@@ -53,6 +60,7 @@ impl Node for BinaryOperation {
             BinaryOpcode::Gt => NlAbstractTy::Boolean,
             BinaryOpcode::Gte => NlAbstractTy::Boolean,
             BinaryOpcode::Eq => NlAbstractTy::Boolean,
+            BinaryOpcode::Neq => NlAbstractTy::Boolean,
             BinaryOpcode::And => NlAbstractTy::Boolean,
             BinaryOpcode::Or => NlAbstractTy::Boolean,
         })
@@ -69,8 +77,8 @@ impl Node for BinaryOperation {
         // TODO(mvp) be prepared for other possible input types and adjust
         // the implementation accordingly
         // TODO(mvp) assert that the types of the operands are compatible with the operation
-        let _lhs_type = nodes[self.lhs].output_type(program, function, nodes).repr();
-        let _rhs_type = nodes[self.rhs].output_type(program, function, nodes).repr();
+        let lhs_type = nodes[self.lhs].output_type(program, function, nodes).repr();
+        let rhs_type = nodes[self.rhs].output_type(program, function, nodes).repr();
 
         let &[lhs] = lir_builder.get_node_results(program, function, nodes, self.lhs) else {
             unimplemented!();
@@ -79,23 +87,47 @@ impl Node for BinaryOperation {
             unimplemented!();
         };
         use BinaryOpcode as Op;
-        let op = match self.op {
-            Op::Add => lir::BinaryOpcode::FAdd,
-            Op::Sub => lir::BinaryOpcode::FSub,
-            Op::Mul => lir::BinaryOpcode::FMul,
-            Op::Div => lir::BinaryOpcode::FDiv,
-            Op::Lt => lir::BinaryOpcode::FLt,
-            Op::Lte => lir::BinaryOpcode::FLte,
-            Op::Gt => lir::BinaryOpcode::FGt,
-            Op::Gte => lir::BinaryOpcode::FGte,
-            Op::Eq => lir::BinaryOpcode::FEq,
-            Op::And => lir::BinaryOpcode::And,
-            Op::Or => lir::BinaryOpcode::Or,
-        };
+        if lhs_type == NlFloat::CONCRETE_TY && rhs_type == NlFloat::CONCRETE_TY {
+            let op = match self.op {
+                Op::Add => lir::BinaryOpcode::FAdd,
+                Op::Sub => lir::BinaryOpcode::FSub,
+                Op::Mul => lir::BinaryOpcode::FMul,
+                Op::Div => lir::BinaryOpcode::FDiv,
+                Op::Lt => lir::BinaryOpcode::FLt,
+                Op::Lte => lir::BinaryOpcode::FLte,
+                Op::Gt => lir::BinaryOpcode::FGt,
+                Op::Gte => lir::BinaryOpcode::FGte,
+                Op::Eq => lir::BinaryOpcode::FEq,
+                _ => unimplemented!(),
+            };
 
-        let result = lir_builder.push_lir_insn(lir::InsnKind::BinaryOp { op, lhs, rhs });
-        lir_builder.node_to_lir.insert(my_node_id, smallvec![lir::ValRef(result, 0)]);
-        Ok(())
+            let result = lir_builder.push_lir_insn(lir::InsnKind::BinaryOp { op, lhs, rhs });
+            lir_builder.node_to_lir.insert(my_node_id, smallvec![lir::ValRef(result, 0)]);
+            Ok(())
+        } else if lhs_type == NlBool::CONCRETE_TY && rhs_type == NlBool::CONCRETE_TY {
+            let op = match self.op {
+                Op::And => lir::BinaryOpcode::And,
+                Op::Or => lir::BinaryOpcode::Or,
+                _ => unimplemented!(),
+            };
+            let result = lir_builder.push_lir_insn(lir::InsnKind::BinaryOp { op, lhs, rhs });
+            lir_builder.node_to_lir.insert(my_node_id, smallvec![lir::ValRef(result, 0)]);
+            Ok(())
+        } else if lhs_type == DynBox::CONCRETE_TY && rhs_type == DynBox::CONCRETE_TY {
+            let opcode = self.op as u8;
+            let opcode_val = lir_builder.push_lir_insn(lir::InsnKind::Const(lir::Const {
+                ty: lir::ValType::I8,
+                value: opcode as u64,
+            }));
+            let pc = lir_builder.push_lir_insn(lir::generate_host_function_call(
+                host_fn::DYNBOX_BINARY_OP,
+                Box::new([lhs, rhs, lir::ValRef(opcode_val, 0)]),
+            ));
+            lir_builder.node_to_lir.insert(my_node_id, smallvec![lir::ValRef(pc, 0)]);
+            Ok(())
+        } else {
+            todo!("binary op has operands of types {:?} and {:?}", lhs_type, rhs_type);
+        }
     }
 }
 

@@ -5,10 +5,11 @@ use derive_more::derive::Display;
 use crate::{
     exec::jit::host_fn,
     mir::{
-        Function, MirTy, NlAbstractTy, Node, NodeId, Nodes, Program, WriteLirError,
-        build_lir::LirInsnBuilder,
+        Function, FunctionId, MirTy, NlAbstractTy, Node, NodeId, NodeKind, NodeTransform, Nodes,
+        Program, WriteLirError, build_lir::LirInsnBuilder, node,
     },
 };
+use lir::smallvec::smallvec;
 
 #[derive(Debug, Display)]
 #[display("TurtleRotate")]
@@ -110,13 +111,41 @@ impl Node for CanMove {
         MirTy::Abstract(NlAbstractTy::Boolean)
     }
 
-    // TODO(mvp_ants) add transformation to turn the node into "patch ahead != nobody"
+    fn peephole_transform(
+        &self,
+        _program: &Program,
+        _fn_id: FunctionId,
+        _my_node_id: NodeId,
+    ) -> Option<NodeTransform> {
+        fn break_down_can_move(program: &Program, fn_id: FunctionId, my_node_id: NodeId) -> bool {
+            let function = program.functions[fn_id].borrow();
+            let mut nodes = function.nodes.borrow_mut();
+            let &CanMove { context, turtle, distance } = (&nodes[my_node_id]).try_into().unwrap();
+
+            let patch = nodes.insert(NodeKind::from(node::PatchRelative {
+                context,
+                relative_loc: PatchLocRelation::Ahead,
+                turtle,
+                distance,
+            }));
+
+            nodes[my_node_id] =
+                NodeKind::from(node::CheckNobody { context, agent: patch, negate: true });
+
+            true
+        }
+        Some(Box::new(break_down_can_move))
+    }
 }
 
 #[derive(Debug, Display)]
 pub enum PatchLocRelation {
-    LeftAhead,
-    RightAhead,
+    #[display("Ahead")]
+    Ahead,
+    #[display("LeftAhead")]
+    LeftAhead(NodeId),
+    #[display("RightAhead")]
+    RightAhead(NodeId),
 }
 
 #[derive(Debug, Display)]
@@ -130,8 +159,6 @@ pub struct PatchRelative {
     pub turtle: NodeId,
     /// The distance to check
     pub distance: NodeId,
-    /// The heading to check
-    pub heading: NodeId,
 }
 
 impl Node for PatchRelative {
@@ -140,10 +167,54 @@ impl Node for PatchRelative {
     }
 
     fn dependencies(&self) -> Vec<NodeId> {
-        vec![self.context, self.turtle, self.distance, self.heading]
+        let mut deps = vec![self.context, self.turtle, self.distance];
+        match &self.relative_loc {
+            PatchLocRelation::LeftAhead(heading) => deps.push(*heading),
+            PatchLocRelation::RightAhead(heading) => deps.push(*heading),
+            _ => (),
+        }
+        deps
     }
 
     fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
         MirTy::Abstract(NlAbstractTy::Patch)
+    }
+
+    // TODO(mvp) add host function for right_and_ahead, and add transformation
+    // to turn left_and_ahead into right_and_ahead with negated operand
+
+    fn write_lir_execution(
+        &self,
+        program: &Program,
+        function: &Function,
+        nodes: &Nodes,
+        my_node_id: NodeId,
+        lir_builder: &mut LirInsnBuilder,
+    ) -> Result<(), WriteLirError> {
+        let &[ctx_ptr] = lir_builder.get_node_results(program, function, nodes, self.context)
+        else {
+            panic!("expected node outputting context pointer to be a single LIR value")
+        };
+        let &[turtle_id] = lir_builder.get_node_results(program, function, nodes, self.turtle)
+        else {
+            panic!("expected node outputting turtle id to be a single LIR value")
+        };
+        let &[distance] = lir_builder.get_node_results(program, function, nodes, self.distance)
+        else {
+            panic!("expected node outputting distance to be a single LIR value")
+        };
+
+        let host_fn = match &self.relative_loc {
+            PatchLocRelation::Ahead => host_fn::PATCH_AHEAD,
+            PatchLocRelation::LeftAhead(_) => todo!(),
+            PatchLocRelation::RightAhead(_) => todo!(),
+        };
+
+        let pc = lir_builder.push_lir_insn(lir::generate_host_function_call(
+            host_fn,
+            Box::new([ctx_ptr, turtle_id, distance]),
+        ));
+        lir_builder.node_to_lir.insert(my_node_id, smallvec![lir::ValRef(pc, 0)]);
+        Ok(())
     }
 }

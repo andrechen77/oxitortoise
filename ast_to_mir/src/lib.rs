@@ -770,20 +770,21 @@ fn translate_expression(expr: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) -> NodeI
         N::ReporterCall(
             reporter @ (R::PatchRightAndAhead { .. } | R::PatchLeftAndAhead { .. }),
         ) => {
-            let (relative_loc, heading, distance) = match reporter {
-                R::PatchRightAndAhead([heading, distance]) => {
-                    (PatchLocRelation::RightAhead, heading, distance)
-                }
-                R::PatchLeftAndAhead([heading, distance]) => {
-                    (PatchLocRelation::LeftAhead, heading, distance)
-                }
+            let (is_left, heading, distance) = match reporter {
+                R::PatchRightAndAhead([heading, distance]) => (false, heading, distance),
+                R::PatchLeftAndAhead([heading, distance]) => (true, heading, distance),
                 _ => unreachable!(),
             };
             let context = ctx.get_context();
             let turtle = ctx.get_self_agent();
             let heading = translate_expression(*heading, ctx.reborrow());
             let distance = translate_expression(*distance, ctx.reborrow());
-            NodeKind::from(node::PatchRelative { context, turtle, relative_loc, heading, distance })
+            let relative_loc = if is_left {
+                PatchLocRelation::LeftAhead(heading)
+            } else {
+                PatchLocRelation::RightAhead(heading)
+            };
+            NodeKind::from(node::PatchRelative { context, turtle, relative_loc, distance })
         }
         N::ReporterCall(R::MaxPxcor([])) => {
             NodeKind::from(node::MaxPxcor { context: ctx.get_context() })
