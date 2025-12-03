@@ -4,13 +4,9 @@
 use derive_more::derive::Display;
 use lir::smallvec::smallvec;
 
-use crate::{
-    mir::{
-        Function, MirTy, NlAbstractTy, Node, NodeId, Nodes, Program, WriteLirError,
-        build_lir::LirInsnBuilder,
-    },
-    sim::value::NlFloat,
-    util::reflection::Reflect,
+use crate::mir::{
+    Function, MirTy, NlAbstractTy, Node, NodeId, Nodes, Program, WriteLirError,
+    build_lir::LirInsnBuilder,
 };
 
 #[derive(Debug, Display)]
@@ -72,14 +68,9 @@ impl Node for BinaryOperation {
     ) -> Result<(), WriteLirError> {
         // TODO(mvp) be prepared for other possible input types and adjust
         // the implementation accordingly
-        assert_eq!(
-            nodes[self.lhs].output_type(program, function, nodes).repr(),
-            NlFloat::CONCRETE_TY
-        );
-        assert_eq!(
-            nodes[self.rhs].output_type(program, function, nodes).repr(),
-            NlFloat::CONCRETE_TY
-        );
+        // TODO(mvp) assert that the types of the operands are compatible with the operation
+        let _lhs_type = nodes[self.lhs].output_type(program, function, nodes).repr();
+        let _rhs_type = nodes[self.rhs].output_type(program, function, nodes).repr();
 
         let &[lhs] = lir_builder.get_node_results(program, function, nodes, self.lhs) else {
             unimplemented!();
@@ -87,18 +78,21 @@ impl Node for BinaryOperation {
         let &[rhs] = lir_builder.get_node_results(program, function, nodes, self.rhs) else {
             unimplemented!();
         };
+        use BinaryOpcode as Op;
         let op = match self.op {
-            BinaryOpcode::Add => lir::BinaryOpcode::FAdd,
-            BinaryOpcode::Sub => lir::BinaryOpcode::FSub,
-            BinaryOpcode::Mul => lir::BinaryOpcode::FMul,
-            BinaryOpcode::Div => lir::BinaryOpcode::FDiv,
-            BinaryOpcode::Lt => lir::BinaryOpcode::FLt,
-            BinaryOpcode::Lte => lir::BinaryOpcode::FLte,
-            BinaryOpcode::Gt => lir::BinaryOpcode::FGt,
-            BinaryOpcode::Gte => lir::BinaryOpcode::FGte,
-            BinaryOpcode::Eq => lir::BinaryOpcode::FEq,
+            Op::Add => lir::BinaryOpcode::FAdd,
+            Op::Sub => lir::BinaryOpcode::FSub,
+            Op::Mul => lir::BinaryOpcode::FMul,
+            Op::Div => lir::BinaryOpcode::FDiv,
+            Op::Lt => lir::BinaryOpcode::FLt,
+            Op::Lte => lir::BinaryOpcode::FLte,
+            Op::Gt => lir::BinaryOpcode::FGt,
+            Op::Gte => lir::BinaryOpcode::FGte,
+            Op::Eq => lir::BinaryOpcode::FEq,
+            Op::And => lir::BinaryOpcode::And,
             _ => todo!("TODO(mvp) implement other binary operations"),
         };
+
         let result = lir_builder.push_lir_insn(lir::InsnKind::BinaryOp { op, lhs, rhs });
         lir_builder.node_to_lir.insert(my_node_id, smallvec![lir::ValRef(result, 0)]);
         Ok(())

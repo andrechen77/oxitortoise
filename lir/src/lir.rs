@@ -330,6 +330,7 @@ pub enum BinaryOpcode {
     FGt,
     FGte,
     FEq,
+    And,
 }
 
 /// A machine-level type. These are just numbers that have no higher-level
@@ -504,6 +505,10 @@ fn infer_binary_op_output_type(op: BinaryOpcode, lhs: ValType, rhs: ValType) -> 
         },
         B::FLt | B::FLte | B::FGt | B::FGte | B::FEq => match (lhs, rhs) {
             (V::F64, V::F64) => V::I8,
+            _ => panic!("Invalid operand types for operation {:?}: {:?} and {:?}", op, lhs, rhs),
+        },
+        B::And => match (lhs, rhs) {
+            (V::I8, V::I8) => V::I8,
             _ => panic!("Invalid operand types for operation {:?}: {:?} and {:?}", op, lhs, rhs),
         },
     }
