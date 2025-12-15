@@ -332,7 +332,13 @@ impl NlAbstractTy {
             Self::Turtle => TurtleId::CONCRETE_TY,
             Self::Link => todo!(""),
             Self::Agentset { agent_type: _ } => todo!(""),
-            Self::Nobody => todo!(),
+            // If a type is just "nobody", then it is inhabited by only one
+            // value and therefore holds no data. Operations that take the
+            // nobody value as an operand typically see it as an inhabitant of
+            // some other type, e.g. nobody as a patch id, or nobody as a turtle
+            // id. This is why "nobody" just by itself has no concrete
+            // representation.
+            Self::Nobody => unimplemented!("nobody type has no concrete representation"),
             Self::Closure(_) => todo!(),
             Self::List { element_ty } if **element_ty == Self::Top => <NlBox<NlList>>::CONCRETE_TY,
             Self::List { element_ty: _ } => todo!(),

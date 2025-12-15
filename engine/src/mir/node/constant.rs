@@ -30,7 +30,9 @@ impl Node for Constant {
     fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
         MirTy::Abstract(match self.value {
             UnpackedDynBox::Float(_) => NlAbstractTy::Float,
-            _ => todo!("TODO(mvp) include all other variants"),
+            UnpackedDynBox::Bool(_) => NlAbstractTy::Boolean,
+            UnpackedDynBox::Nobody => NlAbstractTy::Nobody,
+            _ => todo!("TODO(mvp) include all other variants (doesn't handle {:?})", self.value),
         })
     }
 

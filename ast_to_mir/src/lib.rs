@@ -746,9 +746,10 @@ fn translate_expression(expr: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) -> NodeI
                 R::Or([lhs, rhs]) => (BinaryOpcode::Or, lhs, rhs),
                 _ => unreachable!(),
             };
+            let context = ctx.get_context();
             let lhs = translate_expression(*lhs, ctx.reborrow());
             let rhs = translate_expression(*rhs, ctx.reborrow());
-            NodeKind::from(node::BinaryOperation { op, lhs, rhs })
+            NodeKind::from(node::BinaryOperation { context, op, lhs, rhs })
         }
         N::ReporterCall(R::Not([operand])) => {
             let operand = translate_expression(*operand, ctx.reborrow());

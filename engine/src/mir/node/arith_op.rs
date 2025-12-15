@@ -7,8 +7,8 @@ use lir::smallvec::smallvec;
 use crate::{
     exec::jit::host_fn,
     mir::{
-        Function, MirTy, NlAbstractTy, Node, NodeId, Nodes, Program, WriteLirError,
-        build_lir::LirInsnBuilder,
+        Function, FunctionId, MirTy, NlAbstractTy, Node, NodeId, NodeKind, NodeTransform, Nodes,
+        Program, WriteLirError, build_lir::LirInsnBuilder, node,
     },
     sim::value::{DynBox, NlBool, NlFloat},
     util::reflection::Reflect,
@@ -35,6 +35,9 @@ pub enum BinaryOpcode {
 #[derive(Debug, Display)]
 #[display("{op:?}")]
 pub struct BinaryOperation {
+    /// The context to use for the operation. This is necessary for certain
+    /// operations such as checking for equality with nobody.
+    pub context: NodeId,
     pub op: BinaryOpcode,
     pub lhs: NodeId,
     pub rhs: NodeId,
@@ -64,6 +67,48 @@ impl Node for BinaryOperation {
             BinaryOpcode::And => NlAbstractTy::Boolean,
             BinaryOpcode::Or => NlAbstractTy::Boolean,
         })
+    }
+
+    fn peephole_transform(
+        &self,
+        _program: &Program,
+        _fn_id: FunctionId,
+        _my_node_id: NodeId,
+    ) -> Option<NodeTransform> {
+        fn decompose_with_check_nobody(
+            program: &Program,
+            fn_id: FunctionId,
+            my_node_id: NodeId,
+        ) -> bool {
+            let function = program.functions[fn_id].borrow();
+            let mut nodes = function.nodes.borrow_mut();
+
+            let &BinaryOperation { context, op, lhs, rhs } =
+                (&nodes[my_node_id]).try_into().unwrap();
+
+            let lhs_type = nodes[lhs].output_type(program, &function, &nodes);
+            let rhs_type = nodes[rhs].output_type(program, &function, &nodes);
+
+            // expect that the operation is either Eq or Neq
+            let negate = match op {
+                BinaryOpcode::Eq => false,
+                BinaryOpcode::Neq => true,
+                _ => return false,
+            };
+
+            // find the operand that is being compared to nobody
+            let operand = match (lhs_type, rhs_type) {
+                (MirTy::Abstract(NlAbstractTy::Nobody), _) => rhs,
+                (_, MirTy::Abstract(NlAbstractTy::Nobody)) => lhs,
+                _ => return false,
+            };
+
+            nodes[my_node_id] =
+                NodeKind::from(node::CheckNobody { context, agent: operand, negate });
+
+            true
+        }
+        Some(Box::new(decompose_with_check_nobody))
     }
 
     fn write_lir_execution(
