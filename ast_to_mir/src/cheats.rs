@@ -89,10 +89,7 @@ pub struct Cheats {
 #[derive(Clone, Eq, Hash, PartialEq)]
 struct LocalVarTypeBinding(LocalId, NlAbstractTy);
 
-fn extract_type_bindings<'a>(
-    program: &mut Program,
-    id: FunctionId,
-) -> HashSet<LocalVarTypeBinding> {
+fn extract_type_bindings(program: &mut Program, id: FunctionId) -> HashSet<LocalVarTypeBinding> {
     struct BC<'a> {
         // BindingContext
         program: &'a mut Program,
@@ -137,10 +134,10 @@ fn extract_type_bindings<'a>(
 
     let bc = BC { program, id };
 
-    block_helper(&bc.program.functions[id.clone()].borrow().cfg, &bc)
+    block_helper(&bc.program.functions[id].borrow().cfg, &bc)
 }
 
-fn extract_report_types<'a>(program: &mut Program, id: FunctionId) -> HashSet<NlAbstractTy> {
+fn extract_report_types(program: &mut Program, id: FunctionId) -> HashSet<NlAbstractTy> {
     struct BC<'a> {
         // BindingContext
         program: &'a mut Program,
@@ -177,19 +174,17 @@ fn extract_report_types<'a>(program: &mut Program, id: FunctionId) -> HashSet<Nl
 
     let bc = BC { program, id };
 
-    block_helper(&bc.program.functions[id.clone()].borrow().cfg, &bc)
+    block_helper(&bc.program.functions[id].borrow().cfg, &bc)
 }
 
 fn lub(types: &[NlAbstractTy]) -> NlAbstractTy {
-    return if types.is_empty() {
+    if types.is_empty() || types.iter().any(|t| *t == NlAbstractTy::Unit) {
         NlAbstractTy::Unit
-    } else if types.iter().any(|t| *t == NlAbstractTy::Unit) {
-        NlAbstractTy::Unit
-    } else if types.iter().any(|t| *t == NlAbstractTy::Top) {
+    } else if types.contains(&NlAbstractTy::Top) {
         NlAbstractTy::Top
     } else {
         todo!("TODO Implement least upper bound for other types")
-    };
+    }
 }
 
 /// `avoid_occupancy_bitfield` specifies index numbers of variables that will have fully-dense
