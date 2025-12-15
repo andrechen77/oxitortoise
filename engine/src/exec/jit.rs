@@ -190,6 +190,13 @@ pub mod host_fn {
         return_type: &[I32],
     };
 
+    // fn patch_right_and_ahead(context: &mut CanonExecutionContext, turtle_id: u64, distance: NlFloat, angle: NlFloat) -> PatchId
+    pub const PATCH_RIGHT_AND_AHEAD: &Hf = &Hf {
+        name: "patch_right_and_ahead",
+        parameter_types: &[Ptr, I64, F64, F64],
+        return_type: &[I32],
+    };
+
     // fn diffuse_8_single_variable_buffer(ctx: &mut CanonExecutionContext, field: AgentFieldDescriptor, fraction: NlFloat)
     pub const DIFFUSE_8_SINGLE_VARIABLE_BUFFER: &Hf = &Hf {
         name: "diffuse_8_single_variable_buffer",

@@ -204,16 +204,26 @@ impl Node for PatchRelative {
             panic!("expected node outputting distance to be a single LIR value")
         };
 
-        let host_fn = match &self.relative_loc {
-            PatchLocRelation::Ahead => host_fn::PATCH_AHEAD,
-            PatchLocRelation::LeftAhead(_) => todo!(),
-            PatchLocRelation::RightAhead(_) => todo!(),
+        let pc = match &self.relative_loc {
+            PatchLocRelation::Ahead => lir_builder.push_lir_insn(lir::generate_host_function_call(
+                host_fn::PATCH_AHEAD,
+                Box::new([ctx_ptr, turtle_id, distance]),
+            )),
+            PatchLocRelation::RightAhead(angle) => {
+                let &[angle] = lir_builder.get_node_results(program, function, nodes, *angle)
+                else {
+                    panic!("expected node outputting angle to be a single LIR value");
+                };
+                lir_builder.push_lir_insn(lir::generate_host_function_call(
+                    host_fn::PATCH_RIGHT_AND_AHEAD,
+                    Box::new([ctx_ptr, turtle_id, angle, distance]),
+                ))
+            }
+            PatchLocRelation::LeftAhead(_) => {
+                unimplemented!("transform the node to right-and-ahead with negated angle")
+            }
         };
 
-        let pc = lir_builder.push_lir_insn(lir::generate_host_function_call(
-            host_fn,
-            Box::new([ctx_ptr, turtle_id, distance]),
-        ));
         lir_builder.node_to_lir.insert(my_node_id, smallvec![lir::ValRef(pc, 0)]);
         Ok(())
     }
