@@ -1,6 +1,7 @@
 //! Primitives for interacting with the tick counter.
 
 use derive_more::derive::Display;
+use lir::smallvec::smallvec;
 
 use crate::{
     exec::jit::host_fn,
@@ -108,5 +109,27 @@ impl Node for GetTick {
 
     fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
         MirTy::Abstract(NlAbstractTy::Float)
+    }
+
+    fn write_lir_execution(
+        &self,
+        program: &Program,
+        function: &Function,
+        nodes: &Nodes,
+        my_node_id: NodeId,
+        lir_builder: &mut LirInsnBuilder,
+    ) -> Result<(), WriteLirError> {
+        let &[ctx_ptr] = lir_builder.get_node_results(program, function, nodes, self.context)
+        else {
+            panic!("expected node outputting context pointer to be a single LIR value")
+        };
+        let pc = lir_builder.push_lir_insn(lir::generate_host_function_call(
+            host_fn::GET_TICK,
+            Box::new([ctx_ptr]),
+        ));
+
+        lir_builder.node_to_lir.insert(my_node_id, smallvec![lir::ValRef(pc, 0)]);
+
+        Ok(())
     }
 }

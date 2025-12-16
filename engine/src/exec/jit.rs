@@ -96,11 +96,18 @@ pub mod host_fn {
         return_type: &[],
     };
 
-    // fn advance_tick(world: &mut World)
+    // fn advance_tick(context: &mut Context)
     pub const ADVANCE_TICK: &Hf = &Hf {
         name: "advance_tick",
         parameter_types: &[Ptr],
         return_type: &[],
+    };
+
+    // fn get_tick(context: &mut Context) -> NlFloat
+    pub const GET_TICK: &Hf = &Hf {
+        name: "get_tick",
+        parameter_types: &[Ptr],
+        return_type: &[F64],
     };
 
     pub const CREATE_TURTLES: &Hf = &Hf {
