@@ -169,6 +169,13 @@ pub mod host_fn {
         return_type: &[],
     };
 
+    // fn turtle_forward(context: &mut CanonExecutionContext, turtle_id: TurtleId, distance: NlFloat)
+    pub const TURTLE_FORWARD: &Hf = &Hf {
+        name: "turtle_forward",
+        parameter_types: &[Ptr, I64, F64],
+        return_type: &[],
+    };
+
     // fn patch_at(context: &mut CanonExecutionContext, point: Point) -> OptionPatchId
     pub const PATCH_AT: &Hf = &Hf {
         name: "patch_at",
