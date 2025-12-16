@@ -102,7 +102,8 @@ pub fn optimize_of_agent_type(program: &Program, fn_id: FunctionId) {
             if let NodeKind::Of(of) = &node {
                 trace!("Optimizing Of node {:?}", node);
 
-                let recipients = &nodes[of.recipients];
+                let recipients =
+                    &nodes[of.recipients.node().expect("TODO can't always unwrap here")];
                 let NodeKind::Closure(closure) = &nodes[of.body] else {
                     return;
                 };

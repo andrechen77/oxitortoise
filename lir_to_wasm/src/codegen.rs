@@ -449,6 +449,15 @@ fn add_function<A: FnTableSlotAllocator>(
                     let callee = ctx.mod_ctx.user_fn_ids[function];
                     insn_builder.call(callee);
                 }
+                I::CallIndirectFunction { function: _, args, output_type } => {
+                    let fn_table_id = ctx.mod_ctx.fn_table_id;
+                    let input_types: Vec<_> =
+                        args.iter().map(|v| translate_val_type(ctx.types[v])).collect();
+                    let output_types: Vec<_> =
+                        output_type.iter().copied().map(translate_val_type).collect();
+                    let type_id = ctx.mod_ctx.module.types.add(&input_types, &output_types);
+                    insn_builder.call_indirect(type_id, fn_table_id);
+                }
                 I::UnaryOp { op, operand: _ } => {
                     insn_builder.unop(translate_unary_op(*op));
                 }

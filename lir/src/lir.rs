@@ -208,6 +208,12 @@ pub enum InsnKind {
         output_type: SmallVec<[ValType; 1]>,
         args: Box<[ValRef]>,
     },
+    #[display("call_indirect_fn({:?}, -> {:?})({:?})", function, output_type, args)]
+    CallIndirectFunction {
+        function: ValRef,
+        output_type: SmallVec<[ValType; 1]>,
+        args: Box<[ValRef]>,
+    },
     #[display("unary_op({})({})", op, operand)]
     UnaryOp {
         op: UnaryOpcode,
@@ -447,7 +453,8 @@ pub fn infer_output_types(function: &Function) -> HashMap<ValRef, ValType> {
                 | InsnKind::IfElse(IfElse { output_type, .. })
                 | InsnKind::Loop(Loop { output_type, .. })
                 | InsnKind::CallHostFunction { output_type, .. }
-                | InsnKind::CallUserFunction { output_type, .. } => {
+                | InsnKind::CallUserFunction { output_type, .. }
+                | InsnKind::CallIndirectFunction { output_type, .. } => {
                     for (idx, ty) in output_type.iter().enumerate() {
                         self.types.insert(ValRef(pc, idx.try_into().unwrap()), *ty);
                     }

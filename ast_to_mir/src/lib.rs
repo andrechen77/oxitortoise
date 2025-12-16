@@ -716,7 +716,7 @@ fn translate_expression(expr: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) -> NodeI
             let recipients = translate_expression(*recipients, ctx.reborrow());
             let body =
                 translate_ephemeral_closure(*body, ctx.fn_id, AgentClass::Any, ctx.reborrow());
-            NodeKind::from(node::Of { context, recipients, body })
+            NodeKind::from(node::Of { context, recipients: AskRecipient::Any(recipients), body })
         }
         #[rustfmt::skip]
         N::ReporterCall(reporter @ (

@@ -133,6 +133,16 @@ pub fn stackify_cfg(function: &Function) -> CfgStackification {
                         .map(|i| ValRef(pc, i.try_into().unwrap()).into())
                         .collect(),
                 ),
+                InsnKind::CallIndirectFunction { function, args, output_type } => (
+                    {
+                        let mut inputs: SmallVec<_> = args.iter().map(|v| (*v).into()).collect();
+                        inputs.push((*function).into());
+                        inputs
+                    },
+                    (0..output_type.len())
+                        .map(|i| ValRef(pc, i.try_into().unwrap()).into())
+                        .collect(),
+                ),
                 InsnKind::UnaryOp { operand, .. } => {
                     (smallvec![(*operand).into()], smallvec![ValRef(pc, 0).into()])
                 }

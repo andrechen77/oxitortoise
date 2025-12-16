@@ -1,4 +1,4 @@
-//! The `ask` command.
+//! The `ask` command and `of` reporter.
 
 use derive_more::derive::Display;
 use lir::smallvec::smallvec;
@@ -6,8 +6,8 @@ use lir::smallvec::smallvec;
 use crate::{
     exec::jit::host_fn,
     mir::{
-        Function, FunctionId, MirTy, NlAbstractTy, Node, NodeId, NodeKind, NodeTransform, Nodes,
-        Program, WriteLirError, build_lir::LirInsnBuilder, node,
+        ClosureType, Function, FunctionId, MirTy, NlAbstractTy, Node, NodeId, NodeKind,
+        NodeTransform, Nodes, Program, WriteLirError, build_lir::LirInsnBuilder, node,
     },
 };
 
@@ -114,6 +114,132 @@ impl Node for Ask {
     }
 }
 
+#[derive(Debug, Display)]
+#[display("Of")]
+pub struct Of {
+    /// The execution context to use for the ask.
+    pub context: NodeId,
+    /// The recipients to ask.
+    pub recipients: AskRecipient,
+    /// A closure representing the reporter to run for each recipient.
+    pub body: NodeId,
+}
+
+impl Node for Of {
+    fn is_pure(&self) -> bool {
+        false
+    }
+
+    fn dependencies(&self) -> Vec<NodeId> {
+        let mut deps = Vec::new();
+        deps.push(self.context);
+        if let Some(recipients) = self.recipients.node() {
+            deps.push(recipients);
+        }
+        deps.push(self.body);
+        deps
+    }
+
+    fn output_type(&self, program: &Program, function: &Function, nodes: &Nodes) -> MirTy {
+        let MirTy::Abstract(NlAbstractTy::Closure(closure)) =
+            nodes[self.body].output_type(program, function, nodes)
+        else {
+            panic!("expected node outputting closure body to be a closure")
+        };
+
+        MirTy::Abstract(*closure.return_ty)
+    }
+
+    fn peephole_transform(
+        &self,
+        _program: &Program,
+        _fn_id: FunctionId,
+        _my_node_id: NodeId,
+    ) -> Option<NodeTransform> {
+        fn narrow_recipient_type(program: &Program, fn_id: FunctionId, my_node_id: NodeId) -> bool {
+            let function = program.functions[fn_id].borrow();
+            let mut nodes = function.nodes.borrow_mut();
+
+            let &Of { context: _, recipients, body: _ } = (&nodes[my_node_id]).try_into().unwrap();
+
+            let Some(recipients_node) = recipients.node() else {
+                return false;
+            };
+            let recipients_type = nodes[recipients_node].output_type(program, &function, &nodes);
+            match recipients_type {
+                MirTy::Abstract(NlAbstractTy::Turtle) => {
+                    let NodeKind::Of(Of { context: _, recipients, body: _ }) =
+                        &mut nodes[my_node_id]
+                    else {
+                        panic!("expected node to be an Of");
+                    };
+                    *recipients = AskRecipient::SingleTurtle(recipients_node);
+                }
+                MirTy::Abstract(NlAbstractTy::Patch) => {
+                    let NodeKind::Of(Of { context: _, recipients, body: _ }) =
+                        &mut nodes[my_node_id]
+                    else {
+                        panic!("expected node to be an Of");
+                    };
+                    *recipients = AskRecipient::SinglePatch(recipients_node);
+                }
+                _ => todo!("TODO(mvp) narrow for other recipient types as well"),
+            }
+            true
+        }
+        Some(Box::new(narrow_recipient_type))
+    }
+
+    fn write_lir_execution(
+        &self,
+        program: &Program,
+        function: &Function,
+        nodes: &Nodes,
+        my_node_id: NodeId,
+        lir_builder: &mut LirInsnBuilder,
+    ) -> Result<(), WriteLirError> {
+        let &[env_ptr, fn_ptr] = lir_builder.get_node_results(program, function, nodes, self.body)
+        else {
+            panic!("expected node outputting closure body to be two LIR values");
+        };
+        let &[ctx_ptr] = lir_builder.get_node_results(program, function, nodes, self.context)
+        else {
+            panic!("expected node outputting context pointer to be a single LIR value");
+        };
+
+        // find the output type of the closure
+        let MirTy::Abstract(NlAbstractTy::Closure(ClosureType { arg_ty: _, return_ty })) =
+            nodes[self.body].output_type(program, function, nodes)
+        else {
+            panic!("expected node outputting a closure");
+        };
+        let closure_outputs =
+            return_ty.repr().info().lir_repr.expect("closure return type must have known ABI");
+
+        match self.recipients {
+            AskRecipient::SingleTurtle(recipient) | AskRecipient::SinglePatch(recipient) => {
+                let &[recipient] =
+                    lir_builder.get_node_results(program, function, nodes, recipient)
+                else {
+                    panic!("expected node outputting recipients to be a single LIR value");
+                };
+
+                let pc = lir_builder.push_lir_insn(lir::InsnKind::CallIndirectFunction {
+                    function: fn_ptr,
+                    output_type: closure_outputs.into(),
+                    args: Box::from([env_ptr, ctx_ptr, recipient]),
+                });
+                let output_vals =
+                    (0..closure_outputs.len()).map(|i| lir::ValRef(pc, i as u8)).collect();
+                lir_builder.node_to_lir.insert(my_node_id, output_vals);
+            }
+            _ => todo!("TODO(mvp) write LIR code to indirectly call the closure or use a host fn"),
+        }
+
+        Ok(())
+    }
+}
+
 #[derive(Debug, Copy, Clone)]
 pub enum AskRecipient {
     AllTurtles,
@@ -127,7 +253,7 @@ pub enum AskRecipient {
 }
 
 impl AskRecipient {
-    fn node(&self) -> Option<NodeId> {
+    pub fn node(&self) -> Option<NodeId> {
         match self {
             AskRecipient::AllTurtles => None,
             AskRecipient::AllPatches => None,
