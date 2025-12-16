@@ -10,7 +10,10 @@ use crate::{
         Function, FunctionId, MirTy, NlAbstractTy, Node, NodeId, NodeKind, NodeTransform, Nodes,
         Program, WriteLirError, build_lir::LirInsnBuilder, node,
     },
-    sim::value::{DynBox, NlBool, NlFloat},
+    sim::{
+        color::Color,
+        value::{DynBox, NlBool, NlFloat},
+    },
     util::reflection::Reflect,
 };
 
@@ -132,7 +135,12 @@ impl Node for BinaryOperation {
             unimplemented!();
         };
         use BinaryOpcode as Op;
-        if lhs_type == NlFloat::CONCRETE_TY && rhs_type == NlFloat::CONCRETE_TY {
+        // TODO(mvp) so far, this additional conditions on color only exist to
+        // get ants to compile. we will want to make a full decision on how to
+        // treat colors in the engine later
+        if (lhs_type == NlFloat::CONCRETE_TY || lhs_type == Color::CONCRETE_TY)
+            && (rhs_type == NlFloat::CONCRETE_TY || rhs_type == Color::CONCRETE_TY)
+        {
             let op = match self.op {
                 Op::Add => lir::BinaryOpcode::FAdd,
                 Op::Sub => lir::BinaryOpcode::FSub,
