@@ -1,12 +1,11 @@
 use std::collections::{HashMap, HashSet};
 
-use engine::mir::MirTy::Abstract;
 use engine::mir::StatementKind::{IfElse, Node as NodeStatement, Repeat, Return, Stop};
 use engine::mir::node::SetLocalVar;
 
 use engine::{
     mir::{
-        FunctionId, LocalId, MirTy, NlAbstractTy, Node, NodeId, NodeKind, Program, StatementBlock,
+        FunctionId, LocalId, NlAbstractTy, Node, NodeId, NodeKind, Program, StatementBlock,
         StatementKind,
     },
     sim::{
@@ -101,7 +100,7 @@ fn extract_type_bindings(program: &mut Program, id: FunctionId) -> HashSet<Local
         match nodes[*nid] {
             NodeKind::SetLocalVar(SetLocalVar { local_id, value }) => {
                 let output_type = nodes[value].output_type(bc.program, bc.id);
-                if let Abstract(abs_type) = output_type {
+                if let Some(abs_type) = output_type.abstr {
                     Some(LocalVarTypeBinding(local_id, abs_type))
                 } else {
                     panic!("Unrecognized output type: {:?}", output_type)
@@ -154,7 +153,7 @@ fn extract_report_types(program: &mut Program, id: FunctionId) -> HashSet<NlAbst
                 block_helper(block, bc),
             Return { value } => {
                 let output_type = bc.program.nodes[*value].output_type(bc.program, bc.id);
-                if let Abstract(typ) = output_type {
+                if let Some(typ) = output_type.abstr {
                     HashSet::from([typ])
                 } else {
                     panic!("Unrecognized report type: {:?}", output_type)
@@ -210,7 +209,7 @@ pub fn add_cheats(
                 };
                 let typ = translate_var_type_name(var_type);
                 types.push(typ.repr());
-                program.globals[var_id].ty = MirTy::Abstract(typ);
+                program.globals[var_id].ty = typ.into();
             }
         }
 
@@ -232,7 +231,7 @@ pub fn add_cheats(
 
             let var_type = translate_var_type_name(var_type);
 
-            program.custom_patch_vars[var_id].ty = MirTy::Abstract(var_type);
+            program.custom_patch_vars[var_id].ty = var_type.into();
         }
     }
 
@@ -265,7 +264,7 @@ pub fn add_cheats(
                 panic!("variable {} is not a custom turtle variable", var_name);
             };
             let var_type = translate_var_type_name(var_type);
-            program.custom_turtle_vars[var_id].ty = MirTy::Abstract(var_type);
+            program.custom_turtle_vars[var_id].ty = var_type.into();
         }
     }
 
@@ -298,8 +297,8 @@ pub fn add_cheats(
                 let fn_info = &fn_info[*fn_id];
                 let ty = &mut program.locals[fn_info.self_param.unwrap()].ty;
                 *ty = match self_param_type {
-                    CheatSelfParamType::Patch => MirTy::Abstract(NlAbstractTy::Patch),
-                    CheatSelfParamType::Turtle => MirTy::Abstract(NlAbstractTy::Turtle),
+                    CheatSelfParamType::Patch => NlAbstractTy::Patch.into(),
+                    CheatSelfParamType::Turtle => NlAbstractTy::Turtle.into(),
                 }
             }
         }
@@ -329,8 +328,7 @@ pub fn add_cheats(
                     } else {
                         todo!("TODO Maybe find a least upper-bound type, if we're confident in it")
                     };
-                    let new_type = &MirTy::Abstract(abs_type);
-                    decl.ty = new_type.clone();
+                    decl.ty = abs_type.into();
                 }
             }
         }
@@ -340,15 +338,15 @@ pub fn add_cheats(
             let report_types = &report_types_set.iter().cloned().collect::<Vec<_>>()[..];
 
             let out_type = if report_types.is_empty() {
-                &MirTy::Abstract(NlAbstractTy::Unit)
+                NlAbstractTy::Unit.into()
             } else if let [typ] = report_types {
-                &MirTy::Abstract(typ.clone())
+                typ.clone().into()
             } else {
-                &MirTy::Abstract(lub(report_types))
+                lub(report_types).into()
             };
 
             let func = &mut program.functions[func_id];
-            func.return_ty = out_type.clone();
+            func.return_ty = out_type;
         }
     }
 }

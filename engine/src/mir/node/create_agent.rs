@@ -36,7 +36,7 @@ impl Node for CreateTurtles {
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
-        MirTy::Abstract(NlAbstractTy::Unit)
+        NlAbstractTy::Unit.into()
     }
 
     fn write_lir_execution(

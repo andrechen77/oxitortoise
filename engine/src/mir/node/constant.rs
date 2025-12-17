@@ -28,12 +28,13 @@ impl Node for Constant {
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
-        MirTy::Abstract(match self.value {
+        match self.value {
             UnpackedDynBox::Float(_) => NlAbstractTy::Float,
             UnpackedDynBox::Bool(_) => NlAbstractTy::Boolean,
             UnpackedDynBox::Nobody => NlAbstractTy::Nobody,
             _ => todo!("TODO(mvp) include all other variants (doesn't handle {:?})", self.value),
-        })
+        }
+        .into()
     }
 
     fn write_lir_execution(
@@ -73,7 +74,7 @@ impl Node for ListLiteral {
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
-        MirTy::Abstract(NlAbstractTy::List { element_ty: Box::new(NlAbstractTy::Top) })
+        NlAbstractTy::List { element_ty: Box::new(NlAbstractTy::Top) }.into()
     }
 
     fn write_lir_execution(

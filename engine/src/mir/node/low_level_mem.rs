@@ -29,7 +29,7 @@ impl Node for MemLoad {
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
-        MirTy::Concrete(self.ty)
+        self.ty.into()
     }
 
     fn write_lir_execution(
@@ -78,7 +78,7 @@ impl Node for MemStore {
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
-        MirTy::Other
+        MirTy::default()
     }
 
     fn write_lir_execution(
@@ -119,7 +119,7 @@ impl Node for DeriveField {
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
-        MirTy::Concrete(<*mut u8 as Reflect>::CONCRETE_TY)
+        <*mut u8 as Reflect>::CONCRETE_TY.into()
     }
 
     fn write_lir_execution(
@@ -158,7 +158,7 @@ impl Node for DeriveElement {
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
-        MirTy::Concrete(<*mut u8 as Reflect>::CONCRETE_TY)
+        <*mut u8 as Reflect>::CONCRETE_TY.into()
     }
 
     fn write_lir_execution(

@@ -37,7 +37,7 @@ impl Node for Ask {
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
-        MirTy::Abstract(NlAbstractTy::Unit)
+        NlAbstractTy::Unit.into()
     }
 
     fn peephole_transform(
@@ -138,13 +138,15 @@ impl Node for Of {
     }
 
     fn output_type(&self, program: &Program, fn_id: FunctionId) -> MirTy {
-        let MirTy::Abstract(NlAbstractTy::Closure(closure)) =
-            program.nodes[self.body].output_type(program, fn_id)
+        let NlAbstractTy::Closure(closure) = program.nodes[self.body]
+            .output_type(program, fn_id)
+            .abstr
+            .expect("closure must have an abstract type")
         else {
             panic!("expected node outputting closure body to be a closure")
         };
 
-        MirTy::Abstract(*closure.return_ty)
+        (*closure.return_ty).into()
     }
 
     fn peephole_transform(
@@ -167,8 +169,8 @@ impl Node for Of {
                 return false;
             };
             let recipients_type = program.nodes[recipients_node].output_type(program, fn_id);
-            match recipients_type {
-                MirTy::Abstract(NlAbstractTy::Turtle) => {
+            match recipients_type.abstr.expect("recipients must have an abstract type") {
+                NlAbstractTy::Turtle => {
                     let NodeKind::Of(Of { context: _, recipients, body: _ }) =
                         &mut program.nodes[my_node_id]
                     else {
@@ -176,7 +178,7 @@ impl Node for Of {
                     };
                     *recipients = AskRecipient::SingleTurtle(recipients_node);
                 }
-                MirTy::Abstract(NlAbstractTy::Patch) => {
+                NlAbstractTy::Patch => {
                     let NodeKind::Of(Of { context: _, recipients, body: _ }) =
                         &mut program.nodes[my_node_id]
                     else {
@@ -205,8 +207,10 @@ impl Node for Of {
         };
 
         // find the output type of the closure
-        let MirTy::Abstract(NlAbstractTy::Closure(ClosureType { arg_ty: _, return_ty })) =
-            program.nodes[self.body].output_type(program, lir_builder.fn_id)
+        let NlAbstractTy::Closure(ClosureType { arg_ty: _, return_ty }) = program.nodes[self.body]
+            .output_type(program, lir_builder.fn_id)
+            .abstr
+            .expect("closure must have an abstract type")
         else {
             panic!("expected node outputting a closure");
         };

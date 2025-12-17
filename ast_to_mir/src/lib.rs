@@ -159,8 +159,7 @@ pub fn ast_to_mir(ast: Ast) -> anyhow::Result<ParseResult> {
 
     for name in global_var_names {
         let upper = name.to_uppercase();
-        let decl =
-            CustomVarDecl { name: name.clone().into(), ty: MirTy::Abstract(NlAbstractTy::Top) };
+        let decl = CustomVarDecl { name: name.clone().into(), ty: NlAbstractTy::Top.into() };
         global_var_buffer.push(decl);
         trace!("Adding global variable `{}` at index {:?}", name, global_var_buffer.len() - 1);
         global_scope.global_vars.insert(upper.into(), global_var_buffer.len() - 1);
@@ -173,7 +172,7 @@ pub fn ast_to_mir(ast: Ast) -> anyhow::Result<ParseResult> {
         trace!("Adding patch variable `{}` with id {:?}", patch_var_name, patch_var_id);
         global_scope.patch_vars.insert(patch_var_name.clone(), patch_var_id);
         custom_patch_vars
-            .push(CustomVarDecl { name: patch_var_name, ty: MirTy::Abstract(NlAbstractTy::Top) });
+            .push(CustomVarDecl { name: patch_var_name, ty: NlAbstractTy::Top.into() });
     }
     // add custom turtle variables
     for (i, turtle_var_name) in turtle_var_names.into_iter().enumerate() {
@@ -182,7 +181,7 @@ pub fn ast_to_mir(ast: Ast) -> anyhow::Result<ParseResult> {
         trace!("Adding turtle variable `{}` with id {:?}", turtle_var_name, turtle_var_id);
         global_scope.turtle_vars.insert(turtle_var_name.clone(), turtle_var_id);
         custom_turtle_vars
-            .push(CustomVarDecl { name: turtle_var_name, ty: MirTy::Abstract(NlAbstractTy::Top) });
+            .push(CustomVarDecl { name: turtle_var_name, ty: NlAbstractTy::Top.into() });
     }
 
     let mut functions: SlotMap<FunctionId, Function> = SlotMap::with_key();
@@ -323,7 +322,7 @@ fn create_procedure_skeleton(
     // always add the context parameter TODO this shouldn't be always
     let context_param = locals.insert(LocalDeclaration {
         debug_name: Some("context".into()),
-        ty: MirTy::Concrete(<*mut u8 as Reflect>::CONCRETE_TY),
+        ty: (<*mut u8 as Reflect>::CONCRETE_TY).into(),
         storage: LocalStorage::Register,
     });
     parameter_locals.push(context_param);
@@ -337,7 +336,7 @@ fn create_procedure_skeleton(
         AgentClass::Turtle => {
             let local_id = locals.insert(LocalDeclaration {
                 debug_name: Some("self_turtle_id".into()),
-                ty: MirTy::Abstract(NlAbstractTy::Turtle),
+                ty: NlAbstractTy::Turtle.into(),
                 storage: LocalStorage::Register,
             });
             parameter_locals.push(local_id);
@@ -348,7 +347,7 @@ fn create_procedure_skeleton(
         AgentClass::Patch => {
             let local_id = locals.insert(LocalDeclaration {
                 debug_name: Some("self_patch_id".into()),
-                ty: MirTy::Abstract(NlAbstractTy::Patch),
+                ty: NlAbstractTy::Patch.into(),
                 storage: LocalStorage::Register,
             });
             parameter_locals.push(local_id);
@@ -363,7 +362,7 @@ fn create_procedure_skeleton(
         let arg_name: Rc<str> = Rc::from(arg_name);
         let local_id = locals.insert(LocalDeclaration {
             debug_name: Some(arg_name.clone()),
-            ty: MirTy::Abstract(NlAbstractTy::Top),
+            ty: NlAbstractTy::Top.into(),
             storage: LocalStorage::Register,
         });
         trace!("Adding positional parameter {} with local_id: {:?}", arg_name, local_id);
@@ -384,7 +383,7 @@ fn create_procedure_skeleton(
     let function = Function {
         debug_name: Some(proc_name),
         parameters: parameter_locals,
-        return_ty: MirTy::Abstract(return_ty),
+        return_ty: return_ty.into(),
         locals: my_locals,
         // cfg is a defaulted value and will be filled in later
         cfg: StatementBlock { statements: vec![] },
@@ -425,8 +424,8 @@ fn build_body(
     // ignore it if the return type is already set. this means all user-defined
     // procedures should already have the correct return type. we only set the
     // return type of closure bodies here.
-    if function.return_ty == MirTy::Other {
-        function.return_ty = MirTy::Abstract(return_ty);
+    if function.return_ty.abstr.is_none() {
+        function.return_ty = return_ty.into();
     }
 
     trace!("finished building body");
@@ -858,7 +857,7 @@ fn translate_let_binding(
 ) -> StatementKind {
     let local_id = ctx.mir.locals.insert(LocalDeclaration {
         debug_name: Some(name.clone()),
-        ty: MirTy::Abstract(NlAbstractTy::Top),
+        ty: NlAbstractTy::Top.into(),
         storage: LocalStorage::Register,
     });
     ctx.mir.functions[ctx.fn_id].locals.push(local_id);
@@ -904,7 +903,7 @@ fn translate_ephemeral_closure(
     // add the environment pointer
     let env_param = ctx.mir.locals.insert(LocalDeclaration {
         debug_name: Some("env".into()),
-        ty: MirTy::Concrete(<*mut u8 as Reflect>::CONCRETE_TY),
+        ty: (<*mut u8 as Reflect>::CONCRETE_TY).into(),
         storage: LocalStorage::Register,
     });
     parameter_locals.push(env_param);
@@ -914,7 +913,7 @@ fn translate_ephemeral_closure(
     // add the context parameter
     let context_param = ctx.mir.locals.insert(LocalDeclaration {
         debug_name: Some("context".into()),
-        ty: MirTy::Concrete(<*mut u8 as Reflect>::CONCRETE_TY),
+        ty: (<*mut u8 as Reflect>::CONCRETE_TY).into(),
         storage: LocalStorage::Register,
     });
     parameter_locals.push(context_param);
@@ -929,7 +928,7 @@ fn translate_ephemeral_closure(
         AgentClass::Turtle => {
             let local_id = ctx.mir.locals.insert(LocalDeclaration {
                 debug_name: Some("self_turtle_id".into()),
-                ty: MirTy::Abstract(NlAbstractTy::Turtle),
+                ty: NlAbstractTy::Turtle.into(),
                 storage: LocalStorage::Register,
             });
             parameter_locals.push(local_id);
@@ -940,7 +939,7 @@ fn translate_ephemeral_closure(
         AgentClass::Patch => {
             let local_id = ctx.mir.locals.insert(LocalDeclaration {
                 debug_name: Some("self_patch_id".into()),
-                ty: MirTy::Abstract(NlAbstractTy::Patch),
+                ty: NlAbstractTy::Patch.into(),
                 storage: LocalStorage::Register,
             });
             parameter_locals.push(local_id);
@@ -952,7 +951,7 @@ fn translate_ephemeral_closure(
         AgentClass::Any => {
             let local_id = ctx.mir.locals.insert(LocalDeclaration {
                 debug_name: Some("self_any".into()),
-                ty: MirTy::Abstract(NlAbstractTy::Top),
+                ty: NlAbstractTy::Top.into(),
                 storage: LocalStorage::Register,
             });
             parameter_locals.push(local_id);
@@ -968,7 +967,7 @@ fn translate_ephemeral_closure(
         parameters: parameter_locals,
         locals: my_locals,
         // cfg and return_ty are defaulted and will be filled in later
-        return_ty: MirTy::Other,
+        return_ty: MirTy::default(),
         cfg: StatementBlock::default(),
     };
     let fn_id = ctx.mir.functions.insert(function);

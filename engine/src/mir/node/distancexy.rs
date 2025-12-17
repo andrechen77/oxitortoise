@@ -29,7 +29,7 @@ impl Node for Distancexy {
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
-        MirTy::Abstract(NlAbstractTy::Float)
+        NlAbstractTy::Float.into()
     }
 
     fn peephole_transform(
@@ -59,21 +59,17 @@ fn decompose_distancexy(
     };
 
     // add a node to get the location of the turtle
-    let agent_pos = match agent_type {
-        MirTy::Abstract(NlAbstractTy::Turtle) => {
-            program.nodes.insert(NodeKind::from(node::GetTurtleVar {
-                context,
-                turtle: agent,
-                var: TurtleVarDesc::Pos,
-            }))
-        }
-        MirTy::Abstract(NlAbstractTy::Patch) => {
-            program.nodes.insert(NodeKind::from(node::GetPatchVar {
-                context,
-                patch: agent,
-                var: PatchVarDesc::Pos,
-            }))
-        }
+    let agent_pos = match agent_type.abstr.expect("agent type must have an abstract type") {
+        NlAbstractTy::Turtle => program.nodes.insert(NodeKind::from(node::GetTurtleVar {
+            context,
+            turtle: agent,
+            var: TurtleVarDesc::Pos,
+        })),
+        NlAbstractTy::Patch => program.nodes.insert(NodeKind::from(node::GetPatchVar {
+            context,
+            patch: agent,
+            var: PatchVarDesc::Pos,
+        })),
         _ => todo!("TODO(mvp) decompose in case of link or any"),
     };
 

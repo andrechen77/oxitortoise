@@ -75,7 +75,7 @@ impl Node for PatchAt {
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
-        MirTy::Abstract(NlAbstractTy::Patch)
+        NlAbstractTy::Patch.into()
     }
 
     fn write_lir_execution(
@@ -119,7 +119,7 @@ impl Node for MaxPxcor {
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
-        MirTy::Abstract(NlAbstractTy::Float)
+        NlAbstractTy::Float.into()
     }
 
     fn lowering_expand(
@@ -176,7 +176,7 @@ impl Node for MaxPycor {
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
-        MirTy::Abstract(NlAbstractTy::Float)
+        NlAbstractTy::Float.into()
     }
 
     fn lowering_expand(
@@ -235,7 +235,7 @@ impl Node for EuclideanDistanceNoWrap {
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
-        MirTy::Abstract(NlAbstractTy::Float)
+        NlAbstractTy::Float.into()
     }
 
     fn write_lir_execution(
@@ -275,7 +275,7 @@ impl Node for PointConstructor {
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
-        MirTy::Abstract(NlAbstractTy::Point)
+        NlAbstractTy::Point.into()
     }
 
     fn write_lir_execution(

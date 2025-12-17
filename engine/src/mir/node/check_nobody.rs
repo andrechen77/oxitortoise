@@ -28,7 +28,7 @@ impl Node for CheckNobody {
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
-        MirTy::Abstract(NlAbstractTy::Boolean)
+        NlAbstractTy::Boolean.into()
     }
 
     fn write_lir_execution(
@@ -38,7 +38,8 @@ impl Node for CheckNobody {
 
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
-        let operand_type = program.nodes[self.agent].output_type(program, lir_builder.fn_id).repr();
+        let operand_type =
+            program.nodes[self.agent].output_type(program, lir_builder.fn_id).concrete.unwrap();
         if operand_type == OptionPatchId::CONCRETE_TY {
             let &[agent] = lir_builder.get_node_results(program, self.agent) else {
                 panic!("expected a node that outputs a patch ID to be a single LIR register");

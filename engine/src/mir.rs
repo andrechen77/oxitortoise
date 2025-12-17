@@ -250,33 +250,39 @@ pub enum NodeKind {
     UnaryOp(UnaryOp),
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub enum MirTy {
+#[derive(Clone, Debug, PartialEq, Default)]
+pub struct MirTy {
     /// An abstract type that conceptually makes sense in the NetLogo virtual
-    /// machine. Prefer using this type when possible.
-    Abstract(NlAbstractTy),
-    /// A concrete type. Prefer to use the abstract type if it is available,
-    /// until concrete types are necessary to continue compilation.
-    Concrete(ConcreteTy),
-    /// The "no one cares what type this is" value
-    Other,
+    /// machine. This may be `None` if there is no abstract type that makes
+    /// sense (e.g. an agent is internally represented as an index into a data
+    /// structure).
+    pub abstr: Option<NlAbstractTy>,
+    /// A concrete type. This may be `None` if the concrete type is not known
+    /// yet.
+    pub concrete: Option<ConcreteTy>,
 }
 
 impl MirTy {
     pub fn repr(&self) -> ConcreteTy {
-        match self {
-            MirTy::Abstract(ty) => ty.repr(),
-            MirTy::Concrete(ty) => *ty,
-            MirTy::Other => unimplemented!("attempted to get concrete type of unknown type"),
+        if let Some(concrete) = self.concrete {
+            concrete
+        } else if let Some(abstr) = &self.abstr {
+            abstr.repr()
+        } else {
+            panic!("MirTy is empty");
         }
     }
+}
 
-    pub fn unwrap_abstract(self) -> NlAbstractTy {
-        match self {
-            MirTy::Abstract(ty) => ty,
-            MirTy::Concrete(_) => panic!("cannot convert concrete type to abstract type"),
-            MirTy::Other => unimplemented!("cannot convert unknown type to abstract type"),
-        }
+impl From<NlAbstractTy> for MirTy {
+    fn from(value: NlAbstractTy) -> Self {
+        Self { abstr: Some(value), concrete: None }
+    }
+}
+
+impl From<ConcreteTy> for MirTy {
+    fn from(value: ConcreteTy) -> Self {
+        Self { abstr: None, concrete: Some(value) }
     }
 }
 

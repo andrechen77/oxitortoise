@@ -29,12 +29,21 @@ impl Node for Closure {
 
     fn output_type(&self, program: &Program, _fn_id: FunctionId) -> MirTy {
         let body_arg = program.functions[self.body].parameters[ClosureType::PARAM_ARG_IDX];
-        let arg_ty = program.locals[body_arg].ty.clone().unwrap_abstract();
-        let return_ty = program.functions[self.body].return_ty.clone();
-        MirTy::Abstract(NlAbstractTy::Closure(ClosureType {
+        let arg_ty = program.locals[body_arg]
+            .ty
+            .clone()
+            .abstr
+            .expect("closure argument must have an abstract type");
+        let return_ty = program.functions[self.body]
+            .return_ty
+            .clone()
+            .abstr
+            .expect("closure return must have an abstract type");
+        NlAbstractTy::Closure(ClosureType {
             arg_ty: Box::new(arg_ty),
-            return_ty: Box::new(return_ty.unwrap_abstract()),
-        }))
+            return_ty: Box::new(return_ty),
+        })
+        .into()
     }
 
     fn write_lir_execution(

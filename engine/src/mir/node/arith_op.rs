@@ -56,7 +56,7 @@ impl Node for BinaryOperation {
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
-        MirTy::Abstract(match self.op {
+        match self.op {
             BinaryOpcode::Add => NlAbstractTy::Numeric,
             BinaryOpcode::Sub => NlAbstractTy::Numeric,
             BinaryOpcode::Mul => NlAbstractTy::Numeric,
@@ -69,7 +69,8 @@ impl Node for BinaryOperation {
             BinaryOpcode::Neq => NlAbstractTy::Boolean,
             BinaryOpcode::And => NlAbstractTy::Boolean,
             BinaryOpcode::Or => NlAbstractTy::Boolean,
-        })
+        }
+        .into()
     }
 
     fn peephole_transform(
@@ -89,8 +90,14 @@ impl Node for BinaryOperation {
                 return false;
             };
 
-            let lhs_type = program.nodes[lhs].output_type(program, fn_id);
-            let rhs_type = program.nodes[rhs].output_type(program, fn_id);
+            let lhs_type = program.nodes[lhs]
+                .output_type(program, fn_id)
+                .abstr
+                .expect("operand must have an abstract type");
+            let rhs_type = program.nodes[rhs]
+                .output_type(program, fn_id)
+                .abstr
+                .expect("operand must have an abstract type");
 
             // expect that the operation is either Eq or Neq
             let negate = match op {
@@ -101,8 +108,8 @@ impl Node for BinaryOperation {
 
             // find the operand that is being compared to nobody
             let operand = match (lhs_type, rhs_type) {
-                (MirTy::Abstract(NlAbstractTy::Nobody), _) => rhs,
-                (_, MirTy::Abstract(NlAbstractTy::Nobody)) => lhs,
+                (NlAbstractTy::Nobody, _) => rhs,
+                (_, NlAbstractTy::Nobody) => lhs,
                 _ => return false,
             };
 
@@ -123,8 +130,10 @@ impl Node for BinaryOperation {
         // TODO(mvp) be prepared for other possible input types and adjust
         // the implementation accordingly
         // TODO(mvp) assert that the types of the operands are compatible with the operation
-        let lhs_type = program.nodes[self.lhs].output_type(program, lir_builder.fn_id).repr();
-        let rhs_type = program.nodes[self.rhs].output_type(program, lir_builder.fn_id).repr();
+        let lhs_type =
+            program.nodes[self.lhs].output_type(program, lir_builder.fn_id).concrete.unwrap();
+        let rhs_type =
+            program.nodes[self.rhs].output_type(program, lir_builder.fn_id).concrete.unwrap();
 
         let &[lhs] = lir_builder.get_node_results(program, self.lhs) else {
             unimplemented!();
@@ -206,10 +215,11 @@ impl Node for UnaryOp {
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
-        MirTy::Abstract(match self.op {
+        match self.op {
             UnaryOpcode::Neg => NlAbstractTy::Numeric,
             UnaryOpcode::Not => NlAbstractTy::Boolean,
-        })
+        }
+        .into()
     }
 
     fn write_lir_execution(

@@ -30,14 +30,18 @@ impl Node for OneOf {
     }
 
     fn output_type(&self, program: &Program, fn_id: FunctionId) -> MirTy {
-        let out_type = match program.nodes[self.operand].output_type(program, fn_id) {
-            MirTy::Abstract(NlAbstractTy::Agentset { agent_type }) => agent_type,
-            MirTy::Abstract(NlAbstractTy::List { element_ty }) => element_ty,
+        let out_type = match program.nodes[self.operand]
+            .output_type(program, fn_id)
+            .abstr
+            .expect("operand must have an abstract type")
+        {
+            NlAbstractTy::Agentset { agent_type } => agent_type,
+            NlAbstractTy::List { element_ty } => element_ty,
             x => panic!("Impossible argument type for `one-of`: {:?}", x),
             // TODO this could also just be an unknown type;
         };
 
-        MirTy::Abstract(*out_type)
+        (*out_type).into()
     }
 
     fn write_lir_execution(
@@ -54,7 +58,7 @@ impl Node for OneOf {
         };
 
         let operand_type =
-            program.nodes[self.operand].output_type(program, lir_builder.fn_id).repr();
+            program.nodes[self.operand].output_type(program, lir_builder.fn_id).concrete.unwrap();
 
         if operand_type == <NlBox<NlList>>::CONCRETE_TY {
             let insn =

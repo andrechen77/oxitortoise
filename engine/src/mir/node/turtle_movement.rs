@@ -32,7 +32,7 @@ impl Node for TurtleRotate {
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
-        MirTy::Abstract(NlAbstractTy::Unit)
+        NlAbstractTy::Unit.into()
     }
 
     fn write_lir_execution(
@@ -79,7 +79,7 @@ impl Node for TurtleForward {
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
-        MirTy::Abstract(NlAbstractTy::Unit)
+        NlAbstractTy::Unit.into()
     }
 
     fn write_lir_execution(
@@ -126,7 +126,7 @@ impl Node for CanMove {
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
-        MirTy::Abstract(NlAbstractTy::Boolean)
+        NlAbstractTy::Boolean.into()
     }
 
     fn peephole_transform(
@@ -201,7 +201,7 @@ impl Node for PatchRelative {
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
-        MirTy::Abstract(NlAbstractTy::Patch)
+        NlAbstractTy::Patch.into()
     }
 
     // TODO(mvp) add host function for right_and_ahead, and add transformation

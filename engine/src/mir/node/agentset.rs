@@ -35,7 +35,7 @@ impl Node for Agentset {
             Agentset::AllTurtles => Turtle,
             Agentset::AllPatches => Patch,
         };
-        MirTy::Abstract(NlAbstractTy::Agentset { agent_type: Box::new(typ) })
+        NlAbstractTy::Agentset { agent_type: Box::new(typ) }.into()
     }
 
     fn write_lir_execution(

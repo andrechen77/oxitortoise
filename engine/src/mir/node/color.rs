@@ -31,7 +31,7 @@ impl Node for ScaleColor {
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
-        MirTy::Abstract(NlAbstractTy::Color)
+        NlAbstractTy::Color.into()
     }
 
     fn write_lir_execution(

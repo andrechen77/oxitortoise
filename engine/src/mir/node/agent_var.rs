@@ -119,12 +119,12 @@ impl Node for GetTurtleVar {
     fn output_type(&self, program: &Program, _fn_id: FunctionId) -> MirTy {
         // TODO(wishlist) this should probably be refactored into a function
         match self.var {
-            TurtleVarDesc::Who => MirTy::Abstract(NlAbstractTy::Float),
-            TurtleVarDesc::Color => MirTy::Abstract(NlAbstractTy::Color),
-            TurtleVarDesc::Size => MirTy::Abstract(NlAbstractTy::Float),
-            TurtleVarDesc::Pos => MirTy::Abstract(NlAbstractTy::Point),
-            TurtleVarDesc::Xcor => MirTy::Abstract(NlAbstractTy::Float),
-            TurtleVarDesc::Ycor => MirTy::Abstract(NlAbstractTy::Float),
+            TurtleVarDesc::Who => NlAbstractTy::Float.into(),
+            TurtleVarDesc::Color => NlAbstractTy::Color.into(),
+            TurtleVarDesc::Size => NlAbstractTy::Float.into(),
+            TurtleVarDesc::Pos => NlAbstractTy::Point.into(),
+            TurtleVarDesc::Xcor => NlAbstractTy::Float.into(),
+            TurtleVarDesc::Ycor => NlAbstractTy::Float.into(),
             TurtleVarDesc::Custom(field) => program.custom_turtle_vars[field].ty.clone(),
         }
     }
@@ -151,7 +151,7 @@ impl Node for GetTurtleVar {
             let field = NodeKind::from(node::MemLoad {
                 ptr: data_row,
                 offset: field_offset,
-                ty: my_node.output_type(program, fn_id).repr(),
+                ty: my_node.output_type(program, fn_id).concrete.unwrap(),
             });
             program.nodes[my_node_id] = field;
             true
@@ -183,7 +183,7 @@ impl Node for SetTurtleVar {
         vec![self.context, self.turtle, self.value]
     }
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
-        MirTy::Abstract(NlAbstractTy::Unit)
+        NlAbstractTy::Unit.into()
     }
 
     fn lowering_expand(
@@ -275,7 +275,7 @@ impl Node for TurtleIdToIndex {
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
-        MirTy::Concrete(AGENT_INDEX_CONCRETE_TY)
+        AGENT_INDEX_CONCRETE_TY.into()
     }
 
     fn write_lir_execution(
@@ -318,8 +318,8 @@ impl Node for GetPatchVar {
 
     fn output_type(&self, program: &Program, _fn_id: FunctionId) -> MirTy {
         match self.var {
-            PatchVarDesc::Pcolor => MirTy::Abstract(NlAbstractTy::Color),
-            PatchVarDesc::Pos => MirTy::Abstract(NlAbstractTy::Point),
+            PatchVarDesc::Pcolor => NlAbstractTy::Color.into(),
+            PatchVarDesc::Pos => NlAbstractTy::Point.into(),
             PatchVarDesc::Custom(field) => program.custom_patch_vars[field].ty.clone(),
         }
     }
@@ -346,7 +346,7 @@ impl Node for GetPatchVar {
             let field = NodeKind::from(node::MemLoad {
                 ptr: data_row,
                 offset: field_offset,
-                ty: my_node.output_type(program, fn_id).repr(),
+                ty: my_node.output_type(program, fn_id).concrete.unwrap(),
             });
             program.nodes[my_node_id] = field;
 
@@ -379,7 +379,7 @@ impl Node for SetPatchVar {
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
-        MirTy::Abstract(NlAbstractTy::Unit)
+        NlAbstractTy::Unit.into()
     }
 
     fn lowering_expand(
@@ -475,8 +475,8 @@ impl Node for GetPatchVarAsTurtleOrPatch {
     fn output_type(&self, program: &Program, _fn_id: FunctionId) -> MirTy {
         // TODO(wishlist) refactor to deduplicate with GetPatchVar
         match self.var {
-            PatchVarDesc::Pcolor => MirTy::Abstract(NlAbstractTy::Color),
-            PatchVarDesc::Pos => MirTy::Abstract(NlAbstractTy::Point),
+            PatchVarDesc::Pcolor => NlAbstractTy::Color.into(),
+            PatchVarDesc::Pos => NlAbstractTy::Point.into(),
             PatchVarDesc::Custom(field) => program.custom_patch_vars[field].ty.clone(),
         }
     }
@@ -501,13 +501,17 @@ impl Node for GetPatchVarAsTurtleOrPatch {
                 return false;
             };
 
-            match program.nodes[agent].output_type(program, fn_id) {
-                MirTy::Abstract(NlAbstractTy::Patch) => {
+            match program.nodes[agent]
+                .output_type(program, fn_id)
+                .abstr
+                .expect("agent must have an abstract type")
+            {
+                NlAbstractTy::Patch => {
                     program.nodes[my_node_id] =
                         NodeKind::from(node::GetPatchVar { context, patch: agent, var });
                     true
                 }
-                MirTy::Abstract(NlAbstractTy::Turtle) => {
+                NlAbstractTy::Turtle => {
                     let xcor = program.nodes.insert(NodeKind::from(node::GetTurtleVar {
                         context,
                         turtle: agent,
@@ -563,7 +567,7 @@ impl Node for SetPatchVarAsTurtleOrPatch {
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
-        MirTy::Abstract(NlAbstractTy::Unit)
+        NlAbstractTy::Unit.into()
     }
 
     fn peephole_transform(
@@ -580,13 +584,15 @@ impl Node for SetPatchVarAsTurtleOrPatch {
             move |program: &mut Program, fn_id: FunctionId, my_node_id: NodeId| match program.nodes
                 [agent]
                 .output_type(program, fn_id)
+                .abstr
+                .unwrap()
             {
-                MirTy::Abstract(NlAbstractTy::Patch) => {
+                NlAbstractTy::Patch => {
                     program.nodes[my_node_id] =
                         NodeKind::from(node::SetPatchVar { context, patch: agent, var, value });
                     true
                 }
-                MirTy::Abstract(NlAbstractTy::Turtle) => {
+                NlAbstractTy::Turtle => {
                     let xcor = program.nodes.insert(NodeKind::from(node::GetTurtleVar {
                         context,
                         turtle: agent,

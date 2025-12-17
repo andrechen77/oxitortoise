@@ -30,7 +30,7 @@ impl Node for RandomInt {
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
-        MirTy::Abstract(NlAbstractTy::Float)
+        NlAbstractTy::Float.into()
     }
 
     fn write_lir_execution(

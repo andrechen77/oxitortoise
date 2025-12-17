@@ -28,7 +28,7 @@ impl Node for ResetTicks {
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
-        MirTy::Abstract(NlAbstractTy::Unit)
+        NlAbstractTy::Unit.into()
     }
 
     fn write_lir_execution(
@@ -65,7 +65,7 @@ impl Node for AdvanceTick {
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
-        MirTy::Abstract(NlAbstractTy::Unit)
+        NlAbstractTy::Unit.into()
     }
 
     fn write_lir_execution(
@@ -102,7 +102,7 @@ impl Node for GetTick {
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
-        MirTy::Abstract(NlAbstractTy::Float)
+        NlAbstractTy::Float.into()
     }
 
     fn write_lir_execution(
