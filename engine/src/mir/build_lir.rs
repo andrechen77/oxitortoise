@@ -29,9 +29,9 @@ pub fn mir_to_lir(mir: &mir::Program) -> lir::Program {
     // translate all user function signatures. we collect these first because
     // functions might reference each other, and their signatures are required
     let mut user_function_tracker = SlotMap::with_key(); // used only to allocate lir::FunctionId
-    for (mir_fn_id, mir_fn) in mir.functions.iter() {
+    for mir_fn_id in mir.functions.keys() {
         trace!("translating function signature for {}", mir_fn_id);
-        let signature = translate_function_signature(&mir_fn.borrow());
+        let signature = translate_function_signature(mir, mir_fn_id);
         // allocate a new function id for the LIR function
         let lir_fn_id = user_function_tracker.insert(());
         builder.available_user_functions.insert(mir_fn_id, lir_fn_id);
@@ -40,9 +40,9 @@ pub fn mir_to_lir(mir: &mir::Program) -> lir::Program {
 
     // translate all user function bodies
     let mut lir_fn_bodies = SecondaryMap::new();
-    for (mir_fn_id, mir_fn) in mir.functions.iter() {
+    for mir_fn_id in mir.functions.keys() {
         trace!("translating function body for {}", mir_fn_id);
-        let lir_fn = translate_function_body(mir, &mir_fn.borrow(), &mut builder);
+        let lir_fn = translate_function_body(mir, mir_fn_id, &mut builder);
         let lir_fn_id = builder.available_user_functions[&mir_fn_id];
         lir_fn_bodies.insert(lir_fn_id, lir_fn);
     }
@@ -53,15 +53,18 @@ pub fn mir_to_lir(mir: &mir::Program) -> lir::Program {
     }
 }
 
-#[instrument(skip(function))]
+#[instrument(skip(program))]
 fn translate_function_signature(
-    function: &mir::Function,
+    program: &mir::Program,
+    fn_id: mir::FunctionId,
 ) -> (Vec<lir::ValType>, SmallVec<[lir::ValType; 1]>) {
+    let function = &program.functions[fn_id];
+
     let mut params = Vec::new();
     for parameter in &function.parameters {
-        trace!("adding parameter {:?} with type {:?}", parameter, function.locals[*parameter].ty);
+        trace!("adding parameter {:?} with type {:?}", parameter, program.locals[*parameter].ty);
         params.extend(
-            function.locals[*parameter]
+            program.locals[*parameter]
                 .ty
                 .repr()
                 .info()
@@ -153,33 +156,18 @@ impl<'a> LirInsnBuilder<'a> {
 #[instrument(skip_all)]
 fn translate_function_body(
     program: &mir::Program,
-    function: &mir::Function,
+    fn_id: mir::FunctionId,
     program_builder: &mut LirProgramBuilder,
 ) -> lir::Function {
+    let function = &program.functions[fn_id];
+
     // turn the MIR local variables into LIR local variables
     let mut lir_debug_var_names = HashMap::new();
     let mut local_to_lir = HashMap::new();
     let mut lir_local_var_types = TiVec::new();
-    for &local_id in &function.parameters {
-        let local_decl = &function.locals[local_id];
-        assert_eq!(local_decl.storage, mir::LocalStorage::Register);
-
-        let &[lir_type] =
-            local_decl.ty.repr().info().lir_repr.expect("function parameter must have known ABI")
-        else {
-            unimplemented!("handle local variables that take up multiple LIR values")
-        };
-        let lir_var_id = lir_local_var_types.push_and_get_key(lir_type);
-        local_to_lir.insert(local_id, LocalLocation::Var { var_id: lir_var_id });
-        if let Some(debug_name) = local_decl.debug_name.clone() {
-            lir_debug_var_names.insert(lir_var_id, debug_name);
-        }
-    }
     let num_lir_parameters = lir_local_var_types.len();
-    for (local_id, local_decl) in &function.locals {
-        if local_to_lir.contains_key(&local_id) {
-            continue;
-        }
+    for &local_id in &function.locals {
+        let local_decl = &program.locals[local_id];
         match local_decl.storage {
             mir::LocalStorage::Register => {
                 let &[lir_type] = local_decl
@@ -237,21 +225,15 @@ fn translate_function_body(
     // algorithm idea: iterate over all statements. if a node depends on another
     // node which is not rooted in its own statement, then those dependencies
     // are translated first
-    translate_stmt_block(
-        program,
-        function,
-        &function.nodes.borrow(),
-        &mut fn_builder,
-        &function.cfg,
-    );
+    translate_stmt_block(program, function, &mut fn_builder, &function.cfg);
 
     fn translate_stmt_block(
         program: &mir::Program,
         function: &mir::Function,
-        nodes: &Nodes,
         fn_builder: &mut LirInsnBuilder,
         stmt_block: &mir::StatementBlock,
     ) {
+        let nodes = &program.nodes;
         for stmt in &stmt_block.statements {
             match stmt {
                 &mir::StatementKind::Node(node_id) => {
@@ -267,10 +249,10 @@ fn translate_function_body(
                     let then_body = fn_builder.product.insn_seqs.push_and_get_key(TiVec::new());
                     let else_body = fn_builder.product.insn_seqs.push_and_get_key(TiVec::new());
                     fn_builder.with_insn_seq(then_body, |fn_builder| {
-                        translate_stmt_block(program, function, nodes, fn_builder, then_block)
+                        translate_stmt_block(program, function, fn_builder, then_block)
                     });
                     fn_builder.with_insn_seq(else_body, |fn_builder| {
-                        translate_stmt_block(program, function, nodes, fn_builder, else_block)
+                        translate_stmt_block(program, function, fn_builder, else_block)
                     });
 
                     let &[condition] =

@@ -2,8 +2,8 @@ use derive_more::derive::Display;
 use tracing::trace;
 
 use crate::mir::{
-    ClosureType, Function, FunctionId, MirTy, MirVisitor, Node, NodeId, NodeKind, NodeTransform,
-    Nodes, Program, visit_mir_function,
+    ClosureType, Function, FunctionId, LocalId, MirTy, MirVisitor, Node, NodeId, NodeKind,
+    NodeTransform, Nodes, Program, visit_mir_function,
 };
 
 #[derive(Debug, Display)]
@@ -33,52 +33,60 @@ impl Node for Placeholder {
     }
 }
 
-pub fn lower(program: &Program, fn_id: FunctionId) {
-    struct Visitor<'a> {
-        program: &'a Program,
+pub fn lower(program: &mut Program, fn_id: FunctionId) {
+    struct Visitor {
+        transformations: Vec<(NodeTransform, NodeId)>,
         fn_id: FunctionId,
     }
-    impl<'a> MirVisitor for Visitor<'a> {
-        fn visit_node(&mut self, node_id: NodeId) {
-            let function = self.program.functions[self.fn_id].borrow();
-            let nodes = function.nodes.borrow();
-            let node = &nodes[node_id];
+    impl MirVisitor for Visitor {
+        fn visit_node(&mut self, program: &Program, node_id: NodeId) {
+            let node = &program.nodes[node_id];
 
-            trace!("Transforming node {:?}", node);
+            trace!("Visiting node {:?}", node);
 
-            let transform = node.lowering_expand(self.program, self.fn_id, node_id);
+            let transform = node.lowering_expand(program, self.fn_id, node_id);
+
             if let Some(transform) = transform {
-                drop(nodes);
-                drop(function);
-                transform(self.program, self.fn_id, node_id);
+                self.transformations.push((transform, node_id));
             }
         }
     }
-    visit_mir_function(&mut Visitor { program, fn_id }, &program.functions[fn_id].borrow());
+    let mut visitor = Visitor { transformations: Vec::new(), fn_id };
+    visit_mir_function(&mut visitor, program, fn_id);
+
+    for (transform, node_id) in visitor.transformations {
+        trace!("Applying lowering expansion to node {:?}", node_id);
+        transform(program, fn_id, node_id);
+    }
 }
 
-pub fn peephole_transform(program: &Program, fn_id: FunctionId) {
-    struct Visitor<'a> {
-        program: &'a Program,
+pub fn peephole_transform(program: &mut Program, fn_id: FunctionId) {
+    struct Visitor {
+        transformations: Vec<(NodeTransform, NodeId)>,
         fn_id: FunctionId,
     }
-    impl<'a> MirVisitor for Visitor<'a> {
-        fn visit_node(&mut self, node_id: NodeId) {
-            let function = self.program.functions[self.fn_id].borrow();
-            let nodes = function.nodes.borrow();
-            let node = &nodes[node_id];
+    impl MirVisitor for Visitor {
+        fn visit_node(&mut self, program: &Program, node_id: NodeId) {
+            let node = &program.nodes[node_id];
 
-            trace!("Transforming node {:?}", node);
+            trace!("Visiting node {:?}", node);
 
-            let transform = node.peephole_transform(self.program, self.fn_id, node_id);
+            let transform = node.peephole_transform(program, self.fn_id, node_id);
             if let Some(transform) = transform {
-                drop(nodes);
-                drop(function);
-                transform(self.program, self.fn_id, node_id);
+                self.transformations.push((transform, node_id));
             }
         }
     }
-    visit_mir_function(&mut Visitor { program, fn_id }, &program.functions[fn_id].borrow());
+    let mut visitor = Visitor { transformations: Vec::new(), fn_id };
+    visit_mir_function(&mut visitor, program, fn_id);
+
+    for (transform, node_id) in visitor.transformations {
+        trace!(
+            "Applying peephole transformation to node {:?} {:?}",
+            node_id, program.nodes[node_id]
+        );
+        transform(program, fn_id, node_id);
+    }
 }
 
 // HACK this optimization should instead be part of the type inference pass,
@@ -88,33 +96,39 @@ pub fn peephole_transform(program: &Program, fn_id: FunctionId) {
 // that the `of` is the only way that the closure is ever going to be called, so
 // we can assume that whatever is passed to `of` is going to be the only thing
 // passed to the closure.
-pub fn optimize_of_agent_type(program: &Program, fn_id: FunctionId) {
-    struct Visitor<'a> {
-        program: &'a Program,
+pub fn optimize_of_agent_type(program: &mut Program, fn_id: FunctionId) {
+    struct Visitor {
         fn_id: FunctionId,
+        type_changes: Vec<(LocalId, MirTy)>,
     }
-    impl<'a> MirVisitor for Visitor<'a> {
-        fn visit_node(&mut self, node_id: NodeId) {
-            let function = self.program.functions[self.fn_id].borrow();
-            let nodes = function.nodes.borrow();
-            let node = &nodes[node_id];
+    impl MirVisitor for Visitor {
+        fn visit_node(&mut self, program: &Program, node_id: NodeId) {
+            let node = &program.nodes[node_id];
 
             if let NodeKind::Of(of) = &node {
                 trace!("Optimizing Of node {:?}", node);
 
                 let recipients =
-                    &nodes[of.recipients.node().expect("TODO can't always unwrap here")];
-                let NodeKind::Closure(closure) = &nodes[of.body] else {
+                    &program.nodes[of.recipients.node().expect("TODO can't always unwrap here")];
+                let NodeKind::Closure(closure) = &program.nodes[of.body] else {
                     return;
                 };
-                let mut body = self.program.functions[closure.body].borrow_mut();
 
-                let self_param_id = body.parameters[ClosureType::PARAM_ARG_IDX];
+                let self_param_id =
+                    program.functions[closure.body].parameters[ClosureType::PARAM_ARG_IDX];
 
-                let ty = recipients.output_type(self.program, &function, &nodes).clone();
-                body.locals[self_param_id].ty = ty;
+                let ty = recipients
+                    .output_type(program, &program.functions[self.fn_id], &program.nodes)
+                    .clone();
+                self.type_changes.push((self_param_id, ty));
             }
         }
     }
-    visit_mir_function(&mut Visitor { program, fn_id }, &program.functions[fn_id].borrow());
+    let mut visitor = Visitor { type_changes: Vec::new(), fn_id };
+    visit_mir_function(&mut visitor, program, fn_id);
+
+    // apply the changes to the local variables
+    for (local_id, ty) in visitor.type_changes {
+        program.locals[local_id].ty = ty;
+    }
 }

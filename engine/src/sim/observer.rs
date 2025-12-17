@@ -8,8 +8,8 @@ pub struct GlobalVarAddress {
     pub field_offset: usize,
 }
 
-pub fn calc_global_addr(mir: &mir::Program, var: usize) -> GlobalVarAddress {
-    let globals_schema = mir.globals_schema.as_ref().unwrap();
+pub fn calc_global_addr(program: &mir::Program, var: usize) -> GlobalVarAddress {
+    let globals_schema = program.globals_schema.as_ref().unwrap();
     let row_schema = globals_schema.row_schema();
     GlobalVarAddress {
         buffer_offset: offset_of!(Globals, data),

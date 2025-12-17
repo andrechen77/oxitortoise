@@ -51,23 +51,24 @@ impl Node for Ask {
         // just checking for a specific node. this would require augmenting the
         // type system to include special types for "entire agent class"
 
-        fn type_erase_ask(program: &Program, fn_id: FunctionId, my_node_id: NodeId) -> bool {
-            let function = program.functions[fn_id].borrow();
-            let mut nodes = function.nodes.borrow_mut();
-
-            let &Ask { context: _, recipients, body: _ } = (&nodes[my_node_id]).try_into().unwrap();
+        fn type_erase_ask(program: &mut Program, _fn_id: FunctionId, my_node_id: NodeId) -> bool {
+            let &NodeKind::Ask(Ask { context: _, recipients, body: _ }) =
+                &program.nodes[my_node_id]
+            else {
+                return false;
+            };
 
             let AskRecipient::Any(recipients) = recipients else {
                 return false;
             };
 
-            if let NodeKind::Agentset(agentset) = &nodes[recipients] {
+            if let NodeKind::Agentset(agentset) = &program.nodes[recipients] {
                 let new_recipients = match agentset {
                     node::Agentset::AllTurtles => AskRecipient::AllTurtles,
                     node::Agentset::AllPatches => AskRecipient::AllPatches,
                 };
 
-                let NodeKind::Ask(ask) = &mut nodes[my_node_id] else {
+                let NodeKind::Ask(ask) = &mut program.nodes[my_node_id] else {
                     panic!("expected node to be an Ask");
                 };
                 ask.recipients = new_recipients;
@@ -156,20 +157,28 @@ impl Node for Of {
         _fn_id: FunctionId,
         _my_node_id: NodeId,
     ) -> Option<NodeTransform> {
-        fn narrow_recipient_type(program: &Program, fn_id: FunctionId, my_node_id: NodeId) -> bool {
-            let function = program.functions[fn_id].borrow();
-            let mut nodes = function.nodes.borrow_mut();
-
-            let &Of { context: _, recipients, body: _ } = (&nodes[my_node_id]).try_into().unwrap();
+        fn narrow_recipient_type(
+            program: &mut Program,
+            fn_id: FunctionId,
+            my_node_id: NodeId,
+        ) -> bool {
+            let &NodeKind::Of(Of { context: _, recipients, body: _ }) = &program.nodes[my_node_id]
+            else {
+                return false;
+            };
 
             let Some(recipients_node) = recipients.node() else {
                 return false;
             };
-            let recipients_type = nodes[recipients_node].output_type(program, &function, &nodes);
+            let recipients_type = program.nodes[recipients_node].output_type(
+                program,
+                &program.functions[fn_id],
+                &program.nodes,
+            );
             match recipients_type {
                 MirTy::Abstract(NlAbstractTy::Turtle) => {
                     let NodeKind::Of(Of { context: _, recipients, body: _ }) =
-                        &mut nodes[my_node_id]
+                        &mut program.nodes[my_node_id]
                     else {
                         panic!("expected node to be an Of");
                     };
@@ -177,7 +186,7 @@ impl Node for Of {
                 }
                 MirTy::Abstract(NlAbstractTy::Patch) => {
                     let NodeKind::Of(Of { context: _, recipients, body: _ }) =
-                        &mut nodes[my_node_id]
+                        &mut program.nodes[my_node_id]
                     else {
                         panic!("expected node to be an Of");
                     };

@@ -133,21 +133,24 @@ impl Node for MaxPxcor {
         _fn_id: FunctionId,
         _my_node_id: NodeId,
     ) -> Option<NodeTransform> {
-        fn lower_get_max_pxcor(program: &Program, fn_id: FunctionId, my_node_id: NodeId) -> bool {
-            let function = program.functions[fn_id].borrow();
-            let mut nodes = function.nodes.borrow_mut();
-
-            let &MaxPxcor { context } = (&nodes[my_node_id]).try_into().unwrap();
+        fn lower_get_max_pxcor(
+            program: &mut Program,
+            _fn_id: FunctionId,
+            my_node_id: NodeId,
+        ) -> bool {
+            let &NodeKind::MaxPxcor(MaxPxcor { context }) = &program.nodes[my_node_id] else {
+                return false;
+            };
 
             // insert a node that gets the workspace pointer
-            let workspace_ptr = nodes.insert(NodeKind::from(node::MemLoad {
+            let workspace_ptr = program.nodes.insert(NodeKind::from(node::MemLoad {
                 ptr: context,
                 offset: offset_of!(CanonExecutionContext, workspace),
                 ty: <*mut u8 as Reflect>::CONCRETE_TY,
             }));
 
             // insert a node that gets the the desired field
-            nodes[my_node_id] = NodeKind::from(node::MemLoad {
+            program.nodes[my_node_id] = NodeKind::from(node::MemLoad {
                 ptr: workspace_ptr,
                 offset: offset_of!(Workspace, world)
                     + offset_of!(World, topology)
@@ -187,21 +190,24 @@ impl Node for MaxPycor {
         _fn_id: FunctionId,
         _my_node_id: NodeId,
     ) -> Option<NodeTransform> {
-        fn lower_get_max_pycor(program: &Program, fn_id: FunctionId, my_node_id: NodeId) -> bool {
-            let function = program.functions[fn_id].borrow();
-            let mut nodes = function.nodes.borrow_mut();
-
-            let &MaxPycor { context } = (&nodes[my_node_id]).try_into().unwrap();
+        fn lower_get_max_pycor(
+            program: &mut Program,
+            _fn_id: FunctionId,
+            my_node_id: NodeId,
+        ) -> bool {
+            let &NodeKind::MaxPycor(MaxPycor { context }) = &program.nodes[my_node_id] else {
+                return false;
+            };
 
             // insert a node that gets the workspace pointer
-            let workspace_ptr = nodes.insert(NodeKind::from(node::MemLoad {
+            let workspace_ptr = program.nodes.insert(NodeKind::from(node::MemLoad {
                 ptr: context,
                 offset: offset_of!(CanonExecutionContext, workspace),
                 ty: <*mut u8 as Reflect>::CONCRETE_TY,
             }));
 
             // insert a node that gets the the desired field
-            nodes[my_node_id] = NodeKind::from(node::MemLoad {
+            program.nodes[my_node_id] = NodeKind::from(node::MemLoad {
                 ptr: workspace_ptr,
                 offset: offset_of!(Workspace, world)
                     + offset_of!(World, topology)

@@ -24,8 +24,8 @@ impl Node for GetLocalVar {
         vec![]
     }
 
-    fn output_type(&self, _program: &Program, function: &Function, _nodes: &Nodes) -> MirTy {
-        function.locals[self.local_id].ty.clone()
+    fn output_type(&self, program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
+        program.locals[self.local_id].ty.clone()
     }
 
     fn write_lir_execution(
@@ -83,20 +83,21 @@ impl Node for SetLocalVar {
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
         // TODO(mvp) this should account for values that take up multiple LIR registers
-        let local_location = *lir_builder.local_to_lir.entry(self.local_id).or_insert_with(|| {
-            // TODO(mvp) sometimes a variable should be stored on the stack
-            let &[lir_type] = function.locals[self.local_id]
-                .ty
-                .repr()
-                .info()
-                .lir_repr
-                .expect("local variable must have known ABI")
-            else {
-                todo!()
-            };
-            let var_id = lir_builder.product.local_vars.push_and_get_key(lir_type);
-            LocalLocation::Var { var_id }
-        });
+        // let local_location = *lir_builder.local_to_lir.entry(self.local_id).or_insert_with(|| {
+        //     // TODO(mvp) sometimes a variable should be stored on the stack
+        //     let &[lir_type] = program.locals[self.local_id]
+        //         .ty
+        //         .repr()
+        //         .info()
+        //         .lir_repr
+        //         .expect("local variable must have known ABI")
+        //     else {
+        //         todo!()
+        //     };
+        //     let var_id = lir_builder.product.local_vars.push_and_get_key(lir_type);
+        //     LocalLocation::Var { var_id }
+        // });
+        let local_location = lir_builder.local_to_lir[&self.local_id];
 
         let &[value] = lir_builder.get_node_results(program, function, nodes, self.value) else {
             todo!()

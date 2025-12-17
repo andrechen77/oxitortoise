@@ -1,12 +1,11 @@
 // #![feature(if_let_guard, slice_as_array)]
 
-use std::cell::RefCell;
 use std::path::Path;
 use std::{collections::HashMap, fs, rc::Rc};
 
 use ast::CommandBlock;
 
-use engine::mir::{Node as _, Nodes};
+use engine::mir::Node as _;
 use engine::util::reflection::Reflect;
 use engine::{
     mir::{
@@ -125,6 +124,8 @@ struct MirBuilder {
     functions: SlotMap<FunctionId, Function>,
     fn_info: SecondaryMap<FunctionId, FnInfo>,
     global_names: GlobalScope,
+    locals: SlotMap<LocalId, LocalDeclaration>,
+    nodes: SlotMap<NodeId, NodeKind>,
 }
 
 pub struct ParseResult {
@@ -187,6 +188,8 @@ pub fn ast_to_mir(ast: Ast) -> anyhow::Result<ParseResult> {
     let mut functions: SlotMap<FunctionId, Function> = SlotMap::with_key();
     let mut fn_info = SecondaryMap::new();
     let mut bodies_to_build = SecondaryMap::new();
+    let mut locals = SlotMap::with_key();
+    let nodes = SlotMap::with_key();
 
     // go through each procedure and add a skeleton with just the signatures
     for procedure_ast in procedures {
@@ -216,7 +219,7 @@ pub fn ast_to_mir(ast: Ast) -> anyhow::Result<ParseResult> {
             procedure_ast.name, agent_class
         );
         let (procedure, signature, body_statements) =
-            create_procedure_skeleton(procedure_ast, agent_class)?;
+            create_procedure_skeleton(procedure_ast, agent_class, &mut locals)?;
         let body = ast::Node::CommandBlock(CommandBlock { statements: body_statements });
         let proc_name = procedure.debug_name.as_ref().cloned().unwrap();
         let fn_id = functions.insert(procedure);
@@ -229,7 +232,7 @@ pub fn ast_to_mir(ast: Ast) -> anyhow::Result<ParseResult> {
     }
 
     let mut mir_builder =
-        MirBuilder { turtle_breeds, functions, fn_info, global_names: global_scope };
+        MirBuilder { turtle_breeds, functions, fn_info, global_names: global_scope, nodes, locals };
 
     // then go through each procedure and build out the bodies
     for (fn_id, body) in bodies_to_build {
@@ -248,11 +251,9 @@ pub fn ast_to_mir(ast: Ast) -> anyhow::Result<ParseResult> {
             custom_patch_vars,
             turtle_schema: None,
             patch_schema: None,
-            functions: mir_builder
-                .functions
-                .into_iter()
-                .map(|(id, function)| (id, RefCell::new(function)))
-                .collect(),
+            functions: mir_builder.functions.into_iter().collect(),
+            locals: mir_builder.locals,
+            nodes: mir_builder.nodes,
         },
         global_names: mir_builder.global_names,
         fn_info: mir_builder.fn_info,
@@ -300,6 +301,7 @@ impl FnInfo {
 fn create_procedure_skeleton(
     procedure_ast: ast::Procedure,
     agent_class: AgentClass,
+    locals: &mut SlotMap<LocalId, LocalDeclaration>,
 ) -> anyhow::Result<(Function, FnInfo, Vec<ast::Node>)> {
     trace!("Creating procedure skeleton");
     let proc_name = Rc::from(procedure_ast.name);
@@ -316,7 +318,7 @@ fn create_procedure_skeleton(
 
     // calculate the function parameters
     let mut fn_info = FnInfo::new();
-    let mut locals = SlotMap::with_key();
+    let mut my_locals = Vec::new();
     let mut parameter_locals = Vec::new();
     // always add the context parameter TODO this shouldn't be always
     let context_param = locals.insert(LocalDeclaration {
@@ -325,6 +327,7 @@ fn create_procedure_skeleton(
         storage: LocalStorage::Register,
     });
     parameter_locals.push(context_param);
+    my_locals.push(context_param);
     fn_info.context_param = Some(context_param);
     trace!("Added context parameter with local_id: {:?}", context_param);
     match agent_class {
@@ -338,6 +341,7 @@ fn create_procedure_skeleton(
                 storage: LocalStorage::Register,
             });
             parameter_locals.push(local_id);
+            my_locals.push(local_id);
             fn_info.self_param = Some(local_id);
             trace!("Added turtle self parameter with local_id: {:?}", local_id);
         }
@@ -348,6 +352,7 @@ fn create_procedure_skeleton(
                 storage: LocalStorage::Register,
             });
             parameter_locals.push(local_id);
+            my_locals.push(local_id);
             fn_info.self_param = Some(local_id);
             trace!("Added patch self parameter with local_id: {:?}", local_id);
         }
@@ -364,6 +369,7 @@ fn create_procedure_skeleton(
         trace!("Adding positional parameter {} with local_id: {:?}", arg_name, local_id);
         fn_info.local_names.insert(arg_name, local_id);
         parameter_locals.push(local_id);
+        my_locals.push(local_id);
         fn_info.positional_params.push(local_id);
     }
 
@@ -379,10 +385,9 @@ fn create_procedure_skeleton(
         debug_name: Some(proc_name),
         parameters: parameter_locals,
         return_ty: MirTy::Abstract(return_ty),
-        locals,
-        // cfg and nodes are defaulted values and will be filled in later
+        locals: my_locals,
+        // cfg is a defaulted value and will be filled in later
         cfg: StatementBlock { statements: vec![] },
-        nodes: RefCell::new(SlotMap::with_key()),
     };
     trace!(
         "Created function skeleton for {} with {} parameters",
@@ -404,23 +409,18 @@ fn build_body(
 ) -> anyhow::Result<()> {
     trace!("building body");
 
-    // the nodes for this function
-    let mut nodes: SlotMap<NodeId, NodeKind> = SlotMap::with_key();
-
     // the statements of the current control flow construct
     let (statements, return_ty) = translate_statement_block(
         statements_ast,
         FnBodyBuilderCtx {
             mir: mir_builder,
             fn_id,
-            nodes: &mut nodes,
             current_stmt_block: &mut Vec::new(), // irrelevant for the root block
         },
     );
 
     let function = &mut mir_builder.functions[fn_id];
     function.cfg = statements;
-    function.nodes = RefCell::new(nodes);
     // HACK since translate_statement_block calculates the wrong type, we should
     // ignore it if the return type is already set. this means all user-defined
     // procedures should already have the correct return type. we only set the
@@ -436,7 +436,6 @@ fn build_body(
 struct FnBodyBuilderCtx<'a> {
     mir: &'a mut MirBuilder,
     fn_id: FunctionId,
-    nodes: &'a mut Nodes,
     current_stmt_block: &'a mut Vec<StatementKind>,
 }
 
@@ -445,7 +444,6 @@ impl<'a> FnBodyBuilderCtx<'a> {
         FnBodyBuilderCtx {
             mir: self.mir,
             fn_id: self.fn_id,
-            nodes: self.nodes,
             current_stmt_block: self.current_stmt_block,
         }
     }
@@ -459,7 +457,7 @@ impl<'a> FnBodyBuilderCtx<'a> {
 
     /// Returns a node that gets the context parameter for the current function
     fn get_context(&mut self) -> NodeId {
-        let id = self.nodes.insert(NodeKind::from(node::GetLocalVar {
+        let id = self.mir.nodes.insert(NodeKind::from(node::GetLocalVar {
             local_id: self.mir.fn_info[self.fn_id]
                 .context_param
                 .expect("expected context parameter"),
@@ -471,7 +469,7 @@ impl<'a> FnBodyBuilderCtx<'a> {
     /// Returns a node that gets the self parameter.
     fn get_self_agent(&mut self) -> NodeId {
         let self_param = self.mir.fn_info[self.fn_id].self_param.expect("expected self parameter");
-        self.nodes.insert(NodeKind::from(node::GetLocalVar { local_id: self_param }))
+        self.mir.nodes.insert(NodeKind::from(node::GetLocalVar { local_id: self_param }))
     }
 }
 
@@ -567,7 +565,7 @@ fn translate_statement(ast_node: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) {
                 let context = ctx.get_context();
                 let turtle = ctx.get_self_agent();
                 let angle_rt = translate_expression(*heading, ctx.reborrow());
-                let angle_lt = ctx.nodes.insert(NodeKind::from(node::UnaryOp {
+                let angle_lt = ctx.mir.nodes.insert(NodeKind::from(node::UnaryOp {
                     op: UnaryOpcode::Neg,
                     operand: angle_rt,
                 }));
@@ -628,7 +626,7 @@ fn translate_statement(ast_node: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) {
             }
             other => panic!("expected a statement, got {:?}", other),
         };
-        StatementKind::Node(ctx.nodes.insert(mir_node))
+        StatementKind::Node(ctx.mir.nodes.insert(mir_node))
     };
     ctx.current_stmt_block.push(stmt)
 }
@@ -819,7 +817,7 @@ fn translate_expression(expr: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) -> NodeI
 
     let is_pure = mir_node.is_pure();
 
-    let node_id = ctx.nodes.insert(mir_node);
+    let node_id = ctx.mir.nodes.insert(mir_node);
 
     // if the node has side effects, then its order of evaluation must be
     // specified
@@ -858,14 +856,15 @@ fn translate_let_binding(
     value: ast::Node,
     mut ctx: FnBodyBuilderCtx<'_>,
 ) -> StatementKind {
-    let local_id = ctx.mir.functions[ctx.fn_id].locals.insert(LocalDeclaration {
+    let local_id = ctx.mir.locals.insert(LocalDeclaration {
         debug_name: Some(name.clone()),
         ty: MirTy::Abstract(NlAbstractTy::Top),
         storage: LocalStorage::Register,
     });
+    ctx.mir.functions[ctx.fn_id].locals.push(local_id);
     ctx.mir.fn_info[ctx.fn_id].local_names.insert(name, local_id);
     let value = translate_expression(value, ctx.reborrow());
-    StatementKind::Node(ctx.nodes.insert(NodeKind::from(node::SetLocalVar { local_id, value })))
+    StatementKind::Node(ctx.mir.nodes.insert(NodeKind::from(node::SetLocalVar { local_id, value })))
 }
 
 fn translate_var_reporter_without_read(ast_node: &ast::Node) -> &str {
@@ -880,6 +879,8 @@ fn translate_var_reporter_without_read(ast_node: &ast::Node) -> &str {
     }
 }
 
+// TODO a lot of this function should be deduplicated from
+// create_procedure_skeleton
 #[instrument(skip_all)]
 fn translate_ephemeral_closure(
     expr: ast::Node,
@@ -897,25 +898,27 @@ fn translate_ephemeral_closure(
 
     // calculate the function parameters
     let mut fn_info = FnInfo::new();
-    let mut locals = SlotMap::with_key();
     let mut parameter_locals = Vec::new();
+    let mut my_locals = Vec::new();
 
     // add the environment pointer
-    let env_param = locals.insert(LocalDeclaration {
+    let env_param = ctx.mir.locals.insert(LocalDeclaration {
         debug_name: Some("env".into()),
         ty: MirTy::Concrete(<*mut u8 as Reflect>::CONCRETE_TY),
         storage: LocalStorage::Register,
     });
     parameter_locals.push(env_param);
+    my_locals.push(env_param);
     fn_info.env_param = Some(env_param);
 
     // add the context parameter
-    let context_param = locals.insert(LocalDeclaration {
+    let context_param = ctx.mir.locals.insert(LocalDeclaration {
         debug_name: Some("context".into()),
         ty: MirTy::Concrete(<*mut u8 as Reflect>::CONCRETE_TY),
         storage: LocalStorage::Register,
     });
     parameter_locals.push(context_param);
+    my_locals.push(context_param);
     fn_info.context_param = Some(context_param);
 
     // add the self parameter
@@ -924,33 +927,36 @@ fn translate_ephemeral_closure(
             trace!("No self parameter needed for Observer agent class");
         }
         AgentClass::Turtle => {
-            let local_id = locals.insert(LocalDeclaration {
+            let local_id = ctx.mir.locals.insert(LocalDeclaration {
                 debug_name: Some("self_turtle_id".into()),
                 ty: MirTy::Abstract(NlAbstractTy::Turtle),
                 storage: LocalStorage::Register,
             });
             parameter_locals.push(local_id);
+            my_locals.push(local_id);
             fn_info.self_param = Some(local_id);
             trace!("Added turtle self parameter with local_id: {:?}", local_id);
         }
         AgentClass::Patch => {
-            let local_id = locals.insert(LocalDeclaration {
+            let local_id = ctx.mir.locals.insert(LocalDeclaration {
                 debug_name: Some("self_patch_id".into()),
                 ty: MirTy::Abstract(NlAbstractTy::Patch),
                 storage: LocalStorage::Register,
             });
             parameter_locals.push(local_id);
+            my_locals.push(local_id);
             fn_info.self_param = Some(local_id);
             trace!("Added patch self parameter with local_id: {:?}", local_id);
         }
         AgentClass::Link => todo!("TODO(mvp) add self parameter with link type"),
         AgentClass::Any => {
-            let local_id = locals.insert(LocalDeclaration {
+            let local_id = ctx.mir.locals.insert(LocalDeclaration {
                 debug_name: Some("self_any".into()),
                 ty: MirTy::Abstract(NlAbstractTy::Top),
                 storage: LocalStorage::Register,
             });
             parameter_locals.push(local_id);
+            my_locals.push(local_id);
             fn_info.self_param = Some(local_id);
             trace!("Added any self parameter with local_id: {:?}", local_id);
         }
@@ -960,11 +966,10 @@ fn translate_ephemeral_closure(
     let function = Function {
         debug_name: Some(proc_name),
         parameters: parameter_locals,
-        locals,
-        // cfg, nodes, and return_ty are defaulted and will be filled in later
+        locals: my_locals,
+        // cfg and return_ty are defaulted and will be filled in later
         return_ty: MirTy::Other,
         cfg: StatementBlock::default(),
-        nodes: RefCell::default(),
     };
     let fn_id = ctx.mir.functions.insert(function);
     ctx.mir.fn_info.insert(fn_id, fn_info);
@@ -974,20 +979,20 @@ fn translate_ephemeral_closure(
     build_body(expr, fn_id, ctx.mir).unwrap();
 
     // return a closure object
-    ctx.nodes.insert(NodeKind::from(node::Closure {
+    ctx.mir.nodes.insert(NodeKind::from(node::Closure {
         captures: vec![], // TODO(mvp) find which variables are captured by the closure
         body: fn_id,
     }))
 }
 
 #[instrument(skip_all)]
-pub fn write_dot(fn_id: FunctionId, function: &Function, prefix: &str) {
-    let dot_string = function.to_dot_string_with_options(false);
+pub fn write_dot(program: &mir::Program, fn_id: FunctionId, prefix: &str) {
+    let dot_string = mir::graphviz::to_dot_string_with_options(program, fn_id, true);
     let filename = format!(
         "dots/{}-{}-{:?}.dot",
         prefix,
         fn_id,
-        function.debug_name.as_deref().unwrap_or("unnamed")
+        program.functions[fn_id].debug_name.as_deref().unwrap_or("unnamed")
     );
     trace!("Writing DOT file for function {:?}: {}", fn_id, filename);
 
@@ -1019,8 +1024,8 @@ mod tests {
         let debug_output = format!("{:#?}", program);
         std::fs::write("mir_debug.txt", debug_output).expect("Failed to write MIR debug output");
 
-        for (fn_id, function) in program.functions {
-            write_dot(fn_id, &*function.borrow(), "debug");
+        for fn_id in program.functions.keys() {
+            write_dot(&program, fn_id, "debug");
         }
     }
 }

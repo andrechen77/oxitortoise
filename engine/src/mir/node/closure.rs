@@ -28,12 +28,9 @@ impl Node for Closure {
     }
 
     fn output_type(&self, program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
-        let function = program.functions[self.body].borrow();
-        let arg_ty = function.locals[function.parameters[ClosureType::PARAM_ARG_IDX]]
-            .ty
-            .clone()
-            .unwrap_abstract();
-        let return_ty = function.return_ty.clone();
+        let body_arg = program.functions[self.body].parameters[ClosureType::PARAM_ARG_IDX];
+        let arg_ty = program.locals[body_arg].ty.clone().unwrap_abstract();
+        let return_ty = program.functions[self.body].return_ty.clone();
         MirTy::Abstract(NlAbstractTy::Closure(ClosureType {
             arg_ty: Box::new(arg_ty),
             return_ty: Box::new(return_ty.unwrap_abstract()),

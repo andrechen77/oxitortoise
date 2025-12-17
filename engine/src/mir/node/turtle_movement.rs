@@ -144,19 +144,25 @@ impl Node for CanMove {
         _fn_id: FunctionId,
         _my_node_id: NodeId,
     ) -> Option<NodeTransform> {
-        fn break_down_can_move(program: &Program, fn_id: FunctionId, my_node_id: NodeId) -> bool {
-            let function = program.functions[fn_id].borrow();
-            let mut nodes = function.nodes.borrow_mut();
-            let &CanMove { context, turtle, distance } = (&nodes[my_node_id]).try_into().unwrap();
+        fn break_down_can_move(
+            program: &mut Program,
+            _fn_id: FunctionId,
+            my_node_id: NodeId,
+        ) -> bool {
+            let &NodeKind::CanMove(CanMove { context, turtle, distance }) =
+                &program.nodes[my_node_id]
+            else {
+                return false;
+            };
 
-            let patch = nodes.insert(NodeKind::from(node::PatchRelative {
+            let patch = program.nodes.insert(NodeKind::from(node::PatchRelative {
                 context,
                 relative_loc: PatchLocRelation::Ahead,
                 turtle,
                 distance,
             }));
 
-            nodes[my_node_id] =
+            program.nodes[my_node_id] =
                 NodeKind::from(node::CheckNobody { context, agent: patch, negate: true });
 
             true

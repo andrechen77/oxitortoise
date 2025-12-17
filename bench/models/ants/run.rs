@@ -87,8 +87,8 @@ fn main() {
     let ast = serde_json::from_str(ast).unwrap();
     let ParseResult { mut program, global_names, fn_info } = ast_to_mir::ast_to_mir(ast).unwrap();
 
-    for (fn_id, function) in &program.functions {
-        write_dot(fn_id, &function.borrow(), "original");
+    for fn_id in program.functions.keys() {
+        write_dot(&program, fn_id, "original");
     }
 
     info!("applying cheats");
@@ -96,21 +96,24 @@ fn main() {
     let cheats = serde_json::from_str(cheats).unwrap();
     add_cheats(&cheats, &mut program, &global_names, &fn_info);
 
-    for (fn_id, function) in &program.functions {
+    let fn_ids: Vec<_> = program.functions.keys().collect();
+    for fn_id in fn_ids {
         info!(
             "transforming function {} {}",
             fn_id,
-            function.borrow().debug_name.as_deref().unwrap_or_default()
+            program.functions[fn_id].debug_name.as_deref().unwrap_or_default()
         );
-        peephole_transform(&program, fn_id);
-        optimize_of_agent_type(&program, fn_id);
-        peephole_transform(&program, fn_id);
-        lower(&program, fn_id);
+        peephole_transform(&mut program, fn_id);
+        optimize_of_agent_type(&mut program, fn_id);
+        peephole_transform(&mut program, fn_id);
+        lower(&mut program, fn_id);
     }
 
-    for (fn_id, function) in &program.functions {
-        write_dot(fn_id, &function.borrow(), "transformed");
+    for fn_id in program.functions.keys() {
+        write_dot(&program, fn_id, "transformed");
     }
+
+    std::fs::write("program.txt", format!("{:#?}", program)).unwrap();
 
     let lir_program = mir_to_lir(&program);
     println!("{}", lir_program);

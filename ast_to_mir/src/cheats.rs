@@ -97,11 +97,11 @@ fn extract_type_bindings(program: &mut Program, id: FunctionId) -> HashSet<Local
     }
 
     fn node_helper(nid: &NodeId, bc: &BC) -> Option<LocalVarTypeBinding> {
-        let binding = bc.program.functions[bc.id].borrow();
-        let nodes = binding.nodes.borrow();
+        let binding = &bc.program.functions[bc.id];
+        let nodes = &bc.program.nodes;
         match nodes[*nid] {
             NodeKind::SetLocalVar(SetLocalVar { local_id, value }) => {
-                let output_type = nodes[value].output_type(bc.program, &binding, &nodes);
+                let output_type = nodes[value].output_type(bc.program, binding, nodes);
                 if let Abstract(abs_type) = output_type {
                     Some(LocalVarTypeBinding(local_id, abs_type))
                 } else {
@@ -134,7 +134,7 @@ fn extract_type_bindings(program: &mut Program, id: FunctionId) -> HashSet<Local
 
     let bc = BC { program, id };
 
-    block_helper(&bc.program.functions[id].borrow().cfg, &bc)
+    block_helper(&bc.program.functions[id].cfg, &bc)
 }
 
 fn extract_report_types(program: &mut Program, id: FunctionId) -> HashSet<NlAbstractTy> {
@@ -154,9 +154,9 @@ fn extract_report_types(program: &mut Program, id: FunctionId) -> HashSet<NlAbst
             Repeat { block, .. } =>
                 block_helper(block, bc),
             Return { value } => {
-                let binding = bc.program.functions[bc.id].borrow();
-                let nodes = binding.nodes.borrow();
-                let output_type = nodes[*value].output_type(bc.program, &binding, &nodes);
+                let binding = &bc.program.functions[bc.id];
+                let nodes = &bc.program.nodes;
+                let output_type = nodes[*value].output_type(bc.program, binding, nodes);
                 if let Abstract(typ) = output_type {
                     HashSet::from([typ])
                 } else {
@@ -174,7 +174,7 @@ fn extract_report_types(program: &mut Program, id: FunctionId) -> HashSet<NlAbst
 
     let bc = BC { program, id };
 
-    block_helper(&bc.program.functions[id].borrow().cfg, &bc)
+    block_helper(&bc.program.functions[id].cfg, &bc)
 }
 
 fn lub(types: &[NlAbstractTy]) -> NlAbstractTy {
@@ -299,9 +299,7 @@ pub fn add_cheats(
             let fn_id = global_names.functions.get(fn_name.as_str()).unwrap();
             if let Some(self_param_type) = &info.self_param_type {
                 let fn_info = &fn_info[*fn_id];
-                let ty = &mut program.functions[*fn_id].borrow_mut().locals
-                    [fn_info.self_param.unwrap()]
-                .ty;
+                let ty = &mut program.locals[fn_info.self_param.unwrap()].ty;
                 *ty = match self_param_type {
                     CheatSelfParamType::Patch => MirTy::Abstract(NlAbstractTy::Patch),
                     CheatSelfParamType::Turtle => MirTy::Abstract(NlAbstractTy::Turtle),
@@ -316,17 +314,18 @@ pub fn add_cheats(
         {
             let bindings_set = extract_type_bindings(program, func_id);
 
-            let mut func = program.functions[func_id].borrow_mut();
+            let func = &mut program.functions[func_id];
 
             let mut lid_to_types: HashMap<LocalId, Vec<NlAbstractTy>> =
-                func.locals.clone().into_iter().map(|(k, _)| (k, Vec::new())).collect();
+                func.locals.clone().into_iter().map(|k| (k, Vec::new())).collect();
 
             for LocalVarTypeBinding(local_id, typ) in bindings_set {
                 lid_to_types.get_mut(&local_id).unwrap().push(typ);
             }
 
-            for (local_id, decl) in func.locals.iter_mut() {
-                let types = &lid_to_types.get(&local_id).as_ref().unwrap()[..];
+            for local_id in &func.locals {
+                let decl = &mut program.locals[*local_id];
+                let types = &lid_to_types.get(local_id).as_ref().unwrap()[..];
                 if !types.is_empty() {
                     let abs_type = if let [typ] = types {
                         typ.clone()
@@ -351,7 +350,7 @@ pub fn add_cheats(
                 &MirTy::Abstract(lub(report_types))
             };
 
-            let mut func = program.functions[func_id].borrow_mut();
+            let func = &mut program.functions[func_id];
             func.return_ty = out_type.clone();
         }
     }

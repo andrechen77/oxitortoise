@@ -42,9 +42,11 @@ impl Node for Distancexy {
         _my_node_id: NodeId,
     ) -> Option<NodeTransform> {
         // if the agent is a turtle
-        let function = program.functions[fn_id].borrow();
-        let nodes = function.nodes.borrow();
-        let agent_type = nodes[self.agent].output_type(program, &function, &nodes);
+        let agent_type = program.nodes[self.agent].output_type(
+            program,
+            &program.functions[fn_id],
+            &program.nodes,
+        );
 
         Some(Box::new(move |program, fn_id, my_node_id| {
             decompose_distancexy(program, fn_id, my_node_id, agent_type)
@@ -53,36 +55,40 @@ impl Node for Distancexy {
 }
 
 fn decompose_distancexy(
-    program: &Program,
-    fn_id: FunctionId,
+    program: &mut Program,
+    _fn_id: FunctionId,
     my_node_id: NodeId,
     agent_type: MirTy,
 ) -> bool {
-    let function = program.functions[fn_id].borrow();
-    let mut nodes = function.nodes.borrow_mut();
-
-    let &Distancexy { context, agent, x, y } = (&nodes[my_node_id]).try_into().unwrap();
+    let &NodeKind::Distancexy(Distancexy { context, agent, x, y }) = &program.nodes[my_node_id]
+    else {
+        return false;
+    };
 
     // add a node to get the location of the turtle
     let agent_pos = match agent_type {
-        MirTy::Abstract(NlAbstractTy::Turtle) => nodes.insert(NodeKind::from(node::GetTurtleVar {
-            context,
-            turtle: agent,
-            var: TurtleVarDesc::Pos,
-        })),
-        MirTy::Abstract(NlAbstractTy::Patch) => nodes.insert(NodeKind::from(node::GetPatchVar {
-            context,
-            patch: agent,
-            var: PatchVarDesc::Pos,
-        })),
+        MirTy::Abstract(NlAbstractTy::Turtle) => {
+            program.nodes.insert(NodeKind::from(node::GetTurtleVar {
+                context,
+                turtle: agent,
+                var: TurtleVarDesc::Pos,
+            }))
+        }
+        MirTy::Abstract(NlAbstractTy::Patch) => {
+            program.nodes.insert(NodeKind::from(node::GetPatchVar {
+                context,
+                patch: agent,
+                var: PatchVarDesc::Pos,
+            }))
+        }
         _ => todo!("TODO(mvp) decompose in case of link or any"),
     };
 
     // add a node to construct a point from the x and y coordinates
-    let reference_pos = nodes.insert(NodeKind::from(node::PointConstructor { x, y }));
+    let reference_pos = program.nodes.insert(NodeKind::from(node::PointConstructor { x, y }));
 
     // calculate the distance between the two points
-    nodes[my_node_id] =
+    program.nodes[my_node_id] =
         NodeKind::from(node::EuclideanDistanceNoWrap { a: agent_pos, b: reference_pos });
 
     true

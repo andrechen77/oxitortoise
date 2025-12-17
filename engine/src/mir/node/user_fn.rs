@@ -26,7 +26,7 @@ impl Node for CallUserFn {
     }
 
     fn output_type(&self, program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
-        program.functions[self.target].borrow().return_ty.clone()
+        program.functions[self.target].return_ty.clone()
     }
 
     fn write_lir_execution(

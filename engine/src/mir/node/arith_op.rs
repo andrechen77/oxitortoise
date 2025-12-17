@@ -79,18 +79,20 @@ impl Node for BinaryOperation {
         _my_node_id: NodeId,
     ) -> Option<NodeTransform> {
         fn decompose_with_check_nobody(
-            program: &Program,
+            program: &mut Program,
             fn_id: FunctionId,
             my_node_id: NodeId,
         ) -> bool {
-            let function = program.functions[fn_id].borrow();
-            let mut nodes = function.nodes.borrow_mut();
+            let &NodeKind::BinaryOperation(BinaryOperation { context, op, lhs, rhs }) =
+                &program.nodes[my_node_id]
+            else {
+                return false;
+            };
 
-            let &BinaryOperation { context, op, lhs, rhs } =
-                (&nodes[my_node_id]).try_into().unwrap();
-
-            let lhs_type = nodes[lhs].output_type(program, &function, &nodes);
-            let rhs_type = nodes[rhs].output_type(program, &function, &nodes);
+            let lhs_type =
+                program.nodes[lhs].output_type(program, &program.functions[fn_id], &program.nodes);
+            let rhs_type =
+                program.nodes[rhs].output_type(program, &program.functions[fn_id], &program.nodes);
 
             // expect that the operation is either Eq or Neq
             let negate = match op {
@@ -106,7 +108,7 @@ impl Node for BinaryOperation {
                 _ => return false,
             };
 
-            nodes[my_node_id] =
+            program.nodes[my_node_id] =
                 NodeKind::from(node::CheckNobody { context, agent: operand, negate });
 
             true

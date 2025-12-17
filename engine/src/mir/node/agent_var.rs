@@ -4,7 +4,6 @@ use std::mem::offset_of;
 
 use derive_more::derive::Display;
 use lir::smallvec::smallvec;
-use slotmap::SlotMap;
 
 use crate::{
     exec::CanonExecutionContext,
@@ -51,25 +50,24 @@ impl Node for GetGlobalVar {
         _fn_id: FunctionId,
         _my_node_id: NodeId,
     ) -> Option<NodeTransform> {
-        fn lower_get_global_var(program: &Program, fn_id: FunctionId, my_node_id: NodeId) -> bool {
-            let function = program.functions[fn_id].borrow();
-            let NodeKind::GetGlobalVar(my_node) = function.nodes.borrow()[my_node_id] else {
-                panic!("expected node to be a GetGlobalVar");
+        fn lower_get_global_var(
+            program: &mut Program,
+            fn_id: FunctionId,
+            my_node_id: NodeId,
+        ) -> bool {
+            let NodeKind::GetGlobalVar(my_node) = program.nodes[my_node_id] else {
+                return false;
             };
 
-            let (data_row, field_offset) = context_to_global_data(
-                &mut function.nodes.borrow_mut(),
-                program,
-                my_node.context,
-                my_node.index,
-            );
+            let (data_row, field_offset) =
+                context_to_global_data(program, my_node.context, my_node.index);
 
             let field = NodeKind::from(node::MemLoad {
                 ptr: data_row,
                 offset: field_offset,
-                ty: my_node.output_type(program, &function, &function.nodes.borrow()).repr(),
+                ty: my_node.output_type(program, &program.functions[fn_id], &program.nodes).repr(),
             });
-            function.nodes.borrow_mut()[my_node_id] = field;
+            program.nodes[my_node_id] = field;
             true
         }
 
@@ -77,23 +75,18 @@ impl Node for GetGlobalVar {
     }
 }
 
-fn context_to_global_data(
-    nodes: &mut SlotMap<NodeId, NodeKind>,
-    program: &Program,
-    context: NodeId,
-    var: usize,
-) -> (NodeId, usize) {
+fn context_to_global_data(program: &mut Program, context: NodeId, var: usize) -> (NodeId, usize) {
     let addr = calc_global_addr(program, var);
 
     // insert a node that gets the workspace pointer
-    let workspace_ptr = nodes.insert(NodeKind::from(node::MemLoad {
+    let workspace_ptr = program.nodes.insert(NodeKind::from(node::MemLoad {
         ptr: context,
         offset: offset_of!(CanonExecutionContext, workspace),
         ty: <*mut u8 as Reflect>::CONCRETE_TY,
     }));
 
     // insert a node that gets the row buffer
-    let globals = nodes.insert(NodeKind::from(node::MemLoad {
+    let globals = program.nodes.insert(NodeKind::from(node::MemLoad {
         ptr: workspace_ptr,
         offset: offset_of!(Workspace, world) + addr.buffer_offset,
         ty: <*mut u8 as Reflect>::CONCRETE_TY,
@@ -142,27 +135,25 @@ impl Node for GetTurtleVar {
         _fn_id: FunctionId,
         _my_node_id: NodeId,
     ) -> Option<NodeTransform> {
-        fn lower_get_turtle_var(program: &Program, fn_id: FunctionId, my_node_id: NodeId) -> bool {
-            let function = program.functions[fn_id].borrow();
-            let NodeKind::GetTurtleVar(my_node) = function.nodes.borrow()[my_node_id] else {
-                panic!("expected node to be a GetTurtleVar");
+        fn lower_get_turtle_var(
+            program: &mut Program,
+            fn_id: FunctionId,
+            my_node_id: NodeId,
+        ) -> bool {
+            let NodeKind::GetTurtleVar(my_node) = program.nodes[my_node_id] else {
+                return false;
             };
 
-            let (data_row, field_offset) = context_to_turtle_data(
-                &mut function.nodes.borrow_mut(),
-                program,
-                my_node.context,
-                my_node.turtle,
-                my_node.var,
-            );
+            let (data_row, field_offset) =
+                context_to_turtle_data(program, my_node.context, my_node.turtle, my_node.var);
 
             // create a node to get the field
             let field = NodeKind::from(node::MemLoad {
                 ptr: data_row,
                 offset: field_offset,
-                ty: my_node.output_type(program, &function, &function.nodes.borrow()).repr(),
+                ty: my_node.output_type(program, &program.functions[fn_id], &program.nodes).repr(),
             });
-            function.nodes.borrow_mut()[my_node_id] = field;
+            program.nodes[my_node_id] = field;
             true
         }
 
@@ -201,19 +192,17 @@ impl Node for SetTurtleVar {
         _fn_id: FunctionId,
         _my_node_id: NodeId,
     ) -> Option<NodeTransform> {
-        fn lower_set_turtle_var(program: &Program, fn_id: FunctionId, my_node_id: NodeId) -> bool {
-            let function = program.functions[fn_id].borrow();
-            let NodeKind::SetTurtleVar(my_node) = function.nodes.borrow()[my_node_id] else {
-                panic!("expected node to be a SetTurtleVar");
+        fn lower_set_turtle_var(
+            program: &mut Program,
+            _fn_id: FunctionId,
+            my_node_id: NodeId,
+        ) -> bool {
+            let NodeKind::SetTurtleVar(my_node) = program.nodes[my_node_id] else {
+                return false;
             };
 
-            let (data_row, field_offset) = context_to_turtle_data(
-                &mut function.nodes.borrow_mut(),
-                program,
-                my_node.context,
-                my_node.turtle,
-                my_node.var,
-            );
+            let (data_row, field_offset) =
+                context_to_turtle_data(program, my_node.context, my_node.turtle, my_node.var);
 
             // create a node to set the field
             let field = NodeKind::from(node::MemStore {
@@ -221,7 +210,7 @@ impl Node for SetTurtleVar {
                 offset: field_offset,
                 value: my_node.value,
             });
-            function.nodes.borrow_mut()[my_node_id] = field;
+            program.nodes[my_node_id] = field;
             true
         }
 
@@ -234,8 +223,7 @@ impl Node for SetTurtleVar {
 /// as the byte offset of the field within the data row. This is used by both
 /// loads and stores.
 fn context_to_turtle_data(
-    nodes: &mut SlotMap<NodeId, NodeKind>,
-    program: &Program,
+    program: &mut Program,
     context: NodeId,
     turtle_id: NodeId,
     var: TurtleVarDesc,
@@ -244,24 +232,24 @@ fn context_to_turtle_data(
         calc_turtle_var_offset(program, var);
 
     // insert a node that gets the workspace pointer
-    let workspace_ptr = nodes.insert(NodeKind::from(node::MemLoad {
+    let workspace_ptr = program.nodes.insert(NodeKind::from(node::MemLoad {
         ptr: context,
         offset: offset_of!(CanonExecutionContext, workspace),
         ty: <*mut u8 as Reflect>::CONCRETE_TY,
     }));
 
     // insert a node that gets the row buffer
-    let row_buffer = nodes.insert(NodeKind::from(node::MemLoad {
+    let row_buffer = program.nodes.insert(NodeKind::from(node::MemLoad {
         ptr: workspace_ptr,
         offset: offset_of!(Workspace, world) + buffer_offset,
         ty: <*mut u8 as Reflect>::CONCRETE_TY,
     }));
 
     // insert a node that gets the agent index
-    let turtle_idx = nodes.insert(NodeKind::from(node::TurtleIdToIndex { turtle_id }));
+    let turtle_idx = program.nodes.insert(NodeKind::from(node::TurtleIdToIndex { turtle_id }));
 
     // insert a node that gets the right data row
-    let data_row = nodes.insert(NodeKind::from(node::DeriveElement {
+    let data_row = program.nodes.insert(NodeKind::from(node::DeriveElement {
         ptr: row_buffer,
         index: turtle_idx,
         stride,
@@ -345,28 +333,25 @@ impl Node for GetPatchVar {
         _fn_id: FunctionId,
         _my_node_id: NodeId,
     ) -> Option<NodeTransform> {
-        fn lower_get_patch_var(program: &Program, fn_id: FunctionId, my_node_id: NodeId) -> bool {
-            let function = program.functions[fn_id].borrow();
-            let NodeKind::GetPatchVar(my_node) = function.nodes.borrow()[my_node_id] else {
-                panic!("expected node to be a GetPatchVar");
+        fn lower_get_patch_var(
+            program: &mut Program,
+            fn_id: FunctionId,
+            my_node_id: NodeId,
+        ) -> bool {
+            let NodeKind::GetPatchVar(my_node) = program.nodes[my_node_id] else {
+                return false;
             };
             let GetPatchVar { context, patch, var } = my_node;
 
-            let (data_row, field_offset) = context_to_patch_data(
-                &mut function.nodes.borrow_mut(),
-                program,
-                context,
-                patch,
-                var,
-            );
+            let (data_row, field_offset) = context_to_patch_data(program, context, patch, var);
 
             // create a node to get the field
             let field = NodeKind::from(node::MemLoad {
                 ptr: data_row,
                 offset: field_offset,
-                ty: my_node.output_type(program, &function, &function.nodes.borrow()).repr(),
+                ty: my_node.output_type(program, &program.functions[fn_id], &program.nodes).repr(),
             });
-            function.nodes.borrow_mut()[my_node_id] = field;
+            program.nodes[my_node_id] = field;
 
             true
         }
@@ -406,26 +391,23 @@ impl Node for SetPatchVar {
         _fn_id: FunctionId,
         _my_node_id: NodeId,
     ) -> Option<NodeTransform> {
-        fn lower_set_patch_var(program: &Program, fn_id: FunctionId, my_node_id: NodeId) -> bool {
-            let function = program.functions[fn_id].borrow();
+        fn lower_set_patch_var(
+            program: &mut Program,
+            _fn_id: FunctionId,
+            my_node_id: NodeId,
+        ) -> bool {
             let NodeKind::SetPatchVar(SetPatchVar { context, patch, var, value }) =
-                function.nodes.borrow()[my_node_id]
+                program.nodes[my_node_id]
             else {
-                panic!("expected node to be a SetPatchVar");
+                return false;
             };
 
-            let (data_row, field_offset) = context_to_patch_data(
-                &mut function.nodes.borrow_mut(),
-                program,
-                context,
-                patch,
-                var,
-            );
+            let (data_row, field_offset) = context_to_patch_data(program, context, patch, var);
 
             // create a node to set the field
             let field =
                 NodeKind::from(node::MemStore { ptr: data_row, offset: field_offset, value });
-            function.nodes.borrow_mut()[my_node_id] = field;
+            program.nodes[my_node_id] = field;
             true
         }
 
@@ -437,33 +419,32 @@ impl Node for SetPatchVar {
 /// the NodeId of the node that outputs the pointer to data row, as well as the byte
 /// offset of the field within the data row. This is used by both loads and stores.
 fn context_to_patch_data(
-    nodes: &mut SlotMap<NodeId, NodeKind>,
-    mir: &Program,
+    program: &mut Program,
     context: NodeId,
     patch_id: NodeId,
     var: PatchVarDesc,
 ) -> (NodeId, usize) {
-    let (buffer_offset, stride, field_offset) = calc_patch_var_offset(mir, var);
+    let (buffer_offset, stride, field_offset) = calc_patch_var_offset(program, var);
 
     // insert a node that gets the workspace pointer
-    let workspace_ptr = nodes.insert(NodeKind::from(node::MemLoad {
+    let workspace_ptr = program.nodes.insert(NodeKind::from(node::MemLoad {
         ptr: context,
         offset: offset_of!(CanonExecutionContext, workspace),
         ty: <*mut u8 as Reflect>::CONCRETE_TY,
     }));
 
     // insert a node that gets the row buffer
-    let row_buffer = nodes.insert(NodeKind::from(node::MemLoad {
+    let row_buffer = program.nodes.insert(NodeKind::from(node::MemLoad {
         ptr: workspace_ptr,
         offset: offset_of!(Workspace, world) + buffer_offset,
         ty: <*mut u8 as Reflect>::CONCRETE_TY,
     }));
 
     // insert a node that gets the agent index
-    // let patch_idx = nodes.insert(Box::new(node::PatchIdToIndex { patch_id }));
+    // let patch_idx = program.nodes.insert(Box::new(node::PatchIdToIndex { patch_id }));
 
     // insert a node that gets the right data row
-    let data_row = nodes.insert(NodeKind::from(node::DeriveElement {
+    let data_row = program.nodes.insert(NodeKind::from(node::DeriveElement {
         ptr: row_buffer,
         index: patch_id,
         stride,
@@ -509,52 +490,59 @@ impl Node for GetPatchVarAsTurtleOrPatch {
         _fn_id: FunctionId,
         _my_node_id: NodeId,
     ) -> Option<NodeTransform> {
+        fn decompose_get_patch_var(
+            program: &mut Program,
+            fn_id: FunctionId,
+            my_node_id: NodeId,
+        ) -> bool {
+            let NodeKind::GetPatchVarAsTurtleOrPatch(GetPatchVarAsTurtleOrPatch {
+                context,
+                agent,
+                var,
+            }) = program.nodes[my_node_id]
+            else {
+                return false;
+            };
+
+            match program.nodes[agent].output_type(
+                program,
+                &program.functions[fn_id],
+                &program.nodes,
+            ) {
+                MirTy::Abstract(NlAbstractTy::Patch) => {
+                    program.nodes[my_node_id] =
+                        NodeKind::from(node::GetPatchVar { context, patch: agent, var });
+                    true
+                }
+                MirTy::Abstract(NlAbstractTy::Turtle) => {
+                    let xcor = program.nodes.insert(NodeKind::from(node::GetTurtleVar {
+                        context,
+                        turtle: agent,
+                        var: TurtleVarDesc::Xcor,
+                    }));
+
+                    let ycor = program.nodes.insert(NodeKind::from(node::GetTurtleVar {
+                        context,
+                        turtle: agent,
+                        var: TurtleVarDesc::Ycor,
+                    }));
+
+                    let patch_here = program.nodes.insert(NodeKind::from(node::PatchAt {
+                        context,
+                        x: xcor,
+                        y: ycor,
+                    }));
+
+                    program.nodes[my_node_id] =
+                        NodeKind::from(node::GetPatchVar { context, patch: patch_here, var });
+
+                    true
+                }
+                _ => false,
+            }
+        }
+
         Some(Box::new(decompose_get_patch_var))
-    }
-}
-
-fn decompose_get_patch_var(program: &Program, fn_id: FunctionId, my_node_id: NodeId) -> bool {
-    let function = program.functions[fn_id].borrow();
-    let nodes_borrowed = function.nodes.borrow();
-
-    let NodeKind::GetPatchVarAsTurtleOrPatch(GetPatchVarAsTurtleOrPatch { context, agent, var }) =
-        nodes_borrowed[my_node_id]
-    else {
-        panic!("expected node to be a GetPatchVarAsTurtleOrPatch");
-    };
-
-    match nodes_borrowed[agent].output_type(program, &function, &nodes_borrowed) {
-        MirTy::Abstract(NlAbstractTy::Patch) => {
-            drop(nodes_borrowed);
-            function.nodes.borrow_mut()[my_node_id] =
-                NodeKind::from(node::GetPatchVar { context, patch: agent, var });
-            true
-        }
-        MirTy::Abstract(NlAbstractTy::Turtle) => {
-            drop(nodes_borrowed);
-            let mut nodes = function.nodes.borrow_mut();
-
-            let xcor = nodes.insert(NodeKind::from(node::GetTurtleVar {
-                context,
-                turtle: agent,
-                var: TurtleVarDesc::Xcor,
-            }));
-
-            let ycor = nodes.insert(NodeKind::from(node::GetTurtleVar {
-                context,
-                turtle: agent,
-                var: TurtleVarDesc::Ycor,
-            }));
-
-            let patch_here =
-                nodes.insert(NodeKind::from(node::PatchAt { context, x: xcor, y: ycor }));
-
-            nodes[my_node_id] =
-                NodeKind::from(node::GetPatchVar { context, patch: patch_here, var });
-
-            true
-        }
-        _ => false,
     }
 }
 
@@ -595,36 +583,36 @@ impl Node for SetPatchVarAsTurtleOrPatch {
         let context = self.context;
         let var = self.var;
         let value = self.value;
-        let transform = move |program: &Program, fn_id: FunctionId, my_node_id: NodeId| {
-            let function = program.functions[fn_id].borrow();
-            let nodes_borrowed = function.nodes.borrow();
-            match nodes_borrowed[agent].output_type(program, &function, &nodes_borrowed) {
+        let transform =
+            move |program: &mut Program, fn_id: FunctionId, my_node_id: NodeId| match program.nodes
+                [agent]
+                .output_type(program, &program.functions[fn_id], &program.nodes)
+            {
                 MirTy::Abstract(NlAbstractTy::Patch) => {
-                    drop(nodes_borrowed);
-                    function.nodes.borrow_mut()[my_node_id] =
+                    program.nodes[my_node_id] =
                         NodeKind::from(node::SetPatchVar { context, patch: agent, var, value });
                     true
                 }
                 MirTy::Abstract(NlAbstractTy::Turtle) => {
-                    drop(nodes_borrowed);
-                    let mut nodes = function.nodes.borrow_mut();
-
-                    let xcor = nodes.insert(NodeKind::from(node::GetTurtleVar {
+                    let xcor = program.nodes.insert(NodeKind::from(node::GetTurtleVar {
                         context,
                         turtle: agent,
                         var: TurtleVarDesc::Xcor,
                     }));
 
-                    let ycor = nodes.insert(NodeKind::from(node::GetTurtleVar {
+                    let ycor = program.nodes.insert(NodeKind::from(node::GetTurtleVar {
                         context,
                         turtle: agent,
                         var: TurtleVarDesc::Ycor,
                     }));
 
-                    let patch_here =
-                        nodes.insert(NodeKind::from(node::PatchAt { context, x: xcor, y: ycor }));
+                    let patch_here = program.nodes.insert(NodeKind::from(node::PatchAt {
+                        context,
+                        x: xcor,
+                        y: ycor,
+                    }));
 
-                    nodes[my_node_id] = NodeKind::from(node::SetPatchVar {
+                    program.nodes[my_node_id] = NodeKind::from(node::SetPatchVar {
                         context,
                         patch: patch_here,
                         var,
@@ -634,8 +622,7 @@ impl Node for SetPatchVarAsTurtleOrPatch {
                     true
                 }
                 _ => false,
-            }
-        };
+            };
         Some(Box::new(transform))
     }
 }

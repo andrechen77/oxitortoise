@@ -1,6 +1,6 @@
 // TODO(doc) all of MIR
 
-use std::{cell::RefCell, rc::Rc};
+use std::rc::Rc;
 
 use ambassador::{Delegate, delegatable_trait};
 use derive_more::derive::{Display, From, TryInto};
@@ -20,7 +20,7 @@ use crate::{
 };
 
 mod build_lir;
-mod graphviz;
+pub mod graphviz;
 pub mod node;
 pub mod transforms;
 
@@ -32,7 +32,7 @@ new_key_type! {
     pub struct FunctionId;
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, derive_more::Debug)]
 pub struct Program {
     pub globals: Box<[CustomVarDecl]>,
     pub globals_schema: Option<GlobalsSchema>,
@@ -43,7 +43,16 @@ pub struct Program {
     pub custom_patch_vars: Vec<CustomVarDecl>,
     /// None if the patch schema has not been calculated yet.
     pub patch_schema: Option<PatchSchema>,
-    pub functions: SecondaryMap<FunctionId, RefCell<Function>>,
+    pub functions: SecondaryMap<FunctionId, Function>,
+    /// The set of all nodes in the program, where a "node" is some kind of
+    /// computation, as in sea-of-nodes. A node can only belong to a single
+    /// function at a time.
+    #[debug(skip)]
+    pub nodes: Nodes,
+    /// The set of all local variables in the program. A local variable can
+    /// only belong to a single function at a time.
+    #[debug(skip)]
+    pub locals: SlotMap<LocalId, LocalDeclaration>,
 }
 
 #[derive(Debug)]
@@ -61,16 +70,12 @@ pub struct Function {
     /// includes implicit parameters such as the closure environment, the
     /// context pointer, and the executing agent.
     pub parameters: Vec<LocalId>,
+    /// A list of all local variables in the function.
+    pub locals: Vec<LocalId>,
     pub return_ty: MirTy,
-    /// The set of all local variables used by the function.
-    pub locals: SlotMap<LocalId, LocalDeclaration>,
     /// The structured control flow of the function
     #[debug(skip)]
     pub cfg: StatementBlock,
-    /// The set of all nodes in the function, where a "node" is some kind of
-    /// computation, as in sea-of-nodes.
-    #[debug(skip)]
-    pub nodes: RefCell<Nodes>,
 }
 
 new_key_type! {
@@ -116,7 +121,7 @@ pub struct WriteLirError;
 /// A local transformation that can be applied to a node. The function
 /// returns `true` if the transformation was successfully applied, `false`
 /// otherwise.
-pub type NodeTransform = Box<dyn FnOnce(&Program, FunctionId, NodeId) -> bool>;
+pub type NodeTransform = Box<dyn FnOnce(&mut Program, FunctionId, NodeId) -> bool>;
 
 /// Some kind of computation that takes inputs and produces outputs. The output
 /// of a node is immutable, though may change between instances if the node is
@@ -363,39 +368,47 @@ impl ClosureType {
 }
 
 pub trait MirVisitor {
-    fn visit_statement(&mut self, statement: &StatementKind) {
+    fn visit_statement(&mut self, program: &Program, statement: &StatementKind) {
+        let _ = program;
         let _ = statement;
     }
 
-    fn visit_node(&mut self, node_id: NodeId) {
+    fn visit_node(&mut self, program: &Program, node_id: NodeId) {
+        let _ = program;
         let _ = node_id;
     }
 }
 
-pub fn visit_mir_function<V: MirVisitor>(visitor: &mut V, function: &Function) {
-    visit_statement_block_recursive(visitor, &function.cfg, &function.nodes);
+pub fn visit_mir_function<V: MirVisitor>(visitor: &mut V, program: &Program, fn_id: FunctionId) {
+    visit_statement_block_recursive(
+        visitor,
+        program,
+        &program.functions[fn_id].cfg,
+        &program.nodes,
+    );
 }
 
 fn visit_statement_block_recursive<V: MirVisitor>(
     visitor: &mut V,
+    program: &Program,
     statement_block: &StatementBlock,
-    nodes: &RefCell<Nodes>,
+    nodes: &Nodes,
 ) {
     for statement in &statement_block.statements {
-        visitor.visit_statement(statement);
+        visitor.visit_statement(program, statement);
         match statement {
-            StatementKind::Node(node_id) => visit_node_recursive(visitor, *node_id, nodes),
+            StatementKind::Node(node_id) => visit_node_recursive(visitor, program, *node_id, nodes),
             StatementKind::IfElse { condition, then_block, else_block } => {
-                visit_node_recursive(visitor, *condition, nodes);
-                visit_statement_block_recursive(visitor, then_block, nodes);
-                visit_statement_block_recursive(visitor, else_block, nodes);
+                visit_node_recursive(visitor, program, *condition, nodes);
+                visit_statement_block_recursive(visitor, program, then_block, nodes);
+                visit_statement_block_recursive(visitor, program, else_block, nodes);
             }
             StatementKind::Repeat { num_repetitions, block } => {
-                visit_node_recursive(visitor, *num_repetitions, nodes);
-                visit_statement_block_recursive(visitor, block, nodes);
+                visit_node_recursive(visitor, program, *num_repetitions, nodes);
+                visit_statement_block_recursive(visitor, program, block, nodes);
             }
             StatementKind::Return { value } => {
-                visit_node_recursive(visitor, *value, nodes);
+                visit_node_recursive(visitor, program, *value, nodes);
             }
             StatementKind::Stop => {
                 // do nothing
@@ -404,11 +417,16 @@ fn visit_statement_block_recursive<V: MirVisitor>(
     }
 }
 
-fn visit_node_recursive<V: MirVisitor>(visitor: &mut V, node_id: NodeId, nodes: &RefCell<Nodes>) {
-    visitor.visit_node(node_id);
+fn visit_node_recursive<V: MirVisitor>(
+    visitor: &mut V,
+    program: &Program,
+    node_id: NodeId,
+    nodes: &Nodes,
+) {
+    visitor.visit_node(program, node_id);
 
-    let dependencies = nodes.borrow()[node_id].dependencies();
+    let dependencies = nodes[node_id].dependencies();
     for dependency in dependencies {
-        visit_node_recursive(visitor, dependency, nodes);
+        visit_node_recursive(visitor, program, dependency, nodes);
     }
 }
