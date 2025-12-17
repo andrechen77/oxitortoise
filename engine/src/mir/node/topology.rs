@@ -8,8 +8,8 @@ use lir::smallvec::smallvec;
 use crate::{
     exec::{CanonExecutionContext, jit::host_fn},
     mir::{
-        Function, FunctionId, MirTy, NlAbstractTy, Node, NodeId, NodeKind, NodeTransform, Nodes,
-        Program, WriteLirError, build_lir::LirInsnBuilder, node,
+        FunctionId, MirTy, NlAbstractTy, Node, NodeId, NodeKind, NodeTransform, Program,
+        WriteLirError, build_lir::LirInsnBuilder, node,
     },
     sim::{
         topology::{OFFSET_TOPOLOGY_TO_MAX_PXCOR, OFFSET_TOPOLOGY_TO_MAX_PYCOR},
@@ -40,15 +40,13 @@ impl Node for OffsetDistanceByHeading {
         vec![self.position, self.amt, self.heading]
     }
 
-    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
+    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
         todo!("TODO(mvp) return Point type")
     }
 
     fn write_lir_execution(
         &self,
         _program: &Program,
-        _function: &Function,
-        _nodes: &Nodes,
         _my_node_id: NodeId,
         _lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
@@ -76,26 +74,23 @@ impl Node for PatchAt {
         vec![self.context, self.x, self.y]
     }
 
-    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
+    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
         MirTy::Abstract(NlAbstractTy::Patch)
     }
 
     fn write_lir_execution(
         &self,
         program: &Program,
-        function: &Function,
-        nodes: &Nodes,
         my_node_id: NodeId,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
-        let &[ctx_ptr] = lir_builder.get_node_results(program, function, nodes, self.context)
-        else {
+        let &[ctx_ptr] = lir_builder.get_node_results(program, self.context) else {
             panic!("expected node outputting context pointer to be a single LIR value")
         };
-        let &[x] = lir_builder.get_node_results(program, function, nodes, self.x) else {
+        let &[x] = lir_builder.get_node_results(program, self.x) else {
             panic!("expected node outputting x coordinate to be a single LIR value")
         };
-        let &[y] = lir_builder.get_node_results(program, function, nodes, self.y) else {
+        let &[y] = lir_builder.get_node_results(program, self.y) else {
             panic!("expected node outputting y coordinate to be a single LIR value")
         };
         let pc = lir_builder.push_lir_insn(lir::generate_host_function_call(
@@ -123,7 +118,7 @@ impl Node for MaxPxcor {
         vec![self.context]
     }
 
-    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
+    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
         MirTy::Abstract(NlAbstractTy::Float)
     }
 
@@ -180,7 +175,7 @@ impl Node for MaxPycor {
         vec![self.context]
     }
 
-    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
+    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
         MirTy::Abstract(NlAbstractTy::Float)
     }
 
@@ -239,21 +234,19 @@ impl Node for EuclideanDistanceNoWrap {
         vec![self.a, self.b]
     }
 
-    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
+    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
         MirTy::Abstract(NlAbstractTy::Float)
     }
 
     fn write_lir_execution(
         &self,
         program: &Program,
-        function: &Function,
-        nodes: &Nodes,
         my_node_id: NodeId,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
         let mut args = Vec::new();
-        args.extend(lir_builder.get_node_results(program, function, nodes, self.a));
-        args.extend(lir_builder.get_node_results(program, function, nodes, self.b));
+        args.extend(lir_builder.get_node_results(program, self.a));
+        args.extend(lir_builder.get_node_results(program, self.b));
 
         let pc = lir_builder.push_lir_insn(lir::generate_host_function_call(
             host_fn::EUCLIDEAN_DISTANCE_NO_WRAP,
@@ -281,24 +274,22 @@ impl Node for PointConstructor {
         vec![self.x, self.y]
     }
 
-    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
+    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
         MirTy::Abstract(NlAbstractTy::Point)
     }
 
     fn write_lir_execution(
         &self,
         program: &Program,
-        function: &Function,
-        nodes: &Nodes,
         my_node_id: NodeId,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
         // simply pass through the LIR values
         let Self { x, y } = self;
-        let &[x] = lir_builder.get_node_results(program, function, nodes, *x) else {
+        let &[x] = lir_builder.get_node_results(program, *x) else {
             panic!("expected x value to be a single LIR value");
         };
-        let &[y] = lir_builder.get_node_results(program, function, nodes, *y) else {
+        let &[y] = lir_builder.get_node_results(program, *y) else {
             panic!("expected y value to be a single LIR value");
         };
         lir_builder.node_to_lir.insert(my_node_id, smallvec![x, y]);

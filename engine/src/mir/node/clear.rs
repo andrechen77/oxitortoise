@@ -5,7 +5,7 @@ use derive_more::derive::Display;
 use crate::{
     exec::jit::host_fn,
     mir::{
-        Function, MirTy, NlAbstractTy, Node, NodeId, Nodes, Program, WriteLirError,
+        FunctionId, MirTy, NlAbstractTy, Node, NodeId, Program, WriteLirError,
         build_lir::LirInsnBuilder,
     },
 };
@@ -26,20 +26,17 @@ impl Node for ClearAll {
         vec![self.context]
     }
 
-    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
+    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
         MirTy::Abstract(NlAbstractTy::Unit)
     }
 
     fn write_lir_execution(
         &self,
         program: &Program,
-        function: &Function,
-        nodes: &Nodes,
         _my_node_id: NodeId,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
-        let &[ctx_ptr] = lir_builder.get_node_results(program, function, nodes, self.context)
-        else {
+        let &[ctx_ptr] = lir_builder.get_node_results(program, self.context) else {
             panic!("expected node outputting context pointer to be a single LIR value")
         };
         lir_builder.push_lir_insn(lir::generate_host_function_call(

@@ -97,11 +97,10 @@ fn extract_type_bindings(program: &mut Program, id: FunctionId) -> HashSet<Local
     }
 
     fn node_helper(nid: &NodeId, bc: &BC) -> Option<LocalVarTypeBinding> {
-        let binding = &bc.program.functions[bc.id];
         let nodes = &bc.program.nodes;
         match nodes[*nid] {
             NodeKind::SetLocalVar(SetLocalVar { local_id, value }) => {
-                let output_type = nodes[value].output_type(bc.program, binding, nodes);
+                let output_type = nodes[value].output_type(bc.program, bc.id);
                 if let Abstract(abs_type) = output_type {
                     Some(LocalVarTypeBinding(local_id, abs_type))
                 } else {
@@ -154,9 +153,7 @@ fn extract_report_types(program: &mut Program, id: FunctionId) -> HashSet<NlAbst
             Repeat { block, .. } =>
                 block_helper(block, bc),
             Return { value } => {
-                let binding = &bc.program.functions[bc.id];
-                let nodes = &bc.program.nodes;
-                let output_type = nodes[*value].output_type(bc.program, binding, nodes);
+                let output_type = bc.program.nodes[*value].output_type(bc.program, bc.id);
                 if let Abstract(typ) = output_type {
                     HashSet::from([typ])
                 } else {

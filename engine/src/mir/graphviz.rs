@@ -23,7 +23,7 @@ pub fn to_dot_string_with_options(
         nodes: HashSet<NodeId>,
     }
     impl MirVisitor for NodeCollectorVisitor {
-        fn visit_node(&mut self, _program: &Program, node_id: NodeId) {
+        fn visit_node(&mut self, _program: &Program, _fn_id: FunctionId, node_id: NodeId) {
             self.nodes.insert(node_id);
         }
     }

@@ -3,9 +3,9 @@
 use derive_more::derive::Display;
 
 use crate::mir::{
-    Function, MirTy,
+    FunctionId, MirTy,
     NlAbstractTy::{self, Patch, Turtle},
-    Node, NodeId, Nodes, Program, WriteLirError,
+    Node, NodeId, Program, WriteLirError,
     build_lir::LirInsnBuilder,
 };
 
@@ -30,7 +30,7 @@ impl Node for Agentset {
         }
     }
 
-    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
+    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
         let typ = match self {
             Agentset::AllTurtles => Turtle,
             Agentset::AllPatches => Patch,
@@ -41,8 +41,6 @@ impl Node for Agentset {
     fn write_lir_execution(
         &self,
         _program: &Program,
-        _function: &Function,
-        _nodes: &Nodes,
         _my_node_id: NodeId,
         _lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {

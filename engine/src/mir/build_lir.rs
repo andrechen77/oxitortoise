@@ -11,7 +11,7 @@ use lir::{
 use slotmap::{SecondaryMap, SlotMap};
 use tracing::{error, instrument, trace};
 
-use crate::mir::{self, Node, Nodes};
+use crate::mir::{self, Node};
 
 #[derive(Debug)]
 pub struct LirProgramBuilder {
@@ -85,6 +85,8 @@ fn translate_function_signature(
 #[derive(Debug)]
 pub struct LirInsnBuilder<'a> {
     pub program_builder: &'a LirProgramBuilder,
+    /// The MIR function ID being translated.
+    pub fn_id: mir::FunctionId,
     /// Maps MIR local variables to their LIR representations.
     pub local_to_lir: HashMap<mir::LocalId, LocalLocation>,
     /// Maps node ids to LIR values. This also doubles as a record of which
@@ -101,14 +103,12 @@ impl<'a> LirInsnBuilder<'a> {
     pub fn get_node_results(
         &mut self,
         program: &mir::Program,
-        function: &mir::Function,
-        nodes: &Nodes,
         node_id: mir::NodeId,
     ) -> &[lir::ValRef] {
         if !self.node_to_lir.contains_key(&node_id) {
-            let node = &nodes[node_id];
+            let node = &program.nodes[node_id];
             trace!("writing LIR execution for node {:?} {:?}", node_id, node);
-            node.write_lir_execution(program, function, nodes, node_id, self).unwrap_or_else(|e| {
+            node.write_lir_execution(program, node_id, self).unwrap_or_else(|e| {
                 error!("failed to translate node {:?} to LIR: {:?}", node_id, e);
             });
         }
@@ -216,6 +216,7 @@ fn translate_function_body(
     };
     let mut fn_builder = LirInsnBuilder {
         program_builder,
+        fn_id,
         node_to_lir: HashMap::new(),
         local_to_lir,
         product: lir_function,
@@ -238,7 +239,7 @@ fn translate_function_body(
             match stmt {
                 &mir::StatementKind::Node(node_id) => {
                     trace!("writing LIR execution for {:?} {:?}", node_id, nodes[node_id]);
-                    nodes[node_id].write_lir_execution(program, function, nodes, node_id, fn_builder).inspect_err(|_| {
+                    nodes[node_id].write_lir_execution(program, node_id, fn_builder).inspect_err(|_| {
                         error!("failed to translate node {:?} to LIR", nodes[node_id]);
                     }).expect(
                         "by the time we get to translating to LIR, all nodes should be able to convert to LIR",
@@ -255,9 +256,7 @@ fn translate_function_body(
                         translate_stmt_block(program, function, fn_builder, else_block)
                     });
 
-                    let &[condition] =
-                        fn_builder.get_node_results(program, function, nodes, *condition)
-                    else {
+                    let &[condition] = fn_builder.get_node_results(program, *condition) else {
                         panic!("a condition should evaluate to a single LIR value");
                     };
                     fn_builder.push_lir_insn(lir::InsnKind::IfElse(lir::IfElse {
@@ -280,9 +279,7 @@ fn translate_function_body(
                 mir::StatementKind::Return { value } => {
                     let break_insn = lir::InsnKind::Break {
                         target: fn_builder.insn_seqs[0],
-                        values: Box::from(
-                            fn_builder.get_node_results(program, function, nodes, *value),
-                        ),
+                        values: Box::from(fn_builder.get_node_results(program, *value)),
                     };
                     fn_builder.push_lir_insn(break_insn);
                 }

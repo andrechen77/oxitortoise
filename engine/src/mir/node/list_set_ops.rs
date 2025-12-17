@@ -6,7 +6,7 @@ use lir::smallvec::smallvec;
 use crate::{
     exec::jit::host_fn,
     mir::{
-        Function, MirTy, NlAbstractTy, Node, NodeId, Nodes, Program, WriteLirError,
+        FunctionId, MirTy, NlAbstractTy, Node, NodeId, Program, WriteLirError,
         build_lir::LirInsnBuilder,
     },
     sim::value::{NlBox, NlList},
@@ -29,8 +29,8 @@ impl Node for OneOf {
         vec![self.context, self.operand]
     }
 
-    fn output_type(&self, program: &Program, function: &Function, nodes: &Nodes) -> MirTy {
-        let out_type = match nodes[self.operand].output_type(program, function, nodes) {
+    fn output_type(&self, program: &Program, fn_id: FunctionId) -> MirTy {
+        let out_type = match program.nodes[self.operand].output_type(program, fn_id) {
             MirTy::Abstract(NlAbstractTy::Agentset { agent_type }) => agent_type,
             MirTy::Abstract(NlAbstractTy::List { element_ty }) => element_ty,
             x => panic!("Impossible argument type for `one-of`: {:?}", x),
@@ -43,20 +43,18 @@ impl Node for OneOf {
     fn write_lir_execution(
         &self,
         program: &Program,
-        function: &Function,
-        nodes: &Nodes,
         my_node_id: NodeId,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
-        let &[ctx] = lir_builder.get_node_results(program, function, nodes, self.context) else {
+        let &[ctx] = lir_builder.get_node_results(program, self.context) else {
             panic!("expected node outputting context pointer to be a single LIR value")
         };
-        let &[operand] = lir_builder.get_node_results(program, function, nodes, self.operand)
-        else {
+        let &[operand] = lir_builder.get_node_results(program, self.operand) else {
             panic!("expected node outputting list to be a single LIR value")
         };
 
-        let operand_type = nodes[self.operand].output_type(program, function, nodes).repr();
+        let operand_type =
+            program.nodes[self.operand].output_type(program, lir_builder.fn_id).repr();
 
         if operand_type == <NlBox<NlList>>::CONCRETE_TY {
             let insn =

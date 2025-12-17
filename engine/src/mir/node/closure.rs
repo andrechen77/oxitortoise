@@ -4,8 +4,8 @@ use derive_more::derive::Display;
 use lir::smallvec::smallvec;
 
 use crate::mir::{
-    ClosureType, Function, FunctionId, LocalId, MirTy, NlAbstractTy, Node, NodeId, Nodes, Program,
-    WriteLirError, build_lir::LirInsnBuilder,
+    ClosureType, FunctionId, LocalId, MirTy, NlAbstractTy, Node, NodeId, Program, WriteLirError,
+    build_lir::LirInsnBuilder,
 };
 
 #[derive(Debug, Display)]
@@ -27,7 +27,7 @@ impl Node for Closure {
         vec![]
     }
 
-    fn output_type(&self, program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
+    fn output_type(&self, program: &Program, _fn_id: FunctionId) -> MirTy {
         let body_arg = program.functions[self.body].parameters[ClosureType::PARAM_ARG_IDX];
         let arg_ty = program.locals[body_arg].ty.clone().unwrap_abstract();
         let return_ty = program.functions[self.body].return_ty.clone();
@@ -40,8 +40,6 @@ impl Node for Closure {
     fn write_lir_execution(
         &self,
         _program: &Program,
-        _function: &Function,
-        _nodes: &Nodes,
         my_node_id: NodeId,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {

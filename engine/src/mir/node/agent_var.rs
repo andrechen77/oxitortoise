@@ -8,8 +8,8 @@ use lir::smallvec::smallvec;
 use crate::{
     exec::CanonExecutionContext,
     mir::{
-        Function, FunctionId, MirTy, NlAbstractTy, Node, NodeId, NodeKind, NodeTransform, Nodes,
-        Program, WriteLirError, build_lir::LirInsnBuilder, node,
+        FunctionId, MirTy, NlAbstractTy, Node, NodeId, NodeKind, NodeTransform, Program,
+        WriteLirError, build_lir::LirInsnBuilder, node,
     },
     sim::{
         observer::calc_global_addr,
@@ -37,7 +37,7 @@ impl Node for GetGlobalVar {
         vec![self.context]
     }
 
-    fn output_type(&self, program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
+    fn output_type(&self, program: &Program, _fn_id: FunctionId) -> MirTy {
         let Some(var) = program.globals.get(self.index) else {
             panic!("Unknown global var index: {:?}", self.index);
         };
@@ -65,7 +65,7 @@ impl Node for GetGlobalVar {
             let field = NodeKind::from(node::MemLoad {
                 ptr: data_row,
                 offset: field_offset,
-                ty: my_node.output_type(program, &program.functions[fn_id], &program.nodes).repr(),
+                ty: my_node.output_type(program, fn_id).repr(),
             });
             program.nodes[my_node_id] = field;
             true
@@ -116,7 +116,7 @@ impl Node for GetTurtleVar {
         vec![self.context, self.turtle]
     }
 
-    fn output_type(&self, program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
+    fn output_type(&self, program: &Program, _fn_id: FunctionId) -> MirTy {
         // TODO(wishlist) this should probably be refactored into a function
         match self.var {
             TurtleVarDesc::Who => MirTy::Abstract(NlAbstractTy::Float),
@@ -151,7 +151,7 @@ impl Node for GetTurtleVar {
             let field = NodeKind::from(node::MemLoad {
                 ptr: data_row,
                 offset: field_offset,
-                ty: my_node.output_type(program, &program.functions[fn_id], &program.nodes).repr(),
+                ty: my_node.output_type(program, fn_id).repr(),
             });
             program.nodes[my_node_id] = field;
             true
@@ -182,7 +182,7 @@ impl Node for SetTurtleVar {
     fn dependencies(&self) -> Vec<NodeId> {
         vec![self.context, self.turtle, self.value]
     }
-    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
+    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
         MirTy::Abstract(NlAbstractTy::Unit)
     }
 
@@ -274,20 +274,17 @@ impl Node for TurtleIdToIndex {
         vec![self.turtle_id]
     }
 
-    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
+    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
         MirTy::Concrete(AGENT_INDEX_CONCRETE_TY)
     }
 
     fn write_lir_execution(
         &self,
         program: &Program,
-        function: &Function,
-        nodes: &Nodes,
         my_node_id: NodeId,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
-        let &[turtle_id] = lir_builder.get_node_results(program, function, nodes, self.turtle_id)
-        else {
+        let &[turtle_id] = lir_builder.get_node_results(program, self.turtle_id) else {
             panic!("expected node outputting turtle id to be a single LIR value");
         };
         let pc = lir_builder.push_lir_insn(lir::InsnKind::UnaryOp {
@@ -319,7 +316,7 @@ impl Node for GetPatchVar {
         vec![self.context, self.patch]
     }
 
-    fn output_type(&self, program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
+    fn output_type(&self, program: &Program, _fn_id: FunctionId) -> MirTy {
         match self.var {
             PatchVarDesc::Pcolor => MirTy::Abstract(NlAbstractTy::Color),
             PatchVarDesc::Pos => MirTy::Abstract(NlAbstractTy::Point),
@@ -349,7 +346,7 @@ impl Node for GetPatchVar {
             let field = NodeKind::from(node::MemLoad {
                 ptr: data_row,
                 offset: field_offset,
-                ty: my_node.output_type(program, &program.functions[fn_id], &program.nodes).repr(),
+                ty: my_node.output_type(program, fn_id).repr(),
             });
             program.nodes[my_node_id] = field;
 
@@ -381,7 +378,7 @@ impl Node for SetPatchVar {
         vec![self.context, self.patch, self.value]
     }
 
-    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
+    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
         MirTy::Abstract(NlAbstractTy::Unit)
     }
 
@@ -475,7 +472,7 @@ impl Node for GetPatchVarAsTurtleOrPatch {
         vec![self.context, self.agent]
     }
 
-    fn output_type(&self, program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
+    fn output_type(&self, program: &Program, _fn_id: FunctionId) -> MirTy {
         // TODO(wishlist) refactor to deduplicate with GetPatchVar
         match self.var {
             PatchVarDesc::Pcolor => MirTy::Abstract(NlAbstractTy::Color),
@@ -504,11 +501,7 @@ impl Node for GetPatchVarAsTurtleOrPatch {
                 return false;
             };
 
-            match program.nodes[agent].output_type(
-                program,
-                &program.functions[fn_id],
-                &program.nodes,
-            ) {
+            match program.nodes[agent].output_type(program, fn_id) {
                 MirTy::Abstract(NlAbstractTy::Patch) => {
                     program.nodes[my_node_id] =
                         NodeKind::from(node::GetPatchVar { context, patch: agent, var });
@@ -569,7 +562,7 @@ impl Node for SetPatchVarAsTurtleOrPatch {
         vec![self.context, self.agent, self.value]
     }
 
-    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
+    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
         MirTy::Abstract(NlAbstractTy::Unit)
     }
 
@@ -586,7 +579,7 @@ impl Node for SetPatchVarAsTurtleOrPatch {
         let transform =
             move |program: &mut Program, fn_id: FunctionId, my_node_id: NodeId| match program.nodes
                 [agent]
-                .output_type(program, &program.functions[fn_id], &program.nodes)
+                .output_type(program, fn_id)
             {
                 MirTy::Abstract(NlAbstractTy::Patch) => {
                     program.nodes[my_node_id] =

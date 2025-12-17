@@ -2,8 +2,8 @@ use derive_more::derive::Display;
 use tracing::trace;
 
 use crate::mir::{
-    ClosureType, Function, FunctionId, LocalId, MirTy, MirVisitor, Node, NodeId, NodeKind,
-    NodeTransform, Nodes, Program, visit_mir_function,
+    ClosureType, FunctionId, LocalId, MirTy, MirVisitor, Node, NodeId, NodeKind, NodeTransform,
+    Program, visit_mir_function,
 };
 
 #[derive(Debug, Display)]
@@ -19,7 +19,7 @@ impl Node for Placeholder {
         panic!()
     }
 
-    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
+    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
         panic!()
     }
 
@@ -39,7 +39,7 @@ pub fn lower(program: &mut Program, fn_id: FunctionId) {
         fn_id: FunctionId,
     }
     impl MirVisitor for Visitor {
-        fn visit_node(&mut self, program: &Program, node_id: NodeId) {
+        fn visit_node(&mut self, program: &Program, _fn_id: FunctionId, node_id: NodeId) {
             let node = &program.nodes[node_id];
 
             trace!("Visiting node {:?}", node);
@@ -66,7 +66,7 @@ pub fn peephole_transform(program: &mut Program, fn_id: FunctionId) {
         fn_id: FunctionId,
     }
     impl MirVisitor for Visitor {
-        fn visit_node(&mut self, program: &Program, node_id: NodeId) {
+        fn visit_node(&mut self, program: &Program, _fn_id: FunctionId, node_id: NodeId) {
             let node = &program.nodes[node_id];
 
             trace!("Visiting node {:?}", node);
@@ -98,11 +98,10 @@ pub fn peephole_transform(program: &mut Program, fn_id: FunctionId) {
 // passed to the closure.
 pub fn optimize_of_agent_type(program: &mut Program, fn_id: FunctionId) {
     struct Visitor {
-        fn_id: FunctionId,
         type_changes: Vec<(LocalId, MirTy)>,
     }
     impl MirVisitor for Visitor {
-        fn visit_node(&mut self, program: &Program, node_id: NodeId) {
+        fn visit_node(&mut self, program: &Program, fn_id: FunctionId, node_id: NodeId) {
             let node = &program.nodes[node_id];
 
             if let NodeKind::Of(of) = &node {
@@ -117,14 +116,12 @@ pub fn optimize_of_agent_type(program: &mut Program, fn_id: FunctionId) {
                 let self_param_id =
                     program.functions[closure.body].parameters[ClosureType::PARAM_ARG_IDX];
 
-                let ty = recipients
-                    .output_type(program, &program.functions[self.fn_id], &program.nodes)
-                    .clone();
+                let ty = recipients.output_type(program, fn_id).clone();
                 self.type_changes.push((self_param_id, ty));
             }
         }
     }
-    let mut visitor = Visitor { type_changes: Vec::new(), fn_id };
+    let mut visitor = Visitor { type_changes: Vec::new() };
     visit_mir_function(&mut visitor, program, fn_id);
 
     // apply the changes to the local variables

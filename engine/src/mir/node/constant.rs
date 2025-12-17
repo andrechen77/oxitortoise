@@ -6,7 +6,7 @@ use lir::smallvec::smallvec;
 use crate::{
     exec::jit::host_fn,
     mir::{
-        Function, MirTy, NlAbstractTy, Node, NodeId, Nodes, Program, WriteLirError,
+        FunctionId, MirTy, NlAbstractTy, Node, NodeId, Program, WriteLirError,
         build_lir::LirInsnBuilder,
     },
     sim::value::UnpackedDynBox,
@@ -27,7 +27,7 @@ impl Node for Constant {
         vec![]
     }
 
-    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
+    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
         MirTy::Abstract(match self.value {
             UnpackedDynBox::Float(_) => NlAbstractTy::Float,
             UnpackedDynBox::Bool(_) => NlAbstractTy::Boolean,
@@ -39,8 +39,6 @@ impl Node for Constant {
     fn write_lir_execution(
         &self,
         _program: &Program,
-        _function: &Function,
-        _nodes: &Nodes,
         my_node_id: NodeId,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
@@ -74,15 +72,13 @@ impl Node for ListLiteral {
         self.items.clone()
     }
 
-    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
+    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
         MirTy::Abstract(NlAbstractTy::List { element_ty: Box::new(NlAbstractTy::Top) })
     }
 
     fn write_lir_execution(
         &self,
         program: &Program,
-        function: &Function,
-        nodes: &Nodes,
         my_node_id: NodeId,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
@@ -96,7 +92,7 @@ impl Node for ListLiteral {
 
         // insert instructions to push elements to the list
         for item in &self.items {
-            let &[item] = lir_builder.get_node_results(program, function, nodes, *item) else {
+            let &[item] = lir_builder.get_node_results(program, *item) else {
                 todo!("TODO(mvp) handle multi-register values");
             };
             let pc_push = lir_builder.push_lir_insn(lir::generate_host_function_call(

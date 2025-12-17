@@ -5,7 +5,7 @@ use derive_more::derive::Display;
 use crate::{
     exec::jit::host_fn,
     mir::{
-        Function, MirTy, NlAbstractTy, Node, NodeId, Nodes, Program, WriteLirError,
+        FunctionId, MirTy, NlAbstractTy, Node, NodeId, Program, WriteLirError,
         build_lir::LirInsnBuilder,
     },
     sim::patch::PatchVarDesc,
@@ -31,19 +31,17 @@ impl Node for Diffuse {
         vec![self.context, self.amt]
     }
 
-    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
+    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
         MirTy::Abstract(NlAbstractTy::Unit)
     }
 
     fn write_lir_execution(
         &self,
         program: &Program,
-        function: &Function,
-        nodes: &Nodes,
         _my_node_id: NodeId,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
-        let &[ctx] = lir_builder.get_node_results(program, function, nodes, self.context) else {
+        let &[ctx] = lir_builder.get_node_results(program, self.context) else {
             panic!("expected node outputting context pointer to be a single LIR value")
         };
 
@@ -58,7 +56,7 @@ impl Node for Diffuse {
             value: field_desc.to_u16() as u64,
         }));
 
-        let &[amt] = lir_builder.get_node_results(program, function, nodes, self.amt) else {
+        let &[amt] = lir_builder.get_node_results(program, self.amt) else {
             panic!("expected node outputting amt to be a single LIR value")
         };
 

@@ -4,7 +4,7 @@ use derive_more::derive::Display;
 use lir::smallvec::smallvec;
 
 use crate::mir::{
-    Function, LocalId, MirTy, NlAbstractTy, Node, NodeId, Nodes, Program, WriteLirError,
+    FunctionId, LocalId, MirTy, NlAbstractTy, Node, NodeId, Program, WriteLirError,
     build_lir::{LirInsnBuilder, LocalLocation},
 };
 
@@ -24,15 +24,13 @@ impl Node for GetLocalVar {
         vec![]
     }
 
-    fn output_type(&self, program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
+    fn output_type(&self, program: &Program, _fn_id: FunctionId) -> MirTy {
         program.locals[self.local_id].ty.clone()
     }
 
     fn write_lir_execution(
         &self,
         _program: &Program,
-        _function: &Function,
-        _nodes: &Nodes,
         my_node_id: NodeId,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
@@ -70,15 +68,13 @@ impl Node for SetLocalVar {
         vec![self.value]
     }
 
-    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
+    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
         MirTy::Abstract(NlAbstractTy::Unit)
     }
 
     fn write_lir_execution(
         &self,
         program: &Program,
-        function: &Function,
-        nodes: &Nodes,
         _my_node_id: NodeId,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
@@ -99,9 +95,7 @@ impl Node for SetLocalVar {
         // });
         let local_location = lir_builder.local_to_lir[&self.local_id];
 
-        let &[value] = lir_builder.get_node_results(program, function, nodes, self.value) else {
-            todo!()
-        };
+        let &[value] = lir_builder.get_node_results(program, self.value) else { todo!() };
 
         match local_location {
             LocalLocation::Stack { offset: _ } => {

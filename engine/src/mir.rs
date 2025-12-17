@@ -136,7 +136,7 @@ pub trait Node {
 
     /// For certain low level nodes it doesn't make sense to have an abstract
     /// output type; those should return `None`.
-    fn output_type(&self, program: &Program, function: &Function, nodes: &Nodes) -> MirTy;
+    fn output_type(&self, program: &Program, fn_id: FunctionId) -> MirTy;
 
     /// Returns a possible local transformation that could apply to this node.
     /// This can return at most one transformation, even if multiple are
@@ -187,14 +187,10 @@ pub trait Node {
     fn write_lir_execution(
         &self,
         program: &Program,
-        function: &Function,
-        nodes: &Nodes,
         my_node_id: NodeId,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
         let _ = program;
-        let _ = function;
-        let _ = nodes;
         let _ = my_node_id;
         let _ = lir_builder;
         Err(WriteLirError)
@@ -373,42 +369,40 @@ pub trait MirVisitor {
         let _ = statement;
     }
 
-    fn visit_node(&mut self, program: &Program, node_id: NodeId) {
+    fn visit_node(&mut self, program: &Program, fn_id: FunctionId, node_id: NodeId) {
         let _ = program;
+        let _ = fn_id;
         let _ = node_id;
     }
 }
 
 pub fn visit_mir_function<V: MirVisitor>(visitor: &mut V, program: &Program, fn_id: FunctionId) {
-    visit_statement_block_recursive(
-        visitor,
-        program,
-        &program.functions[fn_id].cfg,
-        &program.nodes,
-    );
+    visit_statement_block_recursive(visitor, program, fn_id, &program.functions[fn_id].cfg);
 }
 
 fn visit_statement_block_recursive<V: MirVisitor>(
     visitor: &mut V,
     program: &Program,
+    fn_id: FunctionId,
     statement_block: &StatementBlock,
-    nodes: &Nodes,
 ) {
     for statement in &statement_block.statements {
         visitor.visit_statement(program, statement);
         match statement {
-            StatementKind::Node(node_id) => visit_node_recursive(visitor, program, *node_id, nodes),
+            StatementKind::Node(node_id) => {
+                visit_node_recursive(visitor, program, fn_id, *node_id);
+            }
             StatementKind::IfElse { condition, then_block, else_block } => {
-                visit_node_recursive(visitor, program, *condition, nodes);
-                visit_statement_block_recursive(visitor, program, then_block, nodes);
-                visit_statement_block_recursive(visitor, program, else_block, nodes);
+                visit_node_recursive(visitor, program, fn_id, *condition);
+                visit_statement_block_recursive(visitor, program, fn_id, then_block);
+                visit_statement_block_recursive(visitor, program, fn_id, else_block);
             }
             StatementKind::Repeat { num_repetitions, block } => {
-                visit_node_recursive(visitor, program, *num_repetitions, nodes);
-                visit_statement_block_recursive(visitor, program, block, nodes);
+                visit_node_recursive(visitor, program, fn_id, *num_repetitions);
+                visit_statement_block_recursive(visitor, program, fn_id, block);
             }
             StatementKind::Return { value } => {
-                visit_node_recursive(visitor, program, *value, nodes);
+                visit_node_recursive(visitor, program, fn_id, *value);
             }
             StatementKind::Stop => {
                 // do nothing
@@ -420,13 +414,13 @@ fn visit_statement_block_recursive<V: MirVisitor>(
 fn visit_node_recursive<V: MirVisitor>(
     visitor: &mut V,
     program: &Program,
+    fn_id: FunctionId,
     node_id: NodeId,
-    nodes: &Nodes,
 ) {
-    visitor.visit_node(program, node_id);
+    visitor.visit_node(program, fn_id, node_id);
 
-    let dependencies = nodes[node_id].dependencies();
+    let dependencies = program.nodes[node_id].dependencies();
     for dependency in dependencies {
-        visit_node_recursive(visitor, program, dependency, nodes);
+        visit_node_recursive(visitor, program, fn_id, dependency);
     }
 }

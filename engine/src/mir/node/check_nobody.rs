@@ -3,7 +3,7 @@ use lir::smallvec::smallvec;
 
 use crate::{
     mir::{
-        Function, MirTy, NlAbstractTy, Node, NodeId, Nodes, Program, WriteLirError,
+        FunctionId, MirTy, NlAbstractTy, Node, NodeId, Program, WriteLirError,
         build_lir::LirInsnBuilder,
     },
     sim::patch::OptionPatchId,
@@ -27,22 +27,20 @@ impl Node for CheckNobody {
         vec![self.context, self.agent]
     }
 
-    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
+    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
         MirTy::Abstract(NlAbstractTy::Boolean)
     }
 
     fn write_lir_execution(
         &self,
         program: &Program,
-        function: &Function,
-        nodes: &Nodes,
         my_node_id: NodeId,
+
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
-        let operand_type = nodes[self.agent].output_type(program, function, nodes).repr();
+        let operand_type = program.nodes[self.agent].output_type(program, lir_builder.fn_id).repr();
         if operand_type == OptionPatchId::CONCRETE_TY {
-            let &[agent] = lir_builder.get_node_results(program, function, nodes, self.agent)
-            else {
+            let &[agent] = lir_builder.get_node_results(program, self.agent) else {
                 panic!("expected a node that outputs a patch ID to be a single LIR register");
             };
 

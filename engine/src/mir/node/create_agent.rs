@@ -7,7 +7,7 @@ use slotmap::Key as _;
 use crate::{
     exec::jit::host_fn,
     mir::{
-        Function, MirTy, NlAbstractTy, Node, NodeId, Nodes, Program, WriteLirError,
+        FunctionId, MirTy, NlAbstractTy, Node, NodeId, Program, WriteLirError,
         build_lir::LirInsnBuilder,
     },
     sim::turtle::BreedId,
@@ -35,33 +35,27 @@ impl Node for CreateTurtles {
         vec![self.context, self.num_turtles, self.body]
     }
 
-    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
+    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
         MirTy::Abstract(NlAbstractTy::Unit)
     }
 
     fn write_lir_execution(
         &self,
         program: &Program,
-        function: &Function,
-        nodes: &Nodes,
         my_node_id: NodeId,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
-        let &[ctx_ptr] = lir_builder.get_node_results(program, function, nodes, self.context)
-        else {
+        let &[ctx_ptr] = lir_builder.get_node_results(program, self.context) else {
             panic!("expected node outputting context pointer to be a single LIR value")
         };
         let breed_id = lir_builder.push_lir_insn(lir::InsnKind::Const(lir::Const {
             ty: lir::ValType::I64,
             value: self.breed.data().as_ffi(),
         }));
-        let &[num_turtles] =
-            lir_builder.get_node_results(program, function, nodes, self.num_turtles)
-        else {
+        let &[num_turtles] = lir_builder.get_node_results(program, self.num_turtles) else {
             panic!("expected node outputting number of turtles to be a single LIR value")
         };
-        let &[env_ptr, fn_ptr] = lir_builder.get_node_results(program, function, nodes, self.body)
-        else {
+        let &[env_ptr, fn_ptr] = lir_builder.get_node_results(program, self.body) else {
             panic!("expected node outputting closure body to be two LIR values");
         };
         let pc = lir_builder.push_lir_insn(lir::generate_host_function_call(

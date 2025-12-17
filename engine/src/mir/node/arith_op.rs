@@ -7,8 +7,8 @@ use lir::smallvec::smallvec;
 use crate::{
     exec::jit::host_fn,
     mir::{
-        Function, FunctionId, MirTy, NlAbstractTy, Node, NodeId, NodeKind, NodeTransform, Nodes,
-        Program, WriteLirError, build_lir::LirInsnBuilder, node,
+        FunctionId, MirTy, NlAbstractTy, Node, NodeId, NodeKind, NodeTransform, Program,
+        WriteLirError, build_lir::LirInsnBuilder, node,
     },
     sim::{
         color::Color,
@@ -55,7 +55,7 @@ impl Node for BinaryOperation {
         vec![self.lhs, self.rhs]
     }
 
-    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
+    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
         MirTy::Abstract(match self.op {
             BinaryOpcode::Add => NlAbstractTy::Numeric,
             BinaryOpcode::Sub => NlAbstractTy::Numeric,
@@ -89,10 +89,8 @@ impl Node for BinaryOperation {
                 return false;
             };
 
-            let lhs_type =
-                program.nodes[lhs].output_type(program, &program.functions[fn_id], &program.nodes);
-            let rhs_type =
-                program.nodes[rhs].output_type(program, &program.functions[fn_id], &program.nodes);
+            let lhs_type = program.nodes[lhs].output_type(program, fn_id);
+            let rhs_type = program.nodes[rhs].output_type(program, fn_id);
 
             // expect that the operation is either Eq or Neq
             let negate = match op {
@@ -119,21 +117,19 @@ impl Node for BinaryOperation {
     fn write_lir_execution(
         &self,
         program: &Program,
-        function: &Function,
-        nodes: &Nodes,
         my_node_id: NodeId,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
         // TODO(mvp) be prepared for other possible input types and adjust
         // the implementation accordingly
         // TODO(mvp) assert that the types of the operands are compatible with the operation
-        let lhs_type = nodes[self.lhs].output_type(program, function, nodes).repr();
-        let rhs_type = nodes[self.rhs].output_type(program, function, nodes).repr();
+        let lhs_type = program.nodes[self.lhs].output_type(program, lir_builder.fn_id).repr();
+        let rhs_type = program.nodes[self.rhs].output_type(program, lir_builder.fn_id).repr();
 
-        let &[lhs] = lir_builder.get_node_results(program, function, nodes, self.lhs) else {
+        let &[lhs] = lir_builder.get_node_results(program, self.lhs) else {
             unimplemented!();
         };
-        let &[rhs] = lir_builder.get_node_results(program, function, nodes, self.rhs) else {
+        let &[rhs] = lir_builder.get_node_results(program, self.rhs) else {
             unimplemented!();
         };
         use BinaryOpcode as Op;
@@ -209,7 +205,7 @@ impl Node for UnaryOp {
         vec![self.operand]
     }
 
-    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
+    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
         MirTy::Abstract(match self.op {
             UnaryOpcode::Neg => NlAbstractTy::Numeric,
             UnaryOpcode::Not => NlAbstractTy::Boolean,
@@ -219,13 +215,10 @@ impl Node for UnaryOp {
     fn write_lir_execution(
         &self,
         program: &Program,
-        function: &Function,
-        nodes: &Nodes,
         my_node_id: NodeId,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
-        let &[operand] = lir_builder.get_node_results(program, function, nodes, self.operand)
-        else {
+        let &[operand] = lir_builder.get_node_results(program, self.operand) else {
             todo!("TODO(mvp) are there operands that are multi-register values?");
         };
         let op = match self.op {

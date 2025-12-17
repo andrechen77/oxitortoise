@@ -6,8 +6,8 @@ use lir::smallvec::smallvec;
 use crate::{
     exec::jit::host_fn,
     mir::{
-        ClosureType, Function, FunctionId, MirTy, NlAbstractTy, Node, NodeId, NodeKind,
-        NodeTransform, Nodes, Program, WriteLirError, build_lir::LirInsnBuilder, node,
+        ClosureType, FunctionId, MirTy, NlAbstractTy, Node, NodeId, NodeKind, NodeTransform,
+        Program, WriteLirError, build_lir::LirInsnBuilder, node,
     },
 };
 
@@ -36,7 +36,7 @@ impl Node for Ask {
         deps
     }
 
-    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
+    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
         MirTy::Abstract(NlAbstractTy::Unit)
     }
 
@@ -83,17 +83,13 @@ impl Node for Ask {
     fn write_lir_execution(
         &self,
         program: &Program,
-        function: &Function,
-        nodes: &Nodes,
         my_node_id: NodeId,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
-        let &[ctx_ptr] = lir_builder.get_node_results(program, function, nodes, self.context)
-        else {
+        let &[ctx_ptr] = lir_builder.get_node_results(program, self.context) else {
             panic!("expected node outputting context pointer to be a single LIR value")
         };
-        let &[env_ptr, fn_ptr] = lir_builder.get_node_results(program, function, nodes, self.body)
-        else {
+        let &[env_ptr, fn_ptr] = lir_builder.get_node_results(program, self.body) else {
             panic!("expected node outputting closure body to be two LIR values");
         };
 
@@ -141,9 +137,9 @@ impl Node for Of {
         deps
     }
 
-    fn output_type(&self, program: &Program, function: &Function, nodes: &Nodes) -> MirTy {
+    fn output_type(&self, program: &Program, fn_id: FunctionId) -> MirTy {
         let MirTy::Abstract(NlAbstractTy::Closure(closure)) =
-            nodes[self.body].output_type(program, function, nodes)
+            program.nodes[self.body].output_type(program, fn_id)
         else {
             panic!("expected node outputting closure body to be a closure")
         };
@@ -170,11 +166,7 @@ impl Node for Of {
             let Some(recipients_node) = recipients.node() else {
                 return false;
             };
-            let recipients_type = program.nodes[recipients_node].output_type(
-                program,
-                &program.functions[fn_id],
-                &program.nodes,
-            );
+            let recipients_type = program.nodes[recipients_node].output_type(program, fn_id);
             match recipients_type {
                 MirTy::Abstract(NlAbstractTy::Turtle) => {
                     let NodeKind::Of(Of { context: _, recipients, body: _ }) =
@@ -202,23 +194,19 @@ impl Node for Of {
     fn write_lir_execution(
         &self,
         program: &Program,
-        function: &Function,
-        nodes: &Nodes,
         my_node_id: NodeId,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
-        let &[env_ptr, fn_ptr] = lir_builder.get_node_results(program, function, nodes, self.body)
-        else {
+        let &[env_ptr, fn_ptr] = lir_builder.get_node_results(program, self.body) else {
             panic!("expected node outputting closure body to be two LIR values");
         };
-        let &[ctx_ptr] = lir_builder.get_node_results(program, function, nodes, self.context)
-        else {
+        let &[ctx_ptr] = lir_builder.get_node_results(program, self.context) else {
             panic!("expected node outputting context pointer to be a single LIR value");
         };
 
         // find the output type of the closure
         let MirTy::Abstract(NlAbstractTy::Closure(ClosureType { arg_ty: _, return_ty })) =
-            nodes[self.body].output_type(program, function, nodes)
+            program.nodes[self.body].output_type(program, lir_builder.fn_id)
         else {
             panic!("expected node outputting a closure");
         };
@@ -227,9 +215,7 @@ impl Node for Of {
 
         match self.recipients {
             AskRecipient::SingleTurtle(recipient) | AskRecipient::SinglePatch(recipient) => {
-                let &[recipient] =
-                    lir_builder.get_node_results(program, function, nodes, recipient)
-                else {
+                let &[recipient] = lir_builder.get_node_results(program, recipient) else {
                     panic!("expected node outputting recipients to be a single LIR value");
                 };
 

@@ -3,10 +3,7 @@
 use derive_more::derive::Display;
 
 use crate::{
-    mir::{
-        Function, FunctionId, MirTy, NlAbstractTy, Node, NodeId, NodeKind, NodeTransform, Nodes,
-        Program, node,
-    },
+    mir::{FunctionId, MirTy, NlAbstractTy, Node, NodeId, NodeKind, NodeTransform, Program, node},
     sim::{patch::PatchVarDesc, turtle::TurtleVarDesc},
 };
 
@@ -31,7 +28,7 @@ impl Node for Distancexy {
         vec![self.agent, self.x, self.y]
     }
 
-    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
+    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
         MirTy::Abstract(NlAbstractTy::Float)
     }
 
@@ -42,11 +39,7 @@ impl Node for Distancexy {
         _my_node_id: NodeId,
     ) -> Option<NodeTransform> {
         // if the agent is a turtle
-        let agent_type = program.nodes[self.agent].output_type(
-            program,
-            &program.functions[fn_id],
-            &program.nodes,
-        );
+        let agent_type = program.nodes[self.agent].output_type(program, fn_id);
 
         Some(Box::new(move |program, fn_id, my_node_id| {
             decompose_distancexy(program, fn_id, my_node_id, agent_type)

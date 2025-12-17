@@ -3,7 +3,7 @@
 use derive_more::derive::Display;
 
 use crate::mir::{
-    Function, MirTy, NlAbstractTy, Node, NodeId, Nodes, Program, WriteLirError,
+    FunctionId, MirTy, NlAbstractTy, Node, NodeId, Program, WriteLirError,
     build_lir::LirInsnBuilder,
 };
 
@@ -25,15 +25,13 @@ impl Node for SetDefaultShape {
         vec![self.breed, self.shape]
     }
 
-    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
+    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
         MirTy::Abstract(NlAbstractTy::Unit)
     }
 
     fn write_lir_execution(
         &self,
         _program: &Program,
-        _function: &Function,
-        _nodes: &Nodes,
         _my_node_id: NodeId,
         _lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {

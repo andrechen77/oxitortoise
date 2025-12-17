@@ -6,7 +6,7 @@ use lir::smallvec::smallvec;
 use crate::{
     exec::jit::host_fn,
     mir::{
-        Function, MirTy, NlAbstractTy, Node, NodeId, Nodes, Program, WriteLirError,
+        FunctionId, MirTy, NlAbstractTy, Node, NodeId, Program, WriteLirError,
         build_lir::LirInsnBuilder,
     },
 };
@@ -30,28 +30,26 @@ impl Node for ScaleColor {
         vec![self.color, self.number, self.range1, self.range2]
     }
 
-    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
+    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
         MirTy::Abstract(NlAbstractTy::Color)
     }
 
     fn write_lir_execution(
         &self,
         program: &Program,
-        function: &Function,
-        nodes: &Nodes,
         my_node_id: NodeId,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
-        let &[color] = lir_builder.get_node_results(program, function, nodes, self.color) else {
+        let &[color] = lir_builder.get_node_results(program, self.color) else {
             panic!("expected node outputting color to be a single LIR value")
         };
-        let &[number] = lir_builder.get_node_results(program, function, nodes, self.number) else {
+        let &[number] = lir_builder.get_node_results(program, self.number) else {
             panic!("expected node outputting number to be a single LIR value")
         };
-        let &[range1] = lir_builder.get_node_results(program, function, nodes, self.range1) else {
+        let &[range1] = lir_builder.get_node_results(program, self.range1) else {
             panic!("expected node outputting range1 to be a single LIR value")
         };
-        let &[range2] = lir_builder.get_node_results(program, function, nodes, self.range2) else {
+        let &[range2] = lir_builder.get_node_results(program, self.range2) else {
             panic!("expected node outputting range2 to be a single LIR value")
         };
         let insn = lir::generate_host_function_call(

@@ -5,8 +5,8 @@ use derive_more::derive::Display;
 use crate::{
     exec::jit::host_fn,
     mir::{
-        Function, FunctionId, MirTy, NlAbstractTy, Node, NodeId, NodeKind, NodeTransform, Nodes,
-        Program, WriteLirError, build_lir::LirInsnBuilder, node,
+        FunctionId, MirTy, NlAbstractTy, Node, NodeId, NodeKind, NodeTransform, Program,
+        WriteLirError, build_lir::LirInsnBuilder, node,
     },
 };
 use lir::smallvec::smallvec;
@@ -31,27 +31,23 @@ impl Node for TurtleRotate {
         vec![self.context, self.turtle, self.angle]
     }
 
-    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
+    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
         MirTy::Abstract(NlAbstractTy::Unit)
     }
 
     fn write_lir_execution(
         &self,
         program: &Program,
-        function: &Function,
-        nodes: &Nodes,
         _my_node_id: NodeId,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
-        let &[ctx_ptr] = lir_builder.get_node_results(program, function, nodes, self.context)
-        else {
+        let &[ctx_ptr] = lir_builder.get_node_results(program, self.context) else {
             panic!("expected node outputting context pointer to be a single LIR value")
         };
-        let &[turtle_id] = lir_builder.get_node_results(program, function, nodes, self.turtle)
-        else {
+        let &[turtle_id] = lir_builder.get_node_results(program, self.turtle) else {
             panic!("expected node outputting turtle id to be a single LIR value")
         };
-        let &[angle] = lir_builder.get_node_results(program, function, nodes, self.angle) else {
+        let &[angle] = lir_builder.get_node_results(program, self.angle) else {
             panic!("expected node outputting angle to be a single LIR value")
         };
         lir_builder.push_lir_insn(lir::generate_host_function_call(
@@ -82,28 +78,23 @@ impl Node for TurtleForward {
         vec![self.context, self.turtle, self.distance]
     }
 
-    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
+    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
         MirTy::Abstract(NlAbstractTy::Unit)
     }
 
     fn write_lir_execution(
         &self,
         program: &Program,
-        function: &Function,
-        nodes: &Nodes,
         _my_node_id: NodeId,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
-        let &[ctx_ptr] = lir_builder.get_node_results(program, function, nodes, self.context)
-        else {
+        let &[ctx_ptr] = lir_builder.get_node_results(program, self.context) else {
             panic!("expected node outputting context pointer to be a single LIR value")
         };
-        let &[turtle_id] = lir_builder.get_node_results(program, function, nodes, self.turtle)
-        else {
+        let &[turtle_id] = lir_builder.get_node_results(program, self.turtle) else {
             panic!("expected node outputting turtle id to be a single LIR value")
         };
-        let &[distance] = lir_builder.get_node_results(program, function, nodes, self.distance)
-        else {
+        let &[distance] = lir_builder.get_node_results(program, self.distance) else {
             panic!("expected node outputting distance to be a single LIR value")
         };
         lir_builder.push_lir_insn(lir::generate_host_function_call(
@@ -134,7 +125,7 @@ impl Node for CanMove {
         vec![self.context, self.turtle, self.distance]
     }
 
-    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
+    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
         MirTy::Abstract(NlAbstractTy::Boolean)
     }
 
@@ -209,7 +200,7 @@ impl Node for PatchRelative {
         deps
     }
 
-    fn output_type(&self, _program: &Program, _function: &Function, _nodes: &Nodes) -> MirTy {
+    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
         MirTy::Abstract(NlAbstractTy::Patch)
     }
 
@@ -219,21 +210,16 @@ impl Node for PatchRelative {
     fn write_lir_execution(
         &self,
         program: &Program,
-        function: &Function,
-        nodes: &Nodes,
         my_node_id: NodeId,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
-        let &[ctx_ptr] = lir_builder.get_node_results(program, function, nodes, self.context)
-        else {
+        let &[ctx_ptr] = lir_builder.get_node_results(program, self.context) else {
             panic!("expected node outputting context pointer to be a single LIR value")
         };
-        let &[turtle_id] = lir_builder.get_node_results(program, function, nodes, self.turtle)
-        else {
+        let &[turtle_id] = lir_builder.get_node_results(program, self.turtle) else {
             panic!("expected node outputting turtle id to be a single LIR value")
         };
-        let &[distance] = lir_builder.get_node_results(program, function, nodes, self.distance)
-        else {
+        let &[distance] = lir_builder.get_node_results(program, self.distance) else {
             panic!("expected node outputting distance to be a single LIR value")
         };
 
@@ -243,8 +229,7 @@ impl Node for PatchRelative {
                 Box::new([ctx_ptr, turtle_id, distance]),
             )),
             PatchLocRelation::RightAhead(angle) => {
-                let &[angle] = lir_builder.get_node_results(program, function, nodes, *angle)
-                else {
+                let &[angle] = lir_builder.get_node_results(program, *angle) else {
                     panic!("expected node outputting angle to be a single LIR value");
                 };
                 lir_builder.push_lir_insn(lir::generate_host_function_call(
