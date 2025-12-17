@@ -1,4 +1,8 @@
 /.cargo
+
 /dots
 /target
+
+/program.txt
+
 output
