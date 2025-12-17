@@ -151,7 +151,7 @@ impl Node for GetTurtleVar {
             let field = NodeKind::from(node::MemLoad {
                 ptr: data_row,
                 offset: field_offset,
-                ty: my_node.output_type(program, fn_id).concrete.unwrap(),
+                ty: my_node.output_type(program, fn_id).repr(),
             });
             program.nodes[my_node_id] = field;
             true
@@ -346,7 +346,7 @@ impl Node for GetPatchVar {
             let field = NodeKind::from(node::MemLoad {
                 ptr: data_row,
                 offset: field_offset,
-                ty: my_node.output_type(program, fn_id).concrete.unwrap(),
+                ty: my_node.output_type(program, fn_id).repr(),
             });
             program.nodes[my_node_id] = field;
 

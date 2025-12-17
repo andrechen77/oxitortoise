@@ -38,8 +38,7 @@ impl Node for CheckNobody {
 
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
-        let operand_type =
-            program.nodes[self.agent].output_type(program, lir_builder.fn_id).concrete.unwrap();
+        let operand_type = program.nodes[self.agent].output_type(program, lir_builder.fn_id).repr();
         if operand_type == OptionPatchId::CONCRETE_TY {
             let &[agent] = lir_builder.get_node_results(program, self.agent) else {
                 panic!("expected a node that outputs a patch ID to be a single LIR register");

@@ -58,7 +58,7 @@ impl Node for OneOf {
         };
 
         let operand_type =
-            program.nodes[self.operand].output_type(program, lir_builder.fn_id).concrete.unwrap();
+            program.nodes[self.operand].output_type(program, lir_builder.fn_id).repr();
 
         if operand_type == <NlBox<NlList>>::CONCRETE_TY {
             let insn =

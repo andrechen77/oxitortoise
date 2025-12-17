@@ -130,10 +130,8 @@ impl Node for BinaryOperation {
         // TODO(mvp) be prepared for other possible input types and adjust
         // the implementation accordingly
         // TODO(mvp) assert that the types of the operands are compatible with the operation
-        let lhs_type =
-            program.nodes[self.lhs].output_type(program, lir_builder.fn_id).concrete.unwrap();
-        let rhs_type =
-            program.nodes[self.rhs].output_type(program, lir_builder.fn_id).concrete.unwrap();
+        let lhs_type = program.nodes[self.lhs].output_type(program, lir_builder.fn_id).repr();
+        let rhs_type = program.nodes[self.rhs].output_type(program, lir_builder.fn_id).repr();
 
         let &[lhs] = lir_builder.get_node_results(program, self.lhs) else {
             unimplemented!();
