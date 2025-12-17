@@ -98,13 +98,13 @@ fn main() {
     add_cheats(&cheats, &mut program, &global_names, &fn_info);
 
     let fn_ids: Vec<_> = program.functions.keys().collect();
+    narrow_types(&mut program);
     for fn_id in fn_ids {
         info!(
             "transforming function {} {}",
             fn_id,
             program.functions[fn_id].debug_name.as_deref().unwrap_or_default()
         );
-        narrow_types(&mut program);
         peephole_transform(&mut program, fn_id);
         optimize_of_agent_type(&mut program, fn_id);
         peephole_transform(&mut program, fn_id);
