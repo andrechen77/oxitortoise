@@ -1,13 +1,7 @@
-use std::collections::{HashMap, HashSet};
-
-use engine::mir::StatementKind::{IfElse, Node as NodeStatement, Repeat, Return, Stop};
-use engine::mir::node::SetLocalVar;
+use std::collections::HashMap;
 
 use engine::{
-    mir::{
-        FunctionId, LocalId, NlAbstractTy, Node, NodeId, NodeKind, Program, StatementBlock,
-        StatementKind,
-    },
+    mir::{FunctionId, NlAbstractTy, Program},
     sim::{
         agent_schema::GlobalsSchema,
         patch::{PatchSchema, PatchVarDesc},
@@ -83,104 +77,6 @@ pub struct Cheats {
     turtle_schema: Option<CheatTurtleSchema>,
     turtle_var_types: Option<HashMap<String, CheatVarType>>,
     functions: Option<HashMap<String, CheatFunctionInfo>>,
-}
-
-#[derive(Clone, Eq, Hash, PartialEq)]
-struct LocalVarTypeBinding(LocalId, NlAbstractTy);
-
-fn extract_type_bindings(program: &mut Program, id: FunctionId) -> HashSet<LocalVarTypeBinding> {
-    struct BC<'a> {
-        // BindingContext
-        program: &'a mut Program,
-        id: FunctionId,
-    }
-
-    fn node_helper(nid: &NodeId, bc: &BC) -> Option<LocalVarTypeBinding> {
-        let nodes = &bc.program.nodes;
-        match nodes[*nid] {
-            NodeKind::SetLocalVar(SetLocalVar { local_id, value }) => {
-                let output_type = nodes[value].output_type(bc.program, bc.id);
-                if let Some(abs_type) = output_type.abstr {
-                    Some(LocalVarTypeBinding(local_id, abs_type))
-                } else {
-                    panic!("Unrecognized output type: {:?}", output_type)
-                }
-            }
-            _ => None,
-        }
-    }
-
-    #[rustfmt::skip]
-    fn structure_helper(statement: &StatementKind, bc: &BC) -> HashSet<LocalVarTypeBinding> {
-        match statement {
-            NodeStatement(node_id) =>
-                node_helper(node_id, bc).into_iter().collect(),
-            IfElse { then_block, else_block, .. } =>
-                block_helper(then_block, bc).union(&block_helper(else_block, bc)).cloned().collect(),
-            Repeat { block, .. } =>
-                block_helper(block, bc),
-            Return { .. } =>
-                HashSet::new(),
-            Stop =>
-                HashSet::new(),
-        }
-    }
-
-    fn block_helper(b: &StatementBlock, bc: &BC) -> HashSet<LocalVarTypeBinding> {
-        b.statements.iter().flat_map(|x| structure_helper(x, bc)).collect()
-    }
-
-    let bc = BC { program, id };
-
-    block_helper(&bc.program.functions[id].cfg, &bc)
-}
-
-fn extract_report_types(program: &mut Program, id: FunctionId) -> HashSet<NlAbstractTy> {
-    struct BC<'a> {
-        // BindingContext
-        program: &'a mut Program,
-        id: FunctionId,
-    }
-
-    #[rustfmt::skip]
-    fn structure_helper(statement: &StatementKind, bc: &BC) -> HashSet<NlAbstractTy> {
-        match statement {
-            NodeStatement(..) =>
-                HashSet::new(),
-            IfElse { then_block, else_block, .. } =>
-                block_helper(then_block, bc).union(&block_helper(else_block, bc)).cloned().collect(),
-            Repeat { block, .. } =>
-                block_helper(block, bc),
-            Return { value } => {
-                let output_type = bc.program.nodes[*value].output_type(bc.program, bc.id);
-                if let Some(typ) = output_type.abstr {
-                    HashSet::from([typ])
-                } else {
-                    panic!("Unrecognized report type: {:?}", output_type)
-                }
-            },
-            Stop =>
-                HashSet::new(),
-        }
-    }
-
-    fn block_helper(b: &StatementBlock, bc: &BC) -> HashSet<NlAbstractTy> {
-        b.statements.iter().flat_map(|x| structure_helper(x, bc)).collect()
-    }
-
-    let bc = BC { program, id };
-
-    block_helper(&bc.program.functions[id].cfg, &bc)
-}
-
-fn lub(types: &[NlAbstractTy]) -> NlAbstractTy {
-    if types.is_empty() || types.iter().any(|t| *t == NlAbstractTy::Unit) {
-        NlAbstractTy::Unit
-    } else if types.contains(&NlAbstractTy::Top) {
-        NlAbstractTy::Top
-    } else {
-        todo!("TODO Implement least upper bound for other types")
-    }
 }
 
 /// `avoid_occupancy_bitfield` specifies index numbers of variables that will have fully-dense
@@ -301,52 +197,6 @@ pub fn add_cheats(
                     CheatSelfParamType::Turtle => NlAbstractTy::Turtle.into(),
                 }
             }
-        }
-    }
-
-    let func_ids: Vec<FunctionId> = program.functions.keys().collect();
-
-    for func_id in func_ids {
-        {
-            let bindings_set = extract_type_bindings(program, func_id);
-
-            let func = &mut program.functions[func_id];
-
-            let mut lid_to_types: HashMap<LocalId, Vec<NlAbstractTy>> =
-                func.locals.clone().into_iter().map(|k| (k, Vec::new())).collect();
-
-            for LocalVarTypeBinding(local_id, typ) in bindings_set {
-                lid_to_types.get_mut(&local_id).unwrap().push(typ);
-            }
-
-            for local_id in &func.locals {
-                let decl = &mut program.locals[*local_id];
-                let types = &lid_to_types.get(local_id).as_ref().unwrap()[..];
-                if !types.is_empty() {
-                    let abs_type = if let [typ] = types {
-                        typ.clone()
-                    } else {
-                        todo!("TODO Maybe find a least upper-bound type, if we're confident in it")
-                    };
-                    decl.ty = abs_type.into();
-                }
-            }
-        }
-
-        {
-            let report_types_set = extract_report_types(program, func_id);
-            let report_types = &report_types_set.iter().cloned().collect::<Vec<_>>()[..];
-
-            let out_type = if report_types.is_empty() {
-                NlAbstractTy::Unit.into()
-            } else if let [typ] = report_types {
-                typ.clone().into()
-            } else {
-                lub(report_types).into()
-            };
-
-            let func = &mut program.functions[func_id];
-            func.return_ty = out_type;
         }
     }
 }

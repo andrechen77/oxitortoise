@@ -23,6 +23,7 @@ mod build_lir;
 pub mod graphviz;
 pub mod node;
 pub mod transforms;
+pub mod type_inference;
 
 pub use build_lir::{LirProgramBuilder, mir_to_lir};
 
@@ -287,11 +288,14 @@ impl From<ConcreteTy> for MirTy {
 }
 
 /// A representation of an element of the lattice making up all NetLogo types.
-#[derive(PartialEq, Debug, Clone, Eq, Hash)]
+#[derive(PartialEq, Debug, Clone, Eq, Hash, Default)]
 pub enum NlAbstractTy {
     Unit,
-    /// Top doesn't actually include everything
+    /// Top only includes types that make sense in the NetLogo environment.
     Top,
+    /// A type that has no inhabitants.
+    #[default]
+    Bottom,
     Numeric,
     Color,
     Float,
@@ -313,14 +317,18 @@ pub enum NlAbstractTy {
 }
 
 impl NlAbstractTy {
-    pub fn join(&self, other: &NlAbstractTy) -> NlAbstractTy {
-        let _ = other;
-        todo!("TODO(mvp) calculate common supertype")
-    }
-
-    pub fn meet(&self, other: &NlAbstractTy) -> NlAbstractTy {
-        let _ = other;
-        todo!("TODO(mvp) calculate common subtype")
+    /// Calculates the least upper bound of two types.
+    pub fn join(self, other: NlAbstractTy) -> NlAbstractTy {
+        if self == Self::Top {
+            self
+        } else if self == other {
+            self
+        } else if self == Self::Bottom {
+            other
+        } else {
+            Self::Top
+        }
+        // TODO implement more granular least upper bound for other types
     }
 
     pub fn repr(&self) -> ConcreteTy {
@@ -328,6 +336,7 @@ impl NlAbstractTy {
         match self {
             Self::Unit => <()>::CONCRETE_TY,
             Self::Top => DynBox::CONCRETE_TY,
+            Self::Bottom => unimplemented!("bottom type has no concrete representation"),
             Self::Numeric => NlFloat::CONCRETE_TY,
             Self::Color => Color::CONCRETE_TY,
             Self::Float => NlFloat::CONCRETE_TY,
@@ -370,8 +379,9 @@ impl ClosureType {
 }
 
 pub trait MirVisitor {
-    fn visit_statement(&mut self, program: &Program, statement: &StatementKind) {
+    fn visit_statement(&mut self, program: &Program, fn_id: FunctionId, statement: &StatementKind) {
         let _ = program;
+        let _ = fn_id;
         let _ = statement;
     }
 
@@ -393,7 +403,7 @@ fn visit_statement_block_recursive<V: MirVisitor>(
     statement_block: &StatementBlock,
 ) {
     for statement in &statement_block.statements {
-        visitor.visit_statement(program, statement);
+        visitor.visit_statement(program, fn_id, statement);
         match statement {
             StatementKind::Node(node_id) => {
                 visit_node_recursive(visitor, program, fn_id, *node_id);

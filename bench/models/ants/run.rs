@@ -5,6 +5,7 @@ use engine::{
     mir::{
         mir_to_lir,
         transforms::{lower, optimize_of_agent_type, peephole_transform},
+        type_inference::narrow_types,
     },
     sim::{
         patch::{PatchSchema, Patches},
@@ -103,6 +104,7 @@ fn main() {
             fn_id,
             program.functions[fn_id].debug_name.as_deref().unwrap_or_default()
         );
+        narrow_types(&mut program);
         peephole_transform(&mut program, fn_id);
         optimize_of_agent_type(&mut program, fn_id);
         peephole_transform(&mut program, fn_id);
