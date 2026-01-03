@@ -11,7 +11,7 @@ use engine::{
     mir::{
         self, CustomVarDecl, Function, FunctionId, LocalDeclaration, LocalId, LocalStorage, MirTy,
         NlAbstractTy, NodeId, NodeKind, StatementBlock, StatementKind,
-        node::{self, AskRecipient, BinaryOpcode, PatchLocRelation, UnaryOpcode},
+        node::{self, Agentset, AskRecipient, BinaryOpcode, PatchLocRelation, UnaryOpcode},
     },
     sim::{
         patch::PatchVarDesc,
@@ -472,6 +472,20 @@ impl<'a> FnBodyBuilderCtx<'a> {
     }
 }
 
+fn translate_recipients(
+    recips: ast::Node,
+    mut ctx: FnBodyBuilderCtx<'_>,
+) -> (AskRecipient, AgentClass) {
+    let recipients_id = translate_expression(recips, ctx.reborrow());
+    // TODO(mvp): Does not currently give type info on individual agents, nor breeds, nor links,
+    // nor recipients within variables
+    match &ctx.mir.nodes[recipients_id] {
+        NodeKind::Agentset(Agentset::AllPatches) => (AskRecipient::AllPatches, AgentClass::Patch),
+        NodeKind::Agentset(Agentset::AllTurtles) => (AskRecipient::AllTurtles, AgentClass::Turtle),
+        _ => (AskRecipient::Any(recipients_id), AgentClass::Any),
+    }
+}
+
 #[instrument(skip_all, fields(node_type, name))]
 fn translate_statement(ast_node: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) {
     let stmt: StatementKind = 'stmt: {
@@ -579,16 +593,12 @@ fn translate_statement(ast_node: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) {
             N::CommandCall(C::ResetTicks([])) => {
                 NodeKind::from(node::ResetTicks { context: ctx.get_context() })
             }
-            N::CommandCall(C::Ask([recipients, body])) => {
+            N::CommandCall(C::Ask([rs, body])) => {
                 let context = ctx.get_context();
-                let recipients = translate_expression(*recipients, ctx.reborrow());
+                let (recipients, agent_class) = translate_recipients(*rs, ctx.reborrow());
                 let body =
-                    translate_ephemeral_closure(*body, ctx.fn_id, AgentClass::Any, ctx.reborrow());
-                NodeKind::from(node::Ask {
-                    context,
-                    recipients: AskRecipient::Any(recipients),
-                    body,
-                })
+                    translate_ephemeral_closure(*body, ctx.fn_id, agent_class, ctx.reborrow());
+                NodeKind::from(node::Ask { context, recipients, body })
             }
             N::CommandCall(C::If([condition, then_block])) => {
                 let condition = translate_expression(*condition, ctx.reborrow());
@@ -708,12 +718,11 @@ fn translate_expression(expr: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) -> NodeI
             let turtle = ctx.get_self_agent();
             NodeKind::from(node::GetTurtleVar { context, turtle, var })
         }
-        N::ReporterCall(R::Of([body, recipients])) => {
+        N::ReporterCall(R::Of([body, rs])) => {
             let context = ctx.get_context();
-            let recipients = translate_expression(*recipients, ctx.reborrow());
-            let body =
-                translate_ephemeral_closure(*body, ctx.fn_id, AgentClass::Any, ctx.reborrow());
-            NodeKind::from(node::Of { context, recipients: AskRecipient::Any(recipients), body })
+            let (recipients, agent_class) = translate_recipients(*rs, ctx.reborrow());
+            let body = translate_ephemeral_closure(*body, ctx.fn_id, agent_class, ctx.reborrow());
+            NodeKind::from(node::Of { context, recipients, body })
         }
         #[rustfmt::skip]
         N::ReporterCall(reporter @ (
