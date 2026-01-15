@@ -5,7 +5,8 @@ use tracing::trace;
 
 use crate::mir::{
     FunctionId, LocalId, MirVisitor, NlAbstractTy, Node as _, NodeId, NodeKind, Program,
-    StatementKind, node::SetLocalVar, visit_mir_function,
+    node::{Break, SetLocalVar},
+    visit_mir_function,
 };
 
 /// Associates values in the program with all the types that are possible for
@@ -37,27 +38,6 @@ pub fn narrow_types(program: &mut Program) {
         types: ProgramTypes,
     }
     impl MirVisitor for Visitor {
-        fn visit_statement(
-            &mut self,
-            program: &Program,
-            fn_id: FunctionId,
-            statement: &StatementKind,
-        ) {
-            match statement {
-                StatementKind::Return { value } => {
-                    let ty = program.nodes[*value].output_type(program, fn_id).abstr.unwrap();
-                    let existing_ty = self
-                        .types
-                        .returns
-                        .entry(fn_id)
-                        .expect("function id should be valid")
-                        .or_insert(NlAbstractTy::Bottom);
-                    *existing_ty = mem::take(existing_ty).join(ty);
-                }
-                _ => {} // do nothing
-            }
-        }
-
         fn visit_node(&mut self, program: &Program, fn_id: FunctionId, node_id: NodeId) {
             match program.nodes[node_id] {
                 NodeKind::SetLocalVar(SetLocalVar { local_id, value }) => {
@@ -70,6 +50,19 @@ pub fn narrow_types(program: &mut Program) {
                         .or_insert(NlAbstractTy::Bottom);
                     *existing_ty = mem::take(existing_ty).join(ty);
                 }
+                // NodeKind::Break(Break { value, target: _ }) => {
+                //     if let Some(value) = value {
+                //         let ty = program.nodes[value].output_type(program, fn_id).abstr.unwrap();
+                //         trace!("in function {:?}, break statement with type {:?} found", fn_id, ty);
+                //         let existing_ty = self
+                //             .types
+                //             .returns
+                //             .entry(fn_id)
+                //             .expect("function id should be valid")
+                //             .or_insert(NlAbstractTy::Bottom);
+                //         *existing_ty = mem::take(existing_ty).join(ty);
+                //     }
+                // }
                 // TODO(mvp) handle setting agent variables
                 _ => {} // do nothing
             }
@@ -87,6 +80,13 @@ pub fn narrow_types(program: &mut Program) {
         // collect type inferences for all nodes in the program
         for fn_id in program.functions.keys() {
             visit_mir_function(&mut visitor, program, fn_id);
+
+            // find the return type of the function
+            let root_node = program.functions[fn_id].root_node;
+            let return_ty = program.nodes[root_node].output_type(program, fn_id).abstr.unwrap();
+            // since a function body already encompasses all possible return
+            // types, we don't need to do extra joining here.
+            visitor.types.returns.insert(fn_id, return_ty);
         }
 
         // apply the type inferences to the program and look for changes

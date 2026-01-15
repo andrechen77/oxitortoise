@@ -4,10 +4,7 @@
 
 use std::collections::HashMap;
 
-use lir::{
-    smallvec::{SmallVec, smallvec},
-    typed_index_collections::TiVec,
-};
+use lir::{smallvec::SmallVec, typed_index_collections::TiVec};
 use slotmap::{SecondaryMap, SlotMap};
 use tracing::{error, instrument, trace};
 
@@ -91,12 +88,15 @@ pub struct LirInsnBuilder<'a> {
     pub local_to_lir: HashMap<mir::LocalId, LocalLocation>,
     /// Maps node ids to LIR values. This also doubles as a record of which
     /// nodes have been executed; it should map to an empty vector for nodes
-    /// that don't have any outputs.
+    /// that were executed but don't have any outputs.
     pub node_to_lir: HashMap<mir::NodeId, SmallVec<[lir::ValRef; 1]>>,
     /// The LIR function being built.
     pub product: lir::Function,
     /// The stack of current instruction sequences being built.
     pub insn_seqs: Vec<lir::InsnSeqId>,
+    /// Maps each block node to the LIR instruction sequence ID that should be
+    /// broken from when the block is exited.
+    pub block_to_insn_seq: HashMap<mir::NodeId, lir::InsnSeqId>,
 }
 
 impl<'a> LirInsnBuilder<'a> {
@@ -120,14 +120,15 @@ impl<'a> LirInsnBuilder<'a> {
             .as_slice()
     }
 
-    pub fn with_insn_seq(
+    pub fn with_insn_seq<R>(
         &mut self,
         insn_seq: lir::InsnSeqId,
-        op: impl FnOnce(&mut LirInsnBuilder),
-    ) {
+        op: impl FnOnce(&mut LirInsnBuilder) -> R,
+    ) -> R {
         self.insn_seqs.push(insn_seq);
-        op(self);
+        let result = op(self);
         self.insn_seqs.pop();
+        result
     }
 }
 
@@ -221,72 +222,13 @@ fn translate_function_body(
         local_to_lir,
         product: lir_function,
         insn_seqs: vec![main_body],
+        block_to_insn_seq: HashMap::new(),
     };
 
-    // algorithm idea: iterate over all statements. if a node depends on another
-    // node which is not rooted in its own statement, then those dependencies
-    // are translated first
-    translate_stmt_block(program, function, &mut fn_builder, &function.cfg);
-
-    fn translate_stmt_block(
-        program: &mir::Program,
-        function: &mir::Function,
-        fn_builder: &mut LirInsnBuilder,
-        stmt_block: &mir::StatementBlock,
-    ) {
-        let nodes = &program.nodes;
-        for stmt in &stmt_block.statements {
-            match stmt {
-                &mir::StatementKind::Node(node_id) => {
-                    trace!("writing LIR execution for {:?} {:?}", node_id, nodes[node_id]);
-                    nodes[node_id].write_lir_execution(program, node_id, fn_builder).inspect_err(|_| {
-                        error!("failed to translate node {:?} to LIR", nodes[node_id]);
-                    }).expect(
-                        "by the time we get to translating to LIR, all nodes should be able to convert to LIR",
-                    );
-                }
-                mir::StatementKind::IfElse { condition, then_block, else_block } => {
-                    // create a new instruction for each branch
-                    let then_body = fn_builder.product.insn_seqs.push_and_get_key(TiVec::new());
-                    let else_body = fn_builder.product.insn_seqs.push_and_get_key(TiVec::new());
-                    fn_builder.with_insn_seq(then_body, |fn_builder| {
-                        translate_stmt_block(program, function, fn_builder, then_block)
-                    });
-                    fn_builder.with_insn_seq(else_body, |fn_builder| {
-                        translate_stmt_block(program, function, fn_builder, else_block)
-                    });
-
-                    let &[condition] = fn_builder.get_node_results(program, *condition) else {
-                        panic!("a condition should evaluate to a single LIR value");
-                    };
-                    fn_builder.push_lir_insn(lir::InsnKind::IfElse(lir::IfElse {
-                        condition,
-                        output_type: smallvec![],
-                        then_body,
-                        else_body,
-                    }));
-                }
-                mir::StatementKind::Stop => {
-                    // TODO(wishlist) this as well as the Return statement
-                    // should stop translating any following statements in the
-                    // same block, because a break instruction must be the last
-                    // instruction in a LIR instruction sequence
-                    fn_builder.push_lir_insn(lir::InsnKind::Break {
-                        target: fn_builder.insn_seqs[0],
-                        values: Box::new([]),
-                    });
-                }
-                mir::StatementKind::Return { value } => {
-                    let break_insn = lir::InsnKind::Break {
-                        target: fn_builder.insn_seqs[0],
-                        values: Box::from(fn_builder.get_node_results(program, *value)),
-                    };
-                    fn_builder.push_lir_insn(break_insn);
-                }
-                mir::StatementKind::Repeat { num_repetitions: _, block: _ } => todo!(),
-            }
-        }
-    }
+    // translate the function body
+    program.nodes[function.root_node]
+        .write_lir_execution(program, function.root_node, &mut fn_builder)
+        .unwrap();
 
     fn_builder.product
 }

@@ -48,11 +48,9 @@ pub struct Program {
     /// The set of all nodes in the program, where a "node" is some kind of
     /// computation, as in sea-of-nodes. A node can only belong to a single
     /// function at a time.
-    #[debug(skip)]
     pub nodes: Nodes,
     /// The set of all local variables in the program. A local variable can
     /// only belong to a single function at a time.
-    #[debug(skip)]
     pub locals: SlotMap<LocalId, LocalDeclaration>,
 }
 
@@ -74,9 +72,9 @@ pub struct Function {
     /// A list of all local variables in the function.
     pub locals: Vec<LocalId>,
     pub return_ty: MirTy,
-    /// The structured control flow of the function
+    /// The root node that gets executed when the function is called.
     #[debug(skip)]
-    pub cfg: StatementBlock,
+    pub root_node: NodeId,
 }
 
 new_key_type! {
@@ -102,20 +100,6 @@ pub enum LocalStorage {
     Register,
 }
 
-#[derive(Debug, Default)]
-pub struct StatementBlock {
-    pub statements: Vec<StatementKind>,
-}
-
-#[derive(Debug)]
-pub enum StatementKind {
-    Node(NodeId),
-    IfElse { condition: NodeId, then_block: StatementBlock, else_block: StatementBlock },
-    Repeat { num_repetitions: NodeId, block: StatementBlock },
-    Return { value: NodeId },
-    Stop,
-}
-
 #[derive(Debug)]
 pub struct WriteLirError;
 
@@ -133,6 +117,9 @@ pub type NodeTransform = Box<dyn FnOnce(&mut Program, FunctionId, NodeId) -> boo
 pub trait Node {
     fn is_pure(&self) -> bool;
 
+    /// All nodes that this node depends on. Note that this doesn't mean the
+    /// dependent nodes are always executed when the current node is executed;
+    /// this might not be the case for the control flow nodes.
     fn dependencies(&self) -> Vec<NodeId>;
 
     /// For certain low level nodes it doesn't make sense to have an abstract
@@ -208,6 +195,8 @@ pub enum NodeKind {
     AdvanceTick(AdvanceTick),
     Ask(Ask),
     BinaryOperation(BinaryOperation),
+    Block(Block),
+    Break(Break),
     CallUserFn(CallUserFn),
     CanMove(CanMove),
     CheckNobody(CheckNobody),
@@ -226,6 +215,7 @@ pub enum NodeKind {
     GetPatchVarAsTurtleOrPatch(GetPatchVarAsTurtleOrPatch),
     GetTick(GetTick),
     GetTurtleVar(GetTurtleVar),
+    IfElse(IfElse),
     ListLiteral(ListLiteral),
     MaxPxcor(MaxPxcor),
     MaxPycor(MaxPycor),
@@ -239,6 +229,7 @@ pub enum NodeKind {
     PointConstructor(PointConstructor),
     RandomInt(RandomInt),
     ResetTicks(ResetTicks),
+    Repeat(Repeat),
     ScaleColor(ScaleColor),
     SetDefaultShape(SetDefaultShape),
     SetLocalVar(SetLocalVar),
@@ -378,13 +369,8 @@ impl ClosureType {
     const PARAM_ARG_IDX: usize = 2;
 }
 
+// TODO this doesn't need to be a visitor; just take a closure instead
 pub trait MirVisitor {
-    fn visit_statement(&mut self, program: &Program, fn_id: FunctionId, statement: &StatementKind) {
-        let _ = program;
-        let _ = fn_id;
-        let _ = statement;
-    }
-
     fn visit_node(&mut self, program: &Program, fn_id: FunctionId, node_id: NodeId) {
         let _ = program;
         let _ = fn_id;
@@ -393,38 +379,7 @@ pub trait MirVisitor {
 }
 
 pub fn visit_mir_function<V: MirVisitor>(visitor: &mut V, program: &Program, fn_id: FunctionId) {
-    visit_statement_block_recursive(visitor, program, fn_id, &program.functions[fn_id].cfg);
-}
-
-fn visit_statement_block_recursive<V: MirVisitor>(
-    visitor: &mut V,
-    program: &Program,
-    fn_id: FunctionId,
-    statement_block: &StatementBlock,
-) {
-    for statement in &statement_block.statements {
-        visitor.visit_statement(program, fn_id, statement);
-        match statement {
-            StatementKind::Node(node_id) => {
-                visit_node_recursive(visitor, program, fn_id, *node_id);
-            }
-            StatementKind::IfElse { condition, then_block, else_block } => {
-                visit_node_recursive(visitor, program, fn_id, *condition);
-                visit_statement_block_recursive(visitor, program, fn_id, then_block);
-                visit_statement_block_recursive(visitor, program, fn_id, else_block);
-            }
-            StatementKind::Repeat { num_repetitions, block } => {
-                visit_node_recursive(visitor, program, fn_id, *num_repetitions);
-                visit_statement_block_recursive(visitor, program, fn_id, block);
-            }
-            StatementKind::Return { value } => {
-                visit_node_recursive(visitor, program, fn_id, *value);
-            }
-            StatementKind::Stop => {
-                // do nothing
-            }
-        }
-    }
+    visit_node_recursive(visitor, program, fn_id, program.functions[fn_id].root_node);
 }
 
 fn visit_node_recursive<V: MirVisitor>(
