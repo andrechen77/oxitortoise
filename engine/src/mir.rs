@@ -73,7 +73,6 @@ pub struct Function {
     pub locals: Vec<LocalId>,
     pub return_ty: MirTy,
     /// The root node that gets executed when the function is called.
-    #[debug(skip)]
     pub root_node: NodeId,
 }
 

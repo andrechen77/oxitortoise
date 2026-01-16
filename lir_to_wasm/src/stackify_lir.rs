@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use lir::smallvec::{SmallVec, ToSmallVec, smallvec};
-use lir::typed_index_collections::{TiVec, ti_vec};
+use lir::typed_index_collections::ti_vec;
 use lir::{Block, Function, IfElse, InsnIdx, InsnKind, InsnPc, InsnSeqId, Loop, ValRef};
 
 use crate::stackify_generic::{self, InsnSeqStackification, StackManipulators};
@@ -58,16 +58,16 @@ impl ValRefOrStackPtr {
 pub struct CfgStackification {
     /// Maps each instruction sequence to the set of manipulators to be injected
     /// to get proper stack machine execution.
-    pub seqs: TiVec<InsnSeqId, InsnSeqStackification<ValRefOrStackPtr, InsnIdx>>,
+    pub seqs: HashMap<InsnSeqId, InsnSeqStackification<ValRefOrStackPtr, InsnIdx>>,
 }
 
 pub fn stackify_cfg(function: &Function) -> CfgStackification {
-    let mut result = CfgStackification { seqs: TiVec::new() };
+    let mut result = CfgStackification { seqs: HashMap::new() };
     stackify_insn_seq(function, function.body.body, &mut result.seqs);
     fn stackify_insn_seq(
         function: &Function,
         seq_id: InsnSeqId,
-        out: &mut TiVec<InsnSeqId, InsnSeqStackification<ValRefOrStackPtr, InsnIdx>>,
+        out: &mut HashMap<InsnSeqId, InsnSeqStackification<ValRefOrStackPtr, InsnIdx>>,
     ) {
         // start the sequence with a fresh operand stack and no manipulators
         let mut op_stack = Vec::new();
@@ -75,9 +75,13 @@ pub fn stackify_cfg(function: &Function) -> CfgStackification {
 
         let insns = &function.insn_seqs[seq_id];
 
-        if seq_id.0 >= out.len() {
-            assert_eq!(out.next_key(), seq_id);
-            out.push(InsnSeqStackification {
+        // TODO there used to be an assertion here that the instruction sequence
+        // was stackified in order relative to other instruction sequences. why
+        // was this assertion made and is the fact that we had to remove it
+        // indicative of a bug?
+        let old = out.insert(
+            seq_id,
+            InsnSeqStackification {
                 inputs: vec![],
                 manips: ti_vec![StackManipulators {
                     captures: 0,
@@ -85,8 +89,9 @@ pub fn stackify_cfg(function: &Function) -> CfgStackification {
                     inputs: smallvec![],
                     outputs: smallvec![],
                 }; insns.len() + 1],
-            });
-        }
+            },
+        );
+        assert!(old.is_none(), "an insn seq should not be stackified twice");
 
         for (insn_idx, insn) in insns.iter_enumerated() {
             let pc = InsnPc(seq_id, insn_idx);
@@ -169,14 +174,14 @@ pub fn stackify_cfg(function: &Function) -> CfgStackification {
                     stackify_insn_seq(function, *body, out);
 
                     // turn all leading getters into inputs to the block
-                    let leading_manips = &mut out[*body].manips[InsnIdx(0)];
+                    let leading_manips = &mut out.get_mut(body).unwrap().manips[InsnIdx(0)];
                     assert_eq!(
                         leading_manips.captures, 0,
                         "an insn seq stackified without parameters should not have any leading captures"
                     );
                     let leading_getters = std::mem::take(&mut leading_manips.getters);
                     let inputs = leading_getters.to_smallvec();
-                    out[*body].inputs = leading_getters;
+                    out.get_mut(body).unwrap().inputs = leading_getters;
 
                     (inputs, outputs)
                 }
@@ -191,10 +196,12 @@ pub fn stackify_cfg(function: &Function) -> CfgStackification {
                     stackify_insn_seq(function, *else_body, out);
 
                     // turn common leading getters into inputs to the if-else
-                    let then_leading_manips = &mut out[*then_body].manips[InsnIdx(0)];
+                    let then_leading_manips =
+                        &mut out.get_mut(then_body).unwrap().manips[InsnIdx(0)];
                     assert_eq!(then_leading_manips.captures, 0);
                     let mut then_leading_getters = std::mem::take(&mut then_leading_manips.getters);
-                    let else_leading_manips = &mut out[*else_body].manips[InsnIdx(0)];
+                    let else_leading_manips =
+                        &mut out.get_mut(else_body).unwrap().manips[InsnIdx(0)];
                     assert_eq!(else_leading_manips.captures, 0);
                     let mut else_leading_getters = std::mem::take(&mut else_leading_manips.getters);
                     let common_prefix = factor_common_prefix([
@@ -203,10 +210,12 @@ pub fn stackify_cfg(function: &Function) -> CfgStackification {
                     ]);
                     let mut inputs = common_prefix.to_smallvec();
                     inputs.push((*condition).into());
-                    out[*then_body].inputs = common_prefix.clone();
-                    out[*then_body].manips[InsnIdx(0)].getters = then_leading_getters;
-                    out[*else_body].inputs = common_prefix;
-                    out[*else_body].manips[InsnIdx(0)].getters = else_leading_getters;
+                    out.get_mut(then_body).unwrap().inputs = common_prefix.clone();
+                    out.get_mut(then_body).unwrap().manips[InsnIdx(0)].getters =
+                        then_leading_getters;
+                    out.get_mut(else_body).unwrap().inputs = common_prefix;
+                    out.get_mut(else_body).unwrap().manips[InsnIdx(0)].getters =
+                        else_leading_getters;
 
                     (inputs, outputs)
                 }
@@ -227,7 +236,7 @@ pub fn stackify_cfg(function: &Function) -> CfgStackification {
             stackify_generic::stackify_single(
                 &mut op_stack,
                 &mut getters,
-                &mut out[seq_id].manips,
+                &mut out.get_mut(&seq_id).unwrap().manips,
                 insn_idx,
                 inputs,
                 outputs,
@@ -237,7 +246,7 @@ pub fn stackify_cfg(function: &Function) -> CfgStackification {
         // any excess operands on the stack should be eliminated
         stackify_generic::remove_excess_operands(
             op_stack.drain(..).zip(std::iter::repeat(false)),
-            &mut out[seq_id].manips,
+            &mut out.get_mut(&seq_id).unwrap().manips,
             insns.next_key(),
         );
     }
@@ -249,7 +258,7 @@ pub fn stackify_cfg(function: &Function) -> CfgStackification {
 /// value.
 pub fn count_getters(stk: &CfgStackification) -> HashMap<ValRef, usize> {
     let mut result = HashMap::new();
-    for seq in &stk.seqs {
+    for seq in stk.seqs.values() {
         for manips in &seq.manips {
             for v in &manips.getters {
                 if let ValRefOrStackPtr::ValRef(v) = v {
@@ -264,7 +273,6 @@ pub fn count_getters(stk: &CfgStackification) -> HashMap<ValRef, usize> {
 #[cfg(test)]
 mod tests {
     use lir::lir_function;
-    use lir::typed_index_collections::ti_vec;
 
     use super::*;
     use crate::stackify_generic::stackification;
@@ -285,7 +293,7 @@ mod tests {
 
         let stackification = stackify_cfg(&block);
         assert_eq!(
-            stackification.seqs[InsnSeqId(0)],
+            stackification.seqs[&InsnSeqId(0)],
             stackification! {
                 inputs [];
                 [InsnIdx(0)] cap(0) get[] [] => [a];
@@ -324,29 +332,38 @@ mod tests {
 
         assert_eq!(
             stackification.seqs,
-            ti_vec![
-                stackification! {
-                    inputs [];
-                    [InsnIdx(0)] cap(0) get[] [] => [ValRefOrStackPtr::ValRef(a)];
-                    [InsnIdx(1)] cap(0) get[] [] => [ValRefOrStackPtr::ValRef(b)];
-                    [InsnIdx(2)] cap(0) get[] [ValRefOrStackPtr::ValRef(a), ValRefOrStackPtr::ValRef(b)] => [ValRefOrStackPtr::ValRef(outer)];
-                    [InsnIdx(3)] cap(0) get[] [ValRefOrStackPtr::ValRef(outer)] => [];
-                    [InsnIdx(4)] cap(0) get[] [] => [];
-                },
-                stackification! {
-                    inputs [ValRefOrStackPtr::ValRef(a), ValRefOrStackPtr::ValRef(b)];
-                    [InsnIdx(0)] cap(0) get[] [ValRefOrStackPtr::ValRef(a), ValRefOrStackPtr::ValRef(b)] => [ValRefOrStackPtr::ValRef(c)];
-                    [InsnIdx(1)] cap(0) get[ValRefOrStackPtr::ValRef(a)] [ValRefOrStackPtr::ValRef(c), ValRefOrStackPtr::ValRef(a)] => [ValRefOrStackPtr::ValRef(inner)];
-                    [InsnIdx(2)] cap(0) get[] [ValRefOrStackPtr::ValRef(inner)] => [];
-                    [InsnIdx(3)] cap(0) get[] [] => [];
-                },
-                stackification! {
-                    inputs [ValRefOrStackPtr::ValRef(c), ValRefOrStackPtr::ValRef(a)];
-                    [InsnIdx(0)] cap(0) get[] [ValRefOrStackPtr::ValRef(c), ValRefOrStackPtr::ValRef(a)] => [ValRefOrStackPtr::ValRef(d)];
-                    [InsnIdx(1)] cap(0) get[] [ValRefOrStackPtr::ValRef(d)] => [];
-                    [InsnIdx(2)] cap(0) get[] [] => [];
-                },
-            ],
+            HashMap::from_iter([
+                (
+                    InsnSeqId(0),
+                    stackification! {
+                        inputs [];
+                        [InsnIdx(0)] cap(0) get[] [] => [ValRefOrStackPtr::ValRef(a)];
+                        [InsnIdx(1)] cap(0) get[] [] => [ValRefOrStackPtr::ValRef(b)];
+                        [InsnIdx(2)] cap(0) get[] [ValRefOrStackPtr::ValRef(a), ValRefOrStackPtr::ValRef(b)] => [ValRefOrStackPtr::ValRef(outer)];
+                        [InsnIdx(3)] cap(0) get[] [ValRefOrStackPtr::ValRef(outer)] => [];
+                        [InsnIdx(4)] cap(0) get[] [] => [];
+                    },
+                ),
+                (
+                    InsnSeqId(1),
+                    stackification! {
+                        inputs [ValRefOrStackPtr::ValRef(a), ValRefOrStackPtr::ValRef(b)];
+                        [InsnIdx(0)] cap(0) get[] [ValRefOrStackPtr::ValRef(a), ValRefOrStackPtr::ValRef(b)] => [ValRefOrStackPtr::ValRef(c)];
+                        [InsnIdx(1)] cap(0) get[ValRefOrStackPtr::ValRef(a)] [ValRefOrStackPtr::ValRef(c), ValRefOrStackPtr::ValRef(a)] => [ValRefOrStackPtr::ValRef(inner)];
+                        [InsnIdx(2)] cap(0) get[] [ValRefOrStackPtr::ValRef(inner)] => [];
+                        [InsnIdx(3)] cap(0) get[] [] => [];
+                    },
+                ),
+                (
+                    InsnSeqId(2),
+                    stackification! {
+                        inputs [ValRefOrStackPtr::ValRef(c), ValRefOrStackPtr::ValRef(a)];
+                        [InsnIdx(0)] cap(0) get[] [ValRefOrStackPtr::ValRef(c), ValRefOrStackPtr::ValRef(a)] => [ValRefOrStackPtr::ValRef(d)];
+                        [InsnIdx(1)] cap(0) get[] [ValRefOrStackPtr::ValRef(d)] => [];
+                        [InsnIdx(2)] cap(0) get[] [] => [];
+                    },
+                ),
+            ]),
         );
     }
 
@@ -379,35 +396,44 @@ mod tests {
 
         assert_eq!(
             stackification.seqs,
-            ti_vec![
-                stackification! {
-                    inputs [];
-                    [InsnIdx(0)] cap(0) get[] [] => [ValRefOrStackPtr::ValRef(a)];
-                    [InsnIdx(1)] cap(0) get[] [] => [ValRefOrStackPtr::ValRef(b)];
-                    [InsnIdx(2)] cap(0) get[] [] => [ValRefOrStackPtr::ValRef(c)];
-                    [InsnIdx(3)] cap(1) get[] [] => [ValRefOrStackPtr::ValRef(d)];
-                    [InsnIdx(4)] cap(1) get[] [] => [ValRefOrStackPtr::ValRef(arg_val)];
-                    [InsnIdx(5)] cap(0) get[] [ValRefOrStackPtr::ValRef(a), ValRefOrStackPtr::ValRef(b), arg_val] => [ValRefOrStackPtr::ValRef(branch)];
-                    [InsnIdx(6)] cap(0) get[] [ValRefOrStackPtr::ValRef(branch)] => [];
-                    [InsnIdx(7)] cap(0) get[] [] => [];
-                },
-                // then branch
-                stackification! {
-                    inputs [ValRefOrStackPtr::ValRef(a), ValRefOrStackPtr::ValRef(b)];
-                    [InsnIdx(0)] cap(0) get[ValRefOrStackPtr::ValRef(c)] [ValRefOrStackPtr::ValRef(b), ValRefOrStackPtr::ValRef(c)] => [ValRefOrStackPtr::ValRef(ValRef(InsnPc(InsnSeqId(1), InsnIdx(0)), 0))];
-                    [InsnIdx(1)] cap(0) get[] [ValRefOrStackPtr::ValRef(a), ValRefOrStackPtr::ValRef(ValRef(InsnPc(InsnSeqId(1), InsnIdx(0)), 0))] => [ValRefOrStackPtr::ValRef(res_0)];
-                    [InsnIdx(2)] cap(0) get[] [ValRefOrStackPtr::ValRef(res_0)] => [];
-                    [InsnIdx(3)] cap(0) get[] [] => [];
-                },
-                // else branch
-                stackification! {
-                    inputs [ValRefOrStackPtr::ValRef(a), ValRefOrStackPtr::ValRef(b)];
-                    [InsnIdx(0)] cap(0) get[ValRefOrStackPtr::ValRef(d)] [ValRefOrStackPtr::ValRef(b), ValRefOrStackPtr::ValRef(d)] => [ValRefOrStackPtr::ValRef(ValRef(InsnPc(InsnSeqId(2), InsnIdx(0)), 0))];
-                    [InsnIdx(1)] cap(0) get[] [ValRefOrStackPtr::ValRef(a), ValRefOrStackPtr::ValRef(ValRef(InsnPc(InsnSeqId(2), InsnIdx(0)), 0))] => [ValRefOrStackPtr::ValRef(res_1)];
-                    [InsnIdx(2)] cap(0) get[] [ValRefOrStackPtr::ValRef(res_1)] => [];
-                    [InsnIdx(3)] cap(0) get[] [] => [];
-                },
-            ]
-        )
+            HashMap::from_iter([
+                (
+                    InsnSeqId(0),
+                    stackification! {
+                        inputs [];
+                        [InsnIdx(0)] cap(0) get[] [] => [ValRefOrStackPtr::ValRef(a)];
+                        [InsnIdx(1)] cap(0) get[] [] => [ValRefOrStackPtr::ValRef(b)];
+                        [InsnIdx(2)] cap(0) get[] [] => [ValRefOrStackPtr::ValRef(c)];
+                        [InsnIdx(3)] cap(1) get[] [] => [ValRefOrStackPtr::ValRef(d)];
+                        [InsnIdx(4)] cap(1) get[] [] => [ValRefOrStackPtr::ValRef(arg_val)];
+                        [InsnIdx(5)] cap(0) get[] [ValRefOrStackPtr::ValRef(a), ValRefOrStackPtr::ValRef(b), arg_val] => [ValRefOrStackPtr::ValRef(branch)];
+                        [InsnIdx(6)] cap(0) get[] [ValRefOrStackPtr::ValRef(branch)] => [];
+                        [InsnIdx(7)] cap(0) get[] [] => [];
+                    },
+                ),
+                (
+                    InsnSeqId(1),
+                    // then branch
+                    stackification! {
+                        inputs [ValRefOrStackPtr::ValRef(a), ValRefOrStackPtr::ValRef(b)];
+                        [InsnIdx(0)] cap(0) get[ValRefOrStackPtr::ValRef(c)] [ValRefOrStackPtr::ValRef(b), ValRefOrStackPtr::ValRef(c)] => [ValRefOrStackPtr::ValRef(ValRef(InsnPc(InsnSeqId(1), InsnIdx(0)), 0))];
+                        [InsnIdx(1)] cap(0) get[] [ValRefOrStackPtr::ValRef(a), ValRefOrStackPtr::ValRef(ValRef(InsnPc(InsnSeqId(1), InsnIdx(0)), 0))] => [ValRefOrStackPtr::ValRef(res_0)];
+                        [InsnIdx(2)] cap(0) get[] [ValRefOrStackPtr::ValRef(res_0)] => [];
+                        [InsnIdx(3)] cap(0) get[] [] => [];
+                    },
+                ),
+                (
+                    InsnSeqId(2),
+                    // else branch
+                    stackification! {
+                        inputs [ValRefOrStackPtr::ValRef(a), ValRefOrStackPtr::ValRef(b)];
+                        [InsnIdx(0)] cap(0) get[ValRefOrStackPtr::ValRef(d)] [ValRefOrStackPtr::ValRef(b), ValRefOrStackPtr::ValRef(d)] => [ValRefOrStackPtr::ValRef(ValRef(InsnPc(InsnSeqId(2), InsnIdx(0)), 0))];
+                        [InsnIdx(1)] cap(0) get[] [ValRefOrStackPtr::ValRef(a), ValRefOrStackPtr::ValRef(ValRef(InsnPc(InsnSeqId(2), InsnIdx(0)), 0))] => [ValRefOrStackPtr::ValRef(res_1)];
+                        [InsnIdx(2)] cap(0) get[] [ValRefOrStackPtr::ValRef(res_1)] => [];
+                        [InsnIdx(3)] cap(0) get[] [] => [];
+                    },
+                ),
+            ]),
+        );
     }
 }

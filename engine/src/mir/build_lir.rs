@@ -154,7 +154,7 @@ impl<'a> LirInsnBuilder<'a> {
     }
 }
 
-#[instrument(skip_all)]
+#[instrument(skip(program, program_builder))]
 fn translate_function_body(
     program: &mir::Program,
     fn_id: mir::FunctionId,
@@ -166,7 +166,6 @@ fn translate_function_body(
     let mut lir_debug_var_names = HashMap::new();
     let mut local_to_lir = HashMap::new();
     let mut lir_local_var_types = TiVec::new();
-    let num_lir_parameters = lir_local_var_types.len();
     for &local_id in &function.locals {
         let local_decl = &program.locals[local_id];
         match local_decl.storage {
@@ -205,6 +204,7 @@ fn translate_function_body(
             .into(),
         body: main_body,
     };
+    let num_lir_parameters = lir_local_var_types.len();
     let lir_function = lir::Function {
         local_vars: lir_local_var_types,
         num_parameters: num_lir_parameters,

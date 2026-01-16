@@ -177,10 +177,23 @@ impl Node for BinaryOperation {
                 ty: lir::ValType::I8,
                 value: opcode as u64,
             }));
-            let pc = lir_builder.push_lir_insn(lir::generate_host_function_call(
-                host_fn::DYNBOX_BINARY_OP,
-                Box::new([lhs, rhs, lir::ValRef(opcode_val, 0)]),
-            ));
+            let pc = match self.op {
+                Op::And | Op::Or | Op::Eq | Op::Neq | Op::Lt | Op::Lte | Op::Gt | Op::Gte => {
+                    lir_builder.push_lir_insn(lir::generate_host_function_call(
+                        host_fn::DYNBOX_BOOL_BINARY_OP,
+                        Box::new([lhs, rhs, lir::ValRef(opcode_val, 0)]),
+                    ))
+                }
+                // TODO(mvp) like the bool-returning specializations, make sure
+                // that other operations actually return the correct type as
+                // predicted by the output_type method. it is incorrect to
+                // use a function that returns a type that disagrees, e.g. dynboc
+                _ => lir_builder.push_lir_insn(lir::generate_host_function_call(
+                    host_fn::DYNBOX_BINARY_OP,
+                    Box::new([lhs, rhs, lir::ValRef(opcode_val, 0)]),
+                )),
+            };
+
             lir_builder.node_to_lir.insert(my_node_id, smallvec![lir::ValRef(pc, 0)]);
             Ok(())
         } else {

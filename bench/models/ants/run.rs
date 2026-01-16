@@ -77,7 +77,8 @@ fn main() {
                     .with_target("oxitortoise_engine", Level::TRACE)
                     .with_target("oxitortoise_ast_to_mir", Level::INFO)
                     .with_target("ants", Level::TRACE)
-                    .with_target("oxitortoise_main", Level::TRACE),
+                    .with_target("oxitortoise_main", Level::TRACE)
+                    .with_target("oxitortoise_lir_to_wasm", Level::TRACE),
             ),
         )
         .init();
@@ -118,5 +119,24 @@ fn main() {
     std::fs::write("program.txt", format!("{:#?}", program)).unwrap();
 
     let lir_program = mir_to_lir(&program);
-    println!("{}", lir_program);
+    std::fs::write("lir_program.txt", format!("{:#?}", lir_program)).unwrap();
+
+    let (mut module, fn_table_allocated_slots) =
+        lir_to_wasm::lir_to_wasm(&lir_program, &mut FnTableSlotAllocator::default());
+    std::fs::write("module.wasm", module.emit_wasm()).unwrap();
+    std::fs::write("fn_table_allocated_slots.txt", format!("{:#?}", fn_table_allocated_slots))
+        .unwrap();
+}
+
+#[derive(Default)]
+struct FnTableSlotAllocator {
+    next_slot: usize,
+}
+impl lir_to_wasm::FnTableSlotAllocator for FnTableSlotAllocator {
+    fn allocate_slot(&mut self) -> usize {
+        let slot = self.next_slot;
+        info!("allocating slot {}", slot);
+        self.next_slot += 1;
+        slot
+    }
 }

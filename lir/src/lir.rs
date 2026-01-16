@@ -357,14 +357,21 @@ pub enum ValType {
 }
 
 pub trait LirVisitor {
-    fn start_insn_seq(&mut self, id: InsnSeqId);
+    fn start_insn_seq(&mut self, id: InsnSeqId) {
+        let _ = id;
+    }
 
-    fn end_insn_seq(&mut self, id: InsnSeqId);
+    fn end_insn_seq(&mut self, id: InsnSeqId) {
+        let _ = id;
+    }
 
     /// Visits an instruction. `next_val_ref` is the index of the first output
     /// of this instruction, if it outputs any; this is used for assertions to
     /// ensure that output counting was correct.
-    fn visit_insn(&mut self, insn: &InsnKind, pc: InsnPc);
+    fn visit_insn(&mut self, insn: &InsnKind, pc: InsnPc) {
+        let _ = insn;
+        let _ = pc;
+    }
 }
 
 pub fn visit_insn_seq<V: LirVisitor>(visitor: &mut V, function: &Function) {
@@ -478,7 +485,13 @@ fn infer_unary_op_output_type(op: UnaryOpcode, operand: ValType) -> ValType {
 
     match (op, operand) {
         (O::I64ToI32, V::I64) => V::I32,
-        _ => todo!("TODO(mvp) add other compinations of ops and val types"),
+        (O::FNeg, V::F64) => V::F64,
+        (O::Not, V::I8) => V::I8,
+        _ => todo!(
+            "TODO(mvp) add other compinations of ops and val types {:?} and {:?}",
+            op,
+            operand
+        ),
     }
 }
 
@@ -531,4 +544,24 @@ pub fn generate_host_function_call(
 ) -> InsnKind {
     // TODO(mvp) validate that the types and number of arguments match
     InsnKind::CallHostFunction { function, output_type: function.return_type.into(), args }
+}
+
+pub fn host_function_references(program: &Program) -> Vec<&'static HostFunction> {
+    struct HostFnCollector {
+        host_fns: Vec<&'static HostFunction>,
+    }
+
+    impl LirVisitor for HostFnCollector {
+        fn visit_insn(&mut self, insn: &InsnKind, _pc: InsnPc) {
+            if let InsnKind::CallHostFunction { function, .. } = insn {
+                self.host_fns.push(*function);
+            }
+        }
+    }
+
+    let mut collector = HostFnCollector { host_fns: vec![] };
+    for function in program.user_functions.values() {
+        visit_insn_seq(&mut collector, function);
+    }
+    collector.host_fns
 }
