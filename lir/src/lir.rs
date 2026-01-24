@@ -44,7 +44,7 @@
 
 use std::{collections::HashMap, fmt::Debug, rc::Rc};
 
-use derive_more::{Display, From, Into};
+use derive_more::{Deref, Display, From, Into};
 use slotmap::{SecondaryMap, new_key_type};
 use smallvec::SmallVec;
 use typed_index_collections::TiVec;
@@ -62,12 +62,29 @@ new_key_type! {
     pub struct FunctionId;
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct HostFunction {
+#[derive(Debug, Clone)]
+pub struct HostFunctionInfo {
     pub parameter_types: &'static [ValType],
     pub return_type: &'static [ValType],
-    /// Import the function by this name in Wasm.
+    /// Meaningful on Wasm targets only. Import the function by this name.
     pub name: &'static str,
+}
+
+#[derive(Debug, Copy, Clone, Deref)]
+#[deref(forward)]
+pub struct HostFunction(pub &'static HostFunctionInfo);
+
+impl PartialEq for HostFunction {
+    fn eq(&self, other: &Self) -> bool {
+        std::ptr::eq(self.0, other.0)
+    }
+}
+impl Eq for HostFunction {}
+
+impl std::hash::Hash for HostFunction {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        (self.0 as *const HostFunctionInfo).hash(state);
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -198,7 +215,7 @@ pub enum InsnKind {
     },
     #[display("call_host_fn({:?}, -> {:?})({:?})", function, output_type, args)]
     CallHostFunction {
-        function: &'static HostFunction,
+        function: HostFunction,
         output_type: SmallVec<[ValType; 1]>,
         args: Box<[ValRef]>,
     },
@@ -538,17 +555,14 @@ fn infer_binary_op_output_type(op: BinaryOpcode, lhs: ValType, rhs: ValType) -> 
     }
 }
 
-pub fn generate_host_function_call(
-    function: &'static HostFunction,
-    args: Box<[ValRef]>,
-) -> InsnKind {
+pub fn generate_host_function_call(function: HostFunction, args: Box<[ValRef]>) -> InsnKind {
     // TODO(mvp) validate that the types and number of arguments match
     InsnKind::CallHostFunction { function, output_type: function.return_type.into(), args }
 }
 
-pub fn host_function_references(program: &Program) -> Vec<&'static HostFunction> {
+pub fn host_function_references(program: &Program) -> Vec<HostFunction> {
     struct HostFnCollector {
-        host_fns: Vec<&'static HostFunction>,
+        host_fns: Vec<HostFunction>,
     }
 
     impl LirVisitor for HostFnCollector {

@@ -27,16 +27,14 @@ struct CodegenModuleInfo<'a, A> {
     fn_table_allocated_slots: HashMap<lir::FunctionId, usize>,
     /// A map from LIR function ids to Walrus function ids.
     user_fn_ids: HashMap<lir::FunctionId, walrus::FunctionId>,
-    /// A map from LIR host functions to Walrus function ids. This uses pointers
-    /// so that we can compare by object identity, but the pointers are never
-    /// dereferenced.
-    host_fn_ids: HashMap<*const lir::HostFunction, walrus::FunctionId>,
+    /// A map from LIR host functions to Walrus function ids.
+    host_fn_ids: HashMap<lir::HostFunction, walrus::FunctionId>,
 }
 
 impl<'a, A> CodegenModuleInfo<'a, A> {
-    fn lookup_host_fn(&self, host_fn: &'static lir::HostFunction) -> walrus::FunctionId {
-        debug!("looking up host function {:?}", host_fn as *const _);
-        self.host_fn_ids[&(host_fn as *const _)]
+    fn lookup_host_fn(&self, host_fn: lir::HostFunction) -> walrus::FunctionId {
+        debug!("looking up host function {:?}", host_fn);
+        self.host_fn_ids[&host_fn]
     }
 }
 
@@ -117,7 +115,7 @@ pub fn lir_to_wasm(
         let func_type = module.types.add(&param_types, &return_types);
         let (w_func_id, _) = module.add_import_func("env", host_fn.name, func_type);
         module.funcs.get_mut(w_func_id).name = Some(host_fn.name.to_string());
-        trace!("added host function {:?} to function table", host_fn as *const _);
+        trace!("added host function {:?} to function table", host_fn);
         mod_info.host_fn_ids.insert(host_fn, w_func_id);
     }
 
@@ -517,7 +515,7 @@ fn write_code<A: FnTableSlotAllocator>(
                     .binop(wir::BinaryOp::I32Add);
             }
             I::CallHostFunction { function, args: _, output_type: _ } => {
-                let callee = mod_info.lookup_host_fn(function);
+                let callee = mod_info.lookup_host_fn(*function);
                 insn_builder.call(callee);
             }
             I::CallUserFunction { function, args: _, output_type: _ } => {
@@ -952,11 +950,11 @@ mod tests {
     #[test]
     fn call_host_function() {
         let mut lir = lir::Program::default();
-        let host_fn = &lir::HostFunction {
+        let host_fn = lir::HostFunction(&lir::HostFunctionInfo {
             name: "defined_elsewhere",
             parameter_types: &[lir::ValType::I32, lir::ValType::F64],
             return_type: &[lir::ValType::F64, lir::ValType::I32],
-        };
+        });
 
         lir_function! {
             fn my_function() -> [F64, I32],
