@@ -1,0 +1,8 @@
+[package]
+name = "lir_interp"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+lir = { path = "../lir", package = "oxitortoise_lir" }
+tracing = "0.1.41"
