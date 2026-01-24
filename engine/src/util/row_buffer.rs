@@ -608,7 +608,7 @@ mod tests {
     static U32_TYPE_INFO: TypeInfo = TypeInfo::new::<u32>(TypeInfoOptions {
         debug_name: "u32",
         is_zeroable: true,
-        mem_repr: Some(&[(0, lir::ValType::I32)]),
+        mem_repr: Some(&[(0, lir::MemOpType::I32)]),
     });
     impl Reflect for u32 {
         const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&U32_TYPE_INFO);
@@ -624,7 +624,7 @@ mod tests {
     static F64_TYPE_INFO: TypeInfo = TypeInfo::new::<f64>(TypeInfoOptions {
         debug_name: "f64",
         is_zeroable: true,
-        mem_repr: Some(&[(0, lir::ValType::F64)]),
+        mem_repr: Some(&[(0, lir::MemOpType::F64)]),
     });
     impl Reflect for f64 {
         const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&F64_TYPE_INFO);
@@ -632,7 +632,7 @@ mod tests {
     static BOOL_TYPE_INFO: TypeInfo = TypeInfo::new::<bool>(TypeInfoOptions {
         debug_name: "bool",
         is_zeroable: true,
-        mem_repr: Some(&[(0, lir::ValType::I8)]),
+        mem_repr: Some(&[(0, lir::MemOpType::I8)]),
     });
     impl Reflect for bool {
         const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&BOOL_TYPE_INFO);

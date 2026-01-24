@@ -51,8 +51,8 @@ static POINT_TYPE_INFO: TypeInfo = TypeInfo::new::<Point>(TypeInfoOptions {
     debug_name: "Point",
     is_zeroable: true,
     mem_repr: Some(&[
-        (offset_of!(Point, x), lir::ValType::F64),
-        (offset_of!(Point, y), lir::ValType::F64),
+        (offset_of!(Point, x), lir::MemOpType::F64),
+        (offset_of!(Point, y), lir::MemOpType::F64),
     ]),
 });
 

@@ -68,7 +68,7 @@ fn translate_function_signature(
                 .mem_repr
                 .expect("function parameter must have known ABI")
                 .iter()
-                .map(|&(_, r#type)| r#type),
+                .map(|&(_, r#type)| r#type.loaded_type()),
         );
     }
     trace!("adding return value with type {:?}", function.return_ty);
@@ -79,7 +79,7 @@ fn translate_function_signature(
         .mem_repr
         .expect("function return type must have known ABI")
         .iter()
-        .map(|&(_, r#type)| r#type)
+        .map(|&(_, r#type)| r#type.loaded_type())
         .collect();
     (params, return_value)
 }
@@ -182,7 +182,7 @@ fn translate_function_body(
                     .mem_repr
                     .expect("local variable must have known ABI")
                     .iter()
-                    .map(|&(_, r#type)| r#type)
+                    .map(|&(_, r#type)| r#type.loaded_type())
                     .collect();
                 let &[lir_type] = lir_types.as_slice() else {
                     unimplemented!("handle local variables that take up multiple LIR values")
@@ -210,7 +210,7 @@ fn translate_function_body(
             .mem_repr
             .expect("function return type must have known ABI")
             .iter()
-            .map(|&(_, r#type)| r#type)
+            .map(|&(_, r#type)| r#type.loaded_type())
             .collect(),
         body: main_body,
     };

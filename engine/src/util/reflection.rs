@@ -59,7 +59,7 @@ pub struct TypeInfo {
     /// Each value that maps as a separate register when this type is
     /// loaded from or stored into memory corresponds to a tuple of the offset
     /// and LIR type of the value.
-    pub mem_repr: Option<&'static [(usize, lir::ValType)]>,
+    pub mem_repr: Option<&'static [(usize, lir::MemOpType)]>,
 }
 
 /// A helper struct to pass as options to [`TypeInfo::new`]
@@ -67,7 +67,7 @@ pub struct TypeInfoOptions {
     // TODO(wishlist) once stable, use const_type_name to automatically generate this
     pub debug_name: &'static str,
     pub is_zeroable: bool,
-    pub mem_repr: Option<&'static [(usize, lir::ValType)]>,
+    pub mem_repr: Option<&'static [(usize, lir::MemOpType)]>,
 }
 
 impl TypeInfo {

@@ -52,7 +52,7 @@ impl Node for Diffuse {
             .field_desc_and_offset(self.variable);
 
         let field_desc = lir_builder.push_lir_insn(lir::InsnKind::Const(lir::Const {
-            ty: lir::ValType::I16,
+            ty: lir::ValType::I32,
             value: field_desc.to_u16() as u64,
         }));
 

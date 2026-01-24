@@ -169,7 +169,7 @@ pub enum InsnKind {
     /// For loading values from the current function's stack frame, use [`InstructionKind::StackLoad`]
     #[display("mem_load(ty={}, offset={})({})", r#type, offset, ptr)]
     MemLoad {
-        r#type: ValType,
+        r#type: MemOpType,
         offset: usize,
         ptr: ValRef,
     },
@@ -178,6 +178,7 @@ pub enum InsnKind {
     /// For storing values onto the current function's stack frame, use [`InstructionKind::StackStore`]
     #[display("mem_store(offset={})(ptr={}, value={})", offset, ptr, value)]
     MemStore {
+        r#type: MemOpType,
         offset: usize,
         ptr: ValRef,
         value: ValRef,
@@ -185,13 +186,14 @@ pub enum InsnKind {
     /// Load a value from the stack.
     #[display("stack_load(ty={}, offset={})", r#type, offset)]
     StackLoad {
-        r#type: ValType,
+        r#type: MemOpType,
         /// The offset from the top of the stack at which to load the value.
         offset: usize,
     },
     /// Store a value onto the stack.
     #[display("stack_store(offset={})(value={})", offset, value)]
     StackStore {
+        r#type: MemOpType,
         /// The offset from the top of the stack at which to store the value.
         offset: usize,
         value: ValRef,
@@ -364,13 +366,36 @@ pub enum BinaryOpcode {
 /// semantic meaning.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Display)]
 pub enum ValType {
-    I8,
-    I16,
     I32,
     I64,
     F64,
     Ptr,
     FnPtr,
+}
+
+/// The type to use when loading from or storing to memory.
+#[derive(PartialEq, Eq, Debug, Display, Clone, Copy)]
+pub enum MemOpType {
+    I8,
+    I32,
+    I64,
+    F64,
+    Ptr,
+    FnPtr,
+}
+
+impl MemOpType {
+    /// The type that a register value loaded with this mem op will have.
+    pub fn loaded_type(&self) -> ValType {
+        match self {
+            Self::I8 => ValType::I32,
+            Self::I32 => ValType::I32,
+            Self::I64 => ValType::I64,
+            Self::F64 => ValType::F64,
+            Self::Ptr => ValType::Ptr,
+            Self::FnPtr => ValType::FnPtr,
+        }
+    }
 }
 
 pub trait LirVisitor {
@@ -445,11 +470,11 @@ pub fn infer_output_types(function: &Function) -> HashMap<ValRef, ValType> {
                     self.types.insert(ValRef(pc, 0), ValType::Ptr);
                 }
                 InsnKind::MemLoad { r#type, .. } => {
-                    self.types.insert(ValRef(pc, 0), *r#type);
+                    self.types.insert(ValRef(pc, 0), r#type.loaded_type());
                 }
                 InsnKind::MemStore { .. } => {}
                 InsnKind::StackLoad { r#type, .. } => {
-                    self.types.insert(ValRef(pc, 0), *r#type);
+                    self.types.insert(ValRef(pc, 0), r#type.loaded_type());
                 }
                 InsnKind::StackStore { .. } => {}
                 InsnKind::StackAddr { .. } => {
@@ -503,7 +528,7 @@ fn infer_unary_op_output_type(op: UnaryOpcode, operand: ValType) -> ValType {
     match (op, operand) {
         (O::I64ToI32, V::I64) => V::I32,
         (O::FNeg, V::F64) => V::F64,
-        (O::Not, V::I8) => V::I8,
+        (O::Not, V::I32) => V::I32,
         _ => todo!(
             "TODO(mvp) add other compinations of ops and val types {:?} and {:?}",
             op,
@@ -518,26 +543,20 @@ fn infer_binary_op_output_type(op: BinaryOpcode, lhs: ValType, rhs: ValType) -> 
 
     match op {
         B::IAdd | B::ISub | B::IMul => match (lhs, rhs) {
-            (V::I8, V::I8) => V::I8,
-            (V::I16, V::I16) => V::I16,
             (V::I32, V::I32) => V::I32,
             (V::I64, V::I64) => V::I64,
             (V::Ptr, V::Ptr) => V::Ptr,
             _ => panic!("Invalid operand types for operation {:?}: {:?} and {:?}", op, lhs, rhs),
         },
         B::ULt | B::UGt | B::IEq | B::INeq => match (lhs, rhs) {
-            (V::I8, V::I8) => V::I8,
-            (V::I16, V::I16) => V::I8,
-            (V::I32, V::I32) => V::I8,
-            (V::I64, V::I64) => V::I8,
-            (V::Ptr, V::Ptr) => V::I8,
+            (V::I32, V::I32) => V::I32,
+            (V::I64, V::I64) => V::I32,
+            (V::Ptr, V::Ptr) => V::I32,
             _ => panic!("Invalid operand types for operation {:?}: {:?} and {:?}", op, lhs, rhs),
         },
         B::SLt | B::SGt => match (lhs, rhs) {
-            (V::I8, V::I8) => V::I8,
-            (V::I16, V::I16) => V::I8,
-            (V::I32, V::I32) => V::I8,
-            (V::I64, V::I64) => V::I8,
+            (V::I32, V::I32) => V::I32,
+            (V::I64, V::I64) => V::I32,
             _ => panic!("Invalid operand types for operation {:?}: {:?} and {:?}", op, lhs, rhs),
         },
         B::FAdd | B::FSub | B::FMul | B::FDiv => match (lhs, rhs) {
@@ -545,11 +564,11 @@ fn infer_binary_op_output_type(op: BinaryOpcode, lhs: ValType, rhs: ValType) -> 
             _ => panic!("Invalid operand types for operation {:?}: {:?} and {:?}", op, lhs, rhs),
         },
         B::FLt | B::FLte | B::FGt | B::FGte | B::FEq => match (lhs, rhs) {
-            (V::F64, V::F64) => V::I8,
+            (V::F64, V::F64) => V::I32,
             _ => panic!("Invalid operand types for operation {:?}: {:?} and {:?}", op, lhs, rhs),
         },
         B::And | B::Or => match (lhs, rhs) {
-            (V::I8, V::I8) => V::I8,
+            (V::I32, V::I32) => V::I32,
             _ => panic!("Invalid operand types for operation {:?}: {:?} and {:?}", op, lhs, rhs),
         },
     }

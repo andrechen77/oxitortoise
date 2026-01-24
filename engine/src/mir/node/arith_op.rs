@@ -172,9 +172,9 @@ impl Node for BinaryOperation {
             lir_builder.node_to_lir.insert(my_node_id, smallvec![lir::ValRef(result, 0)]);
             Ok(())
         } else if lhs_type == DynBox::CONCRETE_TY && rhs_type == DynBox::CONCRETE_TY {
-            let opcode = self.op as u8;
+            let opcode = self.op as u32;
             let opcode_val = lir_builder.push_lir_insn(lir::InsnKind::Const(lir::Const {
-                ty: lir::ValType::I8,
+                ty: lir::ValType::I32,
                 value: opcode as u64,
             }));
             let pc = match self.op {

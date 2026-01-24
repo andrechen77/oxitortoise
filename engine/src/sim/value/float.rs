@@ -30,7 +30,7 @@ impl NlFloat {
 static NL_FLOAT_TYPE_INFO: TypeInfo = TypeInfo::new::<NlFloat>(TypeInfoOptions {
     debug_name: "NlFloat",
     is_zeroable: true,
-    mem_repr: Some(&[(0, lir::ValType::F64)]),
+    mem_repr: Some(&[(0, lir::MemOpType::F64)]),
 });
 
 impl Reflect for NlFloat {

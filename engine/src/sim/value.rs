@@ -22,7 +22,7 @@ use crate::util::reflection::TypeInfoOptions;
 static UNTYPED_PTR_INFO: TypeInfo = TypeInfo::new::<*mut u8>(TypeInfoOptions {
     debug_name: "UntypedPtr",
     is_zeroable: false,
-    mem_repr: Some(&[(0, lir::ValType::Ptr)]),
+    mem_repr: Some(&[(0, lir::MemOpType::Ptr)]),
 });
 impl Reflect for *mut u8 {
     const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&UNTYPED_PTR_INFO);
@@ -42,7 +42,7 @@ impl Reflect for () {
 static AGENT_INDEX_INFO: TypeInfo = TypeInfo::new::<u32>(TypeInfoOptions {
     debug_name: "AgentIndex",
     is_zeroable: false,
-    mem_repr: Some(&[(0, lir::ValType::I32)]),
+    mem_repr: Some(&[(0, lir::MemOpType::I32)]),
 });
 pub const AGENT_INDEX_CONCRETE_TY: ConcreteTy = ConcreteTy::new(&AGENT_INDEX_INFO);
 

@@ -474,10 +474,9 @@ fn write_code<A: FnTableSlotAllocator>(
                 let mem_arg = infer_mem_arg(*r#type, *offset);
                 insn_builder.load(mod_info.mem_id, load_kind, mem_arg);
             }
-            I::MemStore { offset, ptr: _, value } => {
-                let r#type = ctx.types[value];
-                let store_kind = infer_store_kind(r#type);
-                let mem_arg = infer_mem_arg(r#type, *offset);
+            I::MemStore { r#type, offset, ptr: _, value } => {
+                let store_kind = infer_store_kind(*r#type);
+                let mem_arg = infer_mem_arg(*r#type, *offset);
                 insn_builder.store(mod_info.mem_id, store_kind, mem_arg);
             }
             I::StackLoad { r#type, offset } => {
@@ -487,10 +486,9 @@ fn write_code<A: FnTableSlotAllocator>(
                     .local_get(ctx.sp_local_id.expect("the presence of a StackAddr instruction means there must be a stack pointer local var"))
                     .load(mod_info.mem_id, load_kind, mem_arg);
             }
-            I::StackStore { offset, value } => {
-                let r#type = ctx.types[value];
-                let store_kind = infer_store_kind(r#type);
-                let mem_arg = infer_mem_arg(r#type, *offset);
+            I::StackStore { r#type, offset, value } => {
+                let store_kind = infer_store_kind(*r#type);
+                let mem_arg = infer_mem_arg(*r#type, *offset);
                 // stackification ensured that the stack pointer, followed
                 // by the value, are already on the operand stack. we just
                 // need to emit the store instruction.
@@ -695,8 +693,6 @@ fn addr_of_function<A: FnTableSlotAllocator>(
 /// Translate a LIR value type to a Wasm value type.
 fn translate_val_type(r#type: lir::ValType) -> walrus::ValType {
     match r#type {
-        lir::ValType::I8 => walrus::ValType::I32,
-        lir::ValType::I16 => walrus::ValType::I32,
         lir::ValType::I32 => walrus::ValType::I32,
         lir::ValType::I64 => walrus::ValType::I64,
         lir::ValType::F64 => walrus::ValType::F64,
@@ -708,8 +704,6 @@ fn translate_val_type(r#type: lir::ValType) -> walrus::ValType {
 /// Translate a LIR value to a Wasm value.
 fn translate_val(r#type: lir::ValType, value: u64) -> walrus::ir::Value {
     match r#type {
-        lir::ValType::I8 => wir::Value::I32(value as i32),
-        lir::ValType::I16 => wir::Value::I32(value as i32),
         lir::ValType::I32 => wir::Value::I32(value as i32),
         lir::ValType::I64 => wir::Value::I64(value as i64),
         lir::ValType::F64 => wir::Value::F64(value as f64),
@@ -729,41 +723,38 @@ fn translate_usize(x: usize) -> walrus::ir::Value {
     wir::Value::I32(x as i32)
 }
 
-fn infer_load_kind(r#type: lir::ValType) -> wir::LoadKind {
+fn infer_load_kind(r#type: lir::MemOpType) -> wir::LoadKind {
     use wir::ExtendedLoad as L;
     match r#type {
-        lir::ValType::I8 => wir::LoadKind::I32_8 { kind: L::ZeroExtend },
-        lir::ValType::I16 => wir::LoadKind::I32_16 { kind: L::ZeroExtend },
-        lir::ValType::I32 => wir::LoadKind::I32 { atomic: false },
-        lir::ValType::I64 => wir::LoadKind::I64 { atomic: false },
-        lir::ValType::F64 => wir::LoadKind::F64,
-        lir::ValType::Ptr => wir::LoadKind::I32 { atomic: false },
-        lir::ValType::FnPtr => wir::LoadKind::I32 { atomic: false },
+        lir::MemOpType::I8 => wir::LoadKind::I32_8 { kind: L::ZeroExtend },
+        lir::MemOpType::I32 => wir::LoadKind::I32 { atomic: false },
+        lir::MemOpType::I64 => wir::LoadKind::I64 { atomic: false },
+        lir::MemOpType::F64 => wir::LoadKind::F64,
+        lir::MemOpType::Ptr => wir::LoadKind::I32 { atomic: false },
+        lir::MemOpType::FnPtr => wir::LoadKind::I32 { atomic: false },
     }
 }
 
-fn infer_store_kind(r#type: lir::ValType) -> wir::StoreKind {
+fn infer_store_kind(r#type: lir::MemOpType) -> wir::StoreKind {
     match r#type {
-        lir::ValType::I8 => wir::StoreKind::I32_8 { atomic: false },
-        lir::ValType::I16 => wir::StoreKind::I32_16 { atomic: false },
-        lir::ValType::I32 => wir::StoreKind::I32 { atomic: false },
-        lir::ValType::I64 => wir::StoreKind::I64 { atomic: false },
-        lir::ValType::F64 => wir::StoreKind::F64,
-        lir::ValType::Ptr => wir::StoreKind::I32 { atomic: false },
-        lir::ValType::FnPtr => wir::StoreKind::I32 { atomic: false },
+        lir::MemOpType::I8 => wir::StoreKind::I32_8 { atomic: false },
+        lir::MemOpType::I32 => wir::StoreKind::I32 { atomic: false },
+        lir::MemOpType::I64 => wir::StoreKind::I64 { atomic: false },
+        lir::MemOpType::F64 => wir::StoreKind::F64,
+        lir::MemOpType::Ptr => wir::StoreKind::I32 { atomic: false },
+        lir::MemOpType::FnPtr => wir::StoreKind::I32 { atomic: false },
     }
 }
 
-fn infer_mem_arg(r#type: lir::ValType, offset: usize) -> wir::MemArg {
+fn infer_mem_arg(r#type: lir::MemOpType, offset: usize) -> wir::MemArg {
     let offset: u32 = offset.try_into().unwrap();
     match r#type {
-        lir::ValType::I8 => wir::MemArg { align: 1, offset },
-        lir::ValType::I16 => wir::MemArg { align: 2, offset },
-        lir::ValType::I32 => wir::MemArg { align: 4, offset },
-        lir::ValType::I64 => wir::MemArg { align: 8, offset },
-        lir::ValType::F64 => wir::MemArg { align: 8, offset },
-        lir::ValType::Ptr => wir::MemArg { align: 4, offset },
-        lir::ValType::FnPtr => wir::MemArg { align: 4, offset },
+        lir::MemOpType::I8 => wir::MemArg { align: 1, offset },
+        lir::MemOpType::I32 => wir::MemArg { align: 4, offset },
+        lir::MemOpType::I64 => wir::MemArg { align: 8, offset },
+        lir::MemOpType::F64 => wir::MemArg { align: 8, offset },
+        lir::MemOpType::Ptr => wir::MemArg { align: 4, offset },
+        lir::MemOpType::FnPtr => wir::MemArg { align: 4, offset },
     }
 }
 
@@ -801,8 +792,8 @@ fn translate_binary_op(
         (O::FEq, V::F64, V::F64) => Wo::F64Eq,
         (O::FDiv, V::F64, V::F64) => Wo::F64Div,
         (O::FGte, V::F64, V::F64) => Wo::F64Ge,
-        (O::And, V::I8, V::I8) => Wo::I32And, // TODO: fix this
-        (O::Or, V::I8, V::I8) => Wo::I32Or,   // TODO: fix this
+        (O::And, V::I32, V::I32) => Wo::I32And, // TODO: fix this
+        (O::Or, V::I32, V::I32) => Wo::I32Or,   // TODO: fix this
         _ => unimplemented!(
             "unknown combination of op and val types: {:?}, {:?}, {:?}",
             op,
@@ -930,8 +921,8 @@ mod tests {
             vars: [],
             stack_space: 16,
             main: {
-                stack_store(8)(var_load(arg));
-                [_res] = stack_load(I16, 8);
+                stack_store(I32, 8)(var_load(arg));
+                [_res] = stack_load(I32, 8);
                 break_(main)(stack_addr(8));
             }
         }

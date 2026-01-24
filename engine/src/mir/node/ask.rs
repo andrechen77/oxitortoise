@@ -220,7 +220,7 @@ impl Node for Of {
             .mem_repr
             .expect("closure return type must have known ABI")
             .iter()
-            .map(|&(_, r#type)| r#type)
+            .map(|&(_, r#type)| r#type.loaded_type())
             .collect();
         let closure_outputs_len = closure_outputs.len();
 

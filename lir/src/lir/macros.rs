@@ -88,7 +88,7 @@ macro_rules! push_node {
 
         let insn_idx = $ctx.0[$ctx.1].push_and_get_key(
             $crate::InsnKind::MemLoad {
-                r#type: $crate::ValType::$ty,
+                r#type: $crate::MemOpType::$ty,
                 offset: $offset,
                 ptr,
             }
@@ -96,7 +96,10 @@ macro_rules! push_node {
         let $val_ref = $crate::ValRef($crate::InsnPc($ctx.1, insn_idx), 0);
         $ctx.2.insert($val_ref, stringify!($val_ref).into());
     };
-    ($ctx:expr; mem_store($offset:expr)(
+    ($ctx:expr; mem_store(
+        $offset:expr,
+        $ty:ident
+    )(
         $ptr_ident:ident $(($($ptr_param:tt)*))*,
         $value_ident:ident $(($($value_param:tt)*))* $(,)?
     )) => {
@@ -104,6 +107,7 @@ macro_rules! push_node {
         $crate::push_node!($ctx; [value] = $value_ident $(($($value_param)*))*);
 
         $ctx.0[$ctx.1].push($crate::InsnKind::MemStore {
+            r#type: $crate::MemOpType::$ty,
             offset: $offset,
             ptr,
             value,
@@ -112,19 +116,23 @@ macro_rules! push_node {
     ($ctx:expr; [$val_ref:ident] = stack_load($ty:ident, $offset:expr)) => {
         let insn_idx = $ctx.0[$ctx.1].push_and_get_key(
             $crate::InsnKind::StackLoad {
-                r#type: $crate::ValType::$ty,
+                r#type: $crate::MemOpType::$ty,
                 offset: $offset,
             }
         );
         let $val_ref = $crate::ValRef($crate::InsnPc($ctx.1, insn_idx), 0);
         $ctx.2.insert($val_ref, stringify!($val_ref).into());
     };
-    ($ctx:expr; stack_store($offset:expr)(
+    ($ctx:expr; stack_store(
+        $ty:ident,
+        $offset:expr
+    )(
         $value_ident:ident $(($($value_param:tt)*))* $(,)?
     )) => {
         $crate::push_node!($ctx; [value] = $value_ident $(($($value_param)*))*);
 
         $ctx.0[$ctx.1].push($crate::InsnKind::StackStore {
+            r#type: $crate::MemOpType::$ty,
             offset: $offset,
             value,
         });

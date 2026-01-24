@@ -149,7 +149,7 @@ impl Node for IfElse {
                 .mem_repr
                 .expect("a value being returned should have a known ABI")
                 .iter()
-                .map(|&(_, r#type)| r#type)
+                .map(|&(_, r#type)| r#type.loaded_type())
                 .collect(),
             then_body,
             else_body,

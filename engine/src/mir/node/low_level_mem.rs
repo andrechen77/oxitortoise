@@ -101,6 +101,7 @@ impl Node for MemStore {
         );
         for (&(additional_offset, r#type), &value) in mem_repr.iter().zip(values.iter()) {
             lir_builder.push_lir_insn(lir::InsnKind::MemStore {
+                r#type,
                 offset: self.offset + additional_offset,
                 ptr,
                 value,

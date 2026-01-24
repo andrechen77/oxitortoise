@@ -10,7 +10,7 @@ pub const fn generate_box_type_info<T: 'static>(debug_name: &'static str) -> Typ
     TypeInfo::new::<NlBox<T>>(TypeInfoOptions {
         debug_name,
         is_zeroable: false,
-        mem_repr: Some(&[(0, lir::ValType::Ptr)]),
+        mem_repr: Some(&[(0, lir::MemOpType::Ptr)]),
     })
 }
 

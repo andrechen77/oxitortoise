@@ -82,7 +82,7 @@ impl<'env, Arg, Ret> JitCallback<'env, Arg, Ret> {
 #[rustfmt::skip] // keep struct definitions over multiple lines
 pub mod host_fn {
     use lir::{HostFunction as Hf, HostFunctionInfo};
-    use lir::ValType::{I8, I16, I32, I64, F64, FnPtr, Ptr};
+    use lir::ValType::{I32, I64, F64, FnPtr, Ptr};
 
     pub static CLEAR_ALL: Hf = Hf(&HostFunctionInfo {
         name: "clear_all",
@@ -193,14 +193,14 @@ pub mod host_fn {
     // fn dynbox_binary_op(lhs: DynBox, rhs: DynBox, op: u8) -> DynBox
     pub static DYNBOX_BINARY_OP: Hf = Hf(&HostFunctionInfo {
         name: "dynbox_binary_op",
-        parameter_types: &[F64, F64, I8],
+        parameter_types: &[F64, F64, I32],
         return_type: &[F64],
     });
 
     pub static DYNBOX_BOOL_BINARY_OP: Hf = Hf(&HostFunctionInfo {
         name: "dynbox_bool_binary_op",
-        parameter_types: &[F64, F64, I8],
-        return_type: &[I8],
+        parameter_types: &[F64, F64, I32],
+        return_type: &[I32],
     });
 
     // fn patch_ahead(context: &mut CanonExecutionContext, turtle_id: u64, distance: NlFloat) -> PatchId
@@ -220,7 +220,7 @@ pub mod host_fn {
     // fn diffuse_8_single_variable_buffer(ctx: &mut CanonExecutionContext, field: AgentFieldDescriptor, fraction: NlFloat)
     pub static DIFFUSE_8_SINGLE_VARIABLE_BUFFER: Hf = Hf(&HostFunctionInfo {
         name: "diffuse_8_single_variable_buffer",
-        parameter_types: &[Ptr, I16, F64],
+        parameter_types: &[Ptr, I32, F64],
         return_type: &[],
     });
 }
