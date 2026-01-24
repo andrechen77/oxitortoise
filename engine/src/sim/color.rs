@@ -72,7 +72,7 @@ impl AddAssign<NlFloat> for Color {
 static COLOR_TYPE_INFO: TypeInfo = TypeInfo::new::<Color>(TypeInfoOptions {
     debug_name: "Color",
     is_zeroable: true,
-    lir_repr: Some(&[lir::ValType::F64]),
+    mem_repr: Some(&[(0, lir::ValType::F64)]),
 });
 
 impl Reflect for Color {

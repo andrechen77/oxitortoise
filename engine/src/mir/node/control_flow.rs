@@ -146,9 +146,11 @@ impl Node for IfElse {
             condition,
             output_type: my_output_type
                 .info()
-                .lir_repr
+                .mem_repr
                 .expect("a value being returned should have a known ABI")
-                .into(),
+                .iter()
+                .map(|&(_, r#type)| r#type)
+                .collect(),
             then_body,
             else_body,
         }));

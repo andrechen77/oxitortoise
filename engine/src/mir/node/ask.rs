@@ -1,7 +1,7 @@
 //! The `ask` command and `of` reporter.
 
 use derive_more::derive::Display;
-use lir::smallvec::smallvec;
+use lir::smallvec::{SmallVec, smallvec};
 
 use crate::{
     exec::jit::host_fn,
@@ -214,8 +214,15 @@ impl Node for Of {
         else {
             panic!("expected node outputting a closure");
         };
-        let closure_outputs =
-            return_ty.repr().info().lir_repr.expect("closure return type must have known ABI");
+        let closure_outputs: SmallVec<[lir::ValType; 1]> = return_ty
+            .repr()
+            .info()
+            .mem_repr
+            .expect("closure return type must have known ABI")
+            .iter()
+            .map(|&(_, r#type)| r#type)
+            .collect();
+        let closure_outputs_len = closure_outputs.len();
 
         match self.recipients {
             AskRecipient::SingleTurtle(recipient) | AskRecipient::SinglePatch(recipient) => {
@@ -225,11 +232,11 @@ impl Node for Of {
 
                 let pc = lir_builder.push_lir_insn(lir::InsnKind::CallIndirectFunction {
                     function: fn_ptr,
-                    output_type: closure_outputs.into(),
+                    output_type: closure_outputs,
                     args: Box::from([env_ptr, ctx_ptr, recipient]),
                 });
                 let output_vals =
-                    (0..closure_outputs.len()).map(|i| lir::ValRef(pc, i as u8)).collect();
+                    (0..closure_outputs_len).map(|i| lir::ValRef(pc, i as u8)).collect();
                 lir_builder.node_to_lir.insert(my_node_id, output_vals);
             }
             _ => todo!("TODO(mvp) write LIR code to indirectly call the closure or use a host fn"),

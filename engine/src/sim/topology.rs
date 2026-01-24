@@ -50,7 +50,10 @@ impl Point {
 static POINT_TYPE_INFO: TypeInfo = TypeInfo::new::<Point>(TypeInfoOptions {
     debug_name: "Point",
     is_zeroable: true,
-    lir_repr: Some(&[lir::ValType::F64, lir::ValType::F64]),
+    mem_repr: Some(&[
+        (offset_of!(Point, x), lir::ValType::F64),
+        (offset_of!(Point, y), lir::ValType::F64),
+    ]),
 });
 
 impl Reflect for Point {

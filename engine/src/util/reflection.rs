@@ -56,7 +56,10 @@ pub struct TypeInfo {
     /// The caller must guarantee that the passed pointer is a valid pointer to
     /// T that can be dropped, and that that value will never be used again.
     pub drop_fn: unsafe fn(*mut ()),
-    pub lir_repr: Option<&'static [lir::ValType]>,
+    /// Each value that maps as a separate register when this type is
+    /// loaded from or stored into memory corresponds to a tuple of the offset
+    /// and LIR type of the value.
+    pub mem_repr: Option<&'static [(usize, lir::ValType)]>,
 }
 
 /// A helper struct to pass as options to [`TypeInfo::new`]
@@ -64,7 +67,7 @@ pub struct TypeInfoOptions {
     // TODO(wishlist) once stable, use const_type_name to automatically generate this
     pub debug_name: &'static str,
     pub is_zeroable: bool,
-    pub lir_repr: Option<&'static [lir::ValType]>,
+    pub mem_repr: Option<&'static [(usize, lir::ValType)]>,
 }
 
 impl TypeInfo {
@@ -81,14 +84,14 @@ impl TypeInfo {
             }
         }
 
-        let TypeInfoOptions { debug_name, is_zeroable, lir_repr } = options;
+        let TypeInfoOptions { debug_name, is_zeroable, mem_repr } = options;
 
         Self {
             debug_name,
             layout: Layout::new::<T>(),
             is_zeroable,
             drop_fn: drop_impl::<T>,
-            lir_repr,
+            mem_repr,
         }
     }
 }

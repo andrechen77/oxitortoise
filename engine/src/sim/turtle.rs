@@ -67,7 +67,7 @@ impl TurtleId {
 static TURTLE_ID_TYPE_INFO: TypeInfo = TypeInfo::new::<TurtleId>(TypeInfoOptions {
     debug_name: "TurtleId",
     is_zeroable: false,
-    lir_repr: Some(&[lir::ValType::I64]),
+    mem_repr: Some(&[(0, lir::ValType::I64)]),
 });
 
 impl Reflect for TurtleId {
@@ -314,7 +314,7 @@ pub struct TurtleBaseData {
 static TURTLE_BASE_DATA_TYPE_INFO: TypeInfo = TypeInfo::new::<TurtleBaseData>(TypeInfoOptions {
     debug_name: "TurtleBaseData",
     is_zeroable: false,
-    lir_repr: None,
+    mem_repr: None,
 });
 
 impl Reflect for TurtleBaseData {

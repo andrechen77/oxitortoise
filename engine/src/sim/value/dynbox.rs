@@ -89,7 +89,7 @@ impl DynBox {
 static DYN_BOX_TYPE_INFO: TypeInfo = TypeInfo::new::<DynBox>(TypeInfoOptions {
     debug_name: "DynBox",
     is_zeroable: true,
-    lir_repr: Some(&[lir::ValType::F64]),
+    mem_repr: Some(&[(0, lir::ValType::F64)]),
 });
 
 impl Reflect for DynBox {

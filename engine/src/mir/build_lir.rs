@@ -65,8 +65,10 @@ fn translate_function_signature(
                 .ty
                 .repr()
                 .info()
-                .lir_repr
-                .expect("function parameter must have known ABI"),
+                .mem_repr
+                .expect("function parameter must have known ABI")
+                .iter()
+                .map(|&(_, r#type)| r#type),
         );
     }
     trace!("adding return value with type {:?}", function.return_ty);
@@ -74,9 +76,12 @@ fn translate_function_signature(
         .return_ty
         .repr()
         .info()
-        .lir_repr
-        .expect("function return type must have known ABI");
-    (params, return_value.into())
+        .mem_repr
+        .expect("function return type must have known ABI")
+        .iter()
+        .map(|&(_, r#type)| r#type)
+        .collect();
+    (params, return_value)
 }
 
 #[derive(Debug)]
@@ -170,13 +175,16 @@ fn translate_function_body(
         let local_decl = &program.locals[local_id];
         match local_decl.storage {
             mir::LocalStorage::Register => {
-                let &[lir_type] = local_decl
+                let lir_types: SmallVec<[lir::ValType; 1]> = local_decl
                     .ty
                     .repr()
                     .info()
-                    .lir_repr
+                    .mem_repr
                     .expect("local variable must have known ABI")
-                else {
+                    .iter()
+                    .map(|&(_, r#type)| r#type)
+                    .collect();
+                let &[lir_type] = lir_types.as_slice() else {
                     unimplemented!("handle local variables that take up multiple LIR values")
                 };
                 let lir_var_id = lir_local_var_types.push_and_get_key(lir_type);
@@ -199,9 +207,11 @@ fn translate_function_body(
             .return_ty
             .repr()
             .info()
-            .lir_repr
+            .mem_repr
             .expect("function return type must have known ABI")
-            .into(),
+            .iter()
+            .map(|&(_, r#type)| r#type)
+            .collect(),
         body: main_body,
     };
     let num_lir_parameters = lir_local_var_types.len();

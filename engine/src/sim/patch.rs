@@ -40,7 +40,7 @@ impl Default for PatchId {
 static PATCH_ID_TYPE_INFO: TypeInfo = TypeInfo::new::<PatchId>(TypeInfoOptions {
     debug_name: "PatchId",
     is_zeroable: false,
-    lir_repr: Some(&[lir::ValType::I32]),
+    mem_repr: Some(&[(0, lir::ValType::I32)]),
 });
 
 impl Reflect for PatchId {
@@ -283,7 +283,7 @@ pub struct PatchBaseData {
 static PATCH_BASE_DATA_TYPE_INFO: TypeInfo = TypeInfo::new::<PatchBaseData>(TypeInfoOptions {
     debug_name: "PatchBaseData",
     is_zeroable: false,
-    lir_repr: None,
+    mem_repr: None,
 });
 
 impl Reflect for PatchBaseData {

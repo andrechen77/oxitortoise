@@ -38,17 +38,17 @@ impl Node for MemLoad {
         my_node_id: NodeId,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
-        let lir_types = self.ty.info().lir_repr.expect("mem load type must have known ABI");
+        let mem_repr = self.ty.info().mem_repr.expect("mem load type must have known ABI");
 
         let &[ptr] = lir_builder.get_node_results(program, self.ptr) else {
             panic!("expected a node that outputs a pointer to be a single LIR value");
         };
         let mut val_refs = SmallVec::new();
-        for lir_type in lir_types {
+        for &(additional_offset, r#type) in mem_repr {
             let pc = lir_builder.push_lir_insn(lir::InsnKind::MemLoad {
-                r#type: *lir_type,
+                r#type,
                 ptr,
-                offset: self.offset,
+                offset: self.offset + additional_offset,
             });
             val_refs.push(lir::ValRef(pc, 0));
         }
@@ -90,12 +90,22 @@ impl Node for MemStore {
         let &[ptr] = lir_builder.get_node_results(program, self.ptr) else {
             panic!("expected a node that outputs a pointer to be a single LIR value");
         };
-        let &[value] = lir_builder.get_node_results(program, self.value) else {
-            panic!(
-                "expected a node that outputs a about-to-be-stored value to be a single LIR value"
-            );
-        };
-        lir_builder.push_lir_insn(lir::InsnKind::MemStore { ptr, value, offset: self.offset });
+
+        let ty = program.nodes[self.value].output_type(program, lir_builder.fn_id).repr();
+        let mem_repr = ty.info().mem_repr.expect("mem store value type must have known ABI");
+        let values = lir_builder.get_node_results(program, self.value).to_owned();
+        assert_eq!(
+            values.len(),
+            mem_repr.len(),
+            "mem store value must have same number of registers as the type"
+        );
+        for (&(additional_offset, r#type), &value) in mem_repr.iter().zip(values.iter()) {
+            lir_builder.push_lir_insn(lir::InsnKind::MemStore {
+                offset: self.offset + additional_offset,
+                ptr,
+                value,
+            });
+        }
         Ok(())
     }
 }
