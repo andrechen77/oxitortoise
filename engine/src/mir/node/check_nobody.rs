@@ -44,11 +44,8 @@ impl Node for CheckNobody {
                 panic!("expected a node that outputs a patch ID to be a single LIR register");
             };
 
-            let sentinel = lir_builder.push_lir_insn(lir::InsnKind::Const(lir::Const {
-                ty: lir::ValType::I32,
-                value: OptionPatchId::NOBODY.0 as u64,
-            }));
-
+            let sentinel = lir_builder
+                .push_lir_insn(lir::InsnKind::Const(lir::Value::I32(OptionPatchId::NOBODY.0)));
             let opcode = if self.negate { lir::BinaryOpcode::INeq } else { lir::BinaryOpcode::IEq };
             let condition = lir_builder.push_lir_insn(lir::InsnKind::BinaryOp {
                 op: opcode,

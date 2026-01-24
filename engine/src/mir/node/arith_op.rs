@@ -173,10 +173,8 @@ impl Node for BinaryOperation {
             Ok(())
         } else if lhs_type == DynBox::CONCRETE_TY && rhs_type == DynBox::CONCRETE_TY {
             let opcode = self.op as u32;
-            let opcode_val = lir_builder.push_lir_insn(lir::InsnKind::Const(lir::Const {
-                ty: lir::ValType::I32,
-                value: opcode as u64,
-            }));
+            let opcode_val =
+                lir_builder.push_lir_insn(lir::InsnKind::Const(lir::Value::I32(opcode)));
             let pc = match self.op {
                 Op::And | Op::Or | Op::Eq | Op::Neq | Op::Lt | Op::Lte | Op::Gt | Op::Gte => {
                     lir_builder.push_lir_insn(lir::generate_host_function_call(

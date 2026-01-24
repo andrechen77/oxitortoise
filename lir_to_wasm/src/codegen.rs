@@ -453,8 +453,8 @@ fn write_code<A: FnTableSlotAllocator>(
                 // args, however, loop args do output values onto the
                 // operand stack, so things are automatically handled.
             }
-            I::Const(lir::Const { ty: r#type, value }) => {
-                insn_builder.const_(translate_val(*r#type, *value));
+            I::Const(value) => {
+                insn_builder.const_(translate_val(*value));
             }
             I::UserFunctionPtr { function } => {
                 let slot = addr_of_function(mod_info, *function);
@@ -702,14 +702,14 @@ fn translate_val_type(r#type: lir::ValType) -> walrus::ValType {
 }
 
 /// Translate a LIR value to a Wasm value.
-fn translate_val(r#type: lir::ValType, value: u64) -> walrus::ir::Value {
-    match r#type {
-        lir::ValType::I32 => wir::Value::I32(value as i32),
-        lir::ValType::I64 => wir::Value::I64(value as i64),
-        lir::ValType::F64 => wir::Value::F64(value as f64),
-        // only if pointer width is 32 bits
-        lir::ValType::Ptr => wir::Value::I32(value as i32),
-        lir::ValType::FnPtr => wir::Value::I32(value as i32),
+fn translate_val(value: lir::Value) -> walrus::ir::Value {
+    match value {
+        lir::Value::I32(value) => wir::Value::I32(value as i32),
+        lir::Value::I64(value) => wir::Value::I64(value as i64),
+        lir::Value::F64(value) => wir::Value::F64(value),
+        // TODO this is only valid if pointers are 32 bits
+        lir::Value::Ptr(value) => wir::Value::I32(value.addr() as i32),
+        lir::Value::FnPtr(value) => wir::Value::I32(value.addr() as i32),
     }
 }
 
@@ -954,7 +954,7 @@ mod tests {
             main: {
                 [a, b] = call_host_fn(host_fn -> [F64, I32])(
                     constant(I32, 10),
-                    constant(F64, 20)
+                    constant(F64, 20.0)
                 );
                 break_(main)(a, b);
             }
@@ -989,7 +989,7 @@ mod tests {
             vars: [],
             stack_space: 0,
             main: {
-                [a] = call_user_function(callee_id -> [I32])(constant(F64, 1));
+                [a] = call_user_function(callee_id -> [I32])(constant(F64, 1.0));
                 break_(main)(a);
             }
         }

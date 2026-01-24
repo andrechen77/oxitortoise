@@ -51,10 +51,8 @@ impl Node for Diffuse {
             .expect("patch schema should exist at this point")
             .field_desc_and_offset(self.variable);
 
-        let field_desc = lir_builder.push_lir_insn(lir::InsnKind::Const(lir::Const {
-            ty: lir::ValType::I32,
-            value: field_desc.to_u16() as u64,
-        }));
+        let field_desc = lir_builder
+            .push_lir_insn(lir::InsnKind::Const(lir::Value::I32(field_desc.to_u16() as u32)));
 
         let &[amt] = lir_builder.get_node_results(program, self.amt) else {
             panic!("expected node outputting amt to be a single LIR value")

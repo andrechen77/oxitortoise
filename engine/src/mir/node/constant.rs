@@ -46,10 +46,7 @@ impl Node for Constant {
         let _ = my_node_id;
         match self.value {
             UnpackedDynBox::Float(value) => {
-                let pc = lir_builder.push_lir_insn(lir::InsnKind::Const(lir::Const {
-                    value: f64::to_bits(value),
-                    ty: lir::ValType::F64,
-                }));
+                let pc = lir_builder.push_lir_insn(lir::InsnKind::Const(lir::Value::F64(value)));
                 lir_builder.node_to_lir.insert(my_node_id, smallvec![lir::ValRef(pc, 0)]);
                 Ok(())
             }

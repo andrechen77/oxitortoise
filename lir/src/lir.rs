@@ -143,8 +143,8 @@ pub enum InsnKind {
         /// This is not considered an input to this instruction.
         initial_value: ValRef,
     },
-    #[display("constant(ty={}, value={})", _0.ty, _0.value)]
-    Const(Const),
+    #[display("constant(value={:?})", _0)]
+    Const(Value),
     #[display("user_fn_ptr({:?})", function)]
     UserFunctionPtr {
         function: FunctionId,
@@ -279,15 +279,43 @@ pub enum InsnKind {
     Loop(Loop),
 }
 
-#[derive(PartialEq, Eq, Debug)]
-pub struct Const {
-    pub ty: ValType,
-    /// The bit pattern of the value to store.
-    pub value: u64,
+#[derive(Debug, Clone, Copy)]
+pub enum Value {
+    I32(u32),
+    I64(u64),
+    F64(f64),
+    Ptr(*const u8),
+    FnPtr(*const u8),
 }
 
-impl Const {
-    pub const NULL: Self = Self { ty: ValType::Ptr, value: 0 };
+impl PartialEq for Value {
+    fn eq(&self, other: &Self) -> bool {
+        use Value::*;
+        match (self, other) {
+            (I32(a), I32(b)) => a == b,
+            (I64(a), I64(b)) => a == b,
+            (F64(a), F64(b)) => a.to_bits() == b.to_bits(),
+            (Ptr(a), Ptr(b)) => a.addr() == b.addr(),
+            (FnPtr(a), FnPtr(b)) => a.addr() == b.addr(),
+            _ => false,
+        }
+    }
+}
+
+impl Eq for Value {}
+
+impl Value {
+    pub const NULL: Self = Self::Ptr(std::ptr::null());
+
+    fn ty(&self) -> ValType {
+        match self {
+            Self::I32(_) => ValType::I32,
+            Self::I64(_) => ValType::I64,
+            Self::F64(_) => ValType::F64,
+            Self::Ptr(_) => ValType::Ptr,
+            Self::FnPtr(_) => ValType::FnPtr,
+        }
+    }
 }
 
 #[derive(PartialEq, Eq, Debug, Display)]
@@ -457,8 +485,8 @@ pub fn infer_output_types(function: &Function) -> HashMap<ValRef, ValType> {
 
         fn visit_insn(&mut self, insn: &InsnKind, pc: InsnPc) {
             match insn {
-                InsnKind::Const(Const { ty: r#type, .. }) => {
-                    self.types.insert(ValRef(pc, 0), *r#type);
+                InsnKind::Const(value) => {
+                    self.types.insert(ValRef(pc, 0), value.ty());
                 }
                 InsnKind::UserFunctionPtr { .. } => {
                     self.types.insert(ValRef(pc, 0), ValType::FnPtr);

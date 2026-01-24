@@ -54,8 +54,7 @@ impl Node for Closure {
     ) -> Result<(), WriteLirError> {
         // insert an instruction to create the env pointer
         let mk_env_ptr = if self.captures.is_empty() {
-            lir_builder
-                .push_lir_insn(lir::InsnKind::Const(lir::Const { ty: lir::ValType::Ptr, value: 0 }))
+            lir_builder.push_lir_insn(lir::InsnKind::Const(lir::Value::NULL))
         } else {
             // TODO(mvp) verify that the captured variables are on the stack and
             // create a pointer to the stack frame

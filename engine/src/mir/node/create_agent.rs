@@ -48,10 +48,8 @@ impl Node for CreateTurtles {
         let &[ctx_ptr] = lir_builder.get_node_results(program, self.context) else {
             panic!("expected node outputting context pointer to be a single LIR value")
         };
-        let breed_id = lir_builder.push_lir_insn(lir::InsnKind::Const(lir::Const {
-            ty: lir::ValType::I64,
-            value: self.breed.data().as_ffi(),
-        }));
+        let breed_id = lir_builder
+            .push_lir_insn(lir::InsnKind::Const(lir::Value::I64(self.breed.data().as_ffi())));
         let &[num_turtles] = lir_builder.get_node_results(program, self.num_turtles) else {
             panic!("expected node outputting number of turtles to be a single LIR value")
         };

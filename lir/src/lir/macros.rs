@@ -5,10 +5,7 @@ macro_rules! push_node {
     };
     ($ctx:expr; [$val_ref:ident] = constant($ty:ident, $value:expr)) => {
         let insn_idx = $ctx.0[$ctx.1].push_and_get_key(
-            $crate::InsnKind::Const($crate::Const {
-                ty: $crate::ValType::$ty,
-                value: $value,
-            })
+            $crate::InsnKind::Const($crate::Value::$ty($value))
         );
         let $val_ref = $crate::ValRef($crate::InsnPc($ctx.1, insn_idx), 0);
         $ctx.2.insert($val_ref, stringify!($val_ref).into());
