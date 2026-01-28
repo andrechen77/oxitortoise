@@ -1,7 +1,3 @@
-// when compiling to wasm, you must pass -Zwasm-c-abi=spec to rustc for correct
-// compatibility with Emscripten-emitted Wasm. Add this to .cargo/config.toml or
-// pass via RUSTFLAGS.
-
 use std::collections::HashMap;
 
 use engine::{
