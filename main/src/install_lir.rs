@@ -22,9 +22,12 @@ static FUNCTION_INSTALLER: LazyLock<Mutex<FunctionInstaller>> = LazyLock::new(||
 
 pub unsafe fn install_lir(
     lir: &lir::Program,
-) -> Result<HashMap<lir::FunctionId, JitEntrypoint>, InstallLirError> {
+) -> Result<(HashMap<lir::FunctionId, JitEntrypoint>, Vec<u8>), (InstallLirError, Vec<u8>)> {
     unsafe {
-        FUNCTION_INSTALLER.lock().map_err(|_| InstallLirError::InstallerPoisoned)?.install_lir(lir)
+        FUNCTION_INSTALLER
+            .lock()
+            .map_err(|_| (InstallLirError::InstallerPoisoned, vec![]))?
+            .install_lir(lir)
     }
 }
 
@@ -104,7 +107,8 @@ impl FunctionInstaller {
     unsafe fn install_lir(
         &mut self,
         lir: &lir::Program,
-    ) -> Result<HashMap<lir::FunctionId, JitEntrypoint>, InstallLirError> {
+    ) -> Result<(HashMap<lir::FunctionId, JitEntrypoint>, Vec<u8>), (InstallLirError, Vec<u8>)>
+    {
         struct A<'a>(&'a mut BinaryHeap<Reverse<usize>>);
         impl<'a> lir_to_wasm::FnTableSlotAllocator for A<'a> {
             fn allocate_slot(&mut self) -> usize {
@@ -134,7 +138,7 @@ impl FunctionInstaller {
         // cause undefined behavior in the current instance
         let success = unsafe { instantiate_module(module_bytes.as_ptr(), module_bytes.len()) };
         if !success {
-            return Err(InstallLirError::RuntimeError);
+            return Err((InstallLirError::RuntimeError, module_bytes));
         }
 
         // return the function pointers to the installed functions.
@@ -156,6 +160,6 @@ impl FunctionInstaller {
                     ),
                 )
             }));
-        Ok(jit_entries)
+        Ok((jit_entries, module_bytes))
     }
 }

@@ -4,7 +4,7 @@ use derive_more::derive::Display;
 use lir::smallvec::{SmallVec, smallvec};
 
 use crate::{
-    exec::jit::host_fn,
+    exec::jit::InstallLir,
     mir::{
         ClosureType, FunctionId, MirTy, NlAbstractTy, Node, NodeId, NodeKind, NodeTransform,
         Program, WriteLirError, build_lir::LirInsnBuilder, node,
@@ -80,26 +80,26 @@ impl Node for Ask {
         Some(Box::new(type_erase_ask))
     }
 
-    fn write_lir_execution(
+    fn write_lir_execution<I: InstallLir>(
         &self,
         program: &Program,
         my_node_id: NodeId,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
-        let &[ctx_ptr] = lir_builder.get_node_results(program, self.context) else {
+        let &[ctx_ptr] = lir_builder.get_node_results::<I>(program, self.context) else {
             panic!("expected node outputting context pointer to be a single LIR value")
         };
-        let &[env_ptr, fn_ptr] = lir_builder.get_node_results(program, self.body) else {
+        let &[env_ptr, fn_ptr] = lir_builder.get_node_results::<I>(program, self.body) else {
             panic!("expected node outputting closure body to be two LIR values");
         };
 
         let lir_insn = match self.recipients {
             AskRecipient::AllTurtles => lir::generate_host_function_call(
-                host_fn::ASK_ALL_TURTLES,
+                I::HOST_FUNCTION_TABLE.ask_all_turtles,
                 Box::new([ctx_ptr, env_ptr, fn_ptr]),
             ),
             AskRecipient::AllPatches => lir::generate_host_function_call(
-                host_fn::ASK_ALL_PATCHES,
+                I::HOST_FUNCTION_TABLE.ask_all_patches,
                 Box::new([ctx_ptr, env_ptr, fn_ptr]),
             ),
             _ => todo!("TODO(mvp) write LIR code to call a host function"),
@@ -193,16 +193,16 @@ impl Node for Of {
         Some(Box::new(narrow_recipient_type))
     }
 
-    fn write_lir_execution(
+    fn write_lir_execution<I: InstallLir>(
         &self,
         program: &Program,
         my_node_id: NodeId,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
-        let &[env_ptr, fn_ptr] = lir_builder.get_node_results(program, self.body) else {
+        let &[env_ptr, fn_ptr] = lir_builder.get_node_results::<I>(program, self.body) else {
             panic!("expected node outputting closure body to be two LIR values");
         };
-        let &[ctx_ptr] = lir_builder.get_node_results(program, self.context) else {
+        let &[ctx_ptr] = lir_builder.get_node_results::<I>(program, self.context) else {
             panic!("expected node outputting context pointer to be a single LIR value");
         };
 
@@ -226,7 +226,7 @@ impl Node for Of {
 
         match self.recipients {
             AskRecipient::SingleTurtle(recipient) | AskRecipient::SinglePatch(recipient) => {
-                let &[recipient] = lir_builder.get_node_results(program, recipient) else {
+                let &[recipient] = lir_builder.get_node_results::<I>(program, recipient) else {
                     panic!("expected node outputting recipients to be a single LIR value");
                 };
 

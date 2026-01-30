@@ -4,7 +4,7 @@ use derive_more::derive::Display;
 use lir::smallvec::smallvec;
 
 use crate::{
-    exec::jit::host_fn,
+    exec::jit::InstallLir,
     mir::{
         FunctionId, MirTy, NlAbstractTy, Node, NodeId, Program, WriteLirError,
         build_lir::LirInsnBuilder,
@@ -37,7 +37,7 @@ impl Node for Constant {
         .into()
     }
 
-    fn write_lir_execution(
+    fn write_lir_execution<I: InstallLir>(
         &self,
         _program: &Program,
         my_node_id: NodeId,
@@ -74,7 +74,7 @@ impl Node for ListLiteral {
         NlAbstractTy::List { element_ty: Box::new(NlAbstractTy::Top) }.into()
     }
 
-    fn write_lir_execution(
+    fn write_lir_execution<I: InstallLir>(
         &self,
         program: &Program,
         my_node_id: NodeId,
@@ -85,16 +85,16 @@ impl Node for ListLiteral {
 
         // insert an instruction to create an empty list
         let pc_new_list = lir_builder
-            .push_lir_insn(lir::generate_host_function_call(host_fn::LIST_NEW, Box::from([])));
+            .push_lir_insn(lir::generate_host_function_call(I::HOST_FUNCTION_TABLE.list_new, Box::from([])));
         current_list = lir::ValRef(pc_new_list, 0);
 
         // insert instructions to push elements to the list
         for item in &self.items {
-            let &[item] = lir_builder.get_node_results(program, *item) else {
+            let &[item] = lir_builder.get_node_results::<I>(program, *item) else {
                 todo!("TODO(mvp) handle multi-register values");
             };
             let pc_push = lir_builder.push_lir_insn(lir::generate_host_function_call(
-                host_fn::LIST_PUSH,
+                I::HOST_FUNCTION_TABLE.list_push,
                 Box::from([current_list, item]),
             ));
             current_list = lir::ValRef(pc_push, 0);

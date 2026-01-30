@@ -3,7 +3,7 @@
 use derive_more::derive::Display;
 
 use crate::{
-    exec::jit::host_fn,
+    exec::jit::InstallLir,
     mir::{
         FunctionId, MirTy, NlAbstractTy, Node, NodeId, Program, WriteLirError,
         build_lir::LirInsnBuilder,
@@ -35,13 +35,13 @@ impl Node for Diffuse {
         NlAbstractTy::Unit.into()
     }
 
-    fn write_lir_execution(
+    fn write_lir_execution<I: InstallLir>(
         &self,
         program: &Program,
         _my_node_id: NodeId,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
-        let &[ctx] = lir_builder.get_node_results(program, self.context) else {
+        let &[ctx] = lir_builder.get_node_results::<I>(program, self.context) else {
             panic!("expected node outputting context pointer to be a single LIR value")
         };
 
@@ -54,12 +54,12 @@ impl Node for Diffuse {
         let field_desc = lir_builder
             .push_lir_insn(lir::InsnKind::Const(lir::Value::I32(field_desc.to_u16() as u32)));
 
-        let &[amt] = lir_builder.get_node_results(program, self.amt) else {
+        let &[amt] = lir_builder.get_node_results::<I>(program, self.amt) else {
             panic!("expected node outputting amt to be a single LIR value")
         };
 
         lir_builder.push_lir_insn(lir::generate_host_function_call(
-            host_fn::DIFFUSE_8_SINGLE_VARIABLE_BUFFER,
+            I::HOST_FUNCTION_TABLE.diffuse_8_single_variable_buffer,
             Box::new([ctx, lir::ValRef(field_desc, 0), amt]),
         ));
 

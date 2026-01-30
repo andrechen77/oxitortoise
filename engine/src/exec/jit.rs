@@ -1,6 +1,7 @@
 use std::{collections::HashMap, marker::PhantomData};
 
 use crate::exec::CanonExecutionContext;
+use lir::HostFunction as Hf;
 
 pub enum InstallLirError {
     /// Installer state was corrupted and cannot be used to install new
@@ -23,7 +24,9 @@ pub trait InstallLir {
     /// cause undefined behavior.
     unsafe fn install_lir(
         lir: &lir::Program,
-    ) -> Result<HashMap<lir::FunctionId, JitEntrypoint>, InstallLirError>;
+    ) -> Result<(HashMap<lir::FunctionId, JitEntrypoint>, Vec<u8>), (InstallLirError, Vec<u8>)>;
+
+    const HOST_FUNCTION_TABLE: HostFunctionTable;
 }
 
 // TODO(wishlist) currently we have hardcoded constants to define what the
@@ -55,8 +58,8 @@ impl JitEntrypoint {
 
 #[repr(C)]
 pub struct JitCallback<'env, Arg, Ret> {
-    pub fn_ptr: extern "C" fn(*mut u8, &mut CanonExecutionContext, Arg) -> Ret,
     pub env: *mut u8,
+    pub fn_ptr: extern "C" fn(*mut u8, &mut CanonExecutionContext, Arg) -> Ret,
     pub _phantom: PhantomData<&'env mut ()>,
 }
 
@@ -73,154 +76,28 @@ impl<'env, Arg, Ret> JitCallback<'env, Arg, Ret> {
     }
 }
 
-// TODO(mvp) this should be automatically generated from the signatures
-// of the actual host functions (probably done from the main crate rather than
-// the engine crate).
-//
-// TODO(mvp_ants) once the compiler pipeline is done, double-check that the
-// signatures match.
-#[rustfmt::skip] // keep struct definitions over multiple lines
-pub mod host_fn {
-    use lir::{HostFunction as Hf, HostFunctionInfo};
-    use lir::ValType::{I32, I64, F64, FnPtr, Ptr};
-
-    pub static CLEAR_ALL: Hf = Hf(&HostFunctionInfo {
-        name: "clear_all",
-        parameter_types: &[Ptr],
-        return_type: &[],
-    });
-
-    pub static RESET_TICKS: Hf = Hf(&HostFunctionInfo {
-        name: "reset_ticks",
-        parameter_types: &[Ptr],
-        return_type: &[],
-    });
-
-    // fn advance_tick(context: &mut Context)
-    pub static ADVANCE_TICK: Hf = Hf(&HostFunctionInfo {
-        name: "advance_tick",
-        parameter_types: &[Ptr],
-        return_type: &[],
-    });
-
-    // fn get_tick(context: &mut Context) -> NlFloat
-    pub static GET_TICK: Hf = Hf(&HostFunctionInfo {
-        name: "get_tick",
-        parameter_types: &[Ptr],
-        return_type: &[F64],
-    });
-
-    pub static CREATE_TURTLES: Hf = Hf(&HostFunctionInfo {
-        name: "reset_ticks",
-        parameter_types: &[Ptr],
-        return_type: &[],
-    });
-
-    pub static ASK_ALL_TURTLES: Hf = Hf(&HostFunctionInfo {
-        name: "for_all_turtles",
-        parameter_types: &[Ptr, Ptr, FnPtr],
-        return_type: &[],
-    });
-
-    pub static ASK_ALL_PATCHES: Hf = Hf(&HostFunctionInfo {
-        name: "for_all_patches",
-        parameter_types: &[Ptr, Ptr, FnPtr],
-        return_type: &[],
-    });
-
-    pub static EUCLIDEAN_DISTANCE_NO_WRAP: Hf = Hf(&HostFunctionInfo {
-        name: "distance_euclidean_no_wrap",
-        parameter_types: &[F64, F64, F64, F64],
-        return_type: &[F64],
-    });
-
-    // fn list_new() -> NlBox<NlList>
-    pub static LIST_NEW: Hf = Hf(&HostFunctionInfo {
-        name: "list_new",
-        parameter_types: &[],
-        return_type: &[Ptr],
-    });
-
-    // fn list_push(list: NlBox<NlList>, element: DynBox) -> NlBox<NlList>
-    pub static LIST_PUSH: Hf = Hf(&HostFunctionInfo {
-        name: "list_push",
-        parameter_types: &[Ptr, F64],
-        return_type: &[Ptr]
-    });
-
-    // fn one_of_list(context: &mut CanonExecutionContext, list: NlBox<NlList>) -> DynBox
-    pub static ONE_OF_LIST: Hf = Hf(&HostFunctionInfo {
-        name: "one_of_list",
-        parameter_types: &[Ptr, Ptr],
-        return_type: &[Ptr],
-    });
-
-    // fn scale_color(color: Color, number: NlFloat, range1: NlFloat, range2: NlFloat) -> Color
-    pub static SCALE_COLOR: Hf = Hf(&HostFunctionInfo {
-        name: "scale_color",
-        parameter_types: &[F64, F64, F64, F64],
-        return_type: &[F64],
-    });
-
-    // fn rotate_turtle(context: &mut CanonExecutionContext, turtle_id: TurtleId, angle: NlFloat)
-    pub static ROTATE_TURTLE: Hf = Hf(&HostFunctionInfo {
-        name: "rotate_turtle",
-        parameter_types: &[Ptr, I64, F64],
-        return_type: &[],
-    });
-
-    // fn turtle_forward(context: &mut CanonExecutionContext, turtle_id: TurtleId, distance: NlFloat)
-    pub static TURTLE_FORWARD: Hf = Hf(&HostFunctionInfo {
-        name: "turtle_forward",
-        parameter_types: &[Ptr, I64, F64],
-        return_type: &[],
-    });
-
-    // fn patch_at(context: &mut CanonExecutionContext, point: Point) -> OptionPatchId
-    pub static PATCH_AT: Hf = Hf(&HostFunctionInfo {
-        name: "patch_at",
-        parameter_types: &[Ptr, F64, F64],
-        return_type: &[I32],
-    });
-
-    // fn random_int(context: &mut CanonExecutionContext, max: NlFloat) -> NlFloat
-    pub static RANDOM_INT: Hf = Hf(&HostFunctionInfo {
-        name: "random_int",
-        parameter_types: &[Ptr, F64],
-        return_type: &[F64],
-    });
-
-    // fn dynbox_binary_op(lhs: DynBox, rhs: DynBox, op: u8) -> DynBox
-    pub static DYNBOX_BINARY_OP: Hf = Hf(&HostFunctionInfo {
-        name: "dynbox_binary_op",
-        parameter_types: &[F64, F64, I32],
-        return_type: &[F64],
-    });
-
-    pub static DYNBOX_BOOL_BINARY_OP: Hf = Hf(&HostFunctionInfo {
-        name: "dynbox_bool_binary_op",
-        parameter_types: &[F64, F64, I32],
-        return_type: &[I32],
-    });
-
-    // fn patch_ahead(context: &mut CanonExecutionContext, turtle_id: u64, distance: NlFloat) -> PatchId
-    pub static PATCH_AHEAD: Hf = Hf(&HostFunctionInfo {
-        name: "patch_ahead",
-        parameter_types: &[Ptr, I64, F64],
-        return_type: &[I32],
-    });
-
-    // fn patch_right_and_ahead(context: &mut CanonExecutionContext, turtle_id: u64, distance: NlFloat, angle: NlFloat) -> PatchId
-    pub static PATCH_RIGHT_AND_AHEAD: Hf = Hf(&HostFunctionInfo {
-        name: "patch_right_and_ahead",
-        parameter_types: &[Ptr, I64, F64, F64],
-        return_type: &[I32],
-    });
-
-    // fn diffuse_8_single_variable_buffer(ctx: &mut CanonExecutionContext, field: AgentFieldDescriptor, fraction: NlFloat)
-    pub static DIFFUSE_8_SINGLE_VARIABLE_BUFFER: Hf = Hf(&HostFunctionInfo {
-        name: "diffuse_8_single_variable_buffer",
-        parameter_types: &[Ptr, I32, F64],
-        return_type: &[],
-    });
+/// A hard-coded table of all host function that the engine needs to generate
+/// the proper calls from LIR.
+pub struct HostFunctionTable {
+    pub clear_all: Hf,
+    pub reset_ticks: Hf,
+    pub advance_tick: Hf,
+    pub get_tick: Hf,
+    pub create_turtles: Hf,
+    pub ask_all_turtles: Hf,
+    pub ask_all_patches: Hf,
+    pub euclidean_distance_no_wrap: Hf,
+    pub list_new: Hf,
+    pub list_push: Hf,
+    pub one_of_list: Hf,
+    pub scale_color: Hf,
+    pub rotate_turtle: Hf,
+    pub turtle_forward: Hf,
+    pub patch_at: Hf,
+    pub random_int: Hf,
+    pub dynbox_binary_op: Hf,
+    pub dynbox_bool_binary_op: Hf,
+    pub patch_ahead: Hf,
+    pub patch_right_and_ahead: Hf,
+    pub diffuse_8_single_variable_buffer: Hf,
 }

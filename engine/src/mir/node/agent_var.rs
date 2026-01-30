@@ -6,7 +6,7 @@ use derive_more::derive::Display;
 use lir::smallvec::smallvec;
 
 use crate::{
-    exec::CanonExecutionContext,
+    exec::{CanonExecutionContext, jit::InstallLir},
     mir::{
         FunctionId, MirTy, NlAbstractTy, Node, NodeId, NodeKind, NodeTransform, Program,
         WriteLirError, build_lir::LirInsnBuilder, node,
@@ -278,13 +278,13 @@ impl Node for TurtleIdToIndex {
         AGENT_INDEX_CONCRETE_TY.into()
     }
 
-    fn write_lir_execution(
+    fn write_lir_execution<I: InstallLir>(
         &self,
         program: &Program,
         my_node_id: NodeId,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
-        let &[turtle_id] = lir_builder.get_node_results(program, self.turtle_id) else {
+        let &[turtle_id] = lir_builder.get_node_results::<I>(program, self.turtle_id) else {
             panic!("expected node outputting turtle id to be a single LIR value");
         };
         let pc = lir_builder.push_lir_insn(lir::InsnKind::UnaryOp {

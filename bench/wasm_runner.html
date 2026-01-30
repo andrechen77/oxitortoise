@@ -8,17 +8,15 @@
 </head>
 
 <body>
-	<input type="text" id="module_file_name" placeholder="Module File Name">
+	<input type="text" id="model_name" placeholder="Model Name">
 	<button id="load">Load</button>
-	<button id="initialize">Initialize</button>
-	<button id="run_setup_and_go">Run Setup and Go</button>
+	<button id="run_main">
+		<pre>main()</pre>
+	</button>
 
 	<script>
-		async function instantiateMain(filename) {
+		async function instantiateMain(modelName) {
 			let wasmResult = null;
-			let modelCode = await fetch("/bench/models/ants/model_code.wasm")
-				.then(response => response.arrayBuffer())
-				.then(buffer => new Uint8Array(buffer));
 			let importObject = {
 				env: {
 					"write_to_console": (message, length) => {
@@ -26,13 +24,19 @@
 						let str = new TextDecoder().decode(new Uint8Array(mem, message, length));
 						console.log(str);
 					},
-					"get_model_code_size": () => {
-						return modelCode.length;
-					},
-					"write_model_code": (buffer) => {
-						let mem = wasmResult.instance.exports.memory.buffer;
-						let auxModuleBuffer = new Uint8Array(mem, buffer, modelCode.length);
-						auxModuleBuffer.set(modelCode);
+					"write_to_file": (namePtr, nameLength, bytesPtr, bytesLength) => {
+						let mainMemory = wasmResult.instance.exports.memory;
+						let bytes = new Uint8Array(mainMemory.buffer, bytesPtr, bytesLength);
+						let name = new TextDecoder().decode(new Uint8Array(mainMemory.buffer, namePtr, nameLength));
+						let blob = new Blob([bytes], { type: "application/octet-stream" });
+						let url = URL.createObjectURL(blob);
+						let a = document.createElement('a');
+						a.href = url;
+						a.download = name;
+						document.body.appendChild(a);
+						a.click();
+						document.body.removeChild(a);
+						URL.revokeObjectURL(url);
 					},
 					"instantiate_module": (auxModuleBufStart, auxModuleBufLen) => {
 						try {
@@ -68,36 +72,16 @@
 					},
 				}
 			}
-			wasmResult = await WebAssembly.instantiateStreaming(fetch(filename), importObject);
+			wasmResult = await WebAssembly.instantiateStreaming(fetch(`models/${modelName}/run.wasm`), importObject);
 			return wasmResult;
 		}
-
-		// async function fakeJitCompile(i) {
-		// 	console.log(`fakeJitCompile ${i}`);
-		// 	let table = wasmResult.instance.exports["jit_function_table"];
-		// 	let latest_index = table.grow(1);
-		// 	let jit_mod = await WebAssembly.instantiateStreaming(fetch("jit.wasm"), {});
-		// 	table.set(latest_index, jit_mod.instance.exports["increment_one"]);
-		// 	return latest_index;
-		// }
-
-		// async function load() {
-		// 	let importObject = {
-		// 		env: {
-		// 			"fake_jit_compile": fakeJitCompile,
-		// 		}
-		// 	};
-		// 	let obj = await WebAssembly.instantiateStreaming(fetch("lib.wasm"), importObject);
-		// 	console.log("finished instantiation");
-		// 	wasmResult = obj;
-		// }
 
 		var globalWasm = null;
 
 		async function load() {
 			console.log("loading");
-			let filename = document.getElementById('module_file_name').value;
-			globalWasm = await instantiateMain(filename);
+			let name = document.getElementById('model_name').value;
+			globalWasm = await instantiateMain(name);
 			console.log("loaded; the module is available at `var globalWasm`");
 		}
 
@@ -124,22 +108,14 @@
 			}
 		}
 
-		function initialize() {
-			console.log("initializing");
+		function run_main() {
+			console.log("running main()");
 			globalWasm.instance.exports.main();
-		}
-
-		function run_setup_and_go() {
-			let timerName = "running setup and go";
-			console.time(timerName);
-			globalWasm.instance.exports.run_setup_and_go();
-			console.timeEnd(timerName);
 		}
 
 		document.addEventListener('DOMContentLoaded', function () {
 			document.getElementById('load').addEventListener('click', load);
-			document.getElementById('initialize').addEventListener('click', initialize);
-			document.getElementById('run_setup_and_go').addEventListener('click', run_setup_and_go);
+			document.getElementById('run_main').addEventListener('click', run_main);
 		});
 	</script>
 </body>

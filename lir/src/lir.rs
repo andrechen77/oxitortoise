@@ -603,7 +603,6 @@ fn infer_binary_op_output_type(op: BinaryOpcode, lhs: ValType, rhs: ValType) -> 
 }
 
 pub fn generate_host_function_call(function: HostFunction, args: Box<[ValRef]>) -> InsnKind {
-    // TODO(mvp) validate that the types and number of arguments match
     InsnKind::CallHostFunction { function, output_type: function.return_type.into(), args }
 }
 

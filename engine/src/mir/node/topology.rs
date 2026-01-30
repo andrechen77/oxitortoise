@@ -6,7 +6,7 @@ use derive_more::derive::Display;
 use lir::smallvec::smallvec;
 
 use crate::{
-    exec::{CanonExecutionContext, jit::host_fn},
+    exec::{CanonExecutionContext, jit::InstallLir},
     mir::{
         FunctionId, MirTy, NlAbstractTy, Node, NodeId, NodeKind, NodeTransform, Program,
         WriteLirError, build_lir::LirInsnBuilder, node,
@@ -44,7 +44,7 @@ impl Node for OffsetDistanceByHeading {
         todo!("TODO(mvp) return Point type")
     }
 
-    fn write_lir_execution(
+    fn write_lir_execution<I: InstallLir>(
         &self,
         _program: &Program,
         _my_node_id: NodeId,
@@ -78,23 +78,23 @@ impl Node for PatchAt {
         NlAbstractTy::Patch.into()
     }
 
-    fn write_lir_execution(
+    fn write_lir_execution<I: InstallLir>(
         &self,
         program: &Program,
         my_node_id: NodeId,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
-        let &[ctx_ptr] = lir_builder.get_node_results(program, self.context) else {
+        let &[ctx_ptr] = lir_builder.get_node_results::<I>(program, self.context) else {
             panic!("expected node outputting context pointer to be a single LIR value")
         };
-        let &[x] = lir_builder.get_node_results(program, self.x) else {
+        let &[x] = lir_builder.get_node_results::<I>(program, self.x) else {
             panic!("expected node outputting x coordinate to be a single LIR value")
         };
-        let &[y] = lir_builder.get_node_results(program, self.y) else {
+        let &[y] = lir_builder.get_node_results::<I>(program, self.y) else {
             panic!("expected node outputting y coordinate to be a single LIR value")
         };
         let pc = lir_builder.push_lir_insn(lir::generate_host_function_call(
-            host_fn::PATCH_AT,
+            I::HOST_FUNCTION_TABLE.patch_at,
             Box::new([ctx_ptr, x, y]),
         ));
         lir_builder.node_to_lir.insert(my_node_id, smallvec![lir::ValRef(pc, 0)]);
@@ -238,18 +238,18 @@ impl Node for EuclideanDistanceNoWrap {
         NlAbstractTy::Float.into()
     }
 
-    fn write_lir_execution(
+    fn write_lir_execution<I: InstallLir>(
         &self,
         program: &Program,
         my_node_id: NodeId,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
         let mut args = Vec::new();
-        args.extend(lir_builder.get_node_results(program, self.a));
-        args.extend(lir_builder.get_node_results(program, self.b));
+        args.extend(lir_builder.get_node_results::<I>(program, self.a));
+        args.extend(lir_builder.get_node_results::<I>(program, self.b));
 
         let pc = lir_builder.push_lir_insn(lir::generate_host_function_call(
-            host_fn::EUCLIDEAN_DISTANCE_NO_WRAP,
+            I::HOST_FUNCTION_TABLE.euclidean_distance_no_wrap,
             args.into_boxed_slice(),
         ));
         lir_builder.node_to_lir.insert(my_node_id, smallvec![lir::ValRef(pc, 0)]);
@@ -278,7 +278,7 @@ impl Node for PointConstructor {
         NlAbstractTy::Point.into()
     }
 
-    fn write_lir_execution(
+    fn write_lir_execution<I: InstallLir>(
         &self,
         program: &Program,
         my_node_id: NodeId,
@@ -286,10 +286,10 @@ impl Node for PointConstructor {
     ) -> Result<(), WriteLirError> {
         // simply pass through the LIR values
         let Self { x, y } = self;
-        let &[x] = lir_builder.get_node_results(program, *x) else {
+        let &[x] = lir_builder.get_node_results::<I>(program, *x) else {
             panic!("expected x value to be a single LIR value");
         };
-        let &[y] = lir_builder.get_node_results(program, *y) else {
+        let &[y] = lir_builder.get_node_results::<I>(program, *y) else {
             panic!("expected y value to be a single LIR value");
         };
         lir_builder.node_to_lir.insert(my_node_id, smallvec![x, y]);

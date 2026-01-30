@@ -83,7 +83,6 @@ pub enum Node {
     TurtleOrLinkVar { name: String },
     PatchVar { name: String },
     LinkVar { name: String },
-    TurtleOrPatchVar { name: String },
     ProcedureArgRef { name: String },
     Number { value: Number },
     String { value: String },

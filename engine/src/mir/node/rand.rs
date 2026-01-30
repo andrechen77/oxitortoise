@@ -4,7 +4,7 @@ use derive_more::derive::Display;
 use lir::smallvec::smallvec;
 
 use crate::{
-    exec::jit::host_fn,
+    exec::jit::InstallLir,
     mir::{
         FunctionId, MirTy, NlAbstractTy, Node, NodeId, Program, WriteLirError,
         build_lir::LirInsnBuilder,
@@ -33,20 +33,20 @@ impl Node for RandomInt {
         NlAbstractTy::Float.into()
     }
 
-    fn write_lir_execution(
+    fn write_lir_execution<I: InstallLir>(
         &self,
         program: &Program,
         my_node_id: NodeId,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
-        let &[ctx_ptr] = lir_builder.get_node_results(program, self.context) else {
+        let &[ctx_ptr] = lir_builder.get_node_results::<I>(program, self.context) else {
             panic!("expected node outputting context pointer to be a single LIR value")
         };
-        let &[bound] = lir_builder.get_node_results(program, self.bound) else {
+        let &[bound] = lir_builder.get_node_results::<I>(program, self.bound) else {
             panic!("expected node outputting bound to be a single LIR value")
         };
         let pc = lir_builder.push_lir_insn(lir::generate_host_function_call(
-            host_fn::RANDOM_INT,
+            I::HOST_FUNCTION_TABLE.random_int,
             Box::new([ctx_ptr, bound]),
         ));
         lir_builder.node_to_lir.insert(my_node_id, smallvec![lir::ValRef(pc, 0)]);

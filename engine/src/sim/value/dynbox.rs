@@ -1,3 +1,8 @@
+use std::{
+    cmp::Ordering,
+    ops::{Add, Div, Mul, Sub},
+};
+
 use crate::{
     sim::{
         patch::PatchId,
@@ -32,6 +37,7 @@ use crate::{
 /// | 0 | false |
 /// | 1 | true |
 #[derive(Clone)]
+#[repr(transparent)]
 pub struct DynBox(u64);
 
 const NAN_BASE: u64 = 0x7FF8000000000000;
@@ -84,6 +90,26 @@ impl DynBox {
             _ => unimplemented!("This is not a recognized tag for DynBox."),
         }
     }
+
+    pub fn pack(value: UnpackedDynBox) -> Self {
+        match value {
+            UnpackedDynBox::Float(value) => DynBox(value.to_bits()),
+            UnpackedDynBox::Bool(value) => DynBox(NAN_BASE | 0b001 << 48 | (value as u64)),
+            UnpackedDynBox::Nobody => todo!("TODO(mvp) implement nobody"),
+            UnpackedDynBox::Turtle(value) => todo!("TODO(mvp) implement turtle"),
+            UnpackedDynBox::Patch(value) => todo!("TODO(mvp) implement patch"),
+            UnpackedDynBox::Link(value) => todo!("TODO(mvp) implement link"),
+            UnpackedDynBox::Other(value) => todo!("TODO(mvp) implement other"),
+        }
+    }
+
+    pub fn and(self, rhs: Self) -> bool {
+        self.unpack().and(rhs.unpack())
+    }
+
+    pub fn or(self, rhs: Self) -> bool {
+        self.unpack().or(rhs.unpack())
+    }
 }
 
 static DYN_BOX_TYPE_INFO: TypeInfo = TypeInfo::new::<DynBox>(TypeInfoOptions {
@@ -114,6 +140,20 @@ impl UnpackedDynBox {
             UnpackedDynBox::Other(_) => todo!("match on the inner type"),
         }
     }
+
+    pub fn and(self, rhs: Self) -> bool {
+        match (self, rhs) {
+            (UnpackedDynBox::Bool(lhs), UnpackedDynBox::Bool(rhs)) => lhs && rhs,
+            (lhs, rhs) => unimplemented!("Anding {:?} and {:?} is not supported", lhs, rhs),
+        }
+    }
+
+    pub fn or(self, rhs: Self) -> bool {
+        match (self, rhs) {
+            (UnpackedDynBox::Bool(lhs), UnpackedDynBox::Bool(rhs)) => lhs || rhs,
+            (lhs, rhs) => unimplemented!("Oring {:?} and {:?} is not supported", lhs, rhs),
+        }
+    }
 }
 
 impl Clone for UnpackedDynBox {
@@ -124,6 +164,116 @@ impl Clone for UnpackedDynBox {
             UnpackedDynBox::Turtle(value) => UnpackedDynBox::Turtle(*value),
             _ => unimplemented!(),
         }
+    }
+}
+
+impl Add for UnpackedDynBox {
+    type Output = UnpackedDynBox;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        match (self, rhs) {
+            (UnpackedDynBox::Float(lhs), UnpackedDynBox::Float(rhs)) => {
+                UnpackedDynBox::Float(lhs + rhs)
+            }
+            (lhs, rhs) => unimplemented!("Adding {:?} and {:?} is not supported", lhs, rhs),
+        }
+    }
+}
+
+impl Sub for UnpackedDynBox {
+    type Output = UnpackedDynBox;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        match (self, rhs) {
+            (UnpackedDynBox::Float(lhs), UnpackedDynBox::Float(rhs)) => {
+                UnpackedDynBox::Float(lhs - rhs)
+            }
+            (lhs, rhs) => unimplemented!("Subtracting {:?} and {:?} is not supported", lhs, rhs),
+        }
+    }
+}
+
+impl Mul for UnpackedDynBox {
+    type Output = UnpackedDynBox;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        match (self, rhs) {
+            (UnpackedDynBox::Float(lhs), UnpackedDynBox::Float(rhs)) => {
+                UnpackedDynBox::Float(lhs * rhs)
+            }
+            (lhs, rhs) => unimplemented!("Multiplying {:?} and {:?} is not supported", lhs, rhs),
+        }
+    }
+}
+
+impl Div for UnpackedDynBox {
+    type Output = UnpackedDynBox;
+
+    fn div(self, rhs: Self) -> Self::Output {
+        match (self, rhs) {
+            (UnpackedDynBox::Float(lhs), UnpackedDynBox::Float(rhs)) => {
+                UnpackedDynBox::Float(lhs / rhs)
+            }
+            (lhs, rhs) => unimplemented!("Dividing {:?} and {:?} is not supported", lhs, rhs),
+        }
+    }
+}
+
+impl PartialEq for UnpackedDynBox {
+    fn eq(&self, rhs: &Self) -> bool {
+        match (self, rhs) {
+            (UnpackedDynBox::Float(lhs), UnpackedDynBox::Float(rhs)) => lhs == rhs,
+            (lhs, rhs) => unimplemented!("Comparing {:?} and {:?} is not supported", lhs, rhs),
+        }
+    }
+}
+
+impl PartialOrd for UnpackedDynBox {
+    fn partial_cmp(&self, rhs: &Self) -> Option<Ordering> {
+        match (self, rhs) {
+            (UnpackedDynBox::Float(lhs), UnpackedDynBox::Float(rhs)) => lhs.partial_cmp(rhs),
+            (lhs, rhs) => unimplemented!("Comparing {:?} and {:?} is not supported", lhs, rhs),
+        }
+    }
+}
+
+impl Add for DynBox {
+    type Output = DynBox;
+    fn add(self, rhs: Self) -> Self::Output {
+        DynBox::pack(self.unpack() + rhs.unpack())
+    }
+}
+
+impl Sub for DynBox {
+    type Output = DynBox;
+    fn sub(self, rhs: Self) -> Self::Output {
+        DynBox::pack(self.unpack() - rhs.unpack())
+    }
+}
+
+impl Mul for DynBox {
+    type Output = DynBox;
+    fn mul(self, rhs: Self) -> Self::Output {
+        DynBox::pack(self.unpack() * rhs.unpack())
+    }
+}
+
+impl Div for DynBox {
+    type Output = DynBox;
+    fn div(self, rhs: Self) -> Self::Output {
+        DynBox::pack(self.unpack() / rhs.unpack())
+    }
+}
+
+impl PartialEq for DynBox {
+    fn eq(&self, rhs: &Self) -> bool {
+        self.unpack() == rhs.unpack()
+    }
+}
+
+impl PartialOrd for DynBox {
+    fn partial_cmp(&self, rhs: &Self) -> Option<Ordering> {
+        self.unpack().partial_cmp(&rhs.unpack())
     }
 }
 

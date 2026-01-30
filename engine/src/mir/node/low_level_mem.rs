@@ -4,6 +4,7 @@ use derive_more::derive::Display;
 use lir::smallvec::{SmallVec, smallvec};
 
 use crate::{
+    exec::jit::InstallLir,
     mir::{FunctionId, MirTy, Node, NodeId, Program, WriteLirError, build_lir::LirInsnBuilder},
     util::reflection::{ConcreteTy, Reflect},
 };
@@ -32,7 +33,7 @@ impl Node for MemLoad {
         self.ty.into()
     }
 
-    fn write_lir_execution(
+    fn write_lir_execution<I: InstallLir>(
         &self,
         program: &Program,
         my_node_id: NodeId,
@@ -40,7 +41,7 @@ impl Node for MemLoad {
     ) -> Result<(), WriteLirError> {
         let mem_repr = self.ty.info().mem_repr.expect("mem load type must have known ABI");
 
-        let &[ptr] = lir_builder.get_node_results(program, self.ptr) else {
+        let &[ptr] = lir_builder.get_node_results::<I>(program, self.ptr) else {
             panic!("expected a node that outputs a pointer to be a single LIR value");
         };
         let mut val_refs = SmallVec::new();
@@ -81,19 +82,19 @@ impl Node for MemStore {
         MirTy::default()
     }
 
-    fn write_lir_execution(
+    fn write_lir_execution<I: InstallLir>(
         &self,
         program: &Program,
         _my_node_id: NodeId,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
-        let &[ptr] = lir_builder.get_node_results(program, self.ptr) else {
+        let &[ptr] = lir_builder.get_node_results::<I>(program, self.ptr) else {
             panic!("expected a node that outputs a pointer to be a single LIR value");
         };
 
         let ty = program.nodes[self.value].output_type(program, lir_builder.fn_id).repr();
         let mem_repr = ty.info().mem_repr.expect("mem store value type must have known ABI");
-        let values = lir_builder.get_node_results(program, self.value).to_owned();
+        let values = lir_builder.get_node_results::<I>(program, self.value).to_owned();
         assert_eq!(
             values.len(),
             mem_repr.len(),
@@ -133,13 +134,13 @@ impl Node for DeriveField {
         <*mut u8 as Reflect>::CONCRETE_TY.into()
     }
 
-    fn write_lir_execution(
+    fn write_lir_execution<I: InstallLir>(
         &self,
         program: &Program,
         my_node_id: NodeId,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
-        let &[ptr] = lir_builder.get_node_results(program, self.ptr) else {
+        let &[ptr] = lir_builder.get_node_results::<I>(program, self.ptr) else {
             panic!("expected a node that outputs a pointer to be a single LIR value");
         };
         let pc = lir_builder.push_lir_insn(lir::InsnKind::DeriveField { offset: self.offset, ptr });
@@ -172,16 +173,16 @@ impl Node for DeriveElement {
         <*mut u8 as Reflect>::CONCRETE_TY.into()
     }
 
-    fn write_lir_execution(
+    fn write_lir_execution<I: InstallLir>(
         &self,
         program: &Program,
         my_node_id: NodeId,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
-        let &[ptr] = lir_builder.get_node_results(program, self.ptr) else {
+        let &[ptr] = lir_builder.get_node_results::<I>(program, self.ptr) else {
             panic!("expected a node that outputs a pointer to be a single LIR value");
         };
-        let &[index] = lir_builder.get_node_results(program, self.index) else {
+        let &[index] = lir_builder.get_node_results::<I>(program, self.index) else {
             panic!("expected a node that outputs an index to be a single LIR value");
         };
         let pc = lir_builder.push_lir_insn(lir::InsnKind::DeriveElement {

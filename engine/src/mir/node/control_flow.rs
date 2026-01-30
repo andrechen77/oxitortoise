@@ -5,9 +5,12 @@ use derive_more::derive::Display;
 use lir::typed_index_collections::TiVec;
 use tracing::trace;
 
-use crate::mir::{
-    FunctionId, MirTy, NlAbstractTy, Node, NodeId, NodeKind, Program, WriteLirError,
-    build_lir::LirInsnBuilder,
+use crate::{
+    exec::jit::InstallLir,
+    mir::{
+        FunctionId, MirTy, NlAbstractTy, Node, NodeId, NodeKind, Program, WriteLirError,
+        build_lir::LirInsnBuilder,
+    },
 };
 
 /// A node representing a block of statements that are sequentially executed.
@@ -82,7 +85,7 @@ impl Node for Block {
         output_type.into()
     }
 
-    fn write_lir_execution(
+    fn write_lir_execution<I: InstallLir>(
         &self,
         program: &Program,
         my_node_id: NodeId,
@@ -91,7 +94,7 @@ impl Node for Block {
         lir_builder.block_to_insn_seq.insert(my_node_id, *lir_builder.insn_seqs.last().unwrap());
         for &stmt in &self.statements {
             trace!("writing LIR execution for {:?} {:?}", stmt, program.nodes[stmt]);
-            program.nodes[stmt].write_lir_execution(program, stmt, lir_builder)?
+            program.nodes[stmt].write_lir_execution::<I>(program, stmt, lir_builder)?
         }
         Ok(())
     }
@@ -112,7 +115,7 @@ impl Node for IfElse {
         then_ty.join(else_ty).into()
     }
 
-    fn write_lir_execution(
+    fn write_lir_execution<I: InstallLir>(
         &self,
         program: &Program,
         _my_node_id: NodeId,
@@ -122,14 +125,14 @@ impl Node for IfElse {
         let then_body = lir_builder.product.insn_seqs.push_and_get_key(TiVec::new());
         let else_body = lir_builder.product.insn_seqs.push_and_get_key(TiVec::new());
         lir_builder.with_insn_seq(then_body, |lir_builder| {
-            program.nodes[self.then_block].write_lir_execution(
+            program.nodes[self.then_block].write_lir_execution::<I>(
                 program,
                 self.then_block,
                 lir_builder,
             )
         })?;
         lir_builder.with_insn_seq(else_body, |lir_builder| {
-            program.nodes[self.else_block].write_lir_execution(
+            program.nodes[self.else_block].write_lir_execution::<I>(
                 program,
                 self.else_block,
                 lir_builder,
@@ -137,7 +140,7 @@ impl Node for IfElse {
         })?;
 
         // evaluate the condition and insert the branch instruction
-        let &[condition] = lir_builder.get_node_results(program, self.condition) else {
+        let &[condition] = lir_builder.get_node_results::<I>(program, self.condition) else {
             panic!("a condition should evaluate to a single LIR value");
         };
         trace!("calculating output type for if-else in function {:?}", lir_builder.fn_id);
@@ -171,7 +174,7 @@ impl Node for Repeat {
         NlAbstractTy::Unit.into()
     }
 
-    fn write_lir_execution(
+    fn write_lir_execution<I: InstallLir>(
         &self,
         _program: &Program,
         _my_node_id: NodeId,
@@ -195,17 +198,18 @@ impl Node for Break {
         NlAbstractTy::Bottom.into()
     }
 
-    fn write_lir_execution(
+    fn write_lir_execution<I: InstallLir>(
         &self,
         program: &Program,
         _my_node_id: NodeId,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
         let target = lir_builder.block_to_insn_seq[&self.target];
-        let values = Box::from(
-            self.value
-                .map_or_else(|| Default::default(), |v| lir_builder.get_node_results(program, v)),
-        );
+        let values =
+            Box::from(self.value.map_or_else(
+                || Default::default(),
+                |v| lir_builder.get_node_results::<I>(program, v),
+            ));
         lir_builder.push_lir_insn(lir::InsnKind::Break { target, values });
         Ok(())
     }

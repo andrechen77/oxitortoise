@@ -1,8 +1,10 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, io, rc::Rc};
 
 use ast_to_mir::{ParseResult, add_cheats, serde_json, write_dot};
 use engine::{
+    exec::jit::InstallLir as _,
     mir::{
+        graphviz::to_dot_string_with_options,
         mir_to_lir,
         transforms::{lower, optimize_of_agent_type, peephole_transform},
         type_inference::narrow_types,
@@ -20,9 +22,11 @@ use engine::{
     util::{reflection::Reflect as _, rng::CanonRng},
     workspace::Workspace,
 };
-use tracing::{Level, info};
+use oxitortoise_main::LirInstaller;
+use tracing::{Level, error, info};
 use tracing_subscriber::{
-    Layer as _, filter::Targets, layer::SubscriberExt as _, util::SubscriberInitExt as _,
+    Layer as _, filter::Targets, fmt::MakeWriter, layer::SubscriberExt as _,
+    util::SubscriberInitExt as _,
 };
 
 // keep this function around as as reminder of how the workspace is set up
@@ -72,14 +76,17 @@ fn create_workspace() -> (Workspace, BreedId) {
 fn main() {
     tracing_subscriber::registry()
         .with(
-            tracing_subscriber::fmt::layer().with_filter(
-                Targets::new()
-                    .with_target("oxitortoise_engine", Level::TRACE)
-                    .with_target("oxitortoise_ast_to_mir", Level::INFO)
-                    .with_target("ants", Level::TRACE)
-                    .with_target("oxitortoise_main", Level::TRACE)
-                    .with_target("oxitortoise_lir_to_wasm", Level::TRACE),
-            ),
+            tracing_subscriber::fmt::layer()
+                .with_writer(ConsoleWriterFactory)
+                .without_time()
+                .with_filter(
+                    Targets::new()
+                        .with_target("oxitortoise_engine", Level::INFO)
+                        .with_target("oxitortoise_ast_to_mir", Level::TRACE)
+                        .with_target("ants", Level::TRACE)
+                        .with_target("oxitortoise_main", Level::TRACE)
+                        .with_target("oxitortoise_lir_to_wasm", Level::INFO),
+                ),
         )
         .init();
 
@@ -89,17 +96,27 @@ fn main() {
     let ast = serde_json::from_str(ast).unwrap();
     let ParseResult { mut program, global_names, fn_info } = ast_to_mir::ast_to_mir(ast).unwrap();
 
-    for fn_id in program.functions.keys() {
-        write_dot(&program, fn_id, "original");
-    }
-
     info!("applying cheats");
     let cheats = include_str!("cheats.json");
     let cheats = serde_json::from_str(cheats).unwrap();
     add_cheats(&cheats, &mut program, &global_names, &fn_info);
 
+    let mut mir_str = String::new();
+    for fn_id in program.functions.keys() {
+        mir_str.push_str(&format!(
+            "============== func {} {:?} ====================\n",
+            fn_id,
+            program.functions[fn_id].debug_name.as_deref().unwrap_or("unnamed")
+        ));
+        mir_str.push_str(&format!("{:#?}\n", program.functions[fn_id]));
+        mir_str.push_str(&to_dot_string_with_options(&program, fn_id, true));
+    }
+    let mir_filename = "before.mir";
+    write_to_file(mir_filename.as_ptr(), mir_filename.len(), mir_str.as_ptr(), mir_str.len());
+
     let fn_ids: Vec<_> = program.functions.keys().collect();
     narrow_types(&mut program);
+    let mut mir_str = String::new();
     for fn_id in fn_ids {
         info!(
             "transforming function {} {}",
@@ -110,33 +127,69 @@ fn main() {
         optimize_of_agent_type(&mut program, fn_id);
         peephole_transform(&mut program, fn_id);
         lower(&mut program, fn_id);
+
+        mir_str.push_str(&format!(
+            "============== func {} {:?} ====================\n",
+            fn_id,
+            program.functions[fn_id].debug_name.as_deref().unwrap_or("unnamed")
+        ));
+        mir_str.push_str(&format!("{:#?}\n", program.functions[fn_id]));
+        mir_str.push_str(&to_dot_string_with_options(&program, fn_id, true));
     }
+    let mir_filename = "after.mir";
+    write_to_file(mir_filename.as_ptr(), mir_filename.len(), mir_str.as_ptr(), mir_str.len());
 
-    for fn_id in program.functions.keys() {
-        write_dot(&program, fn_id, "transformed");
+    let lir_program = mir_to_lir::<LirInstaller>(&program);
+    let lir_str = format!("{}", lir_program);
+    let lir_filename = "model.lir";
+    write_to_file(lir_filename.as_ptr(), lir_filename.len(), lir_str.as_ptr(), lir_str.len());
+
+    let result = unsafe { LirInstaller::install_lir(&lir_program) };
+    match result {
+        Ok((functions, module_bytes)) => {
+            for fn_id in functions.keys() {
+                info!("installed entrypoint function {:?}", fn_id);
+            }
+        }
+        Err((error, module_bytes)) => {
+            let name = "model.wasm";
+            write_to_file(name.as_ptr(), name.len(), module_bytes.as_ptr(), module_bytes.len());
+            error!("failed to install LIR program");
+        }
     }
-
-    std::fs::write("program.txt", format!("{:#?}", program)).unwrap();
-
-    let lir_program = mir_to_lir(&program);
-    std::fs::write("lir_program.txt", format!("{:#?}", lir_program)).unwrap();
-
-    let (mut module, fn_table_allocated_slots) =
-        lir_to_wasm::lir_to_wasm(&lir_program, &mut FnTableSlotAllocator::default());
-    std::fs::write("module.wasm", module.emit_wasm()).unwrap();
-    std::fs::write("fn_table_allocated_slots.txt", format!("{:#?}", fn_table_allocated_slots))
-        .unwrap();
 }
 
-#[derive(Default)]
-struct FnTableSlotAllocator {
-    next_slot: usize,
+#[cfg(target_arch = "wasm32")]
+unsafe extern "C" {
+    safe fn write_to_console(message: *const u8, length: usize);
+
+    safe fn write_to_file(
+        name: *const u8,
+        name_length: usize,
+        bytes: *const u8,
+        bytes_length: usize,
+    );
 }
-impl lir_to_wasm::FnTableSlotAllocator for FnTableSlotAllocator {
-    fn allocate_slot(&mut self) -> usize {
-        let slot = self.next_slot;
-        info!("allocating slot {}", slot);
-        self.next_slot += 1;
-        slot
+
+struct ConsoleWriter;
+
+impl io::Write for ConsoleWriter {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        write_to_console(buf.as_ptr(), buf.len());
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+struct ConsoleWriterFactory;
+
+impl<'a> MakeWriter<'a> for ConsoleWriterFactory {
+    type Writer = ConsoleWriter;
+
+    fn make_writer(&'a self) -> Self::Writer {
+        ConsoleWriter
     }
 }

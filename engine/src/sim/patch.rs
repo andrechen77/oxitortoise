@@ -64,6 +64,12 @@ impl OptionPatchId {
     pub const NOBODY: Self = Self(u32::MAX);
 }
 
+impl From<PatchId> for OptionPatchId {
+    fn from(value: PatchId) -> Self {
+        OptionPatchId(value.0)
+    }
+}
+
 pub const OFFSET_PATCHES_TO_DATA: usize = offset_of!(Patches, data);
 
 #[derive(Debug)]

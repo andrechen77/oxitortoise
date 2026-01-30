@@ -3,9 +3,12 @@
 use derive_more::derive::Display;
 use lir::smallvec::smallvec;
 
-use crate::mir::{
-    FunctionId, LocalId, MirTy, NlAbstractTy, Node, NodeId, Program, WriteLirError,
-    build_lir::{LirInsnBuilder, LocalLocation},
+use crate::{
+    exec::jit::InstallLir,
+    mir::{
+        FunctionId, LocalId, MirTy, NlAbstractTy, Node, NodeId, Program, WriteLirError,
+        build_lir::{LirInsnBuilder, LocalLocation},
+    },
 };
 
 #[derive(Debug, Display)]
@@ -28,7 +31,7 @@ impl Node for GetLocalVar {
         program.locals[self.local_id].ty.clone()
     }
 
-    fn write_lir_execution(
+    fn write_lir_execution<I: InstallLir>(
         &self,
         _program: &Program,
         my_node_id: NodeId,
@@ -72,7 +75,7 @@ impl Node for SetLocalVar {
         NlAbstractTy::Unit.into()
     }
 
-    fn write_lir_execution(
+    fn write_lir_execution<I: InstallLir>(
         &self,
         program: &Program,
         _my_node_id: NodeId,
@@ -95,7 +98,7 @@ impl Node for SetLocalVar {
         // });
         let local_location = lir_builder.local_to_lir[&self.local_id];
 
-        let &[value] = lir_builder.get_node_results(program, self.value) else { todo!() };
+        let &[value] = lir_builder.get_node_results::<I>(program, self.value) else { todo!() };
 
         match local_location {
             LocalLocation::Stack { offset: _ } => {

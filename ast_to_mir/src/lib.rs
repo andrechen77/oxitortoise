@@ -461,8 +461,23 @@ fn translate_node(ast_node: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) -> (NodeId
             let NameReferent::UserProc(target) = referent else {
                 panic!("expected a user procedure, got {:?}", referent);
             };
-            let args = args.into_iter().map(|arg| translate_node(arg, ctx.reborrow()).0).collect();
-            NodeKind::from(node::CallUserFn { target, args })
+            let mut arg_nodes = Vec::new();
+            let fn_info = &ctx.mir.aux_fn_info[target];
+            assert!(fn_info.env_param.is_none());
+            if let Some(_) = fn_info.context_param {
+                arg_nodes.push(ctx.get_context());
+            }
+            if let Some(_) = ctx.mir.aux_fn_info[target].self_param {
+                arg_nodes.push(ctx.get_self_agent());
+            }
+            arg_nodes.extend(args.into_iter().map(|arg| translate_node(arg, ctx.reborrow()).0));
+            trace!(
+                "expected {} positional parameters",
+                ctx.mir.aux_fn_info[target].positional_params.len()
+            );
+            trace!("added {} positional parameters", arg_nodes.len());
+            assert!(ctx.mir.aux_fn_info[target].positional_params.len() == arg_nodes.len());
+            NodeKind::from(node::CallUserFn { target, args: arg_nodes })
         }
         N::CommandCall(C::Report([value])) => {
             breaking_node = true; // mark this node to have its target fixed later
@@ -607,8 +622,18 @@ fn translate_node(ast_node: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) -> (NodeId
             let NameReferent::UserProc(target) = referent else {
                 panic!("expected a user reporter procedure, got {:?}", referent);
             };
-            let args = args.into_iter().map(|arg| translate_node(arg, ctx.reborrow()).0).collect();
-            NodeKind::from(node::CallUserFn { target, args })
+            let mut arg_nodes = Vec::new();
+            let fn_info = &ctx.mir.aux_fn_info[target];
+            assert!(fn_info.env_param.is_none());
+            if let Some(_) = fn_info.context_param {
+                arg_nodes.push(ctx.get_context());
+            }
+            if let Some(_) = ctx.mir.aux_fn_info[target].self_param {
+                arg_nodes.push(ctx.get_self_agent());
+            }
+            arg_nodes.extend(args.into_iter().map(|arg| translate_node(arg, ctx.reborrow()).0));
+            assert!(ctx.mir.aux_fn_info[target].positional_params.len() == arg_nodes.len());
+            NodeKind::from(node::CallUserFn { target, args: arg_nodes })
         }
         N::GlobalVar { name } => match ctx.mir.global_names.lookup(&name) {
             Some(NameReferent::Global(index)) => {
@@ -629,15 +654,6 @@ fn translate_node(ast_node: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) -> (NodeId
         N::PatchVar { name } => {
             let Some(NameReferent::PatchVar(var)) = ctx.mir.global_names.lookup(&name) else {
                 panic!("unknown patch variable access `{}`", name);
-            };
-            let context = ctx.get_context();
-            let patch = ctx.get_self_agent();
-            NodeKind::from(node::GetPatchVar { context, patch, var })
-        }
-        N::TurtleOrPatchVar { name } => {
-            let var = match ctx.mir.global_names.lookup(&name) {
-                Some(NameReferent::PatchVar(v)) => v,
-                _ => panic!("unknown patch variable access `{}`", name),
             };
             let context = ctx.get_context();
             let agent = ctx.get_self_agent();
@@ -833,7 +849,6 @@ fn translate_var_reporter_without_read(ast_node: &ast::Node) -> &str {
         ast::Node::TurtleOrLinkVar { name } => name,
         ast::Node::PatchVar { name } => name,
         ast::Node::LinkVar { name } => name,
-        ast::Node::TurtleOrPatchVar { name } => name,
         _ => panic!("expected a variable reporter call, got {:?}", ast_node),
     }
 }

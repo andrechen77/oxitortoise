@@ -36,49 +36,49 @@ impl Display for Function {
             debug_val_names,
             debug_var_names,
         } = self;
-        write!(f, "Function {{ local_vars: ")?;
+        write!(f, "Function {{\ndebug_fn_name: ")?;
+        debug_fn_name.fmt(f)?;
+        write!(f, ",\ndebug_val_names: ")?;
+        debug_val_names.fmt(f)?;
+        write!(f, ",\ndebug_var_names: ")?;
+        debug_var_names.fmt(f)?;
+        write!(f, ",\nlocal_vars: ")?;
         local_vars.fmt(f)?;
-        write!(f, ", num_parameters: ")?;
+        write!(f, ",\nnum_parameters: ")?;
         write!(f, "{}", num_parameters)?;
-        write!(f, ", stack_space: ")?;
+        write!(f, ",\nstack_space: ")?;
         write!(f, "{}", stack_space)?;
-        write!(f, ", body: ")?;
+        write!(f, ",\nbody: ")?;
         write!(f, "{}", body)?;
-        write!(f, ", insn_seqs: {{")?;
+        write!(f, ",\ninsn_seqs: {{\n")?;
         let mut iter = insn_seqs.iter_enumerated();
         if let Some((insn_seq_id, insn_seq)) = iter.next() {
-            write!(f, "{:?}: {{", insn_seq_id)?;
+            write!(f, "{:?}: {{\n", insn_seq_id)?;
             let mut inner_iter = insn_seq.iter_enumerated();
             if let Some((insn_idx, insn)) = inner_iter.next() {
                 write!(f, "{:?}: ", insn_idx)?;
                 <InsnKind as Display>::fmt(insn, f)?;
                 for (insn_idx, insn) in inner_iter {
-                    write!(f, ", {:?}: ", insn_idx)?;
+                    write!(f, ",\n{:?}: ", insn_idx)?;
                     <InsnKind as Display>::fmt(insn, f)?;
                 }
             }
-            write!(f, "}}")?;
+            write!(f, "}}\n")?;
             for (insn_seq_id, insn_seq) in iter {
-                write!(f, ", {:?}: {{", insn_seq_id)?;
+                write!(f, ", {:?}: {{\n", insn_seq_id)?;
                 let mut inner_iter = insn_seq.iter_enumerated();
                 if let Some((insn_idx, insn)) = inner_iter.next() {
                     write!(f, "{:?}: ", insn_idx)?;
                     <InsnKind as Display>::fmt(insn, f)?;
                     for (insn_idx, insn) in inner_iter {
-                        write!(f, ", {:?}: ", insn_idx)?;
+                        write!(f, ",\n{:?}: ", insn_idx)?;
                         <InsnKind as Display>::fmt(insn, f)?;
                     }
                 }
-                write!(f, "}}")?;
+                write!(f, "}}\n")?;
             }
         }
-        write!(f, "}}, debug_fn_name: ")?;
-        debug_fn_name.fmt(f)?;
-        write!(f, ", debug_val_names: ")?;
-        debug_val_names.fmt(f)?;
-        write!(f, ", debug_var_names: ")?;
-        debug_var_names.fmt(f)?;
-        write!(f, " }}")
+        write!(f, " }}\n")
     }
 }
 

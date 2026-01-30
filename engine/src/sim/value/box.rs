@@ -1,8 +1,16 @@
-use std::ops::Deref;
+use derive_more::derive::{Deref, DerefMut};
 
 use crate::util::reflection::{TypeInfo, TypeInfoOptions};
 
+#[derive(Deref, DerefMut)]
+#[repr(transparent)]
 pub struct NlBox<T>(Box<T>);
+
+impl<T> NlBox<T> {
+    pub fn new(value: T) -> Self {
+        Self(Box::new(value))
+    }
+}
 
 pub const fn generate_box_type_info<T: 'static>(debug_name: &'static str) -> TypeInfo {
     // it is important that the generated TypeInfo applies to every
@@ -12,12 +20,4 @@ pub const fn generate_box_type_info<T: 'static>(debug_name: &'static str) -> Typ
         is_zeroable: false,
         mem_repr: Some(&[(0, lir::MemOpType::Ptr)]),
     })
-}
-
-impl<T> Deref for NlBox<T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
 }

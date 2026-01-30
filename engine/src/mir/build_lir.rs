@@ -2,13 +2,16 @@
 //! into LIR. No optimization is performed here. Each MIR function will
 //! translate to a single LIR function.
 
-use std::collections::HashMap;
+use std::{collections::HashMap, rc::Rc};
 
 use lir::{smallvec::SmallVec, typed_index_collections::TiVec};
 use slotmap::{SecondaryMap, SlotMap};
 use tracing::{error, instrument, trace};
 
-use crate::mir::{self, Node};
+use crate::{
+    exec::jit::InstallLir,
+    mir::{self, Node},
+};
 
 #[derive(Debug)]
 pub struct LirProgramBuilder {
@@ -17,7 +20,7 @@ pub struct LirProgramBuilder {
         HashMap<lir::FunctionId, (Vec<lir::ValType>, SmallVec<[lir::ValType; 1]>)>,
 }
 
-pub fn mir_to_lir(mir: &mir::Program) -> lir::Program {
+pub fn mir_to_lir<I: InstallLir>(mir: &mir::Program) -> lir::Program {
     let mut builder = LirProgramBuilder {
         available_user_functions: HashMap::new(),
         function_signatures: HashMap::new(),
@@ -39,7 +42,7 @@ pub fn mir_to_lir(mir: &mir::Program) -> lir::Program {
     let mut lir_fn_bodies = SecondaryMap::new();
     for mir_fn_id in mir.functions.keys() {
         trace!("translating function body for {}", mir_fn_id);
-        let lir_fn = translate_function_body(mir, mir_fn_id, &mut builder);
+        let lir_fn = translate_function_body::<I>(mir, mir_fn_id, &mut builder);
         let lir_fn_id = builder.available_user_functions[&mir_fn_id];
         lir_fn_bodies.insert(lir_fn_id, lir_fn);
     }
@@ -105,7 +108,7 @@ pub struct LirInsnBuilder<'a> {
 }
 
 impl<'a> LirInsnBuilder<'a> {
-    pub fn get_node_results(
+    pub fn get_node_results<I: InstallLir>(
         &mut self,
         program: &mir::Program,
         node_id: mir::NodeId,
@@ -113,7 +116,7 @@ impl<'a> LirInsnBuilder<'a> {
         if !self.node_to_lir.contains_key(&node_id) {
             let node = &program.nodes[node_id];
             trace!("writing LIR execution for node {:?} {:?}", node_id, node);
-            node.write_lir_execution(program, node_id, self).unwrap_or_else(|e| {
+            node.write_lir_execution::<I>(program, node_id, self).unwrap_or_else(|e| {
                 error!("failed to translate node {:?} to LIR: {:?}", node_id, e);
             });
         }
@@ -160,7 +163,7 @@ impl<'a> LirInsnBuilder<'a> {
 }
 
 #[instrument(skip(program, program_builder))]
-fn translate_function_body(
+fn translate_function_body<I: InstallLir>(
     program: &mir::Program,
     fn_id: mir::FunctionId,
     program_builder: &mut LirProgramBuilder,
@@ -171,7 +174,13 @@ fn translate_function_body(
     let mut lir_debug_var_names = HashMap::new();
     let mut local_to_lir = HashMap::new();
     let mut lir_local_var_types = TiVec::new();
-    for &local_id in &function.locals {
+    fn add_local(
+        program: &mir::Program,
+        local_to_lir: &mut HashMap<mir::LocalId, LocalLocation>,
+        lir_local_var_types: &mut TiVec<lir::VarId, lir::ValType>,
+        lir_debug_var_names: &mut HashMap<lir::VarId, Rc<str>>,
+        local_id: mir::LocalId,
+    ) {
         let local_decl = &program.locals[local_id];
         match local_decl.storage {
             mir::LocalStorage::Register => {
@@ -198,6 +207,27 @@ fn translate_function_body(
             }
         }
     }
+    for &param_id in &function.parameters {
+        add_local(
+            program,
+            &mut local_to_lir,
+            &mut lir_local_var_types,
+            &mut lir_debug_var_names,
+            param_id,
+        );
+    }
+    let num_lir_parameters = lir_local_var_types.len();
+    for &local_id in &function.locals {
+        if !function.parameters.contains(&local_id) {
+            add_local(
+                program,
+                &mut local_to_lir,
+                &mut lir_local_var_types,
+                &mut lir_debug_var_names,
+                local_id,
+            );
+        }
+    }
 
     // initialize the LIR function and its associated metadata
     let mut insn_seqs = TiVec::new();
@@ -214,7 +244,6 @@ fn translate_function_body(
             .collect(),
         body: main_body,
     };
-    let num_lir_parameters = lir_local_var_types.len();
     let lir_function = lir::Function {
         local_vars: lir_local_var_types,
         num_parameters: num_lir_parameters,
@@ -237,7 +266,7 @@ fn translate_function_body(
 
     // translate the function body
     program.nodes[function.root_node]
-        .write_lir_execution(program, function.root_node, &mut fn_builder)
+        .write_lir_execution::<I>(program, function.root_node, &mut fn_builder)
         .unwrap();
 
     fn_builder.product

@@ -3,9 +3,12 @@
 use derive_more::derive::Display;
 use lir::smallvec::smallvec;
 
-use crate::mir::{
-    ClosureType, FunctionId, LocalId, MirTy, NlAbstractTy, Node, NodeId, Program, WriteLirError,
-    build_lir::LirInsnBuilder,
+use crate::{
+    exec::jit::InstallLir,
+    mir::{
+        ClosureType, FunctionId, LocalId, MirTy, NlAbstractTy, Node, NodeId, Program,
+        WriteLirError, build_lir::LirInsnBuilder,
+    },
 };
 
 #[derive(Debug, Display)]
@@ -46,7 +49,7 @@ impl Node for Closure {
         .into()
     }
 
-    fn write_lir_execution(
+    fn write_lir_execution<I: InstallLir>(
         &self,
         _program: &Program,
         my_node_id: NodeId,

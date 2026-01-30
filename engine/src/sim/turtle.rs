@@ -45,7 +45,8 @@ impl fmt::Display for TurtleWho {
     }
 }
 
-/// An ID for a turtle.
+/// An ID for a turtle. When passing through FFI, this should be converted to a
+/// `u64` first to prevent it from being represented as a pointer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, From, Into, Default)]
 #[repr(transparent)]
 pub struct TurtleId(pub GenIndex);

@@ -5,7 +5,7 @@ use lir::{ValRef, smallvec::smallvec};
 use slotmap::Key as _;
 
 use crate::{
-    exec::jit::host_fn,
+    exec::jit::InstallLir,
     mir::{
         FunctionId, MirTy, NlAbstractTy, Node, NodeId, Program, WriteLirError,
         build_lir::LirInsnBuilder,
@@ -39,25 +39,25 @@ impl Node for CreateTurtles {
         NlAbstractTy::Unit.into()
     }
 
-    fn write_lir_execution(
+    fn write_lir_execution<I: InstallLir>(
         &self,
         program: &Program,
         my_node_id: NodeId,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
-        let &[ctx_ptr] = lir_builder.get_node_results(program, self.context) else {
+        let &[ctx_ptr] = lir_builder.get_node_results::<I>(program, self.context) else {
             panic!("expected node outputting context pointer to be a single LIR value")
         };
         let breed_id = lir_builder
             .push_lir_insn(lir::InsnKind::Const(lir::Value::I64(self.breed.data().as_ffi())));
-        let &[num_turtles] = lir_builder.get_node_results(program, self.num_turtles) else {
+        let &[num_turtles] = lir_builder.get_node_results::<I>(program, self.num_turtles) else {
             panic!("expected node outputting number of turtles to be a single LIR value")
         };
-        let &[env_ptr, fn_ptr] = lir_builder.get_node_results(program, self.body) else {
+        let &[env_ptr, fn_ptr] = lir_builder.get_node_results::<I>(program, self.body) else {
             panic!("expected node outputting closure body to be two LIR values");
         };
         let pc = lir_builder.push_lir_insn(lir::generate_host_function_call(
-            host_fn::CREATE_TURTLES,
+            I::HOST_FUNCTION_TABLE.create_turtles,
             Box::new([ctx_ptr, ValRef(breed_id, 0), num_turtles, env_ptr, fn_ptr]),
         ));
         lir_builder.node_to_lir.insert(my_node_id, smallvec![ValRef(pc, 0)]);

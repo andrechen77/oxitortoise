@@ -7,6 +7,7 @@ use derive_more::derive::{Display, From, TryInto};
 use slotmap::{SecondaryMap, SlotMap, new_key_type};
 
 use crate::{
+    exec::jit::InstallLir,
     mir::build_lir::LirInsnBuilder,
     sim::{
         agent_schema::GlobalsSchema,
@@ -171,7 +172,7 @@ pub trait Node {
     /// Implementations may use [`LirInsnBuilder::get_node_results`] to get
     /// the LIR values for the dependencies, which will recursively call
     /// `write_lir_execution` if necessary.
-    fn write_lir_execution(
+    fn write_lir_execution<I: InstallLir>(
         &self,
         program: &Program,
         my_node_id: NodeId,

@@ -2,11 +2,14 @@
 
 use derive_more::derive::Display;
 
-use crate::mir::{
-    FunctionId, MirTy,
-    NlAbstractTy::{self, Patch, Turtle},
-    Node, NodeId, Program, WriteLirError,
-    build_lir::LirInsnBuilder,
+use crate::{
+    exec::jit::InstallLir,
+    mir::{
+        FunctionId, MirTy,
+        NlAbstractTy::{self, Patch, Turtle},
+        Node, NodeId, Program, WriteLirError,
+        build_lir::LirInsnBuilder,
+    },
 };
 
 #[derive(Debug, Display)]
@@ -38,7 +41,7 @@ impl Node for Agentset {
         NlAbstractTy::Agentset { agent_type: Box::new(typ) }.into()
     }
 
-    fn write_lir_execution(
+    fn write_lir_execution<I: InstallLir>(
         &self,
         _program: &Program,
         _my_node_id: NodeId,

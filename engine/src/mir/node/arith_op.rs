@@ -1,11 +1,11 @@
 //! Nodes to represent basic arithmetic operations that should not be host
 //! function calls.
 
-use derive_more::derive::Display;
+use derive_more::derive::{Display, TryFrom};
 use lir::smallvec::smallvec;
 
 use crate::{
-    exec::jit::host_fn,
+    exec::jit::InstallLir,
     mir::{
         FunctionId, MirTy, NlAbstractTy, Node, NodeId, NodeKind, NodeTransform, Program,
         WriteLirError, build_lir::LirInsnBuilder, node,
@@ -17,7 +17,8 @@ use crate::{
     util::reflection::Reflect,
 };
 
-#[derive(Debug, Display, Clone, Copy)]
+#[derive(Debug, Display, Clone, Copy, TryFrom)]
+#[try_from(repr)]
 #[display("{_0:?}")]
 #[repr(u8)]
 pub enum BinaryOpcode {
@@ -121,7 +122,7 @@ impl Node for BinaryOperation {
         Some(Box::new(decompose_with_check_nobody))
     }
 
-    fn write_lir_execution(
+    fn write_lir_execution<I: InstallLir>(
         &self,
         program: &Program,
         my_node_id: NodeId,
@@ -133,10 +134,10 @@ impl Node for BinaryOperation {
         let lhs_type = program.nodes[self.lhs].output_type(program, lir_builder.fn_id).repr();
         let rhs_type = program.nodes[self.rhs].output_type(program, lir_builder.fn_id).repr();
 
-        let &[lhs] = lir_builder.get_node_results(program, self.lhs) else {
+        let &[lhs] = lir_builder.get_node_results::<I>(program, self.lhs) else {
             unimplemented!();
         };
-        let &[rhs] = lir_builder.get_node_results(program, self.rhs) else {
+        let &[rhs] = lir_builder.get_node_results::<I>(program, self.rhs) else {
             unimplemented!();
         };
         use BinaryOpcode as Op;
@@ -178,7 +179,7 @@ impl Node for BinaryOperation {
             let pc = match self.op {
                 Op::And | Op::Or | Op::Eq | Op::Neq | Op::Lt | Op::Lte | Op::Gt | Op::Gte => {
                     lir_builder.push_lir_insn(lir::generate_host_function_call(
-                        host_fn::DYNBOX_BOOL_BINARY_OP,
+                        I::HOST_FUNCTION_TABLE.dynbox_bool_binary_op,
                         Box::new([lhs, rhs, lir::ValRef(opcode_val, 0)]),
                     ))
                 }
@@ -187,7 +188,7 @@ impl Node for BinaryOperation {
                 // predicted by the output_type method. it is incorrect to
                 // use a function that returns a type that disagrees, e.g. dynboc
                 _ => lir_builder.push_lir_insn(lir::generate_host_function_call(
-                    host_fn::DYNBOX_BINARY_OP,
+                    I::HOST_FUNCTION_TABLE.dynbox_binary_op,
                     Box::new([lhs, rhs, lir::ValRef(opcode_val, 0)]),
                 )),
             };
@@ -231,13 +232,13 @@ impl Node for UnaryOp {
         .into()
     }
 
-    fn write_lir_execution(
+    fn write_lir_execution<I: InstallLir>(
         &self,
         program: &Program,
         my_node_id: NodeId,
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
-        let &[operand] = lir_builder.get_node_results(program, self.operand) else {
+        let &[operand] = lir_builder.get_node_results::<I>(program, self.operand) else {
             todo!("TODO(mvp) are there operands that are multi-register values?");
         };
         let op = match self.op {

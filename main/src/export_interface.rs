@@ -1,80 +1,124 @@
+use std::marker::PhantomData;
+
 use engine::{
     exec::{CanonExecutionContext, helpers, jit::JitCallback},
+    lir::{
+        HostFunctionInfo,
+        ValType::{F64, FnPtr, I32, I64, Ptr},
+    },
+    mir::node::BinaryOpcode,
     sim::{
         agent_schema::AgentFieldDescriptor,
-        patch::PatchId,
-        topology::{Heading, Point, PointInt},
+        patch::{OptionPatchId, PatchId},
+        topology::Point,
         turtle::{BreedId, TurtleId},
-        value::NlFloat,
+        value::{DynBox, NlBox, NlFloat, NlList},
         world::World,
     },
-    slotmap::{Key as _, KeyData},
+    slotmap::KeyData,
     util::rng::Rng as _,
 };
 
-#[unsafe(no_mangle)]
-pub extern "C" fn oxitortoise_is_nan(value: f64) -> bool {
-    value.is_nan()
-}
+// TODO(mvp) the HostFunctionInfo should be automatically generated from the
+// signatures of the actual host functions (probably done from the main crate
+// rather than the engine crate).
 
-#[unsafe(no_mangle)]
-pub extern "C" fn oxitortoise_round(value: NlFloat) -> NlFloat {
-    // FIXME is it possible for this to go from finite to non-finite?
-    NlFloat::new(value.get().round())
-}
-
+pub static CLEAR_ALL_INFO: HostFunctionInfo =
+    HostFunctionInfo { name: "oxitortoise_clear_all", parameter_types: &[Ptr], return_type: &[] };
 #[unsafe(no_mangle)]
 pub extern "C" fn oxitortoise_clear_all(context: &mut CanonExecutionContext) {
     context.workspace.world.clear_all();
 }
 
+pub static RESET_TICKS_INFO: HostFunctionInfo =
+    HostFunctionInfo { name: "oxitortoise_reset_ticks", parameter_types: &[Ptr], return_type: &[] };
 #[unsafe(no_mangle)]
 pub extern "C" fn oxitortoise_reset_ticks(world: &mut World) {
     world.tick_counter.reset();
 }
 
+pub static GET_TICK_INFO: HostFunctionInfo =
+    HostFunctionInfo { name: "oxitortoise_get_tick", parameter_types: &[Ptr], return_type: &[F64] };
 #[unsafe(no_mangle)]
-pub extern "C" fn oxitortoise_get_ticks(world: &mut World) -> NlFloat {
+pub extern "C" fn oxitortoise_get_tick(world: &mut World) -> NlFloat {
     world.tick_counter.get().unwrap() // TODO(mvp) handle error
 }
 
+pub static ADVANCE_TICK_INFO: HostFunctionInfo = HostFunctionInfo {
+    name: "oxitortoise_advance_tick",
+    parameter_types: &[Ptr],
+    return_type: &[],
+};
 #[unsafe(no_mangle)]
 pub extern "C" fn oxitortoise_advance_tick(world: &mut World) {
     world.tick_counter.advance().unwrap(); // TODO(mvp) handle error
 }
 
+// NOTE: HostFunctionInfo had wrong name "reset_ticks", should be "create_turtles"
+// NOTE: Signature mismatch - function takes breed, count, position, and callback, but HostFunctionInfo only has Ptr
+pub static CREATE_TURTLES_INFO: HostFunctionInfo = HostFunctionInfo {
+    name: "oxitortoise_create_turtles",
+    parameter_types: &[Ptr, I64, I64, F64, Ptr, FnPtr],
+    return_type: &[],
+};
 #[unsafe(no_mangle)]
 pub extern "C" fn oxitortoise_create_turtles(
     context: &mut CanonExecutionContext,
     breed: u64,
     count: u64,
-    position: Point,
-    mut birth_command: JitCallback<u64, ()>,
+    birth_command_env: *mut u8,
+    birth_command_fn_ptr: extern "C" fn(
+        *mut u8,
+        &mut CanonExecutionContext,
+        u64, /* TurtleId */
+    ) -> (),
 ) {
     let breed: BreedId = KeyData::from_ffi(breed).into();
+    let position = Point { x: 0.0, y: 0.0 };
+    let mut birth_command =
+        JitCallback { env: birth_command_env, fn_ptr: birth_command_fn_ptr, _phantom: PhantomData };
     helpers::create_turtles(context, breed, count, position, |context, turtle_id| {
         birth_command.call_mut(context, turtle_id.to_ffi())
     });
 }
 
+pub static ASK_ALL_TURTLES_INFO: HostFunctionInfo = HostFunctionInfo {
+    name: "oxitortoise_for_all_turtles",
+    parameter_types: &[Ptr, Ptr, FnPtr],
+    return_type: &[],
+};
 #[unsafe(no_mangle)]
 pub extern "C" fn oxitortoise_for_all_turtles(
     context: &mut CanonExecutionContext,
-    mut block: JitCallback<u64, ()>,
+    block_env: *mut u8,
+    block_fn_ptr: extern "C" fn(*mut u8, &mut CanonExecutionContext, u64 /* TurtleId */) -> (),
 ) {
+    let mut block = JitCallback { env: block_env, fn_ptr: block_fn_ptr, _phantom: PhantomData };
     helpers::for_all_turtles(context, |context, turtle_id| {
         block.call_mut(context, turtle_id.to_ffi())
     });
 }
 
+pub static ASK_ALL_PATCHES_INFO: HostFunctionInfo = HostFunctionInfo {
+    name: "oxitortoise_for_all_patches",
+    parameter_types: &[Ptr, Ptr, FnPtr],
+    return_type: &[],
+};
 #[unsafe(no_mangle)]
 pub extern "C" fn oxitortoise_for_all_patches(
     context: &mut CanonExecutionContext,
-    mut block: JitCallback<PatchId, ()>,
+    block_env: *mut u8,
+    block_fn_ptr: extern "C" fn(*mut u8, &mut CanonExecutionContext, PatchId) -> (),
 ) {
+    let mut block = JitCallback { env: block_env, fn_ptr: block_fn_ptr, _phantom: PhantomData };
     helpers::for_all_patches(context, |context, patch_id| block.call_mut(context, patch_id));
 }
 
+pub static EUCLIDEAN_DISTANCE_NO_WRAP_INFO: HostFunctionInfo = HostFunctionInfo {
+    name: "oxitortoise_distance_euclidean_no_wrap",
+    parameter_types: &[F64, F64, F64, F64],
+    return_type: &[F64],
+};
 #[unsafe(no_mangle)]
 pub extern "C" fn oxitortoise_distance_euclidean_no_wrap(
     a_x: f64,
@@ -87,29 +131,23 @@ pub extern "C" fn oxitortoise_distance_euclidean_no_wrap(
     engine::sim::topology::euclidean_distance_no_wrap(a, b)
 }
 
+pub static PATCH_AT_INFO: HostFunctionInfo = HostFunctionInfo {
+    name: "oxitortoise_patch_at",
+    parameter_types: &[Ptr, F64, F64],
+    return_type: &[I32],
+};
 #[unsafe(no_mangle)]
-pub extern "C" fn oxitortoise_offset_distance_by_heading(
-    world: &World,
-    point: Point,
-    heading: Heading,
-    distance: NlFloat,
-) -> Point {
-    world
-        .topology
-        .offset_distance_by_heading(point, heading, distance)
-        .unwrap_or(Point { x: f64::NAN, y: f64::NAN })
+pub extern "C" fn oxitortoise_patch_at(world: &World, point_x: f64, point_y: f64) -> PatchId {
+    let point = Point { x: point_x, y: point_y };
+    let point_int = point.round_to_int();
+    world.topology.patch_at(point_int)
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn oxitortoise_patch_at(world: &World, point: PointInt) -> PatchId {
-    world.topology.patch_at(point)
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn oxitortoise_normalize_heading(heading: NlFloat) -> Heading {
-    heading.into()
-}
-
+pub static ROTATE_TURTLE_INFO: HostFunctionInfo = HostFunctionInfo {
+    name: "oxitortoise_rotate_turtle",
+    parameter_types: &[Ptr, I64, F64],
+    return_type: &[],
+};
 #[unsafe(no_mangle)]
 pub extern "C" fn oxitortoise_rotate_turtle(
     context: &mut CanonExecutionContext,
@@ -122,15 +160,26 @@ pub extern "C" fn oxitortoise_rotate_turtle(
     }
 }
 
+pub static DIFFUSE_8_SINGLE_VARIABLE_BUFFER_INFO: HostFunctionInfo = HostFunctionInfo {
+    name: "oxitortoise_diffuse_8",
+    parameter_types: &[Ptr, I32, F64],
+    return_type: &[],
+};
 #[unsafe(no_mangle)]
 pub extern "C" fn oxitortoise_diffuse_8(
     world: &mut World,
-    field: AgentFieldDescriptor,
+    field: u32, /* AgentFieldDescriptor */
     diffusion_rate: NlFloat,
 ) {
+    let field = AgentFieldDescriptor::from_u16(field as u16);
     engine::sim::topology::diffuse::diffuse_8_single_variable_buffer(world, field, diffusion_rate);
 }
 
+pub static SCALE_COLOR_INFO: HostFunctionInfo = HostFunctionInfo {
+    name: "oxitortoise_scale_color",
+    parameter_types: &[F64, F64, F64, F64],
+    return_type: &[F64],
+};
 #[unsafe(no_mangle)]
 pub extern "C" fn oxitortoise_scale_color(
     color: NlFloat,
@@ -141,13 +190,158 @@ pub extern "C" fn oxitortoise_scale_color(
     engine::sim::color::scale_color(color.into(), value, min, max).into()
 }
 
+pub static RANDOM_INT_INFO: HostFunctionInfo = HostFunctionInfo {
+    name: "oxitortoise_random_int",
+    parameter_types: &[Ptr, F64],
+    return_type: &[F64],
+};
 #[unsafe(no_mangle)]
-pub extern "C" fn oxitortoise_next_int(context: &mut CanonExecutionContext, max: u32) -> u32 {
+pub extern "C" fn oxitortoise_random_int(context: &mut CanonExecutionContext, max: u32) -> u32 {
     context.next_int.next_int(max as i64) as u32
 }
 
+pub static TURTLE_FORWARD_INFO: HostFunctionInfo = HostFunctionInfo {
+    name: "oxitortoise_turtle_forward",
+    parameter_types: &[Ptr, I64, F64],
+    return_type: &[],
+};
 #[unsafe(no_mangle)]
-pub extern "C" fn oxitortoise_get_default_turtle_breed(context: &mut CanonExecutionContext) -> u64 {
-    let breed_id = context.workspace.world.turtles.breeds().keys().next().unwrap();
-    breed_id.data().as_ffi()
+pub extern "C" fn oxitortoise_turtle_forward(
+    context: &mut CanonExecutionContext,
+    turtle_id: u64,
+    distance: NlFloat,
+) {
+    // TODO: this is a lot of logic. it should be in the engine
+    let world = &mut context.workspace.world;
+    let turtle_id = TurtleId::from_ffi(turtle_id);
+    let heading = world.turtles.get_turtle_heading(turtle_id).unwrap();
+    let position = world.turtles.get_turtle_position(turtle_id).unwrap();
+    let new_pos = world.topology.offset_distance_by_heading(*position, *heading, distance);
+    if let Some(new_pos) = new_pos {
+        *world.turtles.get_turtle_position_mut(turtle_id).unwrap() = new_pos;
+    }
+}
+
+pub static LIST_NEW_INFO: HostFunctionInfo =
+    HostFunctionInfo { name: "oxitortoise_list_new", parameter_types: &[], return_type: &[Ptr] };
+#[unsafe(no_mangle)]
+pub extern "C" fn oxitortoise_list_new() -> NlBox<NlList> {
+    let list = NlList::new();
+    NlBox::new(list)
+}
+
+pub static LIST_PUSH_INFO: HostFunctionInfo = HostFunctionInfo {
+    name: "oxitortoise_list_push",
+    parameter_types: &[Ptr, F64],
+    return_type: &[Ptr],
+};
+#[unsafe(no_mangle)]
+pub extern "C" fn oxitortoise_list_push(mut list: NlBox<NlList>, element: DynBox) -> NlBox<NlList> {
+    list.push(element);
+    list
+}
+
+pub static ONE_OF_LIST_INFO: HostFunctionInfo = HostFunctionInfo {
+    name: "oxitortoise_one_of_list",
+    parameter_types: &[Ptr, Ptr],
+    return_type: &[F64],
+};
+#[unsafe(no_mangle)]
+pub extern "C" fn oxitortoise_one_of_list(
+    context: &mut CanonExecutionContext,
+    mut list: NlBox<NlList>,
+) -> DynBox {
+    let index = context.next_int.next_int(list.len() as i64) as usize; // TODO casts okay?
+    list.swap_remove(index)
+}
+
+// TODO: Write function definition for patch_ahead
+pub static PATCH_AHEAD_INFO: HostFunctionInfo = HostFunctionInfo {
+    name: "oxitortoise_patch_ahead",
+    parameter_types: &[Ptr, I64, F64],
+    return_type: &[I32],
+};
+#[unsafe(no_mangle)]
+pub extern "C" fn oxitortoise_patch_ahead(
+    context: &mut CanonExecutionContext,
+    turtle_id: u64,
+    distance: NlFloat,
+) -> OptionPatchId {
+    // TODO: this is a lot of logic. it should be in the engine
+    let world = &mut context.workspace.world;
+    let turtle_id = TurtleId::from_ffi(turtle_id);
+    let heading = world.turtles.get_turtle_heading(turtle_id).unwrap();
+    let position = world.turtles.get_turtle_position(turtle_id).unwrap();
+    let pos_ahead = world.topology.offset_distance_by_heading(*position, *heading, distance);
+    if let Some(pos_ahead) = pos_ahead {
+        world.topology.patch_at(pos_ahead.round_to_int()).into()
+    } else {
+        OptionPatchId::NOBODY
+    }
+}
+
+pub static PATCH_RIGHT_AND_AHEAD_INFO: HostFunctionInfo = HostFunctionInfo {
+    name: "oxitortoise_patch_right_and_ahead",
+    parameter_types: &[Ptr, I64, F64, F64],
+    return_type: &[I32],
+};
+#[unsafe(no_mangle)]
+pub extern "C" fn oxitortoise_patch_right_and_ahead(
+    context: &mut CanonExecutionContext,
+    turtle_id: u64,
+    distance: NlFloat,
+    angle: NlFloat,
+) -> OptionPatchId {
+    // TODO: this is a lot of logic. it should be in the engine
+    let world = &mut context.workspace.world;
+    let turtle_id = TurtleId::from_ffi(turtle_id);
+    let heading = world.turtles.get_turtle_heading(turtle_id).unwrap();
+    let heading_right = *heading + angle;
+    let position = world.turtles.get_turtle_position(turtle_id).unwrap();
+    let pos_ahead = world.topology.offset_distance_by_heading(*position, heading_right, distance);
+    if let Some(pos_ahead) = pos_ahead {
+        world.topology.patch_at(pos_ahead.round_to_int()).into()
+    } else {
+        OptionPatchId::NOBODY
+    }
+}
+
+// TODO: Write function definition for dynbox_binary_op
+pub static DYNBOX_BINARY_OP_INFO: HostFunctionInfo = HostFunctionInfo {
+    name: "oxitortoise_dynbox_binary_op",
+    parameter_types: &[F64, F64, I32],
+    return_type: &[F64],
+};
+#[unsafe(no_mangle)]
+pub extern "C" fn oxitortoise_dynbox_binary_op(lhs: DynBox, rhs: DynBox, op: u32) -> DynBox {
+    let op = BinaryOpcode::try_from(op as u8).unwrap();
+    match op {
+        BinaryOpcode::Add => lhs + rhs,
+        BinaryOpcode::Sub => lhs - rhs,
+        BinaryOpcode::Mul => lhs * rhs,
+        BinaryOpcode::Div => lhs / rhs,
+        _ => unimplemented!("unsupported binary operation: {:?}", op),
+    }
+}
+
+pub static DYNBOX_BOOL_BINARY_OP_INFO: HostFunctionInfo = HostFunctionInfo {
+    name: "oxitortoise_dynbox_bool_binary_op",
+    parameter_types: &[F64, F64, I32],
+    return_type: &[I32],
+};
+
+#[unsafe(no_mangle)]
+pub extern "C" fn oxitortoise_dynbox_bool_binary_op(lhs: DynBox, rhs: DynBox, op: u32) -> bool {
+    let op = BinaryOpcode::try_from(op as u8).unwrap();
+    match op {
+        BinaryOpcode::Eq => lhs == rhs,
+        BinaryOpcode::Neq => lhs != rhs,
+        BinaryOpcode::Lt => lhs < rhs,
+        BinaryOpcode::Lte => lhs <= rhs,
+        BinaryOpcode::Gt => lhs > rhs,
+        BinaryOpcode::Gte => lhs >= rhs,
+        BinaryOpcode::And => lhs.and(rhs),
+        BinaryOpcode::Or => lhs.or(rhs),
+        _ => unimplemented!("unsupported binary operation: {:?}", op),
+    }
 }

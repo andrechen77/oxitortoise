@@ -2,8 +2,11 @@
 
 use derive_more::derive::Display;
 
-use crate::mir::{
-    FunctionId, MirTy, Node, NodeId, Program, WriteLirError, build_lir::LirInsnBuilder,
+use crate::{
+    exec::jit::InstallLir,
+    mir::{
+        FunctionId, MirTy, Node, NodeId, Program, WriteLirError, build_lir::LirInsnBuilder,
+    },
 };
 
 #[derive(Debug, Display)]
@@ -28,7 +31,7 @@ impl Node for CallUserFn {
         program.functions[self.target].return_ty.clone()
     }
 
-    fn write_lir_execution(
+    fn write_lir_execution<I: InstallLir>(
         &self,
         program: &Program,
         my_node_id: NodeId,
@@ -40,7 +43,7 @@ impl Node for CallUserFn {
 
         let mut args = Vec::new();
         for arg in &self.args {
-            args.extend(lir_builder.get_node_results(program, *arg));
+            args.extend(lir_builder.get_node_results::<I>(program, *arg));
         }
 
         let insn = lir::InsnKind::CallUserFunction {
