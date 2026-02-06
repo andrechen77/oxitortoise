@@ -42,7 +42,11 @@
 //! will exit the current iteration of the loop body and re-enter the loop body
 //! with the loop iteration values set to the values that were broken with.
 
-use std::{collections::HashMap, fmt::Debug, rc::Rc};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Debug,
+    rc::Rc,
+};
 
 use derive_more::{Deref, Display, From, Into};
 use slotmap::{SecondaryMap, new_key_type};
@@ -606,20 +610,20 @@ pub fn generate_host_function_call(function: HostFunction, args: Box<[ValRef]>) 
     InsnKind::CallHostFunction { function, output_type: function.return_type.into(), args }
 }
 
-pub fn host_function_references(program: &Program) -> Vec<HostFunction> {
+pub fn host_function_references(program: &Program) -> HashSet<HostFunction> {
     struct HostFnCollector {
-        host_fns: Vec<HostFunction>,
+        host_fns: HashSet<HostFunction>,
     }
 
     impl LirVisitor for HostFnCollector {
         fn visit_insn(&mut self, insn: &InsnKind, _pc: InsnPc) {
             if let InsnKind::CallHostFunction { function, .. } = insn {
-                self.host_fns.push(*function);
+                self.host_fns.insert(*function);
             }
         }
     }
 
-    let mut collector = HostFnCollector { host_fns: vec![] };
+    let mut collector = HostFnCollector { host_fns: HashSet::new() };
     for function in program.user_functions.values() {
         visit_insn_seq(&mut collector, function);
     }
