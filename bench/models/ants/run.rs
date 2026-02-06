@@ -80,8 +80,8 @@ fn main() {
                 .without_time()
                 .with_filter(
                     Targets::new()
-                        .with_target("oxitortoise_engine", Level::INFO)
-                        .with_target("oxitortoise_ast_to_mir", Level::TRACE)
+                        .with_target("oxitortoise_engine", Level::TRACE)
+                        .with_target("oxitortoise_ast_to_mir", Level::INFO)
                         .with_target("ants", Level::TRACE)
                         .with_target("oxitortoise_main", Level::TRACE)
                         .with_target("oxitortoise_lir_to_wasm", Level::INFO),
@@ -122,7 +122,7 @@ fn main() {
     write_to_file(mir_filename.as_ptr(), mir_filename.len(), mir_str.as_ptr(), mir_str.len());
 
     let lir_program = mir_to_lir::<LirInstaller>(&program);
-    let lir_str = format!("{}", lir_program);
+    let lir_str = lir_program.pretty_print();
     let lir_filename = "model.lir";
     write_to_file(lir_filename.as_ptr(), lir_filename.len(), lir_str.as_ptr(), lir_str.len());
 
