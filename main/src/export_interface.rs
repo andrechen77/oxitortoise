@@ -196,8 +196,9 @@ pub static RANDOM_INT_INFO: HostFunctionInfo = HostFunctionInfo {
     return_type: &[F64],
 };
 #[unsafe(no_mangle)]
-pub extern "C" fn oxitortoise_random_int(context: &mut CanonExecutionContext, max: u32) -> u32 {
-    context.next_int.next_int(max as i64) as u32
+pub extern "C" fn oxitortoise_random_int(context: &mut CanonExecutionContext, max: f64) -> f64 {
+    // TODO move the casting logic to the engine, not in this shim
+    context.next_int.next_int(max as i64) as f64
 }
 
 pub static TURTLE_FORWARD_INFO: HostFunctionInfo = HostFunctionInfo {
