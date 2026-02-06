@@ -32,6 +32,9 @@
 	"turtle_schema": {
 		"type": "default"
 	},
+	"turtle_breed_active_vars": {
+		"TURTLES": []
+	},
 	"functions": {
 		"SETUP-NEST": {
 			"self_param_type": "patch"

@@ -2,12 +2,14 @@
 
 use std::{collections::HashMap, rc::Rc};
 
+use engine::mir::BreedPartial;
+use engine::sim::turtle::DEFAULT_BREED_NAME;
 use engine::slotmap::Key as _;
 use engine::util::reflection::Reflect;
 use engine::{
     mir::{
         self, CustomVarDecl, Function, FunctionId, LocalDeclaration, LocalId, LocalStorage,
-        NlAbstractTy, NodeId, NodeKind,
+        NlAbstractTy, NodeId, NodeKind, TurtleBreeds,
         node::{self, Agentset, AskRecipient, BinaryOpcode, PatchLocRelation, UnaryOpcode},
     },
     sim::{
@@ -42,7 +44,7 @@ pub struct GlobalScope {
 
 #[non_exhaustive]
 #[derive(Debug)]
-enum NameReferent {
+pub enum NameReferent {
     Constant(fn() -> NodeKind),
     Global(usize),
     TurtleVar(TurtleVarDesc),
@@ -73,10 +75,10 @@ impl GlobalScope {
             (Rc::from("COLOR"), TurtleVarDesc::Color),
             (Rc::from("SIZE"), TurtleVarDesc::Size),
         ]);
-        self.turtle_breeds.extend([("".into(), default_turtle_breed)]);
+        self.turtle_breeds.extend([(DEFAULT_BREED_NAME.into(), default_turtle_breed)]);
     }
 
-    fn lookup(&self, name: &str) -> Option<NameReferent> {
+    pub fn lookup(&self, name: &str) -> Option<NameReferent> {
         let Self {
             constants,
             global_vars: globals,
@@ -111,7 +113,7 @@ impl GlobalScope {
 struct MirBuilder {
     global_names: GlobalScope,
     global_vars: Vec<CustomVarDecl>,
-    turtle_breeds: SlotMap<BreedId, ()>,
+    turtle_breeds: SlotMap<BreedId, BreedPartial>,
     turtle_vars: Vec<CustomVarDecl>,
     patch_vars: Vec<CustomVarDecl>,
     /// Maps a function id to the function data
@@ -146,7 +148,9 @@ pub fn ast_to_mir(ast: Ast) -> anyhow::Result<ParseResult> {
     } = ast;
 
     // create the default turtle breed
-    let default_turtle_breed = mir.turtle_breeds.insert(());
+    let default_turtle_breed = mir
+        .turtle_breeds
+        .insert(BreedPartial { name: Rc::from("TURTLES"), singular_name: Rc::from("turtle") });
 
     // add builtin names to the global scope
     mir.global_names.add_builtins(default_turtle_breed);
@@ -219,7 +223,7 @@ pub fn ast_to_mir(ast: Ast) -> anyhow::Result<ParseResult> {
         program: mir::Program {
             globals: mir.global_vars.into(),
             globals_schema: None,
-            turtle_breeds: mir.turtle_breeds,
+            turtle_breeds: TurtleBreeds::Partial(mir.turtle_breeds),
             custom_turtle_vars: mir.turtle_vars,
             custom_patch_vars: mir.patch_vars,
             turtle_schema: None,
@@ -502,7 +506,7 @@ fn translate_node(ast_node: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) -> (NodeId
                 translate_ephemeral_closure(*body, ctx.fn_id, AgentClass::Turtle, ctx.reborrow());
             NodeKind::from(node::CreateTurtles {
                 context,
-                breed: ctx.mir.global_names.turtle_breeds[""], // TODO(mvp) add creating other turtle breeds
+                breed: ctx.mir.global_names.turtle_breeds[DEFAULT_BREED_NAME], // TODO(mvp) add creating other turtle breeds
                 num_turtles: population,
                 body,
             })

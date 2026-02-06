@@ -12,10 +12,11 @@ use crate::{
         WriteLirError, build_lir::LirInsnBuilder, node,
     },
     sim::{
-        observer::calc_global_addr,
+        observer::calc_global_var_offset,
         patch::{PatchVarDesc, calc_patch_var_offset},
         turtle::{TurtleVarDesc, calc_turtle_var_offset},
         value::AGENT_INDEX_CONCRETE_TY,
+        world::World,
     },
     util::reflection::Reflect,
     workspace::Workspace,
@@ -76,7 +77,7 @@ impl Node for GetGlobalVar {
 }
 
 fn context_to_global_data(program: &mut Program, context: NodeId, var: usize) -> (NodeId, usize) {
-    let addr = calc_global_addr(program, var);
+    let (buffer_offset, field_offset) = calc_global_var_offset(program, var);
 
     // insert a node that gets the workspace pointer
     let workspace_ptr = program.nodes.insert(NodeKind::from(node::MemLoad {
@@ -88,12 +89,15 @@ fn context_to_global_data(program: &mut Program, context: NodeId, var: usize) ->
     // insert a node that gets the row buffer
     let globals = program.nodes.insert(NodeKind::from(node::MemLoad {
         ptr: workspace_ptr,
-        offset: offset_of!(Workspace, world) + addr.buffer_offset,
+        offset: offset_of!(Workspace, world) + offset_of!(World, globals) + buffer_offset,
         ty: <*mut u8 as Reflect>::CONCRETE_TY,
     }));
 
-    (globals, addr.field_offset)
+    (globals, field_offset)
 }
+
+// TODO(mvp) if this is a variable that may or may not exist depending on the
+// breed, then we should check the breed of the turtle as well
 
 #[derive(Debug, Display, Copy, Clone)]
 #[display("GetTurtleVar {var:?}")]
@@ -241,7 +245,7 @@ fn context_to_turtle_data(
     // insert a node that gets the row buffer
     let row_buffer = program.nodes.insert(NodeKind::from(node::MemLoad {
         ptr: workspace_ptr,
-        offset: offset_of!(Workspace, world) + buffer_offset,
+        offset: offset_of!(Workspace, world) + offset_of!(World, turtles) + buffer_offset,
         ty: <*mut u8 as Reflect>::CONCRETE_TY,
     }));
 
@@ -433,7 +437,7 @@ fn context_to_patch_data(
     // insert a node that gets the row buffer
     let row_buffer = program.nodes.insert(NodeKind::from(node::MemLoad {
         ptr: workspace_ptr,
-        offset: offset_of!(Workspace, world) + buffer_offset,
+        offset: offset_of!(Workspace, world) + offset_of!(World, patches) + buffer_offset,
         ty: <*mut u8 as Reflect>::CONCRETE_TY,
     }));
 

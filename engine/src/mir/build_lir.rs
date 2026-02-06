@@ -20,7 +20,9 @@ pub struct LirProgramBuilder {
         HashMap<lir::FunctionId, (Vec<lir::ValType>, SmallVec<[lir::ValType; 1]>)>,
 }
 
-pub fn mir_to_lir<I: InstallLir>(mir: &mir::Program) -> lir::Program {
+pub fn mir_to_lir<I: InstallLir>(
+    mir: &mir::Program,
+) -> (lir::Program, HashMap<mir::FunctionId, lir::FunctionId>) {
     let mut builder = LirProgramBuilder {
         available_user_functions: HashMap::new(),
         function_signatures: HashMap::new(),
@@ -47,7 +49,7 @@ pub fn mir_to_lir<I: InstallLir>(mir: &mir::Program) -> lir::Program {
         lir_fn_bodies.insert(lir_fn_id, lir_fn);
     }
 
-    lir::Program { user_functions: lir_fn_bodies }
+    (lir::Program { user_functions: lir_fn_bodies }, builder.available_user_functions)
 }
 
 #[instrument(skip(program))]

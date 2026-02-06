@@ -10,11 +10,11 @@ use crate::{
     exec::jit::InstallLir,
     mir::build_lir::LirInsnBuilder,
     sim::{
-        agent_schema::GlobalsSchema,
         color::Color,
+        observer::GlobalsSchema,
         patch::{OptionPatchId, PatchSchema},
         topology::Point,
-        turtle::{BreedId, TurtleId, TurtleSchema},
+        turtle::{Breed, BreedId, TurtleId, TurtleSchema},
         value::{DynBox, NlBool, NlBox, NlFloat, NlList},
     },
     util::reflection::{ConcreteTy, Reflect},
@@ -34,11 +34,11 @@ new_key_type! {
     pub struct FunctionId;
 }
 
-#[derive(Default, derive_more::Debug)]
+#[derive(derive_more::Debug)]
 pub struct Program {
     pub globals: Box<[CustomVarDecl]>,
     pub globals_schema: Option<GlobalsSchema>,
-    pub turtle_breeds: SlotMap<BreedId, ()>,
+    pub turtle_breeds: TurtleBreeds,
     pub custom_turtle_vars: Vec<CustomVarDecl>,
     /// None if the turtle schema has not been calculated yet.
     pub turtle_schema: Option<TurtleSchema>,
@@ -54,6 +54,18 @@ pub struct Program {
     /// The set of all local variables in the program. A local variable can
     /// only belong to a single function at a time.
     pub locals: SlotMap<LocalId, LocalDeclaration>,
+}
+
+#[derive(derive_more::Debug)]
+pub enum TurtleBreeds {
+    Full(SecondaryMap<BreedId, Breed>),
+    Partial(SlotMap<BreedId, BreedPartial>),
+}
+
+#[derive(Debug)]
+pub struct BreedPartial {
+    pub name: Rc<str>,
+    pub singular_name: Rc<str>,
 }
 
 #[derive(Debug)]

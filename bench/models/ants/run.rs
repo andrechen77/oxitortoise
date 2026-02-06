@@ -1,24 +1,25 @@
 use std::{cell::RefCell, io, rc::Rc};
 
-use ast_to_mir::{ParseResult, add_cheats, serde_json};
+use ast_to_mir::{NameReferent, ParseResult, add_cheats, serde_json};
 use engine::{
-    exec::jit::InstallLir as _,
+    exec::{ExecutionContext, jit::InstallLir as _},
     mir::{
-        mir_to_lir,
+        TurtleBreeds, mir_to_lir,
         transforms::{lower, optimize_of_agent_type, peephole_transform},
         type_inference::narrow_types,
     },
     sim::{
+        observer::{Globals, GlobalsSchema},
         patch::{PatchSchema, Patches},
         shapes::Shapes,
         tick::Tick,
         topology::{Topology, TopologySpec},
         turtle::{Breed, BreedId, TurtleSchema, Turtles},
-        value::{NlBool, NlFloat},
         world::World,
     },
-    slotmap::SlotMap,
-    util::{reflection::Reflect as _, rng::CanonRng},
+    slotmap::SecondaryMap,
+    updater::DirtyAggregator,
+    util::rng::CanonRng,
     workspace::Workspace,
 };
 use oxitortoise_main::LirInstaller;
@@ -28,9 +29,12 @@ use tracing_subscriber::{
     util::SubscriberInitExt as _,
 };
 
-// keep this function around as as reminder of how the workspace is set up
-#[allow(dead_code)]
-fn create_workspace() -> (Workspace, BreedId) {
+fn create_workspace(
+    globals_schema: GlobalsSchema,
+    turtle_schema: TurtleSchema,
+    turtle_breeds: SecondaryMap<BreedId, Breed>,
+    patch_schema: PatchSchema,
+) -> Workspace {
     let topology_spec = TopologySpec {
         min_pxcor: -35,
         max_pycor: 35,
@@ -39,37 +43,19 @@ fn create_workspace() -> (Workspace, BreedId) {
         wrap_x: false,
         wrap_y: false,
     };
-    let patch_schema = PatchSchema::new(
-        1,
-        &[
-            (NlFloat::CONCRETE_TY, 2), // chemical
-            (NlFloat::CONCRETE_TY, 0), // food
-            (NlBool::CONCRETE_TY, 0),  // nest?
-            (NlFloat::CONCRETE_TY, 0), // nest-scent
-            (NlFloat::CONCRETE_TY, 0), // food-source-number
-        ],
-        &[1, 2],
-    );
-    let turtle_schema = TurtleSchema::default();
-    let patches = Patches::new(patch_schema, &topology_spec);
-    let (turtle_breeds, default_turtle_breed) = {
-        let mut breeds = SlotMap::with_key();
-        let key = breeds.insert(Breed {
-            name: Rc::from("turtles"),
-            singular_name: Rc::from("turtle"),
-            active_custom_fields: vec![],
-        });
-        (breeds, key)
+    let workspace = Workspace {
+        world: World {
+            globals: Globals::new(globals_schema),
+            turtles: Turtles::new(turtle_schema, turtle_breeds),
+            patches: Patches::new(patch_schema, &topology_spec),
+            topology: Topology::new(topology_spec),
+            tick_counter: Tick::default(),
+            shapes: Shapes::default(),
+        },
+        rng: Rc::new(RefCell::new(CanonRng::new(0))),
     };
-    let turtles = Turtles::new(turtle_schema, turtle_breeds);
-    let topology = Topology::new(topology_spec);
-    let tick_counter = Tick::default();
-    let shapes = Shapes::default();
-    let world = World { turtles, patches, topology, tick_counter, shapes };
-    let rng = Rc::new(RefCell::new(CanonRng::new(0)));
-    let workspace = Workspace { world, rng };
 
-    (workspace, default_turtle_breed)
+    workspace
 }
 
 fn main() {
@@ -121,19 +107,20 @@ fn main() {
     let mir_str = program.pretty_print();
     write_to_file(mir_filename.as_ptr(), mir_filename.len(), mir_str.as_ptr(), mir_str.len());
 
-    let lir_program = mir_to_lir::<LirInstaller>(&program);
+    let (lir_program, mir_to_lir_fns) = mir_to_lir::<LirInstaller>(&program);
     let lir_str = lir_program.pretty_print();
     let lir_filename = "model.lir";
     write_to_file(lir_filename.as_ptr(), lir_filename.len(), lir_str.as_ptr(), lir_str.len());
 
     let result = unsafe { LirInstaller::install_lir(&lir_program) };
-    match result {
+    let functions = match result {
         Ok((functions, module_bytes)) => {
             for fn_id in functions.keys() {
                 info!("installed entrypoint function {:?}", fn_id);
             }
             let name = "model.wasm";
             write_to_file(name.as_ptr(), name.len(), module_bytes.as_ptr(), module_bytes.len());
+            functions
         }
         Err((error, module_bytes)) => {
             let name = "model.wasm";
@@ -141,7 +128,32 @@ fn main() {
             error!("failed to install LIR program");
             panic!();
         }
-    }
+    };
+
+    let TurtleBreeds::Full(breeds) = program.turtle_breeds else {
+        panic!("turtle breeds are not full");
+    };
+
+    // set up the workspace
+    let mut workspace = create_workspace(
+        program.globals_schema.unwrap(),
+        program.turtle_schema.unwrap(),
+        breeds,
+        program.patch_schema.unwrap(),
+    );
+
+    let NameReferent::UserProc(mir_fn_id) = global_names.lookup("SETUP").unwrap() else {
+        panic!("expected a user procedure");
+    };
+    let setup = functions[&mir_to_lir_fns[&mir_fn_id]];
+
+    let next_int = workspace.rng.clone();
+    let mut execution_context = ExecutionContext {
+        workspace: &mut workspace,
+        next_int,
+        dirty_aggregator: DirtyAggregator::default(),
+    };
+    setup.call(&mut execution_context, std::ptr::null_mut());
 }
 
 #[cfg(target_arch = "wasm32")]

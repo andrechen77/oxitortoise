@@ -34,6 +34,7 @@ pub trait InstallLir {
 // with known signatures. There must be a cleaner way to get ahold of these
 // constants.
 
+#[derive(Clone, Copy)]
 #[repr(transparent)]
 pub struct JitEntrypoint {
     // TODO(wishlist) for type safety, we probably want to use a newtype

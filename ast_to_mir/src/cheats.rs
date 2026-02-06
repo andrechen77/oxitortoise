@@ -1,18 +1,17 @@
 use std::collections::HashMap;
 
 use engine::{
-    mir::{FunctionId, NlAbstractTy, Program},
+    mir::{FunctionId, NlAbstractTy, Program, TurtleBreeds},
     sim::{
-        agent_schema::GlobalsSchema,
+        observer::GlobalsSchema,
         patch::{PatchSchema, PatchVarDesc},
-        turtle::TurtleSchema,
-        turtle::TurtleVarDesc,
+        turtle::{Breed, TurtleSchema, TurtleVarDesc},
     },
     slotmap::SecondaryMap,
 };
 use serde::Deserialize;
 
-use crate::{FnInfo, GlobalScope};
+use crate::{FnInfo, GlobalScope, NameReferent};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -76,6 +75,7 @@ pub struct Cheats {
     patch_schema: Option<CheatPatchSchema>,
     turtle_schema: Option<CheatTurtleSchema>,
     turtle_var_types: Option<HashMap<String, CheatVarType>>,
+    turtle_breed_active_vars: Option<HashMap<String, Vec<String>>>,
     functions: Option<HashMap<String, CheatFunctionInfo>>,
 }
 
@@ -184,6 +184,34 @@ pub fn add_cheats(
             }
         };
         program.turtle_schema = Some(turtle_schema);
+    }
+
+    if let Some(turtle_breed_active_vars) = &cheats.turtle_breed_active_vars {
+        let TurtleBreeds::Partial(partial_breeds) = &program.turtle_breeds else {
+            panic!("turtle breeds are not partial");
+        };
+
+        let mut breeds = SecondaryMap::new();
+        for (breed_name, active_vars) in turtle_breed_active_vars {
+            let NameReferent::TurtleBreed(breed_id) = global_names.lookup(&breed_name).unwrap()
+            else {
+                panic!("breed {} is not defined", breed_name);
+            };
+            assert!(active_vars.is_empty()); // for ants model
+
+            let partial = &partial_breeds[breed_id];
+
+            breeds.insert(
+                breed_id,
+                Breed {
+                    name: partial.name.clone(),
+                    singular_name: partial.singular_name.clone(),
+                    active_custom_fields: Vec::new(),
+                },
+            );
+        }
+
+        program.turtle_breeds = TurtleBreeds::Full(breeds);
     }
 
     if let Some(fn_cheats) = &cheats.functions {

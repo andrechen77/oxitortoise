@@ -13,21 +13,6 @@ use crate::{util::reflection::ConcreteTy, util::row_buffer::RowSchema};
 // Describes all the fields of an agent and how they are stored. The base data
 // for an agent is always stored in the first buffer.
 
-#[derive(Debug)]
-pub struct GlobalsSchema {
-    row_schema: RowSchema,
-}
-
-impl GlobalsSchema {
-    pub fn new(field_types: &[ConcreteTy]) -> Self {
-        Self { row_schema: RowSchema::new(field_types, true) }
-    }
-
-    pub fn row_schema(&self) -> &RowSchema {
-        &self.row_schema
-    }
-}
-
 #[derive(Clone, Debug)]
 pub struct AgentSchemaFieldGroup {
     /// Whether the fields in this group should have an occupancy bitfield

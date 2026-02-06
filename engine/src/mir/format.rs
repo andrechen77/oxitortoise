@@ -2,7 +2,7 @@ use pretty_print::PrettyPrinter;
 use slotmap::Key;
 
 use crate::mir::{
-    Function, FunctionId, MirVisitor, Node as _, NodeId, Program, visit_mir_function,
+    Function, FunctionId, MirVisitor, Node as _, NodeId, Program, TurtleBreeds, visit_mir_function,
 };
 use std::{collections::HashSet, fmt::Write};
 
@@ -32,10 +32,15 @@ impl Program {
                 )
             })?;
             p.add_field("globals_schema", |p| write!(p, "{:#?}", globals_schema))?;
-            p.add_field("turtle_breeds", |p| {
-                p.add_list(turtle_breeds.iter().map(|(breed_id, _)| breed_id), |p, breed_id| {
-                    write!(p, "{:?}", breed_id)
-                })
+            p.add_field("turtle_breeds", |p| match turtle_breeds {
+                TurtleBreeds::Full(breeds) => p
+                    .add_list(breeds.iter().map(|(breed_id, _)| breed_id), |p, breed_id| {
+                        write!(p, "{:?}", breed_id)
+                    }),
+                TurtleBreeds::Partial(breeds) => p
+                    .add_list(breeds.iter().map(|(breed_id, _)| breed_id), |p, breed_id| {
+                        write!(p, "{:?}", breed_id)
+                    }),
             })?;
             p.add_field("custom_turtle_vars", |p| {
                 p.add_map(

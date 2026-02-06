@@ -11,7 +11,7 @@ use std::rc::Rc;
 
 use derive_more::derive::{From, Into};
 use either::Either;
-use slotmap::SlotMap;
+use slotmap::SecondaryMap;
 
 use crate::mir;
 use crate::sim::agent_schema::{AgentFieldDescriptor, AgentSchemaField, AgentSchemaFieldGroup};
@@ -25,6 +25,8 @@ use crate::{
     sim::{color::Color, topology::Point, value},
     util::rng::Rng,
 };
+
+pub const DEFAULT_BREED_NAME: &str = "TURTLES";
 
 /// The who number of a turtle.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Default, PartialOrd, Ord)]
@@ -98,11 +100,11 @@ pub struct Turtles {
     // TODO(mvp) this should be a secondary map, using the breed ids generated
     // during MIR creation
     /// The breeds of turtles.
-    breeds: SlotMap<BreedId, Breed>,
+    breeds: SecondaryMap<BreedId, Breed>,
 }
 
 impl Turtles {
-    pub fn new(turtle_schema: TurtleSchema, breeds: SlotMap<BreedId, Breed>) -> Self {
+    pub fn new(turtle_schema: TurtleSchema, breeds: SecondaryMap<BreedId, Breed>) -> Self {
         Self {
             next_who: TurtleWho::default(),
             slot_tracker: GenSlotTracker::new(),
@@ -125,7 +127,7 @@ impl Turtles {
         &self.breeds[id]
     }
 
-    pub fn breeds(&self) -> &SlotMap<BreedId, Breed> {
+    pub fn breeds(&self) -> &SecondaryMap<BreedId, Breed> {
         &self.breeds
     }
 
