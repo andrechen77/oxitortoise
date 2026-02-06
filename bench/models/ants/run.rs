@@ -132,11 +132,14 @@ fn main() {
             for fn_id in functions.keys() {
                 info!("installed entrypoint function {:?}", fn_id);
             }
+            let name = "model.wasm";
+            write_to_file(name.as_ptr(), name.len(), module_bytes.as_ptr(), module_bytes.len());
         }
         Err((error, module_bytes)) => {
             let name = "model.wasm";
             write_to_file(name.as_ptr(), name.len(), module_bytes.as_ptr(), module_bytes.len());
             error!("failed to install LIR program");
+            panic!();
         }
     }
 }
