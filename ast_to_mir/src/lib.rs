@@ -937,7 +937,9 @@ fn translate_ephemeral_closure(
     // build the function body
     let statements = match expr {
         ast::Node::CommandBlock(ast::CommandBlock { statements }) => statements,
-        ast::Node::ReporterBlock { reporter_app } => vec![*reporter_app],
+        ast::Node::ReporterBlock { reporter_app } => {
+            vec![ast::Node::CommandCall(ast::CommandCall::Report([reporter_app]))]
+        }
         _ => panic!("expected a command or reporter block, got {:?}", expr),
     };
     build_function_body(fn_id, statements, ctx.mir);

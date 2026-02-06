@@ -125,7 +125,7 @@ pub struct ValRef(pub InsnPc, pub u8);
 #[display("{self:?}")]
 pub struct VarId(pub usize);
 
-#[derive(PartialEq, Eq, Debug, Display)]
+#[derive(PartialEq, Eq, Debug, Display, Clone)]
 pub enum InsnKind {
     // QUESTION rethink loop args.
     // first, they should output a multivalue, instead of being a single value,
@@ -318,7 +318,7 @@ impl Value {
     }
 }
 
-#[derive(PartialEq, Eq, Debug, Display)]
+#[derive(PartialEq, Eq, Debug, Display, Clone)]
 #[display("block(-> {:?}) {{{}}}", output_type, body)]
 pub struct Block {
     /// The type of output of this block.
@@ -327,7 +327,7 @@ pub struct Block {
     pub body: InsnSeqId,
 }
 
-#[derive(PartialEq, Eq, Debug, Display)]
+#[derive(PartialEq, Eq, Debug, Display, Clone)]
 #[display("if_else(-> {:?})({}) {{{}}} {{{}}}", output_type, condition, then_body, else_body)]
 pub struct IfElse {
     /// The type of output of this if-else.
@@ -340,7 +340,7 @@ pub struct IfElse {
     pub else_body: InsnSeqId,
 }
 
-#[derive(PartialEq, Eq, Debug, Display)]
+#[derive(PartialEq, Eq, Debug, Display, Clone)]
 #[display("loop(-> {:?}) {{{}}}", output_type, body)]
 pub struct Loop {
     /// The initial values of the loop body arguments.
