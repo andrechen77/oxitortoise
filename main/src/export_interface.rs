@@ -58,14 +58,14 @@ pub extern "C" fn oxitortoise_advance_tick(world: &mut World) {
 // NOTE: Signature mismatch - function takes breed, count, position, and callback, but HostFunctionInfo only has Ptr
 pub static CREATE_TURTLES_INFO: HostFunctionInfo = HostFunctionInfo {
     name: "oxitortoise_create_turtles",
-    parameter_types: &[Ptr, I64, I64, F64, Ptr, FnPtr],
+    parameter_types: &[Ptr, I64, F64, Ptr, FnPtr],
     return_type: &[],
 };
 #[unsafe(no_mangle)]
 pub extern "C" fn oxitortoise_create_turtles(
     context: &mut CanonExecutionContext,
     breed: u64,
-    count: u64,
+    count: f64,
     birth_command_env: *mut u8,
     birth_command_fn_ptr: extern "C" fn(
         *mut u8,

@@ -13,13 +13,13 @@ use crate::{
 pub fn create_turtles(
     context: &mut ExecutionContext,
     breed: BreedId,
-    count: u64,
+    count: f64,
     position: Point,
     mut birth_command: impl FnMut(&mut ExecutionContext, TurtleId),
 ) {
     let new_turtles = context.workspace.world.turtles.create_turtles(
         breed,
-        count,
+        count as u64, // TODO look into rounding behavior
         position,
         &mut context.next_int,
     );
