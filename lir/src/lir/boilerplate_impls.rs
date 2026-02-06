@@ -1,85 +1,101 @@
-use std::{fmt::Display, ops::Add};
+use std::{
+    fmt::{self, Write},
+    ops::Add,
+};
 
 use super::*;
 
-// TODO(wishlist) for all display impls, use debug_closure_helpers once stabilized.
-// see how the code looked in 4e8f50af940c6cacd4bb5511ad156093f0da4e7b
+use pretty_print::PrettyPrinter;
 
-impl Display for Program {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Program {
+    pub fn pretty_print(&self) -> String {
+        let mut p = PrettyPrinter::new();
         let Program { entrypoints, user_functions } = self;
-        write!(f, "Program {{ entrypoints: ")?;
-        entrypoints.fmt(f)?;
-        write!(f, ", user_functions: {{")?;
-        let mut iter = user_functions.iter();
-        if let Some((id, func)) = iter.next() {
-            write!(f, "{:?}: ", id)?;
-            <Function as Display>::fmt(func, f)?;
-            for (id, func) in iter {
-                write!(f, ", {:?}: ", id)?;
-                <Function as Display>::fmt(func, f)?;
-            }
-        }
-        write!(f, "}} }}")
+        let _ = p.add_struct("Lir", |p| {
+            p.add_field("entrypoints", |p| {
+                p.add_list(entrypoints.iter(), |p, entrypoint| write!(p, "{:?}", entrypoint))
+            })?;
+            p.add_field("user_functions", |p| {
+                p.add_map(
+                    user_functions.iter(),
+                    |p, fn_id| {
+                        write!(p, "{:?}", fn_id)?;
+                        if let Some(debug_fn_name) = &user_functions[fn_id].debug_fn_name {
+                            write!(p, " ({:?})", debug_fn_name)?;
+                        }
+                        Ok(())
+                    },
+                    |p, (_, function)| {
+                        let Function {
+                            local_vars,
+                            num_parameters,
+                            stack_space,
+                            body,
+                            debug_fn_name,
+                            ..
+                        } = function;
+                        p.add_struct("Function", |p| {
+                            p.add_field("debug_name", |p| write!(p, "{:?}", debug_fn_name))?;
+                            p.add_field("num_parameters", |p| write!(p, "{}", num_parameters))?;
+                            p.add_field("local_vars", |p| {
+                                p.add_list(
+                                    local_vars.iter_enumerated(),
+                                    |p, (local_var_id, local_var_ty)| {
+                                        write!(p, "{:?}", local_var_ty)?;
+                                        if let Some(debug_var_name) =
+                                            function.debug_var_names.get(&local_var_id)
+                                        {
+                                            write!(p, " /* {:?} */", debug_var_name)?;
+                                        }
+                                        Ok(())
+                                    },
+                                )
+                            })?;
+                            p.add_field("stack_space", |p| write!(p, "{}", stack_space))?;
+                            p.add_field("body", |p| {
+                                write!(p, "{}", body)?;
+                                pretty_print_seq(p, function, body.body)
+                            })
+                        })
+                    },
+                )
+            })
+        });
+        p.finish()
     }
 }
 
-impl Display for Function {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let Function {
-            local_vars,
-            num_parameters,
-            stack_space,
-            body,
-            insn_seqs,
-            debug_fn_name,
-            debug_val_names,
-            debug_var_names,
-        } = self;
-        write!(f, "Function {{\ndebug_fn_name: ")?;
-        debug_fn_name.fmt(f)?;
-        write!(f, ",\ndebug_val_names: ")?;
-        debug_val_names.fmt(f)?;
-        write!(f, ",\ndebug_var_names: ")?;
-        debug_var_names.fmt(f)?;
-        write!(f, ",\nlocal_vars: ")?;
-        local_vars.fmt(f)?;
-        write!(f, ",\nnum_parameters: ")?;
-        write!(f, "{}", num_parameters)?;
-        write!(f, ",\nstack_space: ")?;
-        write!(f, "{}", stack_space)?;
-        write!(f, ",\nbody: ")?;
-        write!(f, "{}", body)?;
-        write!(f, ",\ninsn_seqs: {{\n")?;
-        let mut iter = insn_seqs.iter_enumerated();
-        if let Some((insn_seq_id, insn_seq)) = iter.next() {
-            write!(f, "{:?}: {{\n", insn_seq_id)?;
-            let mut inner_iter = insn_seq.iter_enumerated();
-            if let Some((insn_idx, insn)) = inner_iter.next() {
-                write!(f, "{:?}: ", insn_idx)?;
-                <InsnKind as Display>::fmt(insn, f)?;
-                for (insn_idx, insn) in inner_iter {
-                    write!(f, ",\n{:?}: ", insn_idx)?;
-                    <InsnKind as Display>::fmt(insn, f)?;
+fn pretty_print_seq(
+    p: &mut PrettyPrinter,
+    function: &Function,
+    insn_seq_id: InsnSeqId,
+) -> fmt::Result {
+    p.add_struct("", |p| {
+        for (insn_idx, insn) in function.insn_seqs[insn_seq_id].iter_enumerated() {
+            let val_names: Vec<_> = (0..)
+                .map_while(|i| {
+                    function.debug_val_names.get(&ValRef(InsnPc(insn_seq_id, insn_idx), i))
+                })
+                .collect();
+            p.line()?;
+            write!(p, "{}: {:?} = {}", insn_idx, val_names, insn)?;
+            match insn {
+                InsnKind::Block(Block { body, .. }) => pretty_print_seq(p, function, *body)?,
+                InsnKind::IfElse(IfElse { then_body, else_body, .. }) => {
+                    pretty_print_seq(p, function, *then_body)?;
+                    pretty_print_seq(p, function, *else_body)?;
                 }
-            }
-            write!(f, "}}\n")?;
-            for (insn_seq_id, insn_seq) in iter {
-                write!(f, ", {:?}: {{\n", insn_seq_id)?;
-                let mut inner_iter = insn_seq.iter_enumerated();
-                if let Some((insn_idx, insn)) = inner_iter.next() {
-                    write!(f, "{:?}: ", insn_idx)?;
-                    <InsnKind as Display>::fmt(insn, f)?;
-                    for (insn_idx, insn) in inner_iter {
-                        write!(f, ",\n{:?}: ", insn_idx)?;
-                        <InsnKind as Display>::fmt(insn, f)?;
+                InsnKind::Loop(Loop { body, .. }) => pretty_print_seq(p, function, *body)?,
+                InsnKind::VarLoad { var_id } | InsnKind::VarStore { var_id, .. } => {
+                    if let Some(debug_var_name) = function.debug_var_names.get(var_id) {
+                        write!(p, " /* {:?} */", debug_var_name)?;
                     }
                 }
-                write!(f, "}}\n")?;
+                _ => {}
             }
         }
-        write!(f, " }}\n")
-    }
+        Ok(())
+    })
 }
 
 impl Add<usize> for InsnIdx {

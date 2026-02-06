@@ -55,7 +55,7 @@ pub struct Repeat {
 /// A node representing a breaking control flow construct. Executing this node
 /// will break out of some control flow construct, returning a certain value.
 #[derive(Debug, Display)]
-#[display("Break")]
+#[display("Break({:?})", target)]
 pub struct Break {
     /// The Block node being targeted by this break.
     pub target: NodeId,
