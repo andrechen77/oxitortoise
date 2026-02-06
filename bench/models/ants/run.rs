@@ -80,7 +80,7 @@ fn main() {
                 .without_time()
                 .with_filter(
                     Targets::new()
-                        .with_target("oxitortoise_engine", Level::TRACE)
+                        .with_target("oxitortoise_engine", Level::INFO)
                         .with_target("oxitortoise_ast_to_mir", Level::INFO)
                         .with_target("ants", Level::TRACE)
                         .with_target("oxitortoise_main", Level::TRACE)

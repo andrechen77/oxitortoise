@@ -38,7 +38,7 @@ use crate::{
 /// | 1 | true |
 #[derive(Clone)]
 #[repr(transparent)]
-pub struct DynBox(u64);
+pub struct DynBox(f64);
 
 const NAN_BASE: u64 = 0x7FF8000000000000;
 
@@ -58,20 +58,20 @@ pub enum UnpackedDynBox {
 impl DynBox {
     /// A `DynBox` representing a numeric value of 0. This works because the
     /// all-zero bit pattern is a non-NaN value that represents +0.0.
-    pub const ZERO: Self = Self(0u64);
+    pub const ZERO: Self = Self(0.0);
 
-    pub const FALSE: Self = Self(NAN_BASE | 0b001 << 48);
-    pub const TRUE: Self = Self(NAN_BASE | 0b001 << 48 | 1);
+    pub const FALSE: Self = Self(f64::from_bits(NAN_BASE | 0b001 << 48));
+    pub const TRUE: Self = Self(f64::from_bits(NAN_BASE | 0b001 << 48 | 1));
 
     pub fn unpack(&self) -> UnpackedDynBox {
-        let float = f64::from_bits(self.0);
-        if !float.is_nan() {
-            return UnpackedDynBox::Float(float);
+        if !self.0.is_nan() {
+            return UnpackedDynBox::Float(self.0);
         }
 
         // TODO(wishlist) add constants for each tag variant
-        let tag = (self.0 >> 48) & 0b111;
-        let value = self.0 & 0xFFFFFFFFFFFF;
+        let bits = self.0.to_bits();
+        let tag = (bits >> 48) & 0b111;
+        let value = bits & 0xFFFFFFFFFFFF;
 
         // TODO(mvp) complete all cases for unpacking a DynBox
         match tag {
@@ -93,8 +93,8 @@ impl DynBox {
 
     pub fn pack(value: UnpackedDynBox) -> Self {
         match value {
-            UnpackedDynBox::Float(value) => DynBox(value.to_bits()),
-            UnpackedDynBox::Bool(value) => DynBox(NAN_BASE | 0b001 << 48 | (value as u64)),
+            UnpackedDynBox::Float(value) => DynBox(value),
+            UnpackedDynBox::Bool(value) => DynBox(f64::from_bits(NAN_BASE | 0b001 << 48 | (value as u64))),
             UnpackedDynBox::Nobody => todo!("TODO(mvp) implement nobody"),
             UnpackedDynBox::Turtle(value) => todo!("TODO(mvp) implement turtle"),
             UnpackedDynBox::Patch(value) => todo!("TODO(mvp) implement patch"),
