@@ -98,7 +98,8 @@ impl TypeInfo {
 
 /// A concrete type representation in the NetLogo engine. The same NetLogo
 /// language type may have multiple concrete type representation.
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy, derive_more::Debug)]
+#[debug("{}", self.info().debug_name)]
 pub struct ConcreteTy(&'static TypeInfo);
 
 impl ConcreteTy {

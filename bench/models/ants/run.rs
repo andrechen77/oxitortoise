@@ -101,22 +101,12 @@ fn main() {
     let cheats = serde_json::from_str(cheats).unwrap();
     add_cheats(&cheats, &mut program, &global_names, &fn_info);
 
-    let mut mir_str = String::new();
-    for fn_id in program.functions.keys() {
-        mir_str.push_str(&format!(
-            "============== func {} {:?} ====================\n",
-            fn_id,
-            program.functions[fn_id].debug_name.as_deref().unwrap_or("unnamed")
-        ));
-        mir_str.push_str(&format!("{:#?}\n", program.functions[fn_id]));
-        mir_str.push_str(&to_dot_string_with_options(&program, fn_id, true));
-    }
     let mir_filename = "before.mir";
+    let mir_str = program.pretty_print();
     write_to_file(mir_filename.as_ptr(), mir_filename.len(), mir_str.as_ptr(), mir_str.len());
 
     let fn_ids: Vec<_> = program.functions.keys().collect();
     narrow_types(&mut program);
-    let mut mir_str = String::new();
     for fn_id in fn_ids {
         info!(
             "transforming function {} {}",
@@ -127,16 +117,9 @@ fn main() {
         optimize_of_agent_type(&mut program, fn_id);
         peephole_transform(&mut program, fn_id);
         lower(&mut program, fn_id);
-
-        mir_str.push_str(&format!(
-            "============== func {} {:?} ====================\n",
-            fn_id,
-            program.functions[fn_id].debug_name.as_deref().unwrap_or("unnamed")
-        ));
-        mir_str.push_str(&format!("{:#?}\n", program.functions[fn_id]));
-        mir_str.push_str(&to_dot_string_with_options(&program, fn_id, true));
     }
     let mir_filename = "after.mir";
+    let mir_str = program.pretty_print();
     write_to_file(mir_filename.as_ptr(), mir_filename.len(), mir_str.as_ptr(), mir_str.len());
 
     let lir_program = mir_to_lir::<LirInstaller>(&program);

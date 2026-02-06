@@ -949,26 +949,6 @@ fn translate_ephemeral_closure(
     }))
 }
 
-#[instrument(skip_all)]
-pub fn write_dot(program: &mir::Program, fn_id: FunctionId, prefix: &str) {
-    let dot_string = mir::graphviz::to_dot_string_with_options(program, fn_id, true);
-    let filename = format!(
-        "dots/{}-{}-{:?}.dot",
-        prefix,
-        fn_id,
-        program.functions[fn_id].debug_name.as_deref().unwrap_or("unnamed")
-    );
-    trace!("Writing DOT file for function {:?}: {}", fn_id, filename);
-
-    if let Some(parent) = Path::new(&filename).parent()
-        && let Err(e) = fs::create_dir_all(parent)
-    {
-        panic!("Failed to create parent directory for {} | {:?}", filename, e);
-    }
-
-    fs::write(filename, dot_string).expect("Failed to write DOT file");
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -985,11 +965,7 @@ mod tests {
 
         let ParseResult { program, .. } = ast_to_mir(ast).unwrap();
 
-        let debug_output = format!("{:#?}", program);
+        let debug_output = program.pretty_print();
         std::fs::write("mir_debug.txt", debug_output).expect("Failed to write MIR debug output");
-
-        for fn_id in program.functions.keys() {
-            write_dot(&program, fn_id, "debug");
-        }
     }
 }

@@ -21,7 +21,7 @@ use crate::{
 };
 
 mod build_lir;
-pub mod graphviz;
+mod format;
 pub mod node;
 pub mod transforms;
 pub mod type_inference;
@@ -49,6 +49,7 @@ pub struct Program {
     /// The set of all nodes in the program, where a "node" is some kind of
     /// computation, as in sea-of-nodes. A node can only belong to a single
     /// function at a time.
+    #[debug(skip)]
     pub nodes: Nodes,
     /// The set of all local variables in the program. A local variable can
     /// only belong to a single function at a time.
@@ -242,7 +243,7 @@ pub enum NodeKind {
     UnaryOp(UnaryOp),
 }
 
-#[derive(Clone, Debug, PartialEq, Default)]
+#[derive(Clone, PartialEq, Default)]
 pub struct MirTy {
     /// An abstract type that conceptually makes sense in the NetLogo virtual
     /// machine. This may be `None` if there is no abstract type that makes
@@ -278,8 +279,20 @@ impl From<ConcreteTy> for MirTy {
     }
 }
 
+impl std::fmt::Debug for MirTy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let MirTy { abstr, concrete } = self;
+        match (abstr, concrete) {
+            (Some(abstr), Some(concrete)) => write!(f, "{:?} ({:?})", abstr, concrete),
+            (Some(abstr), None) => write!(f, "{:?}", abstr),
+            (None, Some(concrete)) => write!(f, "{:?}", concrete),
+            (None, None) => write!(f, "unknown"),
+        }
+    }
+}
+
 /// A representation of an element of the lattice making up all NetLogo types.
-#[derive(PartialEq, Debug, Clone, Eq, Hash, Default)]
+#[derive(PartialEq, Debug, Clone, Eq, Hash, Default, Display)]
 pub enum NlAbstractTy {
     Unit,
     /// Top only includes types that make sense in the NetLogo environment.
@@ -353,7 +366,8 @@ impl NlAbstractTy {
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Eq, Hash)]
+#[derive(Debug, PartialEq, Clone, Eq, Hash, Display)]
+#[display("{} -> {}", arg_ty, return_ty)]
 pub struct ClosureType {
     pub arg_ty: Box<NlAbstractTy>,
     pub return_ty: Box<NlAbstractTy>,
