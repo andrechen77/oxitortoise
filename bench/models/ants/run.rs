@@ -1,10 +1,9 @@
 use std::{cell::RefCell, io, rc::Rc};
 
-use ast_to_mir::{ParseResult, add_cheats, serde_json, write_dot};
+use ast_to_mir::{ParseResult, add_cheats, serde_json};
 use engine::{
     exec::jit::InstallLir as _,
     mir::{
-        graphviz::to_dot_string_with_options,
         mir_to_lir,
         transforms::{lower, optimize_of_agent_type, peephole_transform},
         type_inference::narrow_types,

@@ -11,6 +11,7 @@ slotmap = "1.0.7"
 lir = { path = "../lir", package = "oxitortoise_lir" }
 tracing = "0.1.41"
 ambassador = "0.4.2"
+pretty_print = { path = "../pretty_print" }
 
 [features]
 runtime-unsafety = []
