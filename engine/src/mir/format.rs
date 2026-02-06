@@ -64,10 +64,17 @@ impl Program {
                         Ok(())
                     },
                     |p, (fn_id, function)| {
-                        let Function { debug_name, parameters, locals, return_ty, root_node } =
-                            function;
+                        let Function {
+                            debug_name,
+                            parameters,
+                            locals,
+                            return_ty,
+                            root_node: _,
+                            is_entrypoint,
+                        } = function;
                         p.add_struct("Function", |p| {
                             p.add_field("debug_name", |p| write!(p, "{:?}", debug_name))?;
+                            p.add_field("is_entrypoint", |p| write!(p, "{}", is_entrypoint))?;
                             p.add_field("parameters", |p| {
                                 p.add_list(parameters.iter(), |p, param| write!(p, "{:?}", param))
                             })?;

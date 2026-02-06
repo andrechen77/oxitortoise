@@ -138,23 +138,33 @@ impl FunctionInstaller {
         }
 
         // return the function pointers to the installed functions.
-        let jit_entries = HashMap::from_iter(lir.entrypoints.iter().map(|lir_fn_id| {
-            let slot = fn_table_allocated_slots[lir_fn_id];
-            // TODO for sanity, verify that each entrypoint has the signature
-            // specified in `JitEntrypoint`. However, Wasm should already catch
-            // if we indirectly call a function with the wrong signature.
-            let entrypoint = JitEntrypoint::new(
-                // SAFETY: in the wasm32 target, a function pointer is
-                // represented by a i32 indicating the slot in the
-                // function table, so they literally have the same ABI
-                unsafe {
-                    std::mem::transmute::<usize, extern "C" fn(&mut ExecutionContext, *mut u8)>(
-                        slot,
-                    )
-                },
-            );
-            (*lir_fn_id, entrypoint)
-        }));
+        let jit_entries = HashMap::from_iter(
+            lir.user_functions
+                .iter()
+                .filter_map(
+                    |(lir_fn_id, function)| {
+                        if function.is_entrypoint { Some(lir_fn_id) } else { None }
+                    },
+                )
+                .map(|lir_fn_id| {
+                    let slot = fn_table_allocated_slots[&lir_fn_id];
+                    // TODO for sanity, verify that each entrypoint has the signature
+                    // specified in `JitEntrypoint`. However, Wasm should already catch
+                    // if we indirectly call a function with the wrong signature.
+                    let entrypoint = JitEntrypoint::new(
+                        // SAFETY: in the wasm32 target, a function pointer is
+                        // represented by a i32 indicating the slot in the
+                        // function table, so they literally have the same ABI
+                        unsafe {
+                            std::mem::transmute::<
+                                usize,
+                                extern "C" fn(&mut ExecutionContext, *mut u8),
+                            >(slot)
+                        },
+                    );
+                    (lir_fn_id, entrypoint)
+                }),
+        );
         Ok((jit_entries, module_bytes))
     }
 }

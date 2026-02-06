@@ -47,10 +47,7 @@ pub fn mir_to_lir<I: InstallLir>(mir: &mir::Program) -> lir::Program {
         lir_fn_bodies.insert(lir_fn_id, lir_fn);
     }
 
-    lir::Program {
-        entrypoints: vec![], // TODO choose entrypoints, probably add a field to MIR program
-        user_functions: lir_fn_bodies,
-    }
+    lir::Program { user_functions: lir_fn_bodies }
 }
 
 #[instrument(skip(program))]
@@ -253,6 +250,7 @@ fn translate_function_body<I: InstallLir>(
         debug_fn_name: function.debug_name.clone(),
         debug_val_names: HashMap::new(), // TODO(nice_to_have) add debug val names
         debug_var_names: lir_debug_var_names,
+        is_entrypoint: function.is_entrypoint,
     };
     let mut fn_builder = LirInsnBuilder {
         program_builder,

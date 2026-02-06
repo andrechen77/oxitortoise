@@ -100,12 +100,6 @@ pub fn lir_to_wasm(
         host_fn_ids: HashMap::new(),
     };
 
-    // allocate slots in the function table for entrypoint functions
-    for entrypoint in &lir.entrypoints {
-        let slot = mod_info.fn_table_slot_allocator.allocate_slot();
-        mod_info.fn_table_allocated_slots.insert(*entrypoint, slot);
-    }
-
     // add host functions
     for host_fn in lir::host_function_references(lir) {
         let param_types: Vec<_> =
@@ -128,6 +122,12 @@ pub fn lir_to_wasm(
         let (wir_fid, fn_info) = write_function_setup(&mut module, func);
         fn_infos.insert(lir_fid, fn_info);
         mod_info.user_fn_ids.insert(lir_fid, wir_fid);
+
+        // allocate slots in the function table for entrypoint functions
+        if func.is_entrypoint {
+            let slot = mod_info.fn_table_slot_allocator.allocate_slot();
+            mod_info.fn_table_allocated_slots.insert(lir_fid, slot);
+        }
     }
 
     // add user functions. these may allocate additional slots in the function
@@ -859,7 +859,6 @@ mod tests {
         let mut functions: SlotMap<lir::FunctionId, ()> = SlotMap::with_key();
         let func_id = functions.insert(());
         lir.user_functions.insert(func_id, func);
-        lir.entrypoints.push(func_id);
 
         let (mut module, _) = lir_to_wasm(&lir, &mut TestFnTableSlotAllocator::default());
         let wasm = module.emit_wasm();
@@ -881,7 +880,6 @@ mod tests {
         let mut functions: SlotMap<lir::FunctionId, ()> = SlotMap::with_key();
         let func_id = functions.insert(());
         lir.user_functions.insert(func_id, add_one);
-        lir.entrypoints.push(func_id);
 
         let (mut module, _) = lir_to_wasm(&lir, &mut TestFnTableSlotAllocator::default());
         let wasm = module.emit_wasm();
@@ -907,7 +905,6 @@ mod tests {
         let mut functions: SlotMap<lir::FunctionId, ()> = SlotMap::with_key();
         let func_id = functions.insert(());
         lir.user_functions.insert(func_id, use_args);
-        lir.entrypoints.push(func_id);
 
         let (mut module, _) = lir_to_wasm(&lir, &mut TestFnTableSlotAllocator::default());
         let wasm = module.emit_wasm();
@@ -931,7 +928,6 @@ mod tests {
         let mut functions: SlotMap<lir::FunctionId, ()> = SlotMap::with_key();
         let func_id = functions.insert(());
         lir.user_functions.insert(func_id, my_function);
-        lir.entrypoints.push(func_id);
 
         let (mut module, _) = lir_to_wasm(&lir, &mut TestFnTableSlotAllocator::default());
         let wasm = module.emit_wasm();
@@ -962,7 +958,6 @@ mod tests {
         let mut functions: SlotMap<lir::FunctionId, ()> = SlotMap::with_key();
         let func_id = functions.insert(());
         lir.user_functions.insert(func_id, my_function);
-        lir.entrypoints.push(func_id);
 
         let (mut module, _) = lir_to_wasm(&lir, &mut TestFnTableSlotAllocator { next_slot: 0 });
         let wasm = module.emit_wasm();
@@ -995,7 +990,6 @@ mod tests {
         }
         let caller_id = functions.insert(());
         lir.user_functions.insert(caller_id, caller);
-        lir.entrypoints.push(caller_id);
 
         let (mut module, _) = lir_to_wasm(&lir, &mut TestFnTableSlotAllocator::default());
         let wasm = module.emit_wasm();

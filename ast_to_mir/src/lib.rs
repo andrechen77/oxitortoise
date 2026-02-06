@@ -1,16 +1,12 @@
 // #![feature(if_let_guard, slice_as_array)]
 
-use std::path::Path;
-use std::{collections::HashMap, fs, rc::Rc};
+use std::{collections::HashMap, rc::Rc};
 
-use ast::CommandBlock;
-
-use engine::mir::Node as _;
 use engine::slotmap::Key as _;
 use engine::util::reflection::Reflect;
 use engine::{
     mir::{
-        self, CustomVarDecl, Function, FunctionId, LocalDeclaration, LocalId, LocalStorage, MirTy,
+        self, CustomVarDecl, Function, FunctionId, LocalDeclaration, LocalId, LocalStorage,
         NlAbstractTy, NodeId, NodeKind,
         node::{self, Agentset, AskRecipient, BinaryOpcode, PatchLocRelation, UnaryOpcode},
     },
@@ -215,7 +211,8 @@ pub fn ast_to_mir(ast: Ast) -> anyhow::Result<ParseResult> {
 
     // then go through each procedure and build it
     for (fn_id, body) in bodies_to_build {
-        build_function_body(fn_id, body.statements, &mut mir);
+        // assume every user defined procedure can be an entrypoint.
+        build_function_body(fn_id, body.statements, &mut mir, true);
     }
 
     Ok(ParseResult {
@@ -327,7 +324,12 @@ fn build_function_info(
     (mir.aux_fn_info.insert(fn_info), body)
 }
 
-fn build_function_body(fn_id: FunctionId, statements: Vec<ast::Node>, mir: &mut MirBuilder) {
+fn build_function_body(
+    fn_id: FunctionId,
+    statements: Vec<ast::Node>,
+    mir: &mut MirBuilder,
+    is_entrypoint: bool,
+) {
     trace!("building body");
 
     let mut break_nodes = Vec::new();
@@ -359,6 +361,7 @@ fn build_function_body(fn_id: FunctionId, statements: Vec<ast::Node>, mir: &mut 
             return_ty: fn_info.return_ty.clone().into(),
             locals,
             root_node: body_node,
+            is_entrypoint,
         },
     );
 }
@@ -942,7 +945,7 @@ fn translate_ephemeral_closure(
         }
         _ => panic!("expected a command or reporter block, got {:?}", expr),
     };
-    build_function_body(fn_id, statements, ctx.mir);
+    build_function_body(fn_id, statements, ctx.mir, false);
 
     // return a closure object
     ctx.mir.nodes.insert(NodeKind::from(node::Closure {

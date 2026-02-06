@@ -67,6 +67,7 @@ pub type Nodes = SlotMap<NodeId, NodeKind>;
 #[derive(derive_more::Debug)]
 pub struct Function {
     pub debug_name: Option<Rc<str>>,
+    pub is_entrypoint: bool,
     /// A list of local variables which are parameters to the function. This
     /// includes implicit parameters such as the closure environment, the
     /// context pointer, and the executing agent.

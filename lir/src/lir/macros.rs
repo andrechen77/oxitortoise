@@ -377,6 +377,7 @@ macro_rules! lir_function {
             debug_fn_name: Some(stringify!($func).into()),
             debug_val_names,
             debug_var_names,
+            is_entrypoint: true,
         };
     }
 }

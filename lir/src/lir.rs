@@ -58,7 +58,6 @@ mod macros;
 
 #[derive(Debug, PartialEq, Eq, Default)]
 pub struct Program {
-    pub entrypoints: Vec<FunctionId>,
     pub user_functions: SecondaryMap<FunctionId, Function>,
 }
 
@@ -106,6 +105,7 @@ pub struct Function {
     pub debug_fn_name: Option<Rc<str>>,
     pub debug_val_names: HashMap<ValRef, Rc<str>>,
     pub debug_var_names: HashMap<VarId, Rc<str>>,
+    pub is_entrypoint: bool,
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy, From, Into, Debug, Display)]

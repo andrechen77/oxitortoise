@@ -10,11 +10,8 @@ use pretty_print::PrettyPrinter;
 impl Program {
     pub fn pretty_print(&self) -> String {
         let mut p = PrettyPrinter::new();
-        let Program { entrypoints, user_functions } = self;
+        let Program { user_functions } = self;
         let _ = p.add_struct("Lir", |p| {
-            p.add_field("entrypoints", |p| {
-                p.add_list(entrypoints.iter(), |p, entrypoint| write!(p, "{:?}", entrypoint))
-            })?;
             p.add_field("user_functions", |p| {
                 p.add_map(
                     user_functions.iter(),
