@@ -428,6 +428,16 @@ impl MemOpType {
             Self::FnPtr => ValType::FnPtr,
         }
     }
+
+    pub fn from_val_type(ty: ValType) -> Self {
+        match ty {
+            ValType::I32 => Self::I32,
+            ValType::I64 => Self::I64,
+            ValType::F64 => Self::F64,
+            ValType::Ptr => Self::Ptr,
+            ValType::FnPtr => Self::FnPtr,
+        }
+    }
 }
 
 pub trait LirVisitor {

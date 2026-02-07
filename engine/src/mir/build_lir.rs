@@ -4,7 +4,10 @@
 
 use std::{collections::HashMap, rc::Rc};
 
-use lir::{smallvec::SmallVec, typed_index_collections::TiVec};
+use lir::{
+    smallvec::{SmallVec, smallvec},
+    typed_index_collections::{TiVec, ti_vec},
+};
 use slotmap::{SecondaryMap, SlotMap};
 use tracing::{error, instrument, trace};
 
@@ -49,7 +52,17 @@ pub fn mir_to_lir<I: InstallLir>(
         lir_fn_bodies.insert(lir_fn_id, lir_fn);
     }
 
-    (lir::Program { user_functions: lir_fn_bodies }, builder.available_user_functions)
+    // add entrypoint shim functions
+    let mut entrypoints = HashMap::new();
+    for mir_fn_id in mir.functions.keys().filter(|id| mir.functions[*id].is_entrypoint) {
+        let shim = create_entrypoint_shim(mir, mir_fn_id, &mut builder);
+        // allocate a new function id for the shim function
+        let lir_fn_id = user_function_tracker.insert(());
+        lir_fn_bodies.insert(lir_fn_id, shim);
+        entrypoints.insert(mir_fn_id, lir_fn_id);
+    }
+
+    (lir::Program { user_functions: lir_fn_bodies }, entrypoints)
 }
 
 #[instrument(skip(program))]
@@ -252,7 +265,7 @@ fn translate_function_body<I: InstallLir>(
         debug_fn_name: function.debug_name.clone(),
         debug_val_names: HashMap::new(), // TODO(nice_to_have) add debug val names
         debug_var_names: lir_debug_var_names,
-        is_entrypoint: function.is_entrypoint,
+        is_entrypoint: false, // even if the MIR function was an entrypoint, the real entrypoint is a shim function created later
     };
     let mut fn_builder = LirInsnBuilder {
         program_builder,
@@ -270,4 +283,66 @@ fn translate_function_body<I: InstallLir>(
         .unwrap();
 
     fn_builder.product
+}
+
+fn create_entrypoint_shim(
+    program: &mir::Program,
+    target_fn_id: mir::FunctionId,
+    program_builder: &mut LirProgramBuilder,
+) -> lir::Function {
+    // TODO document the assumptions that are made here about parameter types,
+    // order, etc, and ideally couple this function to the code that relies on
+    // those assumptions (e.g. the definition of JitEntrypoint).
+
+    let params: TiVec<lir::VarId, lir::ValType> = ti_vec![lir::ValType::Ptr, lir::ValType::Ptr];
+
+    // let target_function = &program.functions[target_fn_id];
+    let (target_arg_types, target_returns) = translate_function_signature(program, target_fn_id);
+
+    let mut target_args = Vec::new();
+
+    let mut insn_seq: TiVec<lir::InsnIdx, lir::InsnKind> = TiVec::new();
+    // context argument
+    let context = insn_seq.push_and_get_key(lir::InsnKind::VarLoad { var_id: 0.into() });
+    let context = lir::ValRef(lir::InsnPc(lir::InsnSeqId(0), context), 0);
+    target_args.push(context);
+    // pointer to variadic args
+    let ptr_to_args = insn_seq.push_and_get_key(lir::InsnKind::VarLoad { var_id: 1.into() });
+    let ptr_to_args = lir::ValRef(lir::InsnPc(lir::InsnSeqId(0), ptr_to_args), 0);
+    for (i, arg) in target_arg_types.iter().skip(1).enumerate() {
+        let idx = insn_seq.push_and_get_key(lir::InsnKind::MemLoad {
+            r#type: lir::MemOpType::from_val_type(*arg),
+            offset: i * 8,
+            ptr: ptr_to_args,
+        });
+        let val = lir::ValRef(lir::InsnPc(lir::InsnSeqId(0), idx), 0);
+        target_args.push(val);
+    }
+
+    // push the call to the target function
+    insn_seq.push_and_get_key(lir::InsnKind::CallUserFunction {
+        function: program_builder.available_user_functions[&target_fn_id],
+        output_type: target_returns,
+        args: target_args.into_boxed_slice(),
+    });
+
+    // push a break instruction that returns unit
+    insn_seq
+        .push_and_get_key(lir::InsnKind::Break { target: lir::InsnSeqId(0), values: Box::new([]) });
+
+    let insn_seqs = ti_vec![insn_seq];
+    let num_parameters = params.len();
+    let lir_function = lir::Function {
+        local_vars: params,
+        num_parameters,
+        stack_space: 0,
+        body: lir::Block { output_type: smallvec![], body: lir::InsnSeqId(0) },
+        insn_seqs,
+        debug_val_names: HashMap::new(),
+        debug_var_names: HashMap::new(), // TODO
+        is_entrypoint: true,
+        debug_fn_name: Some(format!("entrypoint_shim {}", target_fn_id).into()),
+    };
+
+    lir_function
 }
