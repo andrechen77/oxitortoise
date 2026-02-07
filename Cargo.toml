@@ -1,3 +1,7 @@
 [workspace]
 resolver = "3"
 members = ["lir", "main", "engine", "lir_to_wasm", "ast_to_mir", "pretty_print"]
+
+[profile.dev]
+opt-level = 0
+debug = "full"
