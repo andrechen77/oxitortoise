@@ -5,11 +5,12 @@ use crate::{
     util::reflection::{ConcreteTy, Reflect, TypeInfo},
 };
 
+#[derive(Default)]
 pub struct NlList(Vec<DynBox>);
 
 impl NlList {
     pub fn new() -> Self {
-        Self(Vec::new())
+        Self::default()
     }
 }
 
@@ -25,6 +26,10 @@ impl NlList {
 
     pub fn len(&self) -> usize {
         self.0.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
     }
 
     pub fn swap_remove(&mut self, index: usize) -> DynBox {

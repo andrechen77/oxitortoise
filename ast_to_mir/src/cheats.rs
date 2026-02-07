@@ -193,7 +193,7 @@ pub fn add_cheats(
 
         let mut breeds = SecondaryMap::new();
         for (breed_name, active_vars) in turtle_breed_active_vars {
-            let NameReferent::TurtleBreed(breed_id) = global_names.lookup(&breed_name).unwrap()
+            let NameReferent::TurtleBreed(breed_id) = global_names.lookup(breed_name).unwrap()
             else {
                 panic!("breed {} is not defined", breed_name);
             };

@@ -319,7 +319,7 @@ fn build_function_info(
         debug_name: name.to_uppercase().into(),
         env_param: None,
         context_param: Some(context_param),
-        self_param: self_param,
+        self_param,
         positional_params,
         return_ty,
         local_names,
@@ -471,10 +471,12 @@ fn translate_node(ast_node: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) -> (NodeId
             let mut arg_nodes = Vec::new();
             let fn_info = &ctx.mir.aux_fn_info[target];
             assert!(fn_info.env_param.is_none());
-            if let Some(_) = fn_info.context_param {
+            // TODO: this assumes the argument order. it would be better if it
+            // was made dependent on some definition of the signature
+            if fn_info.context_param.is_some() {
                 arg_nodes.push(ctx.get_context());
             }
-            if let Some(_) = ctx.mir.aux_fn_info[target].self_param {
+            if ctx.mir.aux_fn_info[target].self_param.is_some() {
                 arg_nodes.push(ctx.get_self_agent());
             }
             arg_nodes.extend(args.into_iter().map(|arg| translate_node(arg, ctx.reborrow()).0));
@@ -632,10 +634,12 @@ fn translate_node(ast_node: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) -> (NodeId
             let mut arg_nodes = Vec::new();
             let fn_info = &ctx.mir.aux_fn_info[target];
             assert!(fn_info.env_param.is_none());
-            if let Some(_) = fn_info.context_param {
+            // TODO: this assumes the argument order. it would be better if it
+            // was made dependent on some definition of the signature
+            if fn_info.context_param.is_some() {
                 arg_nodes.push(ctx.get_context());
             }
-            if let Some(_) = ctx.mir.aux_fn_info[target].self_param {
+            if ctx.mir.aux_fn_info[target].self_param.is_some() {
                 arg_nodes.push(ctx.get_self_agent());
             }
             arg_nodes.extend(args.into_iter().map(|arg| translate_node(arg, ctx.reborrow()).0));
@@ -935,7 +939,7 @@ fn translate_ephemeral_closure(
         positional_params,
         // I think we should be able to leave it like this at first and have
         // type inference fix it up for us
-        return_ty: NlAbstractTy::Top.into(),
+        return_ty: NlAbstractTy::Top,
         local_names: HashMap::new(),
         num_internal_bodies: 0,
     };

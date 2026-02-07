@@ -22,12 +22,12 @@ static FUNCTION_INSTALLER: LazyLock<Mutex<FunctionInstaller>> = LazyLock::new(||
 
 pub unsafe fn install_lir(
     lir: &lir::Program,
-) -> Result<(HashMap<lir::FunctionId, JitEntrypoint>, Vec<u8>), (InstallLirError, Vec<u8>)> {
+) -> (Result<HashMap<lir::FunctionId, JitEntrypoint>, InstallLirError>, Vec<u8>) {
     unsafe {
-        FUNCTION_INSTALLER
-            .lock()
-            .map_err(|_| (InstallLirError::InstallerPoisoned, vec![]))?
-            .install_lir(lir)
+        let Ok(mut installer) = FUNCTION_INSTALLER.lock() else {
+            return (Err(InstallLirError::InstallerPoisoned), vec![]);
+        };
+        installer.install_lir(lir)
     }
 }
 
@@ -38,15 +38,15 @@ unsafe extern "C" {
     /// imported by the auxiliary instance under the "main_module" namespace.
     /// This includes:
     /// - memory "memory": the memory used by the main module. The auxiliary
-    /// instance will be able to read and write our memory.
+    ///   instance will be able to read and write our memory.
     /// - table "__indirect_function_table": the function table used by the main
-    /// module. The auxiliary instance will be able to install its own functions
-    /// into this function table, which we will be able to call.
+    ///   module. The auxiliary instance will be able to install its own
+    ///   functions into this function table, which we will be able to call.
     /// - global "__stack_pointer": the stack pointer used by the main module.
-    /// The auxiliary instance will use this stack to store its own local
-    /// variables.
-    /// - all function exports. The auxiliary instance will be able to call
-    /// our functions.
+    ///   The auxiliary instance will use this stack to store its own local
+    ///   variables.
+    /// - all function exports. The auxiliary instance will be able to call our
+    ///   functions.
     ///
     /// # Safety
     ///
@@ -107,8 +107,7 @@ impl FunctionInstaller {
     unsafe fn install_lir(
         &mut self,
         lir: &lir::Program,
-    ) -> Result<(HashMap<lir::FunctionId, JitEntrypoint>, Vec<u8>), (InstallLirError, Vec<u8>)>
-    {
+    ) -> (Result<HashMap<lir::FunctionId, JitEntrypoint>, InstallLirError>, Vec<u8>) {
         struct A<'a>(&'a mut BinaryHeap<Reverse<usize>>);
         impl<'a> lir_to_wasm::FnTableSlotAllocator for A<'a> {
             fn allocate_slot(&mut self) -> usize {
@@ -134,7 +133,7 @@ impl FunctionInstaller {
         // cause undefined behavior in the current instance
         let success = unsafe { instantiate_module(module_bytes.as_ptr(), module_bytes.len()) };
         if !success {
-            return Err((InstallLirError::RuntimeError, module_bytes));
+            return (Err(InstallLirError::RuntimeError), module_bytes);
         }
 
         // return the function pointers to the installed functions.
@@ -165,6 +164,6 @@ impl FunctionInstaller {
                     (lir_fn_id, entrypoint)
                 }),
         );
-        Ok((jit_entries, module_bytes))
+        (Ok(jit_entries), module_bytes)
     }
 }

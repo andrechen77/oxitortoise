@@ -23,8 +23,9 @@ pub trait InstallLir {
     /// indirect function table as the current instance. The code must not
     /// cause undefined behavior.
     unsafe fn install_lir(
+        &mut self,
         lir: &lir::Program,
-    ) -> Result<(HashMap<lir::FunctionId, JitEntrypoint>, Vec<u8>), (InstallLirError, Vec<u8>)>;
+    ) -> Result<HashMap<lir::FunctionId, JitEntrypoint>, InstallLirError>;
 
     const HOST_FUNCTION_TABLE: HostFunctionTable;
 }

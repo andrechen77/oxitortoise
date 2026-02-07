@@ -337,7 +337,7 @@ impl NlAbstractTy {
     /// Calculates the least upper bound of two types.
     pub fn join(self, other: NlAbstractTy) -> NlAbstractTy {
         if self == Self::Top {
-            self
+            Self::Top
         } else if self == other {
             self
         } else if self == Self::Bottom {

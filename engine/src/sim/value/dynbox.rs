@@ -94,12 +94,14 @@ impl DynBox {
     pub fn pack(value: UnpackedDynBox) -> Self {
         match value {
             UnpackedDynBox::Float(value) => DynBox(value),
-            UnpackedDynBox::Bool(value) => DynBox(f64::from_bits(NAN_BASE | 0b001 << 48 | (value as u64))),
+            UnpackedDynBox::Bool(value) => {
+                DynBox(f64::from_bits(NAN_BASE | 0b001 << 48 | (value as u64)))
+            }
             UnpackedDynBox::Nobody => todo!("TODO(mvp) implement nobody"),
-            UnpackedDynBox::Turtle(value) => todo!("TODO(mvp) implement turtle"),
-            UnpackedDynBox::Patch(value) => todo!("TODO(mvp) implement patch"),
-            UnpackedDynBox::Link(value) => todo!("TODO(mvp) implement link"),
-            UnpackedDynBox::Other(value) => todo!("TODO(mvp) implement other"),
+            UnpackedDynBox::Turtle(_) => todo!("TODO(mvp) implement turtle"),
+            UnpackedDynBox::Patch(_) => todo!("TODO(mvp) implement patch"),
+            UnpackedDynBox::Link(_) => todo!("TODO(mvp) implement link"),
+            UnpackedDynBox::Other(_) => todo!("TODO(mvp) implement other"),
         }
     }
 

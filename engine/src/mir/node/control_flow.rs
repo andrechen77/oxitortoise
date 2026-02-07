@@ -68,7 +68,7 @@ impl Node for Block {
     }
 
     fn dependencies(&self) -> Vec<NodeId> {
-        self.statements.iter().map(|statement| *statement).collect()
+        self.statements.clone()
     }
 
     fn output_type(&self, program: &Program, fn_id: FunctionId) -> MirTy {
@@ -205,11 +205,10 @@ impl Node for Break {
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
         let target = lir_builder.block_to_insn_seq[&self.target];
-        let values =
-            Box::from(self.value.map_or_else(
-                || Default::default(),
-                |v| lir_builder.get_node_results::<I>(program, v),
-            ));
+        let values = Box::from(
+            self.value
+                .map_or_else(Default::default, |v| lir_builder.get_node_results::<I>(program, v)),
+        );
         lir_builder.push_lir_insn(lir::InsnKind::Break { target, values });
         Ok(())
     }

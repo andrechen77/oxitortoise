@@ -5,8 +5,7 @@ use tracing::trace;
 
 use crate::mir::{
     FunctionId, LocalId, MirVisitor, NlAbstractTy, Node as _, NodeId, NodeKind, Program,
-    node::{Break, SetLocalVar},
-    visit_mir_function,
+    node::SetLocalVar, visit_mir_function,
 };
 
 /// Associates values in the program with all the types that are possible for
@@ -39,6 +38,7 @@ pub fn narrow_types(program: &mut Program) {
     }
     impl MirVisitor for Visitor {
         fn visit_node(&mut self, program: &Program, fn_id: FunctionId, node_id: NodeId) {
+            #[allow(clippy::single_match)] // we intend to add other branches later
             match program.nodes[node_id] {
                 NodeKind::SetLocalVar(SetLocalVar { local_id, value }) => {
                     let ty = program.nodes[value].output_type(program, fn_id).abstr.unwrap();
@@ -50,19 +50,6 @@ pub fn narrow_types(program: &mut Program) {
                         .or_insert(NlAbstractTy::Bottom);
                     *existing_ty = mem::take(existing_ty).join(ty);
                 }
-                // NodeKind::Break(Break { value, target: _ }) => {
-                //     if let Some(value) = value {
-                //         let ty = program.nodes[value].output_type(program, fn_id).abstr.unwrap();
-                //         trace!("in function {:?}, break statement with type {:?} found", fn_id, ty);
-                //         let existing_ty = self
-                //             .types
-                //             .returns
-                //             .entry(fn_id)
-                //             .expect("function id should be valid")
-                //             .or_insert(NlAbstractTy::Bottom);
-                //         *existing_ty = mem::take(existing_ty).join(ty);
-                //     }
-                // }
                 // TODO(mvp) handle setting agent variables
                 _ => {} // do nothing
             }

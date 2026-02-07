@@ -332,7 +332,7 @@ fn create_entrypoint_shim(
 
     let insn_seqs = ti_vec![insn_seq];
     let num_parameters = params.len();
-    let lir_function = lir::Function {
+    lir::Function {
         local_vars: params,
         num_parameters,
         stack_space: 0,
@@ -342,7 +342,5 @@ fn create_entrypoint_shim(
         debug_var_names: HashMap::new(), // TODO
         is_entrypoint: true,
         debug_fn_name: Some(format!("entrypoint_shim {}", target_fn_id).into()),
-    };
-
-    lir_function
+    }
 }

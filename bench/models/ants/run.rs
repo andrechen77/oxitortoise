@@ -43,7 +43,7 @@ fn create_workspace(
         wrap_x: false,
         wrap_y: false,
     };
-    let workspace = Workspace {
+    Workspace {
         world: World {
             globals: Globals::new(globals_schema),
             turtles: Turtles::new(turtle_schema, turtle_breeds),
@@ -53,9 +53,7 @@ fn create_workspace(
             shapes: Shapes::default(),
         },
         rng: Rc::new(RefCell::new(CanonRng::new(0))),
-    };
-
-    workspace
+    }
 }
 
 fn main() {
@@ -112,19 +110,23 @@ fn main() {
     let lir_filename = "model.lir";
     write_to_file(lir_filename.as_ptr(), lir_filename.len(), lir_str.as_ptr(), lir_str.len());
 
-    let result = unsafe { LirInstaller::install_lir(&lir_program) };
+    let mut lir_installer = LirInstaller::default();
+    let result = unsafe { lir_installer.install_lir(&lir_program) };
+    let name = "model.wasm";
+    write_to_file(
+        name.as_ptr(),
+        name.len(),
+        lir_installer.module_bytes.as_ptr(),
+        lir_installer.module_bytes.len(),
+    );
     let functions = match result {
-        Ok((functions, module_bytes)) => {
+        Ok(functions) => {
             for fn_id in functions.keys() {
                 info!("installed entrypoint function {:?}", fn_id);
             }
-            let name = "model.wasm";
-            write_to_file(name.as_ptr(), name.len(), module_bytes.as_ptr(), module_bytes.len());
             functions
         }
-        Err((error, module_bytes)) => {
-            let name = "model.wasm";
-            write_to_file(name.as_ptr(), name.len(), module_bytes.as_ptr(), module_bytes.len());
+        Err(_error) => {
             error!("failed to install LIR program");
             panic!();
         }

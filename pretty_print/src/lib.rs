@@ -1,5 +1,6 @@
 use std::fmt::{self, Write};
 
+#[derive(Default)]
 pub struct PrettyPrinter {
     out: String,
     indent: usize,
@@ -7,7 +8,7 @@ pub struct PrettyPrinter {
 
 impl PrettyPrinter {
     pub fn new() -> Self {
-        Self { out: String::new(), indent: 0 }
+        Self::default()
     }
 
     pub fn finish(self) -> String {
@@ -89,7 +90,7 @@ impl PrettyPrinter {
     }
 }
 
-impl<'a> Write for PrettyPrinter {
+impl Write for PrettyPrinter {
     fn write_str(&mut self, s: &str) -> fmt::Result {
         let mut lines = s.split("\n");
         if let Some(first_line) = lines.next() {

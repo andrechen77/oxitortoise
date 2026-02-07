@@ -139,7 +139,7 @@ pub fn lir_to_wasm(
             &mut module,
             lir_fid,
             function,
-            &mut fn_infos.get_mut(&lir_fid).unwrap(),
+            fn_infos.get_mut(&lir_fid).unwrap(),
         );
     }
 
@@ -474,7 +474,7 @@ fn write_code<A: FnTableSlotAllocator>(
                 let mem_arg = infer_mem_arg(*r#type, *offset);
                 insn_builder.load(mod_info.mem_id, load_kind, mem_arg);
             }
-            I::MemStore { r#type, offset, ptr: _, value } => {
+            I::MemStore { r#type, offset, ptr: _, value: _ } => {
                 let store_kind = infer_store_kind(*r#type);
                 let mem_arg = infer_mem_arg(*r#type, *offset);
                 insn_builder.store(mod_info.mem_id, store_kind, mem_arg);
@@ -486,7 +486,7 @@ fn write_code<A: FnTableSlotAllocator>(
                     .local_get(ctx.sp_local_id.expect("the presence of a StackAddr instruction means there must be a stack pointer local var"))
                     .load(mod_info.mem_id, load_kind, mem_arg);
             }
-            I::StackStore { r#type, offset, value } => {
+            I::StackStore { r#type, offset, value: _ } => {
                 let store_kind = infer_store_kind(*r#type);
                 let mem_arg = infer_mem_arg(*r#type, *offset);
                 // stackification ensured that the stack pointer, followed

@@ -11,7 +11,10 @@ mod install_lir;
 
 use export_interface::*;
 
-pub struct LirInstaller;
+#[derive(Default)]
+pub struct LirInstaller {
+    pub module_bytes: Vec<u8>,
+}
 
 impl InstallLir for LirInstaller {
     const HOST_FUNCTION_TABLE: HostFunctionTable = HostFunctionTable {
@@ -39,9 +42,11 @@ impl InstallLir for LirInstaller {
     };
 
     unsafe fn install_lir(
+        &mut self,
         lir: &lir::Program,
-    ) -> Result<(HashMap<lir::FunctionId, JitEntrypoint>, Vec<u8>), (InstallLirError, Vec<u8>)>
-    {
-        unsafe { install_lir::install_lir(lir) }
+    ) -> Result<HashMap<lir::FunctionId, JitEntrypoint>, InstallLirError> {
+        let (result, module_bytes) = unsafe { install_lir::install_lir(lir) };
+        self.module_bytes = module_bytes;
+        result
     }
 }
