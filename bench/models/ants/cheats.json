@@ -17,13 +17,13 @@
 	"patch_schema": {
 		"type": "ctor",
 		"pcolor_buffer_idx": 1,
-		"custom_fields": [
-			2,
-			0,
-			0,
-			0,
-			0
-		],
+		"custom_fields": {
+			"CHEMICAL": 2,
+			"FOOD": 0,
+			"NEST?": 0,
+			"NEST-SCENT": 0,
+			"FOOD-SOURCE-NUMBER": 0
+		},
 		"avoid_occupancy_bitfield": [
 			1,
 			2

@@ -36,7 +36,7 @@ pub enum CheatPatchSchema {
 #[derive(Deserialize, Debug)]
 pub struct CheatPatchSchemaCtor {
     pcolor_buffer_idx: u8,
-    custom_fields: Vec<u8>,
+    custom_fields: HashMap<String, u8>,
     avoid_occupancy_bitfield: Vec<u8>,
 }
 
@@ -51,7 +51,7 @@ pub enum CheatTurtleSchema {
 pub struct CheatTurtleSchemaCtor {
     heading_buffer_idx: u8,
     position_buffer_idx: u8,
-    custom_fields: Vec<u8>,
+    custom_fields: HashMap<String, u8>,
     avoid_occupancy_bitfield: Vec<u8>,
 }
 
@@ -138,8 +138,17 @@ pub fn add_cheats(
                 let custom_fields: Vec<_> = ctor_args
                     .custom_fields
                     .iter()
-                    .map(|&buffer_idx| {
-                        (program.custom_patch_vars[usize::from(buffer_idx)].ty.repr(), buffer_idx)
+                    .map(|(var_name, buffer_idx)| {
+                        (
+                            program
+                                .custom_patch_vars
+                                .iter()
+                                .find(|var_decl| *var_decl.name == *var_name)
+                                .expect("variables in the cheats should be actual variables")
+                                .ty
+                                .repr(),
+                            *buffer_idx,
+                        )
                     })
                     .collect();
                 PatchSchema::new(
@@ -171,8 +180,17 @@ pub fn add_cheats(
                 let custom_fields: Vec<_> = ctor_args
                     .custom_fields
                     .iter()
-                    .map(|&buffer_idx| {
-                        (program.custom_turtle_vars[usize::from(buffer_idx)].ty.repr(), buffer_idx)
+                    .map(|(var_name, buffer_idx)| {
+                        (
+                            program
+                                .custom_turtle_vars
+                                .iter()
+                                .find(|var_decl| *var_decl.name == *var_name)
+                                .expect("variables in the cheats should be actual variables")
+                                .ty
+                                .repr(),
+                            *buffer_idx,
+                        )
                     })
                     .collect();
                 TurtleSchema::new(
