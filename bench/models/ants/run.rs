@@ -86,7 +86,7 @@ fn main() {
 
     let mir_filename = "before.mir";
     let mir_str = program.pretty_print();
-    write_to_file(mir_filename.as_ptr(), mir_filename.len(), mir_str.as_ptr(), mir_str.len());
+    write_to_file(mir_filename, mir_str);
 
     let fn_ids: Vec<_> = program.functions.keys().collect();
     narrow_types(&mut program);
@@ -103,22 +103,17 @@ fn main() {
     }
     let mir_filename = "after.mir";
     let mir_str = program.pretty_print();
-    write_to_file(mir_filename.as_ptr(), mir_filename.len(), mir_str.as_ptr(), mir_str.len());
+    write_to_file(mir_filename, mir_str);
 
     let (lir_program, mir_to_lir_fns) = mir_to_lir::<LirInstaller>(&program);
     let lir_str = lir_program.pretty_print();
     let lir_filename = "model.lir";
-    write_to_file(lir_filename.as_ptr(), lir_filename.len(), lir_str.as_ptr(), lir_str.len());
+    write_to_file(lir_filename, lir_str);
 
     let mut lir_installer = LirInstaller::default();
     let result = unsafe { lir_installer.install_lir(&lir_program) };
     let name = "model.wasm";
-    write_to_file(
-        name.as_ptr(),
-        name.len(),
-        lir_installer.module_bytes.as_ptr(),
-        lir_installer.module_bytes.len(),
-    );
+    write_to_file(name, lir_installer.module_bytes);
     let functions = match result {
         Ok(functions) => {
             for fn_id in functions.keys() {
@@ -158,23 +153,11 @@ fn main() {
     setup.call(&mut execution_context, std::ptr::null_mut());
 }
 
-#[cfg(target_arch = "wasm32")]
-unsafe extern "C" {
-    safe fn write_to_console(message: *const u8, length: usize);
-
-    safe fn write_to_file(
-        name: *const u8,
-        name_length: usize,
-        bytes: *const u8,
-        bytes_length: usize,
-    );
-}
-
 struct ConsoleWriter;
 
 impl io::Write for ConsoleWriter {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        write_to_console(buf.as_ptr(), buf.len());
+        write_to_console(buf);
         Ok(buf.len())
     }
 
@@ -190,5 +173,58 @@ impl<'a> MakeWriter<'a> for ConsoleWriterFactory {
 
     fn make_writer(&'a self) -> Self::Writer {
         ConsoleWriter
+    }
+}
+
+pub use debug_print::{write_to_console, write_to_file};
+
+#[cfg(not(target_arch = "wasm32"))]
+mod debug_print {
+    use std::{
+        fs,
+        io::{self, Write},
+        path::Path,
+    };
+
+    pub fn write_to_console(buf: impl AsRef<[u8]>) {
+        let buf = buf.as_ref();
+        io::stdout().write_all(buf).unwrap();
+    }
+
+    pub fn write_to_file(filename: impl AsRef<Path>, buf: impl AsRef<[u8]>) {
+        let filename = filename.as_ref();
+        let buf = buf.as_ref();
+        fs::write(filename, buf).unwrap();
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+mod debug_print {
+    use std::path::Path;
+
+    pub fn write_to_console(buf: impl AsRef<[u8]>) {
+        let buf = buf.as_ref();
+        unsafe { r#extern::write_to_console(buf.as_ptr(), buf.len()) };
+    }
+
+    pub fn write_to_file(filename: impl AsRef<Path>, buf: impl AsRef<[u8]>) {
+        let filename: &[u8] = filename.as_ref().as_os_str().as_encoded_bytes();
+        let buf = buf.as_ref();
+        unsafe {
+            r#extern::write_to_file(filename.as_ptr(), filename.len(), buf.as_ptr(), buf.len())
+        };
+    }
+
+    mod r#extern {
+        unsafe extern "C" {
+            pub fn write_to_console(message: *const u8, length: usize);
+
+            pub fn write_to_file(
+                name: *const u8,
+                name_length: usize,
+                bytes: *const u8,
+                bytes_length: usize,
+            );
+        }
     }
 }
