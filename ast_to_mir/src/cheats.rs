@@ -135,21 +135,10 @@ pub fn add_cheats(
         let patch_schema = match patch_schema {
             CheatPatchSchema::Default => PatchSchema::default(),
             CheatPatchSchema::Ctor(ctor_args) => {
-                let custom_fields: Vec<_> = ctor_args
-                    .custom_fields
+                let custom_fields: Vec<_> = program
+                    .custom_patch_vars
                     .iter()
-                    .map(|(var_name, buffer_idx)| {
-                        (
-                            program
-                                .custom_patch_vars
-                                .iter()
-                                .find(|var_decl| *var_decl.name == *var_name)
-                                .expect("variables in the cheats should be actual variables")
-                                .ty
-                                .repr(),
-                            *buffer_idx,
-                        )
-                    })
+                    .map(|var| (var.ty.repr(), ctor_args.custom_fields[var.name.as_ref()]))
                     .collect();
                 PatchSchema::new(
                     ctor_args.pcolor_buffer_idx,
@@ -177,21 +166,10 @@ pub fn add_cheats(
         let turtle_schema = match turtle_schema {
             CheatTurtleSchema::Default => TurtleSchema::default(),
             CheatTurtleSchema::Ctor(ctor_args) => {
-                let custom_fields: Vec<_> = ctor_args
-                    .custom_fields
+                let custom_fields: Vec<_> = program
+                    .custom_turtle_vars
                     .iter()
-                    .map(|(var_name, buffer_idx)| {
-                        (
-                            program
-                                .custom_turtle_vars
-                                .iter()
-                                .find(|var_decl| *var_decl.name == *var_name)
-                                .expect("variables in the cheats should be actual variables")
-                                .ty
-                                .repr(),
-                            *buffer_idx,
-                        )
-                    })
+                    .map(|var| (var.ty.repr(), ctor_args.custom_fields[var.name.as_ref()]))
                     .collect();
                 TurtleSchema::new(
                     ctor_args.heading_buffer_idx,
