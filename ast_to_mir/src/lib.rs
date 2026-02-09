@@ -36,7 +36,6 @@ pub struct GlobalScope {
     global_vars: HashMap<Rc<str>, usize>,
     patch_vars: HashMap<Rc<str>, PatchVarDesc>,
     turtle_vars: HashMap<Rc<str>, TurtleVarDesc>,
-    /// The default turtle breed is represented by the empty string.
     turtle_breeds: HashMap<Rc<str>, BreedId>,
     functions: HashMap<Rc<str>, FunctionId>,
     // TODO(mvp) add link variables
