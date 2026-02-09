@@ -1,7 +1,9 @@
 //! Nodes to represent closures.
 
-use derive_more::derive::Display;
+use std::fmt::{self, Write};
+
 use lir::smallvec::smallvec;
+use pretty_print::PrettyPrinter;
 
 use crate::{
     exec::jit::InstallLir,
@@ -11,8 +13,7 @@ use crate::{
     },
 };
 
-#[derive(Debug, Display)]
-#[display("Closure {captures:?} {body:?}")]
+#[derive(Debug)]
 pub struct Closure {
     /// All the local variables that are captured by the closure.
     pub captures: Vec<LocalId>,
@@ -26,7 +27,7 @@ impl Node for Closure {
         true
     }
 
-    fn dependencies(&self) -> Vec<NodeId> {
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
         vec![]
     }
 
@@ -77,5 +78,15 @@ impl Node for Closure {
             .insert(my_node_id, smallvec![lir::ValRef(mk_env_ptr, 0), lir::ValRef(mk_fn_ptr, 0),]);
 
         Ok(())
+    }
+
+    fn pretty_print(&self, program: &Program, mut out: impl fmt::Write) -> fmt::Result {
+        PrettyPrinter::new(&mut out).add_struct("Closure", |p| {
+            p.add_field("body", |p| write!(p, "{:?}", self.body))?;
+            if let Some(fn_name) = program.functions[self.body].debug_name.as_deref() {
+                p.add_comment(fn_name)?;
+            }
+            Ok(())
+        })
     }
 }

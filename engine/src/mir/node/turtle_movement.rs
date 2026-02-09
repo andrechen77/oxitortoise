@@ -1,6 +1,8 @@
 //! Primitivees for moving turtles.
 
-use derive_more::derive::Display;
+use std::fmt::{self, Write};
+
+use pretty_print::PrettyPrinter;
 
 use crate::{
     exec::jit::InstallLir,
@@ -11,8 +13,7 @@ use crate::{
 };
 use lir::smallvec::smallvec;
 
-#[derive(Debug, Display)]
-#[display("TurtleRotate")]
+#[derive(Debug)]
 pub struct TurtleRotate {
     /// The execution context to use.
     pub context: NodeId,
@@ -27,8 +28,8 @@ impl Node for TurtleRotate {
         false
     }
 
-    fn dependencies(&self) -> Vec<NodeId> {
-        vec![self.context, self.turtle, self.angle]
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
+        vec![("ctx", self.context), ("turtle", self.turtle), ("angle", self.angle)]
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
@@ -56,10 +57,13 @@ impl Node for TurtleRotate {
         ));
         Ok(())
     }
+
+    fn pretty_print(&self, _program: &Program, mut out: impl fmt::Write) -> fmt::Result {
+        PrettyPrinter::new(&mut out).add_struct("TurtleRotate", |_| Ok(()))
+    }
 }
 
-#[derive(Debug, Display)]
-#[display("TurtleForward")]
+#[derive(Debug)]
 pub struct TurtleForward {
     /// The execution context to use.
     pub context: NodeId,
@@ -74,8 +78,8 @@ impl Node for TurtleForward {
         false
     }
 
-    fn dependencies(&self) -> Vec<NodeId> {
-        vec![self.context, self.turtle, self.distance]
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
+        vec![("ctx", self.context), ("turtle", self.turtle), ("dist", self.distance)]
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
@@ -103,10 +107,13 @@ impl Node for TurtleForward {
         ));
         Ok(())
     }
+
+    fn pretty_print(&self, _program: &Program, mut out: impl fmt::Write) -> fmt::Result {
+        PrettyPrinter::new(&mut out).add_struct("TurtleForward", |_| Ok(()))
+    }
 }
 
-#[derive(Debug, Display)]
-#[display("CanMove")]
+#[derive(Debug)]
 pub struct CanMove {
     /// The execution context to use.
     pub context: NodeId,
@@ -121,8 +128,8 @@ impl Node for CanMove {
         true
     }
 
-    fn dependencies(&self) -> Vec<NodeId> {
-        vec![self.context, self.turtle, self.distance]
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
+        vec![("ctx", self.context), ("turtle", self.turtle), ("dist", self.distance)]
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
@@ -160,20 +167,20 @@ impl Node for CanMove {
         }
         Some(Box::new(break_down_can_move))
     }
+
+    fn pretty_print(&self, _program: &Program, mut out: impl fmt::Write) -> fmt::Result {
+        PrettyPrinter::new(&mut out).add_struct("CanMove", |_| Ok(()))
+    }
 }
 
-#[derive(Debug, Display)]
+#[derive(Debug)]
 pub enum PatchLocRelation {
-    #[display("Ahead")]
     Ahead,
-    #[display("LeftAhead")]
     LeftAhead(NodeId),
-    #[display("RightAhead")]
     RightAhead(NodeId),
 }
 
-#[derive(Debug, Display)]
-#[display("PatchNearby {relative_loc:?}")]
+#[derive(Debug)]
 pub struct PatchRelative {
     /// The execution context to use.
     pub context: NodeId,
@@ -190,11 +197,12 @@ impl Node for PatchRelative {
         true
     }
 
-    fn dependencies(&self) -> Vec<NodeId> {
-        let mut deps = vec![self.context, self.turtle, self.distance];
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
+        let mut deps =
+            vec![("ctx", self.context), ("turtle", self.turtle), ("dist", self.distance)];
         match &self.relative_loc {
-            PatchLocRelation::LeftAhead(heading) => deps.push(*heading),
-            PatchLocRelation::RightAhead(heading) => deps.push(*heading),
+            PatchLocRelation::LeftAhead(heading) => deps.push(("heading", *heading)),
+            PatchLocRelation::RightAhead(heading) => deps.push(("heading", *heading)),
             _ => (),
         }
         deps
@@ -244,5 +252,11 @@ impl Node for PatchRelative {
 
         lir_builder.node_to_lir.insert(my_node_id, smallvec![lir::ValRef(pc, 0)]);
         Ok(())
+    }
+
+    fn pretty_print(&self, _program: &Program, mut out: impl fmt::Write) -> fmt::Result {
+        PrettyPrinter::new(&mut out).add_struct("PatchRelative", |p| {
+            p.add_field("relative_loc", |p| write!(p, "{:?}", self.relative_loc))
+        })
     }
 }

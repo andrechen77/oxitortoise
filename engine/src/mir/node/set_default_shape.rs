@@ -1,6 +1,8 @@
 //! The `set-default-shape` command.
 
-use derive_more::derive::Display;
+use std::fmt;
+
+use pretty_print::PrettyPrinter;
 
 use crate::{
     exec::jit::InstallLir,
@@ -10,8 +12,7 @@ use crate::{
     },
 };
 
-#[derive(Debug, Display)]
-#[display("SetDefaultShape")]
+#[derive(Debug)]
 pub struct SetDefaultShape {
     /// The breed to set the default shape for.
     pub breed: NodeId,
@@ -24,8 +25,8 @@ impl Node for SetDefaultShape {
         false
     }
 
-    fn dependencies(&self) -> Vec<NodeId> {
-        vec![self.breed, self.shape]
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
+        vec![("breed", self.breed), ("shape", self.shape)]
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
@@ -40,5 +41,9 @@ impl Node for SetDefaultShape {
     ) -> Result<(), WriteLirError> {
         // TODO(mvp) write LIR code to set the default shape for the breed
         Ok(())
+    }
+
+    fn pretty_print(&self, _program: &Program, mut out: impl fmt::Write) -> fmt::Result {
+        PrettyPrinter::new(&mut out).add_struct("SetDefaultShape", |_| Ok(()))
     }
 }

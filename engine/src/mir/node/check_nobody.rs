@@ -1,5 +1,7 @@
-use derive_more::derive::Display;
+use std::fmt::{self, Write};
+
 use lir::smallvec::smallvec;
+use pretty_print::PrettyPrinter;
 
 use crate::{
     exec::jit::InstallLir,
@@ -11,8 +13,7 @@ use crate::{
     util::reflection::Reflect,
 };
 
-#[derive(Debug, Display)]
-#[display("CheckNobody negate={negate:?}")]
+#[derive(Debug)]
 pub struct CheckNobody {
     pub context: NodeId,
     pub agent: NodeId,
@@ -24,8 +25,8 @@ impl Node for CheckNobody {
         true
     }
 
-    fn dependencies(&self) -> Vec<NodeId> {
-        vec![self.context, self.agent]
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
+        vec![("ctx", self.context), ("agent", self.agent)]
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
@@ -60,5 +61,10 @@ impl Node for CheckNobody {
         } else {
             todo!("TODO(mvp) write this for other types")
         }
+    }
+
+    fn pretty_print(&self, _program: &Program, mut out: impl fmt::Write) -> fmt::Result {
+        PrettyPrinter::new(&mut out)
+            .add_struct("CheckNobody", |p| p.add_field("negate", |p| write!(p, "{}", self.negate)))
     }
 }

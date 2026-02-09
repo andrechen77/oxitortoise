@@ -9,7 +9,8 @@ use pretty_print::PrettyPrinter;
 
 impl Program {
     pub fn pretty_print(&self) -> String {
-        let mut p = PrettyPrinter::new();
+        let mut out = String::new();
+        let mut p = PrettyPrinter::new(&mut out);
         let Program { user_functions } = self;
         let _ = p.add_struct("Lir", |p| {
             p.add_field("user_functions", |p| {
@@ -58,12 +59,12 @@ impl Program {
                 )
             })
         });
-        p.finish()
+        out
     }
 }
 
-fn pretty_print_seq(
-    p: &mut PrettyPrinter,
+fn pretty_print_seq<W: Write>(
+    p: &mut PrettyPrinter<W>,
     function: &Function,
     insn_seq_id: InsnSeqId,
 ) -> fmt::Result {

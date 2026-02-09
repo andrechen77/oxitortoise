@@ -1,6 +1,6 @@
 //! Nodes for representing agentsets.
 
-use derive_more::derive::Display;
+use pretty_print::PrettyPrinter;
 
 use crate::{
     exec::jit::InstallLir,
@@ -12,11 +12,9 @@ use crate::{
     },
 };
 
-#[derive(Debug, Display)]
+#[derive(Debug)]
 pub enum Agentset {
-    #[display("AllTurtles")]
     AllTurtles,
-    #[display("AllPatches")]
     AllPatches,
     // TODO(mvp) add links
 }
@@ -26,11 +24,8 @@ impl Node for Agentset {
         true
     }
 
-    fn dependencies(&self) -> Vec<NodeId> {
-        match self {
-            Agentset::AllTurtles => vec![],
-            Agentset::AllPatches => vec![],
-        }
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
+        vec![]
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
@@ -39,6 +34,14 @@ impl Node for Agentset {
             Agentset::AllPatches => Patch,
         };
         NlAbstractTy::Agentset { agent_type: Box::new(typ) }.into()
+    }
+
+    fn pretty_print(&self, _program: &Program, mut out: impl std::fmt::Write) -> std::fmt::Result {
+        let name = match self {
+            Agentset::AllTurtles => "AllTurtles",
+            Agentset::AllPatches => "AllPatches",
+        };
+        PrettyPrinter::new(&mut out).add_struct(name, |_| Ok(()))
     }
 
     fn write_lir_execution<I: InstallLir>(

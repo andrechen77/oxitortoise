@@ -1,7 +1,9 @@
 //! The `create-turtles` command and friends.
 
-use derive_more::derive::Display;
+use std::fmt::{self, Write};
+
 use lir::{ValRef, smallvec::smallvec};
+use pretty_print::PrettyPrinter;
 use slotmap::Key as _;
 
 use crate::{
@@ -13,8 +15,7 @@ use crate::{
     sim::turtle::BreedId,
 };
 
-#[derive(Debug, Display)]
-#[display("CreateTurtles {breed:?}")]
+#[derive(Debug)]
 pub struct CreateTurtles {
     /// The execution context to use.
     pub context: NodeId,
@@ -31,8 +32,8 @@ impl Node for CreateTurtles {
         false
     }
 
-    fn dependencies(&self) -> Vec<NodeId> {
-        vec![self.context, self.num_turtles, self.body]
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
+        vec![("ctx", self.context), ("num", self.num_turtles), ("body", self.body)]
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
@@ -62,5 +63,12 @@ impl Node for CreateTurtles {
         ));
         lir_builder.node_to_lir.insert(my_node_id, smallvec![ValRef(pc, 0)]);
         Ok(())
+    }
+
+    fn pretty_print(&self, program: &Program, mut out: impl fmt::Write) -> fmt::Result {
+        PrettyPrinter::new(&mut out).add_struct("CreateTurtles", |p| {
+            p.add_field("breed", |p| write!(p, "{:?}", self.breed))?;
+            p.add_comment(program.turtle_breeds.name(self.breed))
+        })
     }
 }

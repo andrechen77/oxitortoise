@@ -1,9 +1,9 @@
 //! Primitives relating purely to the topology of the world.
 
-use std::mem::offset_of;
+use std::{fmt, mem::offset_of};
 
-use derive_more::derive::Display;
 use lir::smallvec::smallvec;
+use pretty_print::PrettyPrinter;
 
 use crate::{
     exec::{CanonExecutionContext, jit::InstallLir},
@@ -20,8 +20,7 @@ use crate::{
     workspace::Workspace,
 };
 
-#[derive(Debug, Display)]
-#[display("OffsetDistanceByHeading")]
+#[derive(Debug)]
 pub struct OffsetDistanceByHeading {
     /// The position to offset.
     pub position: NodeId,
@@ -36,8 +35,8 @@ impl Node for OffsetDistanceByHeading {
         true
     }
 
-    fn dependencies(&self) -> Vec<NodeId> {
-        vec![self.position, self.amt, self.heading]
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
+        vec![("pos", self.position), ("amt", self.amt), ("heading", self.heading)]
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
@@ -52,10 +51,13 @@ impl Node for OffsetDistanceByHeading {
     ) -> Result<(), WriteLirError> {
         todo!("TODO(mvp_ants) write LIR code to call a host function")
     }
+
+    fn pretty_print(&self, _program: &Program, mut out: impl fmt::Write) -> fmt::Result {
+        PrettyPrinter::new(&mut out).add_struct("OffsetDistanceByHeading", |_| Ok(()))
+    }
 }
 
-#[derive(Debug, Display)]
-#[display("PatchAt {x:?} {y:?}")]
+#[derive(Debug)]
 pub struct PatchAt {
     // The execution context to use.
     pub context: NodeId,
@@ -70,8 +72,8 @@ impl Node for PatchAt {
         true
     }
 
-    fn dependencies(&self) -> Vec<NodeId> {
-        vec![self.context, self.x, self.y]
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
+        vec![("ctx", self.context), ("x", self.x), ("y", self.y)]
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
@@ -100,10 +102,13 @@ impl Node for PatchAt {
         lir_builder.node_to_lir.insert(my_node_id, smallvec![lir::ValRef(pc, 0)]);
         Ok(())
     }
+
+    fn pretty_print(&self, _program: &Program, mut out: impl fmt::Write) -> fmt::Result {
+        PrettyPrinter::new(&mut out).add_struct("PatchAt", |_| Ok(()))
+    }
 }
 
-#[derive(Debug, Display)]
-#[display("MaxPxcor")]
+#[derive(Debug)]
 pub struct MaxPxcor {
     /// The execution context to use.
     pub context: NodeId,
@@ -114,8 +119,8 @@ impl Node for MaxPxcor {
         true
     }
 
-    fn dependencies(&self) -> Vec<NodeId> {
-        vec![self.context]
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
+        vec![("ctx", self.context)]
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
@@ -157,10 +162,13 @@ impl Node for MaxPxcor {
         }
         Some(Box::new(lower_get_max_pxcor))
     }
+
+    fn pretty_print(&self, _program: &Program, mut out: impl fmt::Write) -> fmt::Result {
+        PrettyPrinter::new(&mut out).add_struct("MaxPxcor", |_| Ok(()))
+    }
 }
 
-#[derive(Debug, Display)]
-#[display("MaxPycor")]
+#[derive(Debug)]
 pub struct MaxPycor {
     /// The execution context to use.
     pub context: NodeId,
@@ -171,8 +179,8 @@ impl Node for MaxPycor {
         true
     }
 
-    fn dependencies(&self) -> Vec<NodeId> {
-        vec![self.context]
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
+        vec![("ctx", self.context)]
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
@@ -214,10 +222,13 @@ impl Node for MaxPycor {
         }
         Some(Box::new(lower_get_max_pycor))
     }
+
+    fn pretty_print(&self, _program: &Program, mut out: impl fmt::Write) -> fmt::Result {
+        PrettyPrinter::new(&mut out).add_struct("MaxPycor", |_| Ok(()))
+    }
 }
 
-#[derive(Debug, Display)]
-#[display("EuclideanDistanceNoWrap {a:?} {b:?}")]
+#[derive(Debug)]
 pub struct EuclideanDistanceNoWrap {
     /// The first point.
     pub a: NodeId,
@@ -230,8 +241,8 @@ impl Node for EuclideanDistanceNoWrap {
         true
     }
 
-    fn dependencies(&self) -> Vec<NodeId> {
-        vec![self.a, self.b]
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
+        vec![("a", self.a), ("b", self.b)]
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
@@ -255,11 +266,14 @@ impl Node for EuclideanDistanceNoWrap {
         lir_builder.node_to_lir.insert(my_node_id, smallvec![lir::ValRef(pc, 0)]);
         Ok(())
     }
+
+    fn pretty_print(&self, _program: &Program, mut out: impl fmt::Write) -> fmt::Result {
+        PrettyPrinter::new(&mut out).add_struct("EuclideanDistanceNoWrap", |_| Ok(()))
+    }
 }
 
 /// A node that constructs a point from two floating-point values.
-#[derive(Debug, Display)]
-#[display("PointConstructor")]
+#[derive(Debug)]
 pub struct PointConstructor {
     pub x: NodeId,
     pub y: NodeId,
@@ -270,8 +284,8 @@ impl Node for PointConstructor {
         true
     }
 
-    fn dependencies(&self) -> Vec<NodeId> {
-        vec![self.x, self.y]
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
+        vec![("x", self.x), ("y", self.y)]
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
@@ -294,5 +308,9 @@ impl Node for PointConstructor {
         };
         lir_builder.node_to_lir.insert(my_node_id, smallvec![x, y]);
         Ok(())
+    }
+
+    fn pretty_print(&self, _program: &Program, mut out: impl fmt::Write) -> fmt::Result {
+        PrettyPrinter::new(&mut out).add_struct("PointConstructor", |_| Ok(()))
     }
 }

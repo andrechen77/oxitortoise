@@ -1,7 +1,9 @@
 //! Primitives for interacting with the tick counter.
 
-use derive_more::derive::Display;
+use std::fmt;
+
 use lir::smallvec::smallvec;
+use pretty_print::PrettyPrinter;
 
 use crate::{
     exec::jit::InstallLir,
@@ -11,8 +13,7 @@ use crate::{
     },
 };
 
-#[derive(Debug, Display)]
-#[display("ResetTicks {context:?}")]
+#[derive(Debug)]
 pub struct ResetTicks {
     /// The execution context to use.
     pub context: NodeId,
@@ -23,8 +24,8 @@ impl Node for ResetTicks {
         false
     }
 
-    fn dependencies(&self) -> Vec<NodeId> {
-        vec![self.context]
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
+        vec![("ctx", self.context)]
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
@@ -46,10 +47,13 @@ impl Node for ResetTicks {
         ));
         Ok(())
     }
+
+    fn pretty_print(&self, _program: &Program, mut out: impl fmt::Write) -> fmt::Result {
+        PrettyPrinter::new(&mut out).add_struct("ResetTicks", |_| Ok(()))
+    }
 }
 
-#[derive(Debug, Display)]
-#[display("AdvanceTick")]
+#[derive(Debug)]
 pub struct AdvanceTick {
     /// The context whose tick is being advanced.
     pub context: NodeId,
@@ -60,8 +64,8 @@ impl Node for AdvanceTick {
         false
     }
 
-    fn dependencies(&self) -> Vec<NodeId> {
-        vec![self.context]
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
+        vec![("ctx", self.context)]
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
@@ -83,10 +87,13 @@ impl Node for AdvanceTick {
         ));
         Ok(())
     }
+
+    fn pretty_print(&self, _program: &Program, mut out: impl fmt::Write) -> fmt::Result {
+        PrettyPrinter::new(&mut out).add_struct("AdvanceTick", |_| Ok(()))
+    }
 }
 
-#[derive(Debug, Display)]
-#[display("GetTick")]
+#[derive(Debug)]
 pub struct GetTick {
     /// The context whose tick is being gotten.
     pub context: NodeId,
@@ -97,8 +104,8 @@ impl Node for GetTick {
         true
     }
 
-    fn dependencies(&self) -> Vec<NodeId> {
-        vec![self.context]
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
+        vec![("ctx", self.context)]
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
@@ -122,5 +129,9 @@ impl Node for GetTick {
         lir_builder.node_to_lir.insert(my_node_id, smallvec![lir::ValRef(pc, 0)]);
 
         Ok(())
+    }
+
+    fn pretty_print(&self, _program: &Program, mut out: impl fmt::Write) -> fmt::Result {
+        PrettyPrinter::new(&mut out).add_struct("GetTick", |_| Ok(()))
     }
 }

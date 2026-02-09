@@ -1,3 +1,5 @@
+use std::fmt;
+
 use derive_more::derive::Display;
 use tracing::trace;
 
@@ -15,7 +17,7 @@ impl Node for Placeholder {
         panic!()
     }
 
-    fn dependencies(&self) -> Vec<NodeId> {
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
         panic!()
     }
 
@@ -30,6 +32,10 @@ impl Node for Placeholder {
         _my_node_id: NodeId,
     ) -> Option<NodeTransform> {
         None
+    }
+
+    fn pretty_print(&self, _program: &Program, mut out: impl fmt::Write) -> fmt::Result {
+        write!(out, "Placeholder")
     }
 }
 

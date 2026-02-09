@@ -1,6 +1,8 @@
 //! The `diffuse` command.
 
-use derive_more::derive::Display;
+use std::fmt::{self, Write};
+
+use pretty_print::PrettyPrinter;
 
 use crate::{
     exec::jit::InstallLir,
@@ -11,8 +13,7 @@ use crate::{
     sim::patch::PatchVarDesc,
 };
 
-#[derive(Debug, Display)]
-#[display("Diffuse {variable:?}")]
+#[derive(Debug)]
 pub struct Diffuse {
     /// The execution context to use.
     pub context: NodeId,
@@ -27,8 +28,8 @@ impl Node for Diffuse {
         false
     }
 
-    fn dependencies(&self) -> Vec<NodeId> {
-        vec![self.context, self.amt]
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
+        vec![("ctx", self.context), ("amt", self.amt)]
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
@@ -64,5 +65,15 @@ impl Node for Diffuse {
         ));
 
         Ok(())
+    }
+
+    fn pretty_print(&self, program: &Program, mut out: impl fmt::Write) -> fmt::Result {
+        PrettyPrinter::new(&mut out).add_struct("Diffuse", |p| {
+            p.add_field("variable", |p| write!(p, "{:?}", self.variable))?;
+            if let PatchVarDesc::Custom(field) = self.variable {
+                p.add_comment(&program.custom_patch_vars[field].name)?;
+            }
+            Ok(())
+        })
     }
 }

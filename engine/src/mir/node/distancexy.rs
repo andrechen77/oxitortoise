@@ -1,14 +1,15 @@
 //! The `distancexy` operation.
 
-use derive_more::derive::Display;
+use std::fmt;
+
+use pretty_print::PrettyPrinter;
 
 use crate::{
     mir::{FunctionId, MirTy, NlAbstractTy, Node, NodeId, NodeKind, NodeTransform, Program, node},
     sim::{patch::PatchVarDesc, turtle::TurtleVarDesc},
 };
 
-#[derive(Debug, Display)]
-#[display("Distancexy {x:?} {y:?}")]
+#[derive(Debug)]
 pub struct Distancexy {
     pub context: NodeId,
     /// The agent to get the distance from.
@@ -24,8 +25,8 @@ impl Node for Distancexy {
         true
     }
 
-    fn dependencies(&self) -> Vec<NodeId> {
-        vec![self.agent, self.x, self.y]
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
+        vec![("agent", self.agent), ("x", self.x), ("y", self.y)]
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
@@ -44,6 +45,10 @@ impl Node for Distancexy {
         Some(Box::new(move |program, fn_id, my_node_id| {
             decompose_distancexy(program, fn_id, my_node_id, agent_type)
         }))
+    }
+
+    fn pretty_print(&self, _program: &Program, mut out: impl fmt::Write) -> fmt::Result {
+        PrettyPrinter::new(&mut out).add_struct("Distancexy", |_| Ok(()))
     }
 }
 

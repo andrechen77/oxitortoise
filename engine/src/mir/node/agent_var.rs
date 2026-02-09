@@ -1,9 +1,12 @@
 //! Nodes for getting and setting agent and global variables.
 
-use std::mem::offset_of;
+use std::{
+    fmt::{self, Write},
+    mem::offset_of,
+};
 
-use derive_more::derive::Display;
 use lir::smallvec::smallvec;
+use pretty_print::PrettyPrinter;
 
 use crate::{
     exec::{CanonExecutionContext, jit::InstallLir},
@@ -22,8 +25,7 @@ use crate::{
     workspace::Workspace,
 };
 
-#[derive(Debug, Display, Copy, Clone)]
-#[display("GetGlobalVar {index:?}")]
+#[derive(Debug, Copy, Clone)]
 pub struct GetGlobalVar {
     pub context: NodeId,
     pub index: usize,
@@ -34,8 +36,8 @@ impl Node for GetGlobalVar {
         false
     }
 
-    fn dependencies(&self) -> Vec<NodeId> {
-        vec![self.context]
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
+        vec![("context", self.context)]
     }
 
     fn output_type(&self, program: &Program, _fn_id: FunctionId) -> MirTy {
@@ -74,6 +76,13 @@ impl Node for GetGlobalVar {
 
         Some(Box::new(lower_get_global_var))
     }
+
+    fn pretty_print(&self, program: &Program, mut out: impl fmt::Write) -> fmt::Result {
+        PrettyPrinter::new(&mut out).add_struct("GetGlobalVar", |p| {
+            p.add_field("var", |p| write!(p, "{}", self.index))?;
+            p.add_comment(&program.globals[self.index].name)
+        })
+    }
 }
 
 fn context_to_global_data(program: &mut Program, context: NodeId, var: usize) -> (NodeId, usize) {
@@ -99,8 +108,7 @@ fn context_to_global_data(program: &mut Program, context: NodeId, var: usize) ->
 // TODO(mvp) if this is a variable that may or may not exist depending on the
 // breed, then we should check the breed of the turtle as well
 
-#[derive(Debug, Display, Copy, Clone)]
-#[display("GetTurtleVar {var:?}")]
+#[derive(Debug, Copy, Clone)]
 pub struct GetTurtleVar {
     /// The execution context to use.
     pub context: NodeId,
@@ -116,8 +124,8 @@ impl Node for GetTurtleVar {
         false
     }
 
-    fn dependencies(&self) -> Vec<NodeId> {
-        vec![self.context, self.turtle]
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
+        vec![("context", self.context), ("turtle", self.turtle)]
     }
 
     fn output_type(&self, program: &Program, _fn_id: FunctionId) -> MirTy {
@@ -163,10 +171,19 @@ impl Node for GetTurtleVar {
 
         Some(Box::new(lower_get_turtle_var))
     }
+
+    fn pretty_print(&self, program: &Program, mut out: impl fmt::Write) -> fmt::Result {
+        PrettyPrinter::new(&mut out).add_struct("GetTurtleVar", |p| {
+            p.add_field("var", |p| write!(p, "{:?}", self.var))?;
+            if let TurtleVarDesc::Custom(field) = self.var {
+                p.add_comment(&program.custom_turtle_vars[field].name)?;
+            }
+            Ok(())
+        })
+    }
 }
 
-#[derive(Debug, Display, Copy, Clone)]
-#[display("SetTurtleVar {var:?}")]
+#[derive(Debug, Copy, Clone)]
 pub struct SetTurtleVar {
     /// The execution context to use.
     pub context: NodeId,
@@ -183,8 +200,8 @@ impl Node for SetTurtleVar {
         false
     }
 
-    fn dependencies(&self) -> Vec<NodeId> {
-        vec![self.context, self.turtle, self.value]
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
+        vec![("context", self.context), ("turtle", self.turtle), ("value", self.value)]
     }
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
         NlAbstractTy::Unit.into()
@@ -219,6 +236,22 @@ impl Node for SetTurtleVar {
         }
 
         Some(Box::new(lower_set_turtle_var))
+    }
+
+    fn pretty_print(&self, program: &Program, mut out: impl fmt::Write) -> fmt::Result {
+        let var_name = match self.var {
+            TurtleVarDesc::Who => "who",
+            TurtleVarDesc::Color => "color",
+            TurtleVarDesc::Size => "size",
+            TurtleVarDesc::Pos => "pos",
+            TurtleVarDesc::Xcor => "xcor",
+            TurtleVarDesc::Ycor => "ycor",
+            TurtleVarDesc::Custom(field) => program.custom_turtle_vars[field].name.as_ref(),
+        };
+        PrettyPrinter::new(&mut out).add_struct("SetTurtleVar", |p| {
+            p.add_field("var", |p| write!(p, "{:?}", self.var))?;
+            p.add_comment(var_name)
+        })
     }
 }
 
@@ -262,8 +295,7 @@ fn context_to_turtle_data(
     (data_row, field_offset)
 }
 
-#[derive(Debug, Display)]
-#[display("TurtleIdToIndex")]
+#[derive(Debug)]
 pub struct TurtleIdToIndex {
     /// The turtle id to convert.
     pub turtle_id: NodeId,
@@ -274,8 +306,8 @@ impl Node for TurtleIdToIndex {
         true
     }
 
-    fn dependencies(&self) -> Vec<NodeId> {
-        vec![self.turtle_id]
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
+        vec![("turtle_id", self.turtle_id)]
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
@@ -298,10 +330,13 @@ impl Node for TurtleIdToIndex {
         lir_builder.node_to_lir.insert(my_node_id, smallvec![lir::ValRef(pc, 0)]);
         Ok(())
     }
+
+    fn pretty_print(&self, _program: &Program, mut out: impl fmt::Write) -> fmt::Result {
+        PrettyPrinter::new(&mut out).add_struct("TurtleIdToIndex", |_| Ok(()))
+    }
 }
 
-#[derive(Debug, Display, Copy, Clone)]
-#[display("GetPatchVar {var:?}")]
+#[derive(Debug, Copy, Clone)]
 pub struct GetPatchVar {
     /// The execution context to use.
     pub context: NodeId,
@@ -316,8 +351,8 @@ impl Node for GetPatchVar {
         false
     }
 
-    fn dependencies(&self) -> Vec<NodeId> {
-        vec![self.context, self.patch]
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
+        vec![("context", self.context), ("patch", self.patch)]
     }
 
     fn output_type(&self, program: &Program, _fn_id: FunctionId) -> MirTy {
@@ -358,10 +393,19 @@ impl Node for GetPatchVar {
         }
         Some(Box::new(lower_get_patch_var))
     }
+
+    fn pretty_print(&self, program: &Program, mut out: impl fmt::Write) -> fmt::Result {
+        PrettyPrinter::new(&mut out).add_struct("GetPatchVar", |p| {
+            p.add_field("var", |p| write!(p, "{:?}", self.var))?;
+            if let PatchVarDesc::Custom(field) = self.var {
+                p.add_comment(&program.custom_patch_vars[field].name)?;
+            }
+            Ok(())
+        })
+    }
 }
 
-#[derive(Debug, Display)]
-#[display("SetPatchVar {var:?}")]
+#[derive(Debug)]
 pub struct SetPatchVar {
     /// The execution context to use.
     pub context: NodeId,
@@ -378,8 +422,8 @@ impl Node for SetPatchVar {
         false
     }
 
-    fn dependencies(&self) -> Vec<NodeId> {
-        vec![self.context, self.patch, self.value]
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
+        vec![("context", self.context), ("patch", self.patch), ("value", self.value)]
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
@@ -413,6 +457,16 @@ impl Node for SetPatchVar {
         }
 
         Some(Box::new(lower_set_patch_var))
+    }
+
+    fn pretty_print(&self, program: &Program, mut out: impl fmt::Write) -> fmt::Result {
+        PrettyPrinter::new(&mut out).add_struct("SetPatchVar", |p| {
+            p.add_field("var", |p| write!(p, "{:?}", self.var))?;
+            if let PatchVarDesc::Custom(field) = self.var {
+                p.add_comment(&program.custom_patch_vars[field].name)?;
+            }
+            Ok(())
+        })
     }
 }
 
@@ -455,8 +509,7 @@ fn context_to_patch_data(
 }
 
 /// A node for getting an patch variable when the type of the agent is unknown.
-#[derive(Debug, Display, Clone)]
-#[display("GetPatchVarAsTurtleOrPatch {var:?}")]
+#[derive(Debug, Clone)]
 pub struct GetPatchVarAsTurtleOrPatch {
     /// The execution context to use.
     pub context: NodeId,
@@ -472,8 +525,8 @@ impl Node for GetPatchVarAsTurtleOrPatch {
         false
     }
 
-    fn dependencies(&self) -> Vec<NodeId> {
-        vec![self.context, self.agent]
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
+        vec![("context", self.context), ("agent", self.agent)]
     }
 
     fn output_type(&self, program: &Program, _fn_id: FunctionId) -> MirTy {
@@ -545,10 +598,19 @@ impl Node for GetPatchVarAsTurtleOrPatch {
 
         Some(Box::new(decompose_get_patch_var))
     }
+
+    fn pretty_print(&self, program: &Program, mut out: impl fmt::Write) -> fmt::Result {
+        PrettyPrinter::new(&mut out).add_struct("GetPatchVarAsTurtleOrPatch", |p| {
+            p.add_field("var", |p| write!(p, "{:?}", self.var))?;
+            if let PatchVarDesc::Custom(field) = self.var {
+                p.add_comment(&program.custom_patch_vars[field].name)?;
+            }
+            Ok(())
+        })
+    }
 }
 
-#[derive(Debug, Display)]
-#[display("SetPatchVarAsTurtleOrPatch {var:?}")]
+#[derive(Debug)]
 pub struct SetPatchVarAsTurtleOrPatch {
     /// The execution context to use.
     pub context: NodeId,
@@ -566,8 +628,8 @@ impl Node for SetPatchVarAsTurtleOrPatch {
         false
     }
 
-    fn dependencies(&self) -> Vec<NodeId> {
-        vec![self.context, self.agent, self.value]
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
+        vec![("context", self.context), ("agent", self.agent), ("value", self.value)]
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
@@ -627,5 +689,15 @@ impl Node for SetPatchVarAsTurtleOrPatch {
                 _ => false,
             };
         Some(Box::new(transform))
+    }
+
+    fn pretty_print(&self, program: &Program, mut out: impl fmt::Write) -> fmt::Result {
+        PrettyPrinter::new(&mut out).add_struct("SetPatchVarAsTurtleOrPatch", |p| {
+            p.add_field("var", |p| write!(p, "{:?}", self.var))?;
+            if let PatchVarDesc::Custom(field) = self.var {
+                p.add_comment(&program.custom_patch_vars[field].name)?;
+            }
+            Ok(())
+        })
     }
 }

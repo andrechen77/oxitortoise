@@ -1,7 +1,9 @@
 //! Commands and reporters that interact with the RNG.
 
-use derive_more::derive::Display;
+use std::fmt;
+
 use lir::smallvec::smallvec;
+use pretty_print::PrettyPrinter;
 
 use crate::{
     exec::jit::InstallLir,
@@ -12,8 +14,7 @@ use crate::{
 };
 
 /// Returns a random integer between 0 (inclusive) and bound (exclusive)
-#[derive(Debug, Display)]
-#[display("RandomInt")]
+#[derive(Debug)]
 pub struct RandomInt {
     /// The execution context to use.
     pub context: NodeId,
@@ -25,8 +26,8 @@ impl Node for RandomInt {
         false
     }
 
-    fn dependencies(&self) -> Vec<NodeId> {
-        vec![self.context, self.bound]
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
+        vec![("ctx", self.context), ("bound", self.bound)]
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
@@ -51,5 +52,9 @@ impl Node for RandomInt {
         ));
         lir_builder.node_to_lir.insert(my_node_id, smallvec![lir::ValRef(pc, 0)]);
         Ok(())
+    }
+
+    fn pretty_print(&self, _program: &Program, mut out: impl fmt::Write) -> fmt::Result {
+        PrettyPrinter::new(&mut out).add_struct("RandomInt", |_| Ok(()))
     }
 }

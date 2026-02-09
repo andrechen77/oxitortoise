@@ -1,6 +1,8 @@
 //! The `clear-all` command and friends.
 
-use derive_more::derive::Display;
+use std::fmt;
+
+use pretty_print::PrettyPrinter;
 
 use crate::{
     exec::jit::InstallLir,
@@ -10,8 +12,7 @@ use crate::{
     },
 };
 
-#[derive(Debug, Display)]
-#[display("ClearAll")]
+#[derive(Debug)]
 pub struct ClearAll {
     /// The execution context to use.
     pub context: NodeId,
@@ -22,8 +23,8 @@ impl Node for ClearAll {
         false
     }
 
-    fn dependencies(&self) -> Vec<NodeId> {
-        vec![self.context]
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
+        vec![("ctx", self.context)]
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
@@ -44,5 +45,9 @@ impl Node for ClearAll {
             Box::new([ctx_ptr]),
         ));
         Ok(())
+    }
+
+    fn pretty_print(&self, _program: &Program, mut out: impl fmt::Write) -> fmt::Result {
+        PrettyPrinter::new(&mut out).add_struct("ClearAll", |_| Ok(()))
     }
 }

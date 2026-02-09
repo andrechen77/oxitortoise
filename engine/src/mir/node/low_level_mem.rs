@@ -1,7 +1,9 @@
 //! Nodes representing low-level memory operations.
 
-use derive_more::derive::Display;
+use std::fmt::{self, Write};
+
 use lir::smallvec::{SmallVec, smallvec};
+use pretty_print::PrettyPrinter;
 
 use crate::{
     exec::jit::InstallLir,
@@ -9,8 +11,7 @@ use crate::{
     util::reflection::{ConcreteTy, Reflect},
 };
 
-#[derive(Debug, Display)]
-#[display("MemLoad offset={offset:?}")]
+#[derive(Debug)]
 pub struct MemLoad {
     /// The pointer to the memory to load from.
     pub ptr: NodeId,
@@ -25,8 +26,8 @@ impl Node for MemLoad {
         true
     }
 
-    fn dependencies(&self) -> Vec<NodeId> {
-        vec![self.ptr]
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
+        vec![("ptr", self.ptr)]
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
@@ -56,10 +57,14 @@ impl Node for MemLoad {
         lir_builder.node_to_lir.insert(my_node_id, val_refs);
         Ok(())
     }
+
+    fn pretty_print(&self, _program: &Program, mut out: impl fmt::Write) -> fmt::Result {
+        PrettyPrinter::new(&mut out)
+            .add_struct("MemLoad", |p| p.add_field("offset", |p| write!(p, "{}", self.offset)))
+    }
 }
 
-#[derive(Debug, Display)]
-#[display("MemStore offset={offset:?}")]
+#[derive(Debug)]
 pub struct MemStore {
     /// The pointer to the memory to store to.
     pub ptr: NodeId,
@@ -70,8 +75,8 @@ pub struct MemStore {
 }
 
 impl Node for MemStore {
-    fn dependencies(&self) -> Vec<NodeId> {
-        vec![self.ptr, self.value]
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
+        vec![("ptr", self.ptr), ("val", self.value)]
     }
 
     fn is_pure(&self) -> bool {
@@ -110,10 +115,14 @@ impl Node for MemStore {
         }
         Ok(())
     }
+
+    fn pretty_print(&self, _program: &Program, mut out: impl fmt::Write) -> fmt::Result {
+        PrettyPrinter::new(&mut out)
+            .add_struct("MemStore", |p| p.add_field("offset", |p| write!(p, "{}", self.offset)))
+    }
 }
 
-#[derive(Debug, Display)]
-#[display("DeriveField offset={offset:?}")]
+#[derive(Debug)]
 pub struct DeriveField {
     /// The pointer to the memory to derive.
     pub ptr: NodeId,
@@ -126,8 +135,8 @@ impl Node for DeriveField {
         true
     }
 
-    fn dependencies(&self) -> Vec<NodeId> {
-        vec![self.ptr]
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
+        vec![("ptr", self.ptr)]
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
@@ -147,10 +156,14 @@ impl Node for DeriveField {
         lir_builder.node_to_lir.insert(my_node_id, smallvec![lir::ValRef(pc, 0)]);
         Ok(())
     }
+
+    fn pretty_print(&self, _program: &Program, mut out: impl fmt::Write) -> fmt::Result {
+        PrettyPrinter::new(&mut out)
+            .add_struct("DeriveField", |p| p.add_field("offset", |p| write!(p, "{}", self.offset)))
+    }
 }
 
-#[derive(Debug, Display)]
-#[display("DeriveElement stride={stride:?}")]
+#[derive(Debug)]
 pub struct DeriveElement {
     /// The pointer to the memory to derive.
     pub ptr: NodeId,
@@ -165,8 +178,8 @@ impl Node for DeriveElement {
         true
     }
 
-    fn dependencies(&self) -> Vec<NodeId> {
-        vec![self.ptr, self.index]
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
+        vec![("ptr", self.ptr), ("idx", self.index)]
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
@@ -192,5 +205,11 @@ impl Node for DeriveElement {
         });
         lir_builder.node_to_lir.insert(my_node_id, smallvec![lir::ValRef(pc, 0)]);
         Ok(())
+    }
+
+    fn pretty_print(&self, _program: &Program, mut out: impl fmt::Write) -> fmt::Result {
+        PrettyPrinter::new(&mut out).add_struct("DeriveElement", |p| {
+            p.add_field("stride", |p| write!(p, "{}", self.stride))
+        })
     }
 }

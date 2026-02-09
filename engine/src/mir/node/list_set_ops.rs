@@ -1,7 +1,9 @@
 //! Nodes for primitives that operate on lists and agentsets.
 
-use derive_more::derive::Display;
+use std::fmt;
+
 use lir::smallvec::smallvec;
+use pretty_print::PrettyPrinter;
 
 use crate::{
     exec::jit::InstallLir,
@@ -13,8 +15,7 @@ use crate::{
     util::reflection::Reflect as _,
 };
 
-#[derive(Debug, Display)]
-#[display("OneOf")]
+#[derive(Debug)]
 pub struct OneOf {
     pub context: NodeId,
     pub operand: NodeId,
@@ -25,8 +26,8 @@ impl Node for OneOf {
         false
     }
 
-    fn dependencies(&self) -> Vec<NodeId> {
-        vec![self.context, self.operand]
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
+        vec![("ctx", self.context), ("op", self.operand)]
     }
 
     fn output_type(&self, program: &Program, fn_id: FunctionId) -> MirTy {
@@ -72,5 +73,9 @@ impl Node for OneOf {
         } else {
             todo!("TODO(mvp) handle other operand types")
         }
+    }
+
+    fn pretty_print(&self, _program: &Program, mut out: impl fmt::Write) -> fmt::Result {
+        PrettyPrinter::new(&mut out).add_struct("OneOf", |_| Ok(()))
     }
 }

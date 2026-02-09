@@ -1,7 +1,9 @@
 //! The `ask` command and `of` reporter.
 
-use derive_more::derive::Display;
+use std::fmt::{self, Write};
+
 use lir::smallvec::{SmallVec, smallvec};
+use pretty_print::PrettyPrinter;
 
 use crate::{
     exec::jit::InstallLir,
@@ -12,8 +14,7 @@ use crate::{
 };
 
 /// A node representing an "ask" construct.
-#[derive(Debug, Display)]
-#[display("Ask {recipients:?}")]
+#[derive(Debug)]
 pub struct Ask {
     /// The execution context to use for the ask.
     pub context: NodeId,
@@ -28,10 +29,10 @@ impl Node for Ask {
         false
     }
 
-    fn dependencies(&self) -> Vec<NodeId> {
-        let mut deps = vec![self.context, self.body];
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
+        let mut deps = vec![("context", self.context), ("body", self.body)];
         if let Some(recipients) = self.recipients.node() {
-            deps.push(recipients);
+            deps.push(("recipients", recipients));
         }
         deps
     }
@@ -109,10 +110,15 @@ impl Node for Ask {
         lir_builder.node_to_lir.insert(my_node_id, smallvec![lir::ValRef(pc, 0)]);
         Ok(())
     }
+
+    fn pretty_print(&self, _program: &Program, mut out: impl fmt::Write) -> fmt::Result {
+        PrettyPrinter::new(&mut out).add_struct("Ask", |p| {
+            p.add_field("recipients", |p| write!(p, "{:?}", self.recipients))
+        })
+    }
 }
 
-#[derive(Debug, Display)]
-#[display("Of")]
+#[derive(Debug)]
 pub struct Of {
     /// The execution context to use for the ask.
     pub context: NodeId,
@@ -127,13 +133,12 @@ impl Node for Of {
         false
     }
 
-    fn dependencies(&self) -> Vec<NodeId> {
-        let mut deps = Vec::new();
-        deps.push(self.context);
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
+        let mut deps = vec![("context", self.context)];
         if let Some(recipients) = self.recipients.node() {
-            deps.push(recipients);
+            deps.push(("recipients", recipients));
         }
-        deps.push(self.body);
+        deps.push(("body", self.body));
         deps
     }
 
@@ -243,6 +248,11 @@ impl Node for Of {
         }
 
         Ok(())
+    }
+
+    fn pretty_print(&self, _program: &Program, mut out: impl fmt::Write) -> fmt::Result {
+        PrettyPrinter::new(&mut out)
+            .add_struct("Of", |p| p.add_field("recipients", |p| write!(p, "{:?}", self.recipients)))
     }
 }
 

@@ -1,8 +1,10 @@
 //! Nodes that represent control flow constructs. These are the fundamental
 //! building blocks that allow sequential execution of statements in a function.
 
-use derive_more::derive::Display;
+use std::fmt::{self, Write};
+
 use lir::typed_index_collections::TiVec;
+use pretty_print::PrettyPrinter;
 use tracing::trace;
 
 use crate::{
@@ -21,8 +23,7 @@ use crate::{
 /// For the purposes of analysis and transformation, the only way to exit the
 /// block is with a break statement. If these do not exist in the NetLogo
 /// source, they should be automatically inserted when this node is created.
-#[derive(Debug, Display)]
-#[display("Block")]
+#[derive(Debug)]
 pub struct Block {
     pub statements: Vec<NodeId>,
     /// The IDs of all [`Break`] nodes that can break out of this block with a
@@ -34,8 +35,7 @@ pub struct Block {
 /// execution of this node, the condition is always executed; based on the
 /// result of the condition, only one of the branch nodes is executed and
 /// becomes the output of this node.
-#[derive(Debug, Display)]
-#[display("IfElse")]
+#[derive(Debug)]
 pub struct IfElse {
     pub condition: NodeId,
     pub then_block: NodeId,
@@ -45,8 +45,7 @@ pub struct IfElse {
 /// A node representing a loop control flow construct. For a given execution of
 /// this node, the node representing the number of repetition is executed
 /// exactly once, and the body can be executed any number of times.
-#[derive(Debug, Display)]
-#[display("Repeat")]
+#[derive(Debug)]
 pub struct Repeat {
     pub num_repetitions: NodeId,
     pub body_block: NodeId,
@@ -54,8 +53,7 @@ pub struct Repeat {
 
 /// A node representing a breaking control flow construct. Executing this node
 /// will break out of some control flow construct, returning a certain value.
-#[derive(Debug, Display)]
-#[display("Break({:?})", target)]
+#[derive(Debug)]
 pub struct Break {
     /// The Block node being targeted by this break.
     pub target: NodeId,
@@ -67,8 +65,8 @@ impl Node for Block {
         false
     }
 
-    fn dependencies(&self) -> Vec<NodeId> {
-        self.statements.clone()
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
+        self.statements.iter().map(|&id| ("stmt", id)).collect()
     }
 
     fn output_type(&self, program: &Program, fn_id: FunctionId) -> MirTy {
@@ -98,6 +96,10 @@ impl Node for Block {
         }
         Ok(())
     }
+
+    fn pretty_print(&self, _program: &Program, mut out: impl fmt::Write) -> fmt::Result {
+        PrettyPrinter::new(&mut out).add_struct("Block", |_| Ok(()))
+    }
 }
 
 impl Node for IfElse {
@@ -105,8 +107,8 @@ impl Node for IfElse {
         false
     }
 
-    fn dependencies(&self) -> Vec<NodeId> {
-        vec![self.condition, self.then_block, self.else_block]
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
+        vec![("cond", self.condition), ("then", self.then_block), ("else", self.else_block)]
     }
 
     fn output_type(&self, program: &Program, fn_id: FunctionId) -> MirTy {
@@ -159,6 +161,10 @@ impl Node for IfElse {
         }));
         Ok(())
     }
+
+    fn pretty_print(&self, _program: &Program, mut out: impl fmt::Write) -> fmt::Result {
+        PrettyPrinter::new(&mut out).add_struct("IfElse", |_| Ok(()))
+    }
 }
 
 impl Node for Repeat {
@@ -166,8 +172,8 @@ impl Node for Repeat {
         false
     }
 
-    fn dependencies(&self) -> Vec<NodeId> {
-        vec![self.num_repetitions, self.body_block]
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
+        vec![("num_repetitions", self.num_repetitions), ("body", self.body_block)]
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
@@ -182,6 +188,10 @@ impl Node for Repeat {
     ) -> Result<(), WriteLirError> {
         todo!()
     }
+
+    fn pretty_print(&self, _program: &Program, mut out: impl fmt::Write) -> fmt::Result {
+        PrettyPrinter::new(&mut out).add_struct("Repeat", |_| Ok(()))
+    }
 }
 
 impl Node for Break {
@@ -189,8 +199,8 @@ impl Node for Break {
         false
     }
 
-    fn dependencies(&self) -> Vec<NodeId> {
-        self.value.iter().copied().collect()
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
+        self.value.iter().map(|&id| ("value", id)).collect()
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
@@ -211,5 +221,10 @@ impl Node for Break {
         );
         lir_builder.push_lir_insn(lir::InsnKind::Break { target, values });
         Ok(())
+    }
+
+    fn pretty_print(&self, _program: &Program, mut out: impl fmt::Write) -> fmt::Result {
+        PrettyPrinter::new(&mut out)
+            .add_struct("Break", |p| p.add_field("target", |p| write!(p, "{:?}", self.target)))
     }
 }

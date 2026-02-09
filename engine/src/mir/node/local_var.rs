@@ -1,7 +1,9 @@
 //! Nodes for getting and setting local variables.
 
-use derive_more::derive::Display;
+use std::fmt::{self, Write};
+
 use lir::smallvec::smallvec;
+use pretty_print::PrettyPrinter;
 
 use crate::{
     exec::jit::InstallLir,
@@ -11,8 +13,7 @@ use crate::{
     },
 };
 
-#[derive(Debug, Display)]
-#[display("GetLocalVar {local_id:?}")]
+#[derive(Debug)]
 pub struct GetLocalVar {
     /// The id of the local variable being gotten.
     pub local_id: LocalId,
@@ -23,7 +24,7 @@ impl Node for GetLocalVar {
         true
     }
 
-    fn dependencies(&self) -> Vec<NodeId> {
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
         vec![]
     }
 
@@ -51,10 +52,19 @@ impl Node for GetLocalVar {
             }
         }
     }
+
+    fn pretty_print(&self, program: &Program, mut out: impl fmt::Write) -> fmt::Result {
+        PrettyPrinter::new(&mut out).add_struct("GetLocalVar", |p| {
+            p.add_field("local_id", |p| write!(p, "{:?}", self.local_id))?;
+            if let Some(var_name) = program.locals[self.local_id].debug_name.as_deref() {
+                p.add_comment(var_name)?;
+            }
+            Ok(())
+        })
+    }
 }
 
-#[derive(Debug, Display)]
-#[display("SetLocalVar {local_id:?}")]
+#[derive(Debug)]
 pub struct SetLocalVar {
     /// The id of the local variable being set.
     pub local_id: LocalId,
@@ -67,8 +77,8 @@ impl Node for SetLocalVar {
         false
     }
 
-    fn dependencies(&self) -> Vec<NodeId> {
-        vec![self.value]
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
+        vec![("val", self.value)]
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
@@ -110,5 +120,15 @@ impl Node for SetLocalVar {
                 Ok(())
             }
         }
+    }
+
+    fn pretty_print(&self, program: &Program, mut out: impl fmt::Write) -> fmt::Result {
+        PrettyPrinter::new(&mut out).add_struct("SetLocalVar", |p| {
+            p.add_field("local_id", |p| write!(p, "{:?}", self.local_id))?;
+            if let Some(var_name) = program.locals[self.local_id].debug_name.as_deref() {
+                p.add_comment(var_name)?;
+            }
+            Ok(())
+        })
     }
 }

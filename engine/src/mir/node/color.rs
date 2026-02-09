@@ -1,7 +1,9 @@
 //! Nodes for commands that perform operations on colors.
 
-use derive_more::derive::Display;
+use std::fmt;
+
 use lir::smallvec::smallvec;
+use pretty_print::PrettyPrinter;
 
 use crate::{
     exec::jit::InstallLir,
@@ -12,8 +14,7 @@ use crate::{
 };
 
 /// https://docs.netlogo.org/dict/scale-color.html
-#[derive(Debug, Display)]
-#[display("ScaleColor")]
+#[derive(Debug)]
 pub struct ScaleColor {
     pub color: NodeId,
     pub number: NodeId,
@@ -26,8 +27,8 @@ impl Node for ScaleColor {
         true
     }
 
-    fn dependencies(&self) -> Vec<NodeId> {
-        vec![self.color, self.number, self.range1, self.range2]
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
+        vec![("color", self.color), ("num", self.number), ("r1", self.range1), ("r2", self.range2)]
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
@@ -59,5 +60,9 @@ impl Node for ScaleColor {
         let pc = lir_builder.push_lir_insn(insn);
         lir_builder.node_to_lir.insert(my_node_id, smallvec![lir::ValRef(pc, 0)]);
         Ok(())
+    }
+
+    fn pretty_print(&self, _program: &Program, mut out: impl fmt::Write) -> fmt::Result {
+        PrettyPrinter::new(&mut out).add_struct("ScaleColor", |_| Ok(()))
     }
 }

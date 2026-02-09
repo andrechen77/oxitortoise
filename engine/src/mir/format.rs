@@ -8,7 +8,8 @@ use std::{collections::HashSet, fmt::Write};
 
 impl Program {
     pub fn pretty_print(&self) -> String {
-        let mut printer = PrettyPrinter::new();
+        let mut out = String::new();
+        let mut printer = PrettyPrinter::new(&mut out);
 
         let Program {
             globals,
@@ -119,11 +120,9 @@ impl Program {
                                         // add all nodes as vertices
                                         for node_id in &visitor.nodes {
                                             let node = &nodes[*node_id];
-                                            let node_label =
-                                                format!("{}", node).replacen(' ', "\n", 1);
-                                            let formatted_label =
-                                                format!("{:?}\n{}", node_id.data(), node_label);
-                                            let escaped_label = formatted_label
+                                            let mut label = format!("{:?}\n", node_id.data());
+                                            node.pretty_print(self, &mut label)?;
+                                            label = label
                                                 .replace('"', "\\\"")
                                                 .replace('\n', "\\n")
                                                 .replace('\r', "\\r");
@@ -133,7 +132,7 @@ impl Program {
                                                 p,
                                                 "{:?} [label=\"{}\"];",
                                                 node_id.data().as_ffi(),
-                                                escaped_label
+                                                label
                                             )?;
                                         }
 
@@ -141,15 +140,17 @@ impl Program {
                                         for node_id in &visitor.nodes {
                                             let node = &nodes[*node_id];
                                             let dependencies = node.dependencies();
-                                            for (i, dep_id) in dependencies.into_iter().enumerate()
+                                            for (i, (dep_name, dep_id)) in
+                                                dependencies.into_iter().enumerate()
                                             {
                                                 p.line()?;
                                                 write!(
                                                     p,
-                                                    "{:?} -> {:?} [label=\"{}\"];",
+                                                    "{:?} -> {:?} [label=\"{}:{}\"];",
                                                     node_id.data().as_ffi(),
                                                     dep_id.data().as_ffi(),
                                                     i,
+                                                    dep_name,
                                                 )?;
                                             }
                                         }
@@ -166,6 +167,6 @@ impl Program {
             })
         });
 
-        printer.finish()
+        out
     }
 }

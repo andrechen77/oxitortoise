@@ -1,6 +1,6 @@
 // TODO(doc) all of MIR
 
-use std::rc::Rc;
+use std::{fmt, rc::Rc};
 
 use ambassador::{Delegate, delegatable_trait};
 use derive_more::derive::{Display, From, TryInto};
@@ -56,10 +56,20 @@ pub struct Program {
     pub locals: SlotMap<LocalId, LocalDeclaration>,
 }
 
+// TODO This sucks pls separate the two levels that MIR has melded together
 #[derive(derive_more::Debug)]
 pub enum TurtleBreeds {
     Full(SecondaryMap<BreedId, Breed>),
     Partial(SlotMap<BreedId, BreedPartial>),
+}
+
+impl TurtleBreeds {
+    pub fn name(&self, breed_id: BreedId) -> &str {
+        match self {
+            TurtleBreeds::Full(breeds) => &breeds[breed_id].name,
+            TurtleBreeds::Partial(breeds) => &breeds[breed_id].name,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -133,8 +143,9 @@ pub trait Node {
 
     /// All nodes that this node depends on. Note that this doesn't mean the
     /// dependent nodes are always executed when the current node is executed;
-    /// this might not be the case for the control flow nodes.
-    fn dependencies(&self) -> Vec<NodeId>;
+    /// this might not be the case for the control flow nodes. The dependencies
+    /// are returned with identifiers for debugging purposes.
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)>;
 
     /// For certain low level nodes it doesn't make sense to have an abstract
     /// output type; those should return `None`.
@@ -197,11 +208,13 @@ pub trait Node {
         let _ = lir_builder;
         Err(WriteLirError)
     }
+
+    fn pretty_print(&self, program: &Program, out: impl fmt::Write) -> fmt::Result;
 }
 
 use node::*;
 
-#[derive(Debug, Display, From, TryInto, Delegate)]
+#[derive(Debug, From, TryInto, Delegate)]
 #[try_into(owned, ref, ref_mut)]
 #[delegate(Node)]
 pub enum NodeKind {
@@ -418,7 +431,7 @@ fn visit_node_recursive<V: MirVisitor>(
     visitor.visit_node(program, fn_id, node_id);
 
     let dependencies = program.nodes[node_id].dependencies();
-    for dependency in dependencies {
+    for (_, dependency) in dependencies {
         visit_node_recursive(visitor, program, fn_id, dependency);
     }
 }

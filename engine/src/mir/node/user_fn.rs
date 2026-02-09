@@ -1,16 +1,15 @@
 //! A node representing a call to a user-defined function.
 
-use derive_more::derive::Display;
+use std::fmt::{self, Write};
+
+use pretty_print::PrettyPrinter;
 
 use crate::{
     exec::jit::InstallLir,
-    mir::{
-        FunctionId, MirTy, Node, NodeId, Program, WriteLirError, build_lir::LirInsnBuilder,
-    },
+    mir::{FunctionId, MirTy, Node, NodeId, Program, WriteLirError, build_lir::LirInsnBuilder},
 };
 
-#[derive(Debug, Display)]
-#[display("CallUserFn {target:?}")]
+#[derive(Debug)]
 pub struct CallUserFn {
     /// The function being called.
     pub target: FunctionId,
@@ -23,8 +22,8 @@ impl Node for CallUserFn {
         false
     }
 
-    fn dependencies(&self) -> Vec<NodeId> {
-        self.args.clone()
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
+        self.args.iter().map(|&id| ("arg", id)).collect()
     }
 
     fn output_type(&self, program: &Program, _fn_id: FunctionId) -> MirTy {
@@ -56,5 +55,15 @@ impl Node for CallUserFn {
         let output_vals = (0..output_type.len()).map(|i| lir::ValRef(pc, i as u8)).collect();
         lir_builder.node_to_lir.insert(my_node_id, output_vals);
         Ok(())
+    }
+
+    fn pretty_print(&self, program: &Program, mut out: impl fmt::Write) -> fmt::Result {
+        PrettyPrinter::new(&mut out).add_struct("CallUserFn", |p| {
+            p.add_field("target", |p| write!(p, "{:?}", self.target))?;
+            if let Some(fn_name) = program.functions[self.target].debug_name.as_deref() {
+                p.add_comment(fn_name)?;
+            }
+            Ok(())
+        })
     }
 }

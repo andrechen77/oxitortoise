@@ -1,7 +1,9 @@
 //! Nodes that represent constant/literal values.
 
-use derive_more::derive::Display;
+use std::fmt::{self, Write};
+
 use lir::smallvec::smallvec;
+use pretty_print::PrettyPrinter;
 
 use crate::{
     exec::jit::InstallLir,
@@ -12,8 +14,7 @@ use crate::{
     sim::value::UnpackedDynBox,
 };
 
-#[derive(Debug, Display)]
-#[display("Constant {value:?}")]
+#[derive(Debug)]
 pub struct Constant {
     pub value: UnpackedDynBox,
 }
@@ -23,7 +24,7 @@ impl Node for Constant {
         true
     }
 
-    fn dependencies(&self) -> Vec<NodeId> {
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
         vec![]
     }
 
@@ -53,10 +54,14 @@ impl Node for Constant {
             _ => todo!("TODO(mvp) include other variants"),
         }
     }
+
+    fn pretty_print(&self, _program: &Program, mut out: impl fmt::Write) -> fmt::Result {
+        PrettyPrinter::new(&mut out)
+            .add_struct("Constant", |p| p.add_field("value", |p| write!(p, "{:?}", self.value)))
+    }
 }
 
-#[derive(Debug, Display)]
-#[display("ListLiteral {items:?}")]
+#[derive(Debug)]
 pub struct ListLiteral {
     pub items: Vec<NodeId>,
 }
@@ -66,8 +71,8 @@ impl Node for ListLiteral {
         true
     }
 
-    fn dependencies(&self) -> Vec<NodeId> {
-        self.items.clone()
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
+        self.items.iter().map(|&id| ("item", id)).collect()
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
@@ -84,8 +89,10 @@ impl Node for ListLiteral {
         let mut current_list;
 
         // insert an instruction to create an empty list
-        let pc_new_list = lir_builder
-            .push_lir_insn(lir::generate_host_function_call(I::HOST_FUNCTION_TABLE.list_new, Box::from([])));
+        let pc_new_list = lir_builder.push_lir_insn(lir::generate_host_function_call(
+            I::HOST_FUNCTION_TABLE.list_new,
+            Box::from([]),
+        ));
         current_list = lir::ValRef(pc_new_list, 0);
 
         // insert instructions to push elements to the list
@@ -104,5 +111,9 @@ impl Node for ListLiteral {
         lir_builder.node_to_lir.insert(my_node_id, smallvec![current_list]);
 
         Ok(())
+    }
+
+    fn pretty_print(&self, _program: &Program, mut out: impl fmt::Write) -> fmt::Result {
+        PrettyPrinter::new(&mut out).add_struct("ListLiteral", |_| Ok(()))
     }
 }

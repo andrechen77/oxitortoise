@@ -1,18 +1,13 @@
 use std::fmt::{self, Write};
 
-#[derive(Default)]
-pub struct PrettyPrinter {
-    out: String,
+pub struct PrettyPrinter<W> {
+    out: W,
     indent: usize,
 }
 
-impl PrettyPrinter {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn finish(self) -> String {
-        self.out
+impl<W: Write> PrettyPrinter<W> {
+    pub fn new(out: W) -> Self {
+        Self { out, indent: 0 }
     }
 
     /// Starts a new line with indentation.
@@ -48,6 +43,10 @@ impl PrettyPrinter {
         write!(self, "{}: ", name)?;
         then(self)?;
         write!(self, ",")
+    }
+
+    pub fn add_comment(&mut self, comment: &str) -> fmt::Result {
+        write!(self, " /* {} */", comment)
     }
 
     pub fn add_map<K: Copy, V>(
@@ -90,7 +89,7 @@ impl PrettyPrinter {
     }
 }
 
-impl Write for PrettyPrinter {
+impl<W: Write> Write for PrettyPrinter<W> {
     fn write_str(&mut self, s: &str) -> fmt::Result {
         let mut lines = s.split("\n");
         if let Some(first_line) = lines.next() {

@@ -1,8 +1,10 @@
 //! Nodes to represent basic arithmetic operations that should not be host
 //! function calls.
 
-use derive_more::derive::{Display, TryFrom};
+use derive_more::derive::TryFrom;
 use lir::smallvec::smallvec;
+use pretty_print::PrettyPrinter;
+use std::fmt::Write;
 
 use crate::{
     exec::jit::InstallLir,
@@ -17,9 +19,8 @@ use crate::{
     util::reflection::Reflect,
 };
 
-#[derive(Debug, Display, Clone, Copy, TryFrom)]
+#[derive(Debug, Clone, Copy, TryFrom)]
 #[try_from(repr)]
-#[display("{_0:?}")]
 #[repr(u8)]
 pub enum BinaryOpcode {
     Add,
@@ -36,8 +37,7 @@ pub enum BinaryOpcode {
     Or,
 }
 
-#[derive(Debug, Display)]
-#[display("{op:?}")]
+#[derive(Debug)]
 pub struct BinaryOperation {
     /// The context to use for the operation. This is necessary for certain
     /// operations such as checking for equality with nobody.
@@ -52,8 +52,8 @@ impl Node for BinaryOperation {
         true
     }
 
-    fn dependencies(&self) -> Vec<NodeId> {
-        vec![self.lhs, self.rhs]
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
+        vec![("context", self.context), ("lhs", self.lhs), ("rhs", self.rhs)]
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
@@ -120,6 +120,11 @@ impl Node for BinaryOperation {
             true
         }
         Some(Box::new(decompose_with_check_nobody))
+    }
+
+    fn pretty_print(&self, _program: &Program, mut out: impl std::fmt::Write) -> std::fmt::Result {
+        PrettyPrinter::new(&mut out)
+            .add_struct("BinaryOperation", |p| p.add_field("op", |p| write!(p, "{:?}", self.op)))
     }
 
     fn write_lir_execution<I: InstallLir>(
@@ -201,15 +206,13 @@ impl Node for BinaryOperation {
     }
 }
 
-#[derive(Debug, Display)]
-#[display("{op:?}")]
+#[derive(Debug)]
 pub enum UnaryOpcode {
     Neg,
     Not,
 }
 
-#[derive(Debug, Display)]
-#[display("{op:?}")]
+#[derive(Debug)]
 pub struct UnaryOp {
     pub op: UnaryOpcode,
     pub operand: NodeId,
@@ -220,8 +223,8 @@ impl Node for UnaryOp {
         true
     }
 
-    fn dependencies(&self) -> Vec<NodeId> {
-        vec![self.operand]
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
+        vec![("operand", self.operand)]
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
@@ -230,6 +233,11 @@ impl Node for UnaryOp {
             UnaryOpcode::Not => NlAbstractTy::Boolean,
         }
         .into()
+    }
+
+    fn pretty_print(&self, _program: &Program, mut out: impl std::fmt::Write) -> std::fmt::Result {
+        PrettyPrinter::new(&mut out)
+            .add_struct("UnaryOp", |p| p.add_field("op", |p| write!(p, "{:?}", self.op)))
     }
 
     fn write_lir_execution<I: InstallLir>(
