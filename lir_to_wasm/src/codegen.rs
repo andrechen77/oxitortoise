@@ -210,7 +210,7 @@ fn write_function_setup(
     // allocate local variables for the function parameters
     let mut arg_locals = Vec::new();
     for (var_id, _) in func.local_vars[..func.num_parameters.into()].iter_enumerated() {
-        trace!("allocating local variable for parameter {}", var_id);
+        trace!("allocating local variable for parameter {:?}", var_id);
         let wir_local_id = allocate_local_for_var(&mut module.locals, &mut fn_info, func, var_id);
         fn_info.var_local_ids.insert(var_id, wir_local_id);
         arg_locals.push(wir_local_id);

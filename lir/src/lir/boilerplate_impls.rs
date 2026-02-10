@@ -52,7 +52,7 @@ impl Program {
                             p.add_field("stack_space", |p| write!(p, "{}", stack_space))?;
                             p.add_field("body", |p| {
                                 write!(p, "{}", body)?;
-                                pretty_print_seq(p, function, body.body)
+                                pretty_print_seq(p, self, function, body.body)
                             })
                         })
                     },
@@ -65,6 +65,7 @@ impl Program {
 
 fn pretty_print_seq<W: Write>(
     p: &mut PrettyPrinter<W>,
+    program: &Program,
     function: &Function,
     insn_seq_id: InsnSeqId,
 ) -> fmt::Result {
@@ -78,15 +79,27 @@ fn pretty_print_seq<W: Write>(
             p.line()?;
             write!(p, "{}: {:?} = {}", insn_idx, val_names, insn)?;
             match insn {
-                InsnKind::Block(Block { body, .. }) => pretty_print_seq(p, function, *body)?,
-                InsnKind::IfElse(IfElse { then_body, else_body, .. }) => {
-                    pretty_print_seq(p, function, *then_body)?;
-                    pretty_print_seq(p, function, *else_body)?;
+                InsnKind::Block(Block { body, .. }) => {
+                    pretty_print_seq(p, program, function, *body)?
                 }
-                InsnKind::Loop(Loop { body, .. }) => pretty_print_seq(p, function, *body)?,
+                InsnKind::IfElse(IfElse { then_body, else_body, .. }) => {
+                    pretty_print_seq(p, program, function, *then_body)?;
+                    pretty_print_seq(p, program, function, *else_body)?;
+                }
+                InsnKind::Loop(Loop { body, .. }) => pretty_print_seq(p, program, function, *body)?,
                 InsnKind::VarLoad { var_id } | InsnKind::VarStore { var_id, .. } => {
                     if let Some(debug_var_name) = function.debug_var_names.get(var_id) {
                         write!(p, " /* {:?} */", debug_var_name)?;
+                    }
+                }
+                InsnKind::CallUserFunction { function: fn_id, .. } => {
+                    if let Some(debug_name) = &program.user_functions[*fn_id].debug_fn_name {
+                        write!(p, " /* {:?} */", debug_name)?;
+                    }
+                }
+                InsnKind::UserFunctionPtr { function: fn_id } => {
+                    if let Some(debug_name) = &program.user_functions[*fn_id].debug_fn_name {
+                        write!(p, " /* {:?} */", debug_name)?;
                     }
                 }
                 _ => {}

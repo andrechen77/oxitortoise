@@ -114,19 +114,18 @@ pub struct InsnSeqId(pub usize);
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Into, From, Debug, Display)]
 pub struct InsnIdx(pub usize);
 
-#[derive(PartialEq, Eq, Hash, Clone, Copy, Debug, Display)]
-#[display("{_0}:{_1}")]
+#[derive(PartialEq, Eq, Hash, Clone, Copy, derive_more::Debug)]
+#[debug("{_0}:{_1}")]
 pub struct InsnPc(pub InsnSeqId, pub InsnIdx);
 
 /// A reference to a value produced by an instruction. Starts from 0 and counts
 /// up for each value produced by an instruction in the function. Some
 /// instructions may produce multiple values, while others may produce zero.
-#[derive(PartialEq, Eq, Hash, Clone, Copy, Debug, Display)]
-#[display("{_0}:{_1}")]
+#[derive(PartialEq, Eq, Hash, Clone, Copy, derive_more::Debug)]
+#[debug("{_0:?}:{_1}")]
 pub struct ValRef(pub InsnPc, pub u8);
 
-#[derive(PartialEq, Eq, Hash, Clone, Copy, From, Into, Debug, Display)]
-#[display("{self:?}")]
+#[derive(PartialEq, Eq, Hash, Clone, Copy, From, Into, Debug)]
 pub struct VarId(pub usize);
 
 #[derive(PartialEq, Eq, Debug, Display, Clone)]
@@ -141,7 +140,7 @@ pub enum InsnKind {
     // fresh stack. If the former, then I'll have to deal with the fact that
     // every loop body must start with a loop args instruction.
     /// Outputs all arguments of a loop body.
-    #[display("loop_args(-> {})", initial_value)]
+    #[display("loop_args(-> {:?})", initial_value)]
     LoopArg {
         /// The initial value of the arguments when the loop is entered.
         /// This is not considered an input to this instruction.
@@ -155,14 +154,14 @@ pub enum InsnKind {
     },
     /// Add a compile-time offset to a pointer, producing a pointer to a
     /// subfield.
-    #[display("derive_field(offset={})({})", offset, ptr)]
+    #[display("derive_field(offset={})({:?})", offset, ptr)]
     DeriveField {
         offset: usize,
         ptr: ValRef,
     },
     /// Add a dynamic offset to a pointer, producing a pointer to an element of
     /// an array.
-    #[display("derive_element(stride={})(ptr={}, index={})", element_size, ptr, index)]
+    #[display("derive_element(stride={})(ptr={:?}, index={:?})", element_size, ptr, index)]
     DeriveElement {
         element_size: usize,
         ptr: ValRef,
@@ -171,7 +170,7 @@ pub enum InsnKind {
     /// Load a value from memory.
     ///
     /// For loading values from the current function's stack frame, use [`InstructionKind::StackLoad`]
-    #[display("mem_load(ty={}, offset={})({})", r#type, offset, ptr)]
+    #[display("mem_load(ty={}, offset={})({:?})", r#type, offset, ptr)]
     MemLoad {
         r#type: MemOpType,
         offset: usize,
@@ -180,7 +179,7 @@ pub enum InsnKind {
     /// Store a value into memory.
     ///
     /// For storing values onto the current function's stack frame, use [`InstructionKind::StackStore`]
-    #[display("mem_store(offset={})(ptr={}, value={})", offset, ptr, value)]
+    #[display("mem_store(offset={})(ptr={:?}, value={:?})", offset, ptr, value)]
     MemStore {
         r#type: MemOpType,
         offset: usize,
@@ -195,7 +194,7 @@ pub enum InsnKind {
         offset: usize,
     },
     /// Store a value onto the stack.
-    #[display("stack_store(offset={})(value={})", offset, value)]
+    #[display("stack_store(offset={})(value={:?})", offset, value)]
     StackStore {
         r#type: MemOpType,
         /// The offset from the top of the stack at which to store the value.
@@ -203,13 +202,13 @@ pub enum InsnKind {
         value: ValRef,
     },
     /// Store a value into a possibly mutable local variable.
-    #[display("var_store({})(value={})", var_id, value)]
+    #[display("var_store({:?})(value={:?})", var_id, value)]
     VarStore {
         var_id: VarId,
         value: ValRef,
     },
     /// Load a value from a possibly mutable local variable.
-    #[display("var_load({})", var_id)]
+    #[display("var_load({:?})", var_id)]
     VarLoad {
         var_id: VarId,
     },
@@ -219,7 +218,7 @@ pub enum InsnKind {
         /// The offset from the top of the stack.
         offset: usize,
     },
-    #[display("call_host_fn({:?}, -> {:?})({:?})", function, output_type, args)]
+    #[display("call_host_fn({:?}, -> {:?})({:?})", function.name, output_type, args)]
     CallHostFunction {
         function: HostFunction,
         output_type: SmallVec<[ValType; 1]>,
@@ -237,12 +236,12 @@ pub enum InsnKind {
         output_type: SmallVec<[ValType; 1]>,
         args: Box<[ValRef]>,
     },
-    #[display("unary_op({})({})", op, operand)]
+    #[display("unary_op({})({:?})", op, operand)]
     UnaryOp {
         op: UnaryOpcode,
         operand: ValRef,
     },
-    #[display("binary_op({})({}, {})", op, lhs, rhs)]
+    #[display("binary_op({})({:?}, {:?})", op, lhs, rhs)]
     BinaryOp {
         /// The operation to perform. This also determines the types of the
         /// inputs and outputs.
@@ -270,7 +269,7 @@ pub enum InsnKind {
     },
     /// Conditionally break out of control flow constructs. See
     /// [`InsnKind::Break`] for more information.
-    #[display("conditional_break({})(cond={}, {:?})", target, condition, values)]
+    #[display("conditional_break({})(cond={:?}, {:?})", target, condition, values)]
     ConditionalBreak {
         target: InsnSeqId,
         condition: ValRef,
@@ -332,7 +331,7 @@ pub struct Block {
 }
 
 #[derive(PartialEq, Eq, Debug, Display, Clone)]
-#[display("if_else(-> {:?})({}) {{{}}} {{{}}}", output_type, condition, then_body, else_body)]
+#[display("if_else(-> {:?})({:?}) {{{}}} {{{}}}", output_type, condition, then_body, else_body)]
 pub struct IfElse {
     /// The type of output of this if-else.
     pub output_type: SmallVec<[ValType; 1]>,
