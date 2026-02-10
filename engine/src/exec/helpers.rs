@@ -6,20 +6,23 @@ use crate::{
         patch::PatchId,
         topology::Point,
         turtle::{BreedId, TurtleId},
-        value::agentset::{AllPatches, AllTurtles},
+        value::{
+            NlFloat,
+            agentset::{AllPatches, AllTurtles},
+        },
     },
 };
 
 pub fn create_turtles(
     context: &mut ExecutionContext,
     breed: BreedId,
-    count: f64,
+    count: NlFloat,
     position: Point,
     mut birth_command: impl FnMut(&mut ExecutionContext, TurtleId),
 ) {
     let new_turtles = context.workspace.world.turtles.create_turtles(
         breed,
-        count as u64, // TODO look into rounding behavior
+        count.to_u64_round_to_zero(),
         position,
         &mut context.next_int,
     );

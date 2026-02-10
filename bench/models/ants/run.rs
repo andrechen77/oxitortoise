@@ -10,11 +10,11 @@ use engine::{
     },
     sim::{
         observer::{Globals, GlobalsSchema},
-        patch::{PatchSchema, Patches},
+        patch::{PatchBaseData, PatchSchema, Patches},
         shapes::Shapes,
         tick::Tick,
         topology::{Topology, TopologySpec},
-        turtle::{Breed, BreedId, TurtleSchema, Turtles},
+        turtle::{Breed, BreedId, TurtleBaseData, TurtleSchema, Turtles},
         world::World,
     },
     slotmap::SecondaryMap,
@@ -23,11 +23,62 @@ use engine::{
     workspace::Workspace,
 };
 use oxitortoise_main::LirInstaller;
-use tracing::{Level, error, info};
+use tracing::{Level, error, info, trace};
 use tracing_subscriber::{
     Layer as _, filter::Targets, fmt::MakeWriter, layer::SubscriberExt as _,
     util::SubscriberInitExt as _,
 };
+
+macro_rules! print_offsets {
+    ($struct:ident, $($field:ident).*) => {
+        let offset = std::mem::offset_of!($struct, $($field).*);
+        tracing::trace!("offset of {}: {}", stringify!($struct.$($field).*), offset);
+    }
+}
+
+fn print_offsets(workspace: &Workspace) {
+    print_offsets!(Workspace, world);
+    print_offsets!(World, globals.data);
+    print_offsets!(World, turtles.data);
+    print_offsets!(World, patches.data);
+    print_offsets!(World, topology);
+    print_offsets!(World, topology.max_x);
+    print_offsets!(World, topology.max_y);
+    print_offsets!(World, tick_counter);
+    print_offsets!(World, shapes);
+    for (i, row_buffer) in workspace
+        .world
+        .turtles
+        .data
+        .iter()
+        .enumerate()
+        .filter_map(|(i, r)| r.as_ref().map(|r| (i, r)))
+    {
+        trace!("turtle row buffer {}: {:?}", i, row_buffer.schema());
+    }
+    print_offsets!(TurtleBaseData, who);
+    print_offsets!(TurtleBaseData, breed);
+    print_offsets!(TurtleBaseData, shape_name);
+    print_offsets!(TurtleBaseData, color);
+    print_offsets!(TurtleBaseData, label);
+    print_offsets!(TurtleBaseData, label_color);
+    print_offsets!(TurtleBaseData, hidden);
+    print_offsets!(TurtleBaseData, size);
+    for (i, row_buffer) in workspace
+        .world
+        .patches
+        .data
+        .iter()
+        .enumerate()
+        .filter_map(|(i, r)| r.as_ref().map(|r| (i, r)))
+    {
+        trace!("patch row buffer {}: {:?}", i, row_buffer.schema());
+    }
+    print_offsets!(PatchBaseData, position);
+    print_offsets!(PatchBaseData, plabel);
+    print_offsets!(PatchBaseData, plabel_color);
+    trace!("globals: {:?}", workspace.world.globals.data.schema());
+}
 
 fn create_workspace(
     globals_schema: GlobalsSchema,
@@ -110,6 +161,19 @@ fn main() {
     let lir_filename = "model.lir";
     write_to_file(lir_filename, lir_str);
 
+    // set up the workspace
+    let TurtleBreeds::Full(breeds) = program.turtle_breeds else {
+        panic!("turtle breeds are not full");
+    };
+    let mut workspace = create_workspace(
+        program.globals_schema.unwrap(),
+        program.turtle_schema.unwrap(),
+        breeds,
+        program.patch_schema.unwrap(),
+    );
+
+    print_offsets(&workspace);
+
     let mut lir_installer = LirInstaller::default();
     let result = unsafe { lir_installer.install_lir(&lir_program) };
     let name = "model.wasm";
@@ -126,18 +190,6 @@ fn main() {
             panic!();
         }
     };
-
-    let TurtleBreeds::Full(breeds) = program.turtle_breeds else {
-        panic!("turtle breeds are not full");
-    };
-
-    // set up the workspace
-    let mut workspace = create_workspace(
-        program.globals_schema.unwrap(),
-        program.turtle_schema.unwrap(),
-        breeds,
-        program.patch_schema.unwrap(),
-    );
 
     let NameReferent::UserProc(mir_fn_id) = global_names.lookup("SETUP").unwrap() else {
         panic!("expected a user procedure");

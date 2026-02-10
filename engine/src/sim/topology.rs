@@ -123,23 +123,19 @@ impl TopologySpec {
     }
 }
 
-pub const OFFSET_TOPOLOGY_TO_MAX_PXCOR: usize = offset_of!(Topology, max_x);
-
-pub const OFFSET_TOPOLOGY_TO_MAX_PYCOR: usize = offset_of!(Topology, max_y);
-
 #[derive(Debug, Clone)]
 pub struct Topology {
-    spec: TopologySpec,
+    pub spec: TopologySpec,
     // QUESTION the max coordinates currently go all the way to the edge of the
     // border patches (e.g. 16.5 instead of 16.0), but the max-pxcor and
     // max-pycor reporters only report the center. See if this needs to be
     // changed based on which version is used more often.
-    min_x: CoordFloat,
-    max_x: CoordFloat,
-    world_width: CoordFloat,
-    min_y: CoordFloat,
-    max_y: CoordFloat,
-    world_height: CoordFloat,
+    pub min_x: CoordFloat,
+    pub max_x: CoordFloat,
+    pub world_width: CoordFloat,
+    pub min_y: CoordFloat,
+    pub max_y: CoordFloat,
+    pub world_height: CoordFloat,
 }
 
 impl Topology {

@@ -10,7 +10,7 @@ use crate::{
 
 #[derive(Debug)]
 pub struct Globals {
-    data: RowBuffer,
+    pub data: RowBuffer,
 }
 
 impl Globals {
@@ -19,7 +19,7 @@ impl Globals {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct GlobalsSchema {
     row_schema: RowSchema,
 }

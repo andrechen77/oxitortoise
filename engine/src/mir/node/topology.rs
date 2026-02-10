@@ -11,11 +11,7 @@ use crate::{
         FunctionId, MirTy, NlAbstractTy, Node, NodeId, NodeKind, NodeTransform, Program,
         WriteLirError, build_lir::LirInsnBuilder, node,
     },
-    sim::{
-        topology::{OFFSET_TOPOLOGY_TO_MAX_PXCOR, OFFSET_TOPOLOGY_TO_MAX_PYCOR},
-        value::NlFloat,
-        world::World,
-    },
+    sim::{topology::Topology, value::NlFloat, world::World},
     util::reflection::Reflect,
     workspace::Workspace,
 };
@@ -154,7 +150,7 @@ impl Node for MaxPxcor {
                 ptr: workspace_ptr,
                 offset: offset_of!(Workspace, world)
                     + offset_of!(World, topology)
-                    + OFFSET_TOPOLOGY_TO_MAX_PXCOR,
+                    + offset_of!(Topology, max_x),
                 ty: NlFloat::CONCRETE_TY,
             });
 
@@ -214,7 +210,7 @@ impl Node for MaxPycor {
                 ptr: workspace_ptr,
                 offset: offset_of!(Workspace, world)
                     + offset_of!(World, topology)
-                    + OFFSET_TOPOLOGY_TO_MAX_PYCOR,
+                    + offset_of!(Topology, max_y),
                 ty: NlFloat::CONCRETE_TY,
             });
 

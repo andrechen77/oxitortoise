@@ -73,14 +73,12 @@ impl From<PatchId> for OptionPatchId {
     }
 }
 
-pub const OFFSET_PATCHES_TO_DATA: usize = offset_of!(Patches, data);
-
 #[derive(Debug)]
 pub struct Patches {
     /// The buffers that store the data for the patches. Each patch is
     /// represented by a row in all buffers. There are multiple buffers to
     /// allow for SoA-style data locality of certain fields.
-    data: [Option<RowBuffer>; 4],
+    pub data: [Option<RowBuffer>; 4],
     /// The fields of a patch.
     patch_schema: PatchSchema,
     /// The number of patches in the world.
@@ -307,7 +305,7 @@ pub enum PatchVarDesc {
     Custom(usize),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PatchSchema {
     pcolor: AgentFieldDescriptor,
     field_groups: Vec<AgentSchemaFieldGroup>,

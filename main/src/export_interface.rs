@@ -33,8 +33,8 @@ pub extern "C" fn oxitortoise_clear_all(context: &mut CanonExecutionContext) {
 pub static RESET_TICKS_INFO: HostFunctionInfo =
     HostFunctionInfo { name: "oxitortoise_reset_ticks", parameter_types: &[Ptr], return_type: &[] };
 #[unsafe(no_mangle)]
-pub extern "C" fn oxitortoise_reset_ticks(world: &mut World) {
-    world.tick_counter.reset();
+pub extern "C" fn oxitortoise_reset_ticks(context: &mut CanonExecutionContext) {
+    context.workspace.world.tick_counter.reset();
 }
 
 pub static GET_TICK_INFO: HostFunctionInfo =
@@ -65,7 +65,7 @@ pub static CREATE_TURTLES_INFO: HostFunctionInfo = HostFunctionInfo {
 pub extern "C" fn oxitortoise_create_turtles(
     context: &mut CanonExecutionContext,
     breed: u64,
-    count: f64,
+    count: NlFloat,
     birth_command_env: *mut u8,
     birth_command_fn_ptr: extern "C" fn(
         *mut u8,

@@ -82,7 +82,7 @@ impl Drop for AlignedBytes {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RowSchema {
     /// The length of the occupancy bitfield. If schema has fields that are
     /// always present, then this is zero.
@@ -94,7 +94,7 @@ pub struct RowSchema {
 }
 
 // For safety this must be correct at all times.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RowSchemaField {
     pub offset: usize,
     pub r#type: ConcreteTy,

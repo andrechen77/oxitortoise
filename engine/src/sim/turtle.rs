@@ -80,8 +80,6 @@ impl ConstTypeName for TurtleId {
     const TYPE_NAME: &'static str = "TurtleId";
 }
 
-pub const OFFSET_TURTLES_TO_DATA: usize = offset_of!(Turtles, data);
-
 #[derive(Debug)]
 pub struct Turtles {
     /// The who number to be given to the next turtle; also how many turtles
@@ -92,7 +90,7 @@ pub struct Turtles {
     /// The buffers that store the data for the turtle. Each turtle is
     /// represented by a row in all buffers. There are multiple buffers to
     /// allow for SoA-style data locality of certain fields.
-    data: [Option<RowBuffer>; 4],
+    pub data: [Option<RowBuffer>; 4],
     /// Fallback storage for custom fields whose type doesn't match the
     /// compile-time type.
     fallback_custom_fields: HashMap<(TurtleId, AgentFieldDescriptor), PackedAny>,
@@ -362,7 +360,7 @@ pub enum TurtleVarDesc {
     // TODO(mvp) add other builtin variables
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TurtleSchema {
     position: AgentFieldDescriptor,
     heading: AgentFieldDescriptor,
