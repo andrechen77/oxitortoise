@@ -4,6 +4,7 @@ use std::{collections::HashMap, rc::Rc};
 
 use engine::mir::BreedPartial;
 use engine::sim::turtle::DEFAULT_BREED_NAME;
+use engine::sim::value::NlString;
 use engine::slotmap::Key as _;
 use engine::util::reflection::Reflect;
 use engine::{
@@ -15,7 +16,7 @@ use engine::{
     sim::{
         patch::PatchVarDesc,
         turtle::{BreedId, TurtleVarDesc},
-        value::UnpackedAny,
+        value::{BoxedAny, UnpackedAny},
     },
     slotmap::{SecondaryMap, SlotMap},
 };
@@ -613,10 +614,9 @@ fn translate_node(ast_node: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) -> (NodeId
         N::Number { value } => {
             NodeKind::from(node::Constant { value: UnpackedAny::Float(value.as_f64().unwrap()) })
         }
-        N::String { value: _ } => {
-            // TODO(mvp_ants) implement string literals
-            NodeKind::from(node::Constant { value: UnpackedAny::Float(0.0) })
-        }
+        N::String { value } => NodeKind::from(node::Constant {
+            value: UnpackedAny::Other(BoxedAny::new(NlString::new(&value))),
+        }),
         N::List { items } => {
             let items =
                 items.into_iter().map(|item| translate_node(item, ctx.reborrow()).0).collect();

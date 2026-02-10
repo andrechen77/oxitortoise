@@ -4,7 +4,7 @@ use std::{
     ptr::NonNull,
 };
 
-use crate::sim::value::{NlBool, NlFloat, NlList};
+use crate::sim::value::{NlBool, NlFloat, NlList, NlString};
 use crate::util::reflection::{ConcreteTy, Reflect};
 
 pub struct BoxedAny {
@@ -131,6 +131,8 @@ impl Debug for BoxedAny {
             write!(f, "{:?}", self.deref::<NlFloat>())?;
         } else if self.ty() == NlList::CONCRETE_TY {
             write!(f, "{:?}", self.deref::<NlList>())?;
+        } else if self.ty() == NlString::CONCRETE_TY {
+            write!(f, "{:?}", self.deref::<NlString>())?;
         } else {
             write!(f, "BoxedAny(unknown type {:?})", self.ty())?;
         }
