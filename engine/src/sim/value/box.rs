@@ -1,10 +1,10 @@
 use derive_more::derive::{Deref, DerefMut};
 
-use crate::util::reflection::{TypeInfo, TypeInfoOptions};
+use crate::util::reflection::{ConstTypeName, TypeInfo, TypeInfoOptions};
 
 #[derive(Deref, DerefMut)]
 #[repr(transparent)]
-pub struct NlBox<T>(Box<T>);
+pub struct NlBox<T: Sized>(Box<T>);
 
 impl<T> NlBox<T> {
     pub fn new(value: T) -> Self {
@@ -12,12 +12,15 @@ impl<T> NlBox<T> {
     }
 }
 
-pub const fn generate_box_type_info<T: 'static>(debug_name: &'static str) -> TypeInfo {
+pub const fn generate_box_type_info<T: 'static + ConstTypeName>() -> TypeInfo {
     // it is important that the generated TypeInfo applies to every
     // possible type T
     TypeInfo::new::<NlBox<T>>(TypeInfoOptions {
-        debug_name,
         is_zeroable: false,
         mem_repr: Some(&[(0, lir::MemOpType::Ptr)]),
     })
+}
+
+impl<T> ConstTypeName for NlBox<T> {
+    const TYPE_NAME: &'static str = "NlBox<?>";
 }

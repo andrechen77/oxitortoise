@@ -18,7 +18,7 @@ use crate::{
         observer::calc_global_var_offset,
         patch::{PatchVarDesc, calc_patch_var_offset},
         turtle::{TurtleVarDesc, calc_turtle_var_offset},
-        value::AGENT_INDEX_CONCRETE_TY,
+        value::U32_CONCRETE_TY,
         world::World,
     },
     util::reflection::Reflect,
@@ -311,7 +311,7 @@ impl Node for TurtleIdToIndex {
     }
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
-        AGENT_INDEX_CONCRETE_TY.into()
+        U32_CONCRETE_TY.into()
     }
 
     fn write_lir_execution<I: InstallLir>(

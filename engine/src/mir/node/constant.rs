@@ -11,12 +11,12 @@ use crate::{
         FunctionId, MirTy, NlAbstractTy, Node, NodeId, Program, WriteLirError,
         build_lir::LirInsnBuilder,
     },
-    sim::value::UnpackedDynBox,
+    sim::value::UnpackedAny,
 };
 
 #[derive(Debug)]
 pub struct Constant {
-    pub value: UnpackedDynBox,
+    pub value: UnpackedAny,
 }
 
 impl Node for Constant {
@@ -30,9 +30,9 @@ impl Node for Constant {
 
     fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> MirTy {
         match self.value {
-            UnpackedDynBox::Float(_) => NlAbstractTy::Float,
-            UnpackedDynBox::Bool(_) => NlAbstractTy::Boolean,
-            UnpackedDynBox::Nobody => NlAbstractTy::Nobody,
+            UnpackedAny::Float(_) => NlAbstractTy::Float,
+            UnpackedAny::Bool(_) => NlAbstractTy::Boolean,
+            UnpackedAny::Nobody => NlAbstractTy::Nobody,
             _ => todo!("TODO(mvp) include all other variants (doesn't handle {:?})", self.value),
         }
         .into()
@@ -46,7 +46,7 @@ impl Node for Constant {
     ) -> Result<(), WriteLirError> {
         let _ = my_node_id;
         match self.value {
-            UnpackedDynBox::Float(value) => {
+            UnpackedAny::Float(value) => {
                 let pc = lir_builder.push_lir_insn(lir::InsnKind::Const(lir::Value::F64(value)));
                 lir_builder.node_to_lir.insert(my_node_id, smallvec![lir::ValRef(pc, 0)]);
                 Ok(())

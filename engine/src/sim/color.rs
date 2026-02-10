@@ -6,7 +6,7 @@ use std::{
 use crate::{
     sim::value::NlFloat,
     util::{
-        reflection::{ConcreteTy, Reflect, TypeInfo, TypeInfoOptions},
+        reflection::{ConcreteTy, ConstTypeName, Reflect, TypeInfo, TypeInfoOptions},
         rng::Rng,
     },
 };
@@ -70,13 +70,16 @@ impl AddAssign<NlFloat> for Color {
 }
 
 static COLOR_TYPE_INFO: TypeInfo = TypeInfo::new::<Color>(TypeInfoOptions {
-    debug_name: "Color",
     is_zeroable: true,
     mem_repr: Some(&[(0, lir::MemOpType::F64)]),
 });
 
-impl Reflect for Color {
+unsafe impl Reflect for Color {
     const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&COLOR_TYPE_INFO);
+}
+
+impl ConstTypeName for Color {
+    const TYPE_NAME: &'static str = "Color";
 }
 
 const COLOR_MAX: f64 = 140.0;

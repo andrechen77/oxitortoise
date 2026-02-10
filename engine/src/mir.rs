@@ -15,7 +15,7 @@ use crate::{
         patch::{OptionPatchId, PatchSchema},
         topology::Point,
         turtle::{Breed, BreedId, TurtleId, TurtleSchema},
-        value::{DynBox, NlBool, NlBox, NlFloat, NlList},
+        value::{NlBool, NlBox, NlFloat, NlList, PackedAny},
     },
     util::reflection::{ConcreteTy, Reflect},
 };
@@ -365,7 +365,7 @@ impl NlAbstractTy {
         // TODO(mvp) add machine types for all abstract types
         match self {
             Self::Unit => <()>::CONCRETE_TY,
-            Self::Top => DynBox::CONCRETE_TY,
+            Self::Top => PackedAny::CONCRETE_TY,
             Self::Bottom => unimplemented!("bottom type has no concrete representation"),
             Self::Numeric => NlFloat::CONCRETE_TY,
             Self::Color => Color::CONCRETE_TY,
@@ -373,7 +373,7 @@ impl NlAbstractTy {
             Self::Boolean => NlBool::CONCRETE_TY,
             Self::String => todo!(),
             Self::Point => Point::CONCRETE_TY,
-            Self::Agent => DynBox::CONCRETE_TY,
+            Self::Agent => PackedAny::CONCRETE_TY,
             Self::Patch => OptionPatchId::CONCRETE_TY,
             Self::Turtle => TurtleId::CONCRETE_TY,
             Self::Link => todo!(""),

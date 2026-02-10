@@ -10,10 +10,10 @@ use crate::{
         agent_schema::{AgentFieldDescriptor, AgentSchemaField, AgentSchemaFieldGroup},
         color::Color,
         topology::{CoordFloat, PointInt, TopologySpec},
-        value::{DynBox, NlFloat},
+        value::{NlFloat, PackedAny},
     },
     util::{
-        reflection::{ConcreteTy, Reflect, TypeInfo, TypeInfoOptions},
+        reflection::{ConcreteTy, ConstTypeName, Reflect, TypeInfo, TypeInfoOptions},
         row_buffer::{self, RowBuffer, RowSchema},
     },
 };
@@ -38,12 +38,15 @@ impl Default for PatchId {
 }
 
 static PATCH_ID_TYPE_INFO: TypeInfo = TypeInfo::new::<PatchId>(TypeInfoOptions {
-    debug_name: "PatchId",
     is_zeroable: false,
     mem_repr: Some(&[(0, lir::MemOpType::I32)]),
 });
 
-impl Reflect for PatchId {
+impl ConstTypeName for PatchId {
+    const TYPE_NAME: &'static str = "PatchId";
+}
+
+unsafe impl Reflect for PatchId {
     const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&PATCH_ID_TYPE_INFO);
 }
 
@@ -56,7 +59,7 @@ pub struct OptionPatchId(pub u32);
 // make a copy with a different identity
 static OPTION_PATCH_ID_TYPE_INFO: TypeInfo = PATCH_ID_TYPE_INFO;
 
-impl Reflect for OptionPatchId {
+unsafe impl Reflect for OptionPatchId {
     const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&OPTION_PATCH_ID_TYPE_INFO);
 }
 
@@ -84,7 +87,7 @@ pub struct Patches {
     num_patches: u32,
     /// Fallback storage for custom fields whose type doesn't match the
     /// compile-time type.
-    fallback_custom_fields: HashMap<(PatchId, AgentFieldDescriptor), DynBox>,
+    fallback_custom_fields: HashMap<(PatchId, AgentFieldDescriptor), PackedAny>,
 }
 
 impl Patches {
@@ -143,7 +146,7 @@ impl Patches {
                             .row_mut(id.0 as usize)
                             .insert_zeroable(field.field_idx as usize);
                     } else {
-                        patches.fallback_custom_fields.insert((id, field), DynBox::ZERO);
+                        patches.fallback_custom_fields.insert((id, field), PackedAny::ZERO);
                     }
                 }
                 // TODO(wishlist) can reduce code duplication by using a helper
@@ -165,7 +168,7 @@ impl Patches {
         &self,
         id: PatchId,
         field: AgentFieldDescriptor,
-    ) -> Option<Either<&T, &DynBox>> {
+    ) -> Option<Either<&T, &PackedAny>> {
         if id.0 >= self.num_patches {
             return None;
         }
@@ -199,7 +202,7 @@ impl Patches {
         &mut self,
         id: PatchId,
         field: AgentFieldDescriptor,
-    ) -> Option<Either<&mut T, &mut DynBox>> {
+    ) -> Option<Either<&mut T, &mut PackedAny>> {
         if id.0 >= self.num_patches {
             return None;
         }
@@ -286,13 +289,14 @@ pub struct PatchBaseData {
     // TODO add some way of tracking what turtles are on this patch.
 }
 
-static PATCH_BASE_DATA_TYPE_INFO: TypeInfo = TypeInfo::new::<PatchBaseData>(TypeInfoOptions {
-    debug_name: "PatchBaseData",
-    is_zeroable: false,
-    mem_repr: None,
-});
+static PATCH_BASE_DATA_TYPE_INFO: TypeInfo =
+    TypeInfo::new::<PatchBaseData>(TypeInfoOptions { is_zeroable: false, mem_repr: None });
 
-impl Reflect for PatchBaseData {
+impl ConstTypeName for PatchBaseData {
+    const TYPE_NAME: &'static str = "PatchBaseData";
+}
+
+unsafe impl Reflect for PatchBaseData {
     const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&PATCH_BASE_DATA_TYPE_INFO);
 }
 

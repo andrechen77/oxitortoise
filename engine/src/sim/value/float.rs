@@ -4,7 +4,7 @@ use derive_more::derive::{
 
 use crate::{
     sim::{color::Color, topology::CoordInt, turtle::TurtleWho},
-    util::reflection::{ConcreteTy, Reflect, TypeInfo, TypeInfoOptions},
+    util::reflection::{ConcreteTy, ConstTypeName, Reflect, TypeInfo, TypeInfoOptions},
 };
 
 /// A double-precision floating-point number which is guaranteed to be finite
@@ -28,13 +28,16 @@ impl NlFloat {
 }
 
 static NL_FLOAT_TYPE_INFO: TypeInfo = TypeInfo::new::<NlFloat>(TypeInfoOptions {
-    debug_name: "NlFloat",
     is_zeroable: true,
     mem_repr: Some(&[(0, lir::MemOpType::F64)]),
 });
 
-impl Reflect for NlFloat {
+unsafe impl Reflect for NlFloat {
     const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&NL_FLOAT_TYPE_INFO);
+}
+
+impl ConstTypeName for NlFloat {
+    const TYPE_NAME: &'static str = "NlFloat";
 }
 
 impl From<CoordInt> for NlFloat {

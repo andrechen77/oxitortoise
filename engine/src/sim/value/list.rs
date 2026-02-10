@@ -1,12 +1,12 @@
 use std::ops::{Index, IndexMut};
 
 use crate::{
-    sim::value::{DynBox, NlBox, NlFloat, r#box::generate_box_type_info},
-    util::reflection::{ConcreteTy, Reflect, TypeInfo},
+    sim::value::{NlBox, NlFloat, PackedAny, r#box::generate_box_type_info},
+    util::reflection::{ConcreteTy, ConstTypeName, Reflect, TypeInfo},
 };
 
-#[derive(Default)]
-pub struct NlList(Vec<DynBox>);
+#[derive(Default, Debug)]
+pub struct NlList(Vec<PackedAny>);
 
 impl NlList {
     pub fn new() -> Self {
@@ -14,13 +14,24 @@ impl NlList {
     }
 }
 
-static LIST_TYPE_INFO: TypeInfo = generate_box_type_info::<NlList>("List");
-impl Reflect for NlBox<NlList> {
+impl ConstTypeName for NlList {
+    const TYPE_NAME: &'static str = "NlList";
+}
+
+static LIST_TYPE_INFO: TypeInfo = TypeInfo::new_opaque::<NlList>();
+
+unsafe impl Reflect for NlList {
     const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&LIST_TYPE_INFO);
 }
 
+static BOX_LIST_TYPE_INFO: TypeInfo = generate_box_type_info::<NlList>();
+
+unsafe impl Reflect for NlBox<NlList> {
+    const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&BOX_LIST_TYPE_INFO);
+}
+
 impl NlList {
-    pub fn push(&mut self, element: DynBox) {
+    pub fn push(&mut self, element: PackedAny) {
         self.0.push(element);
     }
 
@@ -32,13 +43,13 @@ impl NlList {
         self.0.is_empty()
     }
 
-    pub fn swap_remove(&mut self, index: usize) -> DynBox {
+    pub fn swap_remove(&mut self, index: usize) -> PackedAny {
         self.0.swap_remove(index)
     }
 }
 
 impl Index<NlFloat> for NlList {
-    type Output = DynBox;
+    type Output = PackedAny;
 
     fn index(&self, index: NlFloat) -> &Self::Output {
         // TODO verify that float->usize conversion matches NetLogo behavior
@@ -54,7 +65,7 @@ impl IndexMut<NlFloat> for NlList {
 }
 
 impl Index<usize> for NlList {
-    type Output = DynBox;
+    type Output = PackedAny;
 
     fn index(&self, index: usize) -> &Self::Output {
         &self.0[index]

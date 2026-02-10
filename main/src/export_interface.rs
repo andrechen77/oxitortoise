@@ -12,7 +12,7 @@ use engine::{
         patch::{OptionPatchId, PatchId},
         topology::Point,
         turtle::{BreedId, TurtleId},
-        value::{DynBox, NlBox, NlFloat, NlList},
+        value::{NlBox, NlFloat, NlList, PackedAny},
         world::World,
     },
     slotmap::KeyData,
@@ -237,7 +237,10 @@ pub static LIST_PUSH_INFO: HostFunctionInfo = HostFunctionInfo {
     return_type: &[Ptr],
 };
 #[unsafe(no_mangle)]
-pub extern "C" fn oxitortoise_list_push(mut list: NlBox<NlList>, element: DynBox) -> NlBox<NlList> {
+pub extern "C" fn oxitortoise_list_push(
+    mut list: NlBox<NlList>,
+    element: PackedAny,
+) -> NlBox<NlList> {
     list.push(element);
     list
 }
@@ -251,7 +254,7 @@ pub static ONE_OF_LIST_INFO: HostFunctionInfo = HostFunctionInfo {
 pub extern "C" fn oxitortoise_one_of_list(
     context: &mut CanonExecutionContext,
     mut list: NlBox<NlList>,
-) -> DynBox {
+) -> PackedAny {
     let index = context.next_int.next_int(list.len() as i64) as usize; // TODO casts okay?
     list.swap_remove(index)
 }
@@ -307,14 +310,14 @@ pub extern "C" fn oxitortoise_patch_right_and_ahead(
     }
 }
 
-// TODO: Write function definition for dynbox_binary_op
-pub static DYNBOX_BINARY_OP_INFO: HostFunctionInfo = HostFunctionInfo {
-    name: "oxitortoise_dynbox_binary_op",
+// TODO: Write function definition for any_binary_op
+pub static ANY_BINARY_OP_INFO: HostFunctionInfo = HostFunctionInfo {
+    name: "oxitortoise_any_binary_op",
     parameter_types: &[F64, F64, I32],
     return_type: &[F64],
 };
 #[unsafe(no_mangle)]
-pub extern "C" fn oxitortoise_dynbox_binary_op(lhs: DynBox, rhs: DynBox, op: u32) -> DynBox {
+pub extern "C" fn oxitortoise_any_binary_op(lhs: PackedAny, rhs: PackedAny, op: u32) -> PackedAny {
     let op = BinaryOpcode::try_from(op as u8).unwrap();
     match op {
         BinaryOpcode::Add => lhs + rhs,
@@ -325,14 +328,14 @@ pub extern "C" fn oxitortoise_dynbox_binary_op(lhs: DynBox, rhs: DynBox, op: u32
     }
 }
 
-pub static DYNBOX_BOOL_BINARY_OP_INFO: HostFunctionInfo = HostFunctionInfo {
-    name: "oxitortoise_dynbox_bool_binary_op",
+pub static ANY_BOOL_BINARY_OP_INFO: HostFunctionInfo = HostFunctionInfo {
+    name: "oxitortoise_any_bool_binary_op",
     parameter_types: &[F64, F64, I32],
     return_type: &[I32],
 };
 
 #[unsafe(no_mangle)]
-pub extern "C" fn oxitortoise_dynbox_bool_binary_op(lhs: DynBox, rhs: DynBox, op: u32) -> bool {
+pub extern "C" fn oxitortoise_any_bool_binary_op(lhs: PackedAny, rhs: PackedAny, op: u32) -> bool {
     let op = BinaryOpcode::try_from(op as u8).unwrap();
     match op {
         BinaryOpcode::Eq => lhs == rhs,

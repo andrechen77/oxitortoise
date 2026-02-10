@@ -17,9 +17,9 @@ use crate::mir;
 use crate::sim::agent_schema::{AgentFieldDescriptor, AgentSchemaField, AgentSchemaFieldGroup};
 use crate::sim::topology::Heading;
 use crate::sim::value::agentset::TurtleSet;
-use crate::sim::value::{DynBox, NlFloat};
+use crate::sim::value::{NlFloat, PackedAny};
 use crate::util::gen_slot_tracker::{GenIndex, GenSlotTracker};
-use crate::util::reflection::{ConcreteTy, Reflect, TypeInfo, TypeInfoOptions};
+use crate::util::reflection::{ConcreteTy, ConstTypeName, Reflect, TypeInfo, TypeInfoOptions};
 use crate::util::row_buffer::{RowBuffer, RowSchema};
 use crate::{
     sim::{color::Color, topology::Point, value},
@@ -68,13 +68,16 @@ impl TurtleId {
 }
 
 static TURTLE_ID_TYPE_INFO: TypeInfo = TypeInfo::new::<TurtleId>(TypeInfoOptions {
-    debug_name: "TurtleId",
     is_zeroable: false,
     mem_repr: Some(&[(0, lir::MemOpType::I64)]),
 });
 
-impl Reflect for TurtleId {
+unsafe impl Reflect for TurtleId {
     const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&TURTLE_ID_TYPE_INFO);
+}
+
+impl ConstTypeName for TurtleId {
+    const TYPE_NAME: &'static str = "TurtleId";
 }
 
 pub const OFFSET_TURTLES_TO_DATA: usize = offset_of!(Turtles, data);
@@ -92,7 +95,7 @@ pub struct Turtles {
     data: [Option<RowBuffer>; 4],
     /// Fallback storage for custom fields whose type doesn't match the
     /// compile-time type.
-    fallback_custom_fields: HashMap<(TurtleId, AgentFieldDescriptor), DynBox>,
+    fallback_custom_fields: HashMap<(TurtleId, AgentFieldDescriptor), PackedAny>,
     /// The fields of a turtle.
     turtle_schema: TurtleSchema,
     /// The number of turtles in the world.
@@ -195,7 +198,7 @@ impl Turtles {
                         .row_mut(idx.index as usize)
                         .insert_zeroable(field.field_idx as usize);
                 } else {
-                    self.fallback_custom_fields.insert((id, field), DynBox::ZERO);
+                    self.fallback_custom_fields.insert((id, field), PackedAny::ZERO);
                 }
             }
 
@@ -219,7 +222,7 @@ impl Turtles {
         &self,
         id: TurtleId,
         field: AgentFieldDescriptor,
-    ) -> Option<Either<&T, &DynBox>> {
+    ) -> Option<Either<&T, &PackedAny>> {
         if !self.slot_tracker.has_key(id.0) {
             return None;
         }
@@ -257,7 +260,7 @@ impl Turtles {
         &mut self,
         id: TurtleId,
         field: AgentFieldDescriptor,
-    ) -> Option<Either<&mut T, &mut DynBox>> {
+    ) -> Option<Either<&mut T, &mut PackedAny>> {
         if !self.slot_tracker.has_key(id.0) {
             return None;
         }
@@ -314,14 +317,15 @@ pub struct TurtleBaseData {
     pub size: value::NlFloat,
 }
 
-static TURTLE_BASE_DATA_TYPE_INFO: TypeInfo = TypeInfo::new::<TurtleBaseData>(TypeInfoOptions {
-    debug_name: "TurtleBaseData",
-    is_zeroable: false,
-    mem_repr: None,
-});
+static TURTLE_BASE_DATA_TYPE_INFO: TypeInfo =
+    TypeInfo::new::<TurtleBaseData>(TypeInfoOptions { is_zeroable: false, mem_repr: None });
 
-impl Reflect for TurtleBaseData {
+unsafe impl Reflect for TurtleBaseData {
     const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&TURTLE_BASE_DATA_TYPE_INFO);
+}
+
+impl ConstTypeName for TurtleBaseData {
+    const TYPE_NAME: &'static str = "TurtleBaseData";
 }
 
 slotmap::new_key_type! {

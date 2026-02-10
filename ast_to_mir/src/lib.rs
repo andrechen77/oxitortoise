@@ -15,7 +15,7 @@ use engine::{
     sim::{
         patch::PatchVarDesc,
         turtle::{BreedId, TurtleVarDesc},
-        value::UnpackedDynBox,
+        value::UnpackedAny,
     },
     slotmap::{SecondaryMap, SlotMap},
 };
@@ -58,15 +58,15 @@ impl GlobalScope {
         self.constants.extend([
             (
                 "RED",
-                (|| NodeKind::from(node::Constant { value: UnpackedDynBox::Float(15.0) }))
+                (|| NodeKind::from(node::Constant { value: UnpackedAny::Float(15.0) }))
                     as fn() -> NodeKind,
             ),
-            ("ORANGE", || NodeKind::from(node::Constant { value: UnpackedDynBox::Float(25.0) })),
-            ("GREEN", || NodeKind::from(node::Constant { value: UnpackedDynBox::Float(55.0) })),
-            ("CYAN", || NodeKind::from(node::Constant { value: UnpackedDynBox::Float(85.0) })),
-            ("SKY", || NodeKind::from(node::Constant { value: UnpackedDynBox::Float(95.0) })),
-            ("BLUE", || NodeKind::from(node::Constant { value: UnpackedDynBox::Float(105.0) })),
-            ("VIOLET", || NodeKind::from(node::Constant { value: UnpackedDynBox::Float(115.0) })),
+            ("ORANGE", || NodeKind::from(node::Constant { value: UnpackedAny::Float(25.0) })),
+            ("GREEN", || NodeKind::from(node::Constant { value: UnpackedAny::Float(55.0) })),
+            ("CYAN", || NodeKind::from(node::Constant { value: UnpackedAny::Float(85.0) })),
+            ("SKY", || NodeKind::from(node::Constant { value: UnpackedAny::Float(95.0) })),
+            ("BLUE", || NodeKind::from(node::Constant { value: UnpackedAny::Float(105.0) })),
+            ("VIOLET", || NodeKind::from(node::Constant { value: UnpackedAny::Float(115.0) })),
         ]);
         self.patch_vars.extend([(Rc::from("PCOLOR"), PatchVarDesc::Pcolor)]);
         self.turtle_vars.extend([
@@ -611,18 +611,18 @@ fn translate_node(ast_node: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) -> (NodeId
             NodeKind::from(node::GetLocalVar { local_id })
         }
         N::Number { value } => {
-            NodeKind::from(node::Constant { value: UnpackedDynBox::Float(value.as_f64().unwrap()) })
+            NodeKind::from(node::Constant { value: UnpackedAny::Float(value.as_f64().unwrap()) })
         }
         N::String { value: _ } => {
             // TODO(mvp_ants) implement string literals
-            NodeKind::from(node::Constant { value: UnpackedDynBox::Float(0.0) })
+            NodeKind::from(node::Constant { value: UnpackedAny::Float(0.0) })
         }
         N::List { items } => {
             let items =
                 items.into_iter().map(|item| translate_node(item, ctx.reborrow()).0).collect();
             NodeKind::from(node::ListLiteral { items })
         }
-        N::Nobody => NodeKind::from(node::Constant { value: UnpackedDynBox::Nobody }),
+        N::Nobody => NodeKind::from(node::Constant { value: UnpackedAny::Nobody }),
         N::ReporterProcCall { name, args } => {
             let referent = ctx.mir.global_names.lookup(&name).unwrap_or_else(|| {
                 panic!("unknown reporter procedure {:?}", name);

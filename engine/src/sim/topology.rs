@@ -1,6 +1,6 @@
 use std::{fmt, mem::offset_of};
 
-use crate::util::reflection::{ConcreteTy, Reflect, TypeInfo, TypeInfoOptions};
+use crate::util::reflection::{ConcreteTy, ConstTypeName, Reflect, TypeInfo, TypeInfoOptions};
 
 use super::{patch::PatchId, value};
 
@@ -48,7 +48,6 @@ impl Point {
 }
 
 static POINT_TYPE_INFO: TypeInfo = TypeInfo::new::<Point>(TypeInfoOptions {
-    debug_name: "Point",
     is_zeroable: true,
     mem_repr: Some(&[
         (offset_of!(Point, x), lir::MemOpType::F64),
@@ -56,8 +55,12 @@ static POINT_TYPE_INFO: TypeInfo = TypeInfo::new::<Point>(TypeInfoOptions {
     ]),
 });
 
-impl Reflect for Point {
+unsafe impl Reflect for Point {
     const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&POINT_TYPE_INFO);
+}
+
+impl ConstTypeName for Point {
+    const TYPE_NAME: &'static str = "Point";
 }
 
 impl fmt::Display for Point {

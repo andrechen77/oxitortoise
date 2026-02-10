@@ -4,7 +4,7 @@ use super::CoordFloat;
 use crate::{
     sim::value::{self, NlFloat},
     util::{
-        reflection::{ConcreteTy, Reflect, TypeInfo, TypeInfoOptions},
+        reflection::{ConcreteTy, ConstTypeName, Reflect, TypeInfo, TypeInfoOptions},
         rng::Rng,
     },
 };
@@ -69,11 +69,14 @@ impl From<NlFloat> for Heading {
 }
 
 static HEADING_TYPE_INFO: TypeInfo = TypeInfo::new::<Heading>(TypeInfoOptions {
-    debug_name: "Heading",
     is_zeroable: true,
     mem_repr: Some(&[(0, lir::MemOpType::F64)]),
 });
 
-impl Reflect for Heading {
+impl ConstTypeName for Heading {
+    const TYPE_NAME: &'static str = "Heading";
+}
+
+unsafe impl Reflect for Heading {
     const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&HEADING_TYPE_INFO);
 }

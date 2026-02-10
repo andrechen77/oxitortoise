@@ -14,7 +14,7 @@ use crate::{
     },
     sim::{
         color::Color,
-        value::{DynBox, NlBool, NlFloat},
+        value::{NlBool, NlFloat, PackedAny},
     },
     util::reflection::Reflect,
 };
@@ -177,14 +177,14 @@ impl Node for BinaryOperation {
             let result = lir_builder.push_lir_insn(lir::InsnKind::BinaryOp { op, lhs, rhs });
             lir_builder.node_to_lir.insert(my_node_id, smallvec![lir::ValRef(result, 0)]);
             Ok(())
-        } else if lhs_type == DynBox::CONCRETE_TY && rhs_type == DynBox::CONCRETE_TY {
+        } else if lhs_type == PackedAny::CONCRETE_TY && rhs_type == PackedAny::CONCRETE_TY {
             let opcode = self.op as u32;
             let opcode_val =
                 lir_builder.push_lir_insn(lir::InsnKind::Const(lir::Value::I32(opcode)));
             let pc = match self.op {
                 Op::And | Op::Or | Op::Eq | Op::Neq | Op::Lt | Op::Lte | Op::Gt | Op::Gte => {
                     lir_builder.push_lir_insn(lir::generate_host_function_call(
-                        I::HOST_FUNCTION_TABLE.dynbox_bool_binary_op,
+                        I::HOST_FUNCTION_TABLE.any_bool_binary_op,
                         Box::new([lhs, rhs, lir::ValRef(opcode_val, 0)]),
                     ))
                 }
@@ -193,7 +193,7 @@ impl Node for BinaryOperation {
                 // predicted by the output_type method. it is incorrect to
                 // use a function that returns a type that disagrees, e.g. dynboc
                 _ => lir_builder.push_lir_insn(lir::generate_host_function_call(
-                    I::HOST_FUNCTION_TABLE.dynbox_binary_op,
+                    I::HOST_FUNCTION_TABLE.any_binary_op,
                     Box::new([lhs, rhs, lir::ValRef(opcode_val, 0)]),
                 )),
             };

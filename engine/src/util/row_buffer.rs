@@ -29,6 +29,7 @@ impl AlignedBytes {
         if layout.size() == 0 {
             panic!("capacity must be greater than 0");
         }
+        // SAFETY: we checked that the size is greater than 0
         let ptr =
             NonNull::new(unsafe { alloc_zeroed(layout) }).expect("allocation should not fail");
         Self { data: ptr, layout }
@@ -208,9 +209,9 @@ impl<'a, B: AsRef<[u8]> + 'a> Row<'a, B> {
 }
 
 impl<'a, B: AsRef<[u8]> + AsMut<[u8]> + 'a> Row<'a, B> {
-    pub fn get_ptr_mut(&mut self, field_idx: usize) -> *mut () {
+    pub fn get_ptr_mut(&mut self, field_idx: usize) -> *mut u8 {
         let field_offset = self.schema.fields[field_idx].offset;
-        let base_ptr = self.data.as_mut() as *mut [u8] as *mut ();
+        let base_ptr = self.data.as_mut() as *mut [u8] as *mut u8;
         // SAFETY: the offset is into an allocated object
         unsafe { base_ptr.byte_add(field_offset) }
     }
@@ -600,42 +601,45 @@ impl<T: Copy> std::ops::IndexMut<usize> for Array<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::util::reflection::{TypeInfo, TypeInfoOptions};
+    use crate::util::reflection::{ConstTypeName, TypeInfo, TypeInfoOptions};
 
     use super::*;
 
     // provide these impls for testing purposes only
     static U32_TYPE_INFO: TypeInfo = TypeInfo::new::<u32>(TypeInfoOptions {
-        debug_name: "u32",
         is_zeroable: true,
         mem_repr: Some(&[(0, lir::MemOpType::I32)]),
     });
-    impl Reflect for u32 {
+    unsafe impl Reflect for u32 {
         const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&U32_TYPE_INFO);
     }
-    static STRING_TYPE_INFO: TypeInfo = TypeInfo::new::<String>(TypeInfoOptions {
-        debug_name: "String",
-        is_zeroable: false,
-        mem_repr: None,
-    });
-    impl Reflect for String {
+    static STRING_TYPE_INFO: TypeInfo =
+        TypeInfo::new::<String>(TypeInfoOptions { is_zeroable: false, mem_repr: None });
+    unsafe impl Reflect for String {
         const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&STRING_TYPE_INFO);
     }
+    impl ConstTypeName for String {
+        const TYPE_NAME: &'static str = "String";
+    }
     static F64_TYPE_INFO: TypeInfo = TypeInfo::new::<f64>(TypeInfoOptions {
-        debug_name: "f64",
         is_zeroable: true,
         mem_repr: Some(&[(0, lir::MemOpType::F64)]),
     });
-    impl Reflect for f64 {
+    unsafe impl Reflect for f64 {
         const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&F64_TYPE_INFO);
     }
+    impl ConstTypeName for f64 {
+        const TYPE_NAME: &'static str = "f64";
+    }
     static BOOL_TYPE_INFO: TypeInfo = TypeInfo::new::<bool>(TypeInfoOptions {
-        debug_name: "bool",
         is_zeroable: true,
         mem_repr: Some(&[(0, lir::MemOpType::I8)]),
     });
-    impl Reflect for bool {
+    unsafe impl Reflect for bool {
         const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&BOOL_TYPE_INFO);
+    }
+    impl ConstTypeName for bool {
+        const TYPE_NAME: &'static str = "bool";
     }
 
     #[test]
