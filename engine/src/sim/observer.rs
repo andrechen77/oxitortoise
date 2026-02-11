@@ -47,6 +47,18 @@ impl Globals {
             Either::Right(&self.fallback_fields[&var_index])
         }
     }
+
+    pub fn get_mut<T: Reflect>(&mut self, var_index: usize) -> Either<&mut T, &mut PackedAny> {
+        if let Some(field) = self.data.row_mut(0).get_mut(var_index) {
+            Either::Left(field)
+        } else {
+            Either::Right(
+                self.fallback_fields
+                    .get_mut(&var_index)
+                    .expect("global variable should always exist"),
+            )
+        }
+    }
 }
 
 impl fmt::Debug for Globals {
