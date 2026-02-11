@@ -174,6 +174,8 @@ fn main() {
 
     print_offsets(&workspace);
 
+    write_to_file("workspace.txt", format!("{:#?}", workspace));
+
     let mut lir_installer = LirInstaller::default();
     let result = unsafe { lir_installer.install_lir(&lir_program) };
     let name = "model.wasm";

@@ -96,22 +96,21 @@ pub fn add_cheats(
     }
 
     {
-        let mut types = Vec::new();
-
+        let mut fields = Vec::new();
         if let Some(globals_var_types) = &cheats.globals_var_types {
             for (var_name, var_type) in globals_var_types {
                 let Some(var_id) = global_names.global_vars.get(var_name.as_str()).copied() else {
                     panic!("variable {} is not a custom global variable", var_name);
                 };
                 let typ = translate_var_type_name(var_type);
-                types.push(typ.repr());
+                fields.push((&program.globals[var_id].name, typ.repr()));
                 program.globals[var_id].ty = typ.into();
             }
         }
 
         if let Some(globals_cheaty_schema) = &cheats.globals_schema {
             let globals_schema = match globals_cheaty_schema {
-                CheatGlobalsSchema::Default => GlobalsSchema::new(&types),
+                CheatGlobalsSchema::Default => GlobalsSchema::new(&fields),
             };
             program.globals_schema = Some(globals_schema);
         };
@@ -138,7 +137,9 @@ pub fn add_cheats(
                 let custom_fields: Vec<_> = program
                     .custom_patch_vars
                     .iter()
-                    .map(|var| (var.ty.repr(), ctor_args.custom_fields[var.name.as_ref()]))
+                    .map(|var| {
+                        (&var.name, var.ty.repr(), ctor_args.custom_fields[var.name.as_ref()])
+                    })
                     .collect();
                 PatchSchema::new(
                     ctor_args.pcolor_buffer_idx,
@@ -169,7 +170,9 @@ pub fn add_cheats(
                 let custom_fields: Vec<_> = program
                     .custom_turtle_vars
                     .iter()
-                    .map(|var| (var.ty.repr(), ctor_args.custom_fields[var.name.as_ref()]))
+                    .map(|var| {
+                        (&var.name, var.ty.repr(), ctor_args.custom_fields[var.name.as_ref()])
+                    })
                     .collect();
                 TurtleSchema::new(
                     ctor_args.heading_buffer_idx,

@@ -54,7 +54,3 @@ pub const U32_CONCRETE_TY: ConcreteTy = ConcreteTy::new(&U32_INFO);
 impl ConstTypeName for u32 {
     const TYPE_NAME: &'static str = "u32";
 }
-
-// TODO(mvp) add box-like representation for indirect values.
-// Values such as strings, lists, anonymous procedures, etc. should use this,
-// replacing the existing String file

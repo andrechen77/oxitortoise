@@ -4,20 +4,21 @@
 //! turtles belong to a special breed that acts like the `turtles` agentset.
 
 use std::collections::HashMap;
-use std::fmt::{self, Debug};
+use std::fmt::{self, Debug, Write};
 use std::mem::offset_of;
 use std::ops::Index;
 use std::rc::Rc;
 
 use derive_more::derive::{From, Into};
 use either::Either;
+use pretty_print::PrettyPrinter;
 use slotmap::SecondaryMap;
 
 use crate::mir;
 use crate::sim::agent_schema::{AgentFieldDescriptor, AgentSchemaField, AgentSchemaFieldGroup};
 use crate::sim::topology::Heading;
 use crate::sim::value::agentset::TurtleSet;
-use crate::sim::value::{NlFloat, PackedAny};
+use crate::sim::value::{NlBool, NlFloat, NlList, NlString, PackedAny};
 use crate::util::gen_slot_tracker::{GenIndex, GenSlotTracker};
 use crate::util::reflection::{ConcreteTy, ConstTypeName, Reflect, TypeInfo, TypeInfoOptions};
 use crate::util::row_buffer::{RowBuffer, RowSchema};
@@ -80,7 +81,6 @@ impl ConstTypeName for TurtleId {
     const TYPE_NAME: &'static str = "TurtleId";
 }
 
-#[derive(Debug)]
 pub struct Turtles {
     /// The who number to be given to the next turtle; also how many turtles
     /// have been created since the last `clear-turtles`.
@@ -300,6 +300,87 @@ impl Turtles {
     }
 }
 
+impl fmt::Debug for Turtles {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut p = PrettyPrinter::new(f);
+        let Turtles {
+            next_who,
+            slot_tracker: _,
+            data: _,
+            fallback_custom_fields: _,
+            turtle_schema,
+            num_turtles,
+            breeds,
+        } = self;
+        p.add_struct("Turtles", |p| {
+            p.add_field("breeds", |p| write!(p, "{:?}", breeds))?;
+            p.add_field("turtle_schema", |p| write!(p, "{:?}", turtle_schema))?;
+            p.add_field("num_turtles", |p| write!(p, "{}", num_turtles))?;
+            p.add_field("next_who", |p| write!(p, "{:?}", next_who))?;
+            p.add_field("turtles", |p| {
+                p.add_map(
+                    self.turtle_ids().map(|t| (t, ())),
+                    |p, id| write!(p, "{:?}", id),
+                    |p, (id, _)| pretty_print_turtle(p, self, id),
+                )
+            })?;
+            Ok(())
+        })
+    }
+}
+
+fn pretty_print_turtle(
+    p: &mut PrettyPrinter<impl Write>,
+    turtles: &Turtles,
+    id: TurtleId,
+) -> fmt::Result {
+    p.add_struct("Turtle", |p| {
+        // add builtin fields
+        p.add_field("base", |p| {
+            write!(p, "{:?}", turtles.get_turtle_base_data(id).expect("turtle must be valid"))
+        })?;
+        p.add_field("pos", |p| {
+            write!(p, "{:?}", turtles.get_turtle_position(id).expect("turtle must be valid"))
+        })?;
+        p.add_field("heading", |p| {
+            write!(p, "{:?}", turtles.get_turtle_heading(id).expect("turtle must be valid"))
+        })?;
+
+        // add custom fields
+        for (field_name, field_desc) in turtles.schema().custom_fields() {
+            let AgentSchemaField::Other(ty) = turtles.schema()[*field_desc] else {
+                panic!("field at index {:?} should not be base data", field_desc);
+            };
+            p.add_field(&field_name, |p| {
+                fn print_field<T: Reflect + Debug>(
+                    p: &mut PrettyPrinter<impl Write>,
+                    turtles: &Turtles,
+                    id: TurtleId,
+                    field_desc: AgentFieldDescriptor,
+                ) -> fmt::Result {
+                    match turtles.get_turtle_field::<T>(id, field_desc) {
+                        None => write!(p, "None"),
+                        Some(Either::Left(field)) => write!(p, "{:?}", field),
+                        Some(Either::Right(field)) => write!(p, "fallback {:?}", field),
+                    }
+                }
+                if ty == NlFloat::CONCRETE_TY {
+                    print_field::<NlFloat>(p, turtles, id, *field_desc)
+                } else if ty == NlBool::CONCRETE_TY {
+                    print_field::<NlBool>(p, turtles, id, *field_desc)
+                } else if ty == NlString::CONCRETE_TY {
+                    print_field::<NlString>(p, turtles, id, *field_desc)
+                } else if ty == NlList::CONCRETE_TY {
+                    print_field::<NlList>(p, turtles, id, *field_desc)
+                } else {
+                    write!(p, "unknown type {:?}", ty)
+                }
+            })?;
+        }
+        Ok(())
+    })
+}
+
 #[derive(Debug)]
 #[repr(C)]
 pub struct TurtleBaseData {
@@ -365,14 +446,14 @@ pub struct TurtleSchema {
     position: AgentFieldDescriptor,
     heading: AgentFieldDescriptor,
     field_groups: Vec<AgentSchemaFieldGroup>,
-    custom_fields: Vec<AgentFieldDescriptor>,
+    custom_fields: Vec<(Rc<str>, AgentFieldDescriptor)>,
 }
 
 impl TurtleSchema {
     pub fn new(
         heading_buffer_idx: u8,
         position_buffer_idx: u8,
-        custom_fields: &[(ConcreteTy, u8)],
+        custom_fields: &[(&Rc<str>, ConcreteTy, u8)],
         avoid_occupancy_bitfield: &[u8],
     ) -> Self {
         // create field groups vector and add base data group
@@ -385,7 +466,7 @@ impl TurtleSchema {
         // ensure field groups exist up to max needed index
         let max_buffer_idx = heading_buffer_idx
             .max(position_buffer_idx)
-            .max(custom_fields.iter().map(|(_, idx)| *idx).max().unwrap_or(0));
+            .max(custom_fields.iter().map(|(_, _, idx)| *idx).max().unwrap_or(0));
         while field_groups.len() <= max_buffer_idx as usize {
             field_groups.push(AgentSchemaFieldGroup {
                 avoid_occupancy_bitfield: false,
@@ -403,14 +484,17 @@ impl TurtleSchema {
 
         // add custom fields
         let mut custom_field_descriptors = Vec::new();
-        for (field_type, buffer_idx) in custom_fields {
+        for (name, field_type, buffer_idx) in custom_fields {
             let field_group = &mut field_groups[usize::from(*buffer_idx)];
             let idx_within_buffer = field_group.fields.len();
             field_group.fields.push(AgentSchemaField::Other(*field_type));
-            custom_field_descriptors.push(AgentFieldDescriptor {
-                buffer_idx: *buffer_idx,
-                field_idx: idx_within_buffer as u8,
-            });
+            custom_field_descriptors.push((
+                Rc::clone(name),
+                AgentFieldDescriptor {
+                    buffer_idx: *buffer_idx,
+                    field_idx: idx_within_buffer as u8,
+                },
+            ));
         }
 
         // set avoid_occupancy_bitfield flags
@@ -457,13 +541,13 @@ impl TurtleSchema {
         self.position
     }
 
-    pub fn custom_fields(&self) -> &[AgentFieldDescriptor] {
+    pub fn custom_fields(&self) -> &[(Rc<str>, AgentFieldDescriptor)] {
         &self.custom_fields
     }
 
     pub fn field_desc_and_offset(&self, var: TurtleVarDesc) -> (AgentFieldDescriptor, usize) {
         match var {
-            TurtleVarDesc::Custom(field_id) => (self.custom_fields()[field_id], 0),
+            TurtleVarDesc::Custom(field_id) => (self.custom_fields()[field_id].1, 0),
             TurtleVarDesc::Who => (self.base_data(), offset_of!(TurtleBaseData, who)),
             TurtleVarDesc::Size => (self.base_data(), offset_of!(TurtleBaseData, size)),
             TurtleVarDesc::Color => (self.base_data(), offset_of!(TurtleBaseData, color)),
@@ -538,7 +622,7 @@ pub fn turtle_var_type(schema: &TurtleSchema, var: TurtleVarDesc) -> ConcreteTy 
         TurtleVarDesc::Xcor => NlFloat::CONCRETE_TY,
         TurtleVarDesc::Ycor => NlFloat::CONCRETE_TY,
         TurtleVarDesc::Custom(field) => {
-            let AgentSchemaField::Other(ty) = schema[schema.custom_fields()[field]] else {
+            let AgentSchemaField::Other(ty) = schema[schema.custom_fields()[field].1] else {
                 unreachable!("this is a custom field, so it cannot be part of the base data");
             };
             ty

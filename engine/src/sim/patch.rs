@@ -1,7 +1,14 @@
-use std::{collections::HashMap, mem::offset_of, ops::Index};
+use std::{
+    collections::HashMap,
+    fmt::{self, Write},
+    mem::offset_of,
+    ops::Index,
+    rc::Rc,
+};
 
 use derive_more::derive::From;
 use either::Either;
+use pretty_print::PrettyPrinter;
 
 use super::topology::Point;
 use crate::{
@@ -10,7 +17,7 @@ use crate::{
         agent_schema::{AgentFieldDescriptor, AgentSchemaField, AgentSchemaFieldGroup},
         color::Color,
         topology::{CoordFloat, PointInt, TopologySpec},
-        value::{NlFloat, PackedAny},
+        value::{NlBool, NlFloat, NlList, NlString, PackedAny},
     },
     util::{
         reflection::{ConcreteTy, ConstTypeName, Reflect, TypeInfo, TypeInfoOptions},
@@ -58,7 +65,6 @@ pub struct OptionPatchId(pub u32);
 
 // make a copy with a different identity
 static OPTION_PATCH_ID_TYPE_INFO: TypeInfo = PATCH_ID_TYPE_INFO;
-
 unsafe impl Reflect for OptionPatchId {
     const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&OPTION_PATCH_ID_TYPE_INFO);
 }
@@ -73,7 +79,6 @@ impl From<PatchId> for OptionPatchId {
     }
 }
 
-#[derive(Debug)]
 pub struct Patches {
     /// The buffers that store the data for the patches. Each patch is
     /// represented by a row in all buffers. There are multiple buffers to
@@ -133,7 +138,7 @@ impl Patches {
                     .insert_zeroable(pcolor_desc.field_idx as usize);
 
                 // initialize custom fields
-                for &field in patches.patch_schema.custom_fields() {
+                for &(_, field) in patches.patch_schema.custom_fields() {
                     let AgentSchemaField::Other(r#type) = &patches.patch_schema[field] else {
                         panic!("field at index {:?} should be a custom field", field);
                     };
@@ -279,6 +284,74 @@ impl Patches {
     }
 }
 
+impl fmt::Debug for Patches {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut p = PrettyPrinter::new(f);
+        let Patches { data: _, patch_schema, num_patches, fallback_custom_fields: _ } = self;
+        p.add_struct("Patches", |p| {
+            p.add_field("patch_schema", |p| write!(p, "{:?}", patch_schema))?;
+            p.add_field("num_patches", |p| write!(p, "{}", num_patches))?;
+            p.add_field("patches", |p| {
+                p.add_map(
+                    self.patch_ids().map(|id| (id, ())),
+                    |p, id| write!(p, "{:?}", id),
+                    |p, (id, _)| pretty_print_patch(p, self, id),
+                )
+            })?;
+            Ok(())
+        })
+    }
+}
+
+fn pretty_print_patch(
+    p: &mut PrettyPrinter<impl Write>,
+    patches: &Patches,
+    id: PatchId,
+) -> fmt::Result {
+    p.add_struct("Patch", |p| {
+        // add builtin fields
+        p.add_field("base", |p| {
+            write!(p, "{:?}", patches.get_patch_base_data(id).expect("patch must be valid"))
+        })?;
+        p.add_field("pcolor", |p| {
+            write!(p, "{:?}", patches.get_patch_pcolor(id).expect("patch must be valid"))
+        })?;
+
+        // add custom fields
+        for (field_name, field_desc) in patches.schema().custom_fields() {
+            let AgentSchemaField::Other(ty) = patches.schema()[*field_desc] else {
+                panic!("field at index {:?} should be a custom field", field_desc);
+            };
+            p.add_field(&field_name, |p| {
+                fn print_field<T: Reflect + fmt::Debug>(
+                    p: &mut PrettyPrinter<impl Write>,
+                    patches: &Patches,
+                    id: PatchId,
+                    field: AgentFieldDescriptor,
+                ) -> fmt::Result {
+                    match patches.get_patch_field::<T>(id, field) {
+                        None => write!(p, "None"),
+                        Some(Either::Left(field)) => write!(p, "{:?}", field),
+                        Some(Either::Right(field)) => write!(p, "fallback {:?}", field),
+                    }
+                }
+                if ty == NlFloat::CONCRETE_TY {
+                    print_field::<NlFloat>(p, patches, id, *field_desc)
+                } else if ty == NlBool::CONCRETE_TY {
+                    print_field::<NlBool>(p, patches, id, *field_desc)
+                } else if ty == NlString::CONCRETE_TY {
+                    print_field::<NlString>(p, patches, id, *field_desc)
+                } else if ty == NlList::CONCRETE_TY {
+                    print_field::<NlList>(p, patches, id, *field_desc)
+                } else {
+                    write!(p, "unknown type {:?}", ty)
+                }
+            })?;
+        }
+        Ok(())
+    })
+}
+
 #[derive(Debug)]
 pub struct PatchBaseData {
     pub position: Point,
@@ -309,13 +382,13 @@ pub enum PatchVarDesc {
 pub struct PatchSchema {
     pcolor: AgentFieldDescriptor,
     field_groups: Vec<AgentSchemaFieldGroup>,
-    custom_fields: Vec<AgentFieldDescriptor>,
+    custom_fields: Vec<(Rc<str>, AgentFieldDescriptor)>,
 }
 
 impl PatchSchema {
     pub fn new(
         pcolor_buffer_idx: u8,
-        custom_fields: &[(ConcreteTy, u8)],
+        custom_fields: &[(&Rc<str>, ConcreteTy, u8)],
         avoid_occupancy_bitfield: &[u8],
     ) -> Self {
         // create field groups vector and add base data group
@@ -327,7 +400,7 @@ impl PatchSchema {
 
         // ensure field groups exist up to max needed index
         let max_buffer_idx =
-            pcolor_buffer_idx.max(custom_fields.iter().map(|(_, idx)| *idx).max().unwrap_or(0));
+            pcolor_buffer_idx.max(custom_fields.iter().map(|(_, _, idx)| *idx).max().unwrap_or(0));
         while field_groups.len() <= max_buffer_idx as usize {
             field_groups.push(AgentSchemaFieldGroup {
                 avoid_occupancy_bitfield: false,
@@ -342,11 +415,13 @@ impl PatchSchema {
 
         // add custom fields and collect their descriptors
         let mut custom_field_descriptors = Vec::new();
-        for (field_type, buffer_idx) in custom_fields {
+        for (field_name, field_type, buffer_idx) in custom_fields {
             let field_idx = field_groups[*buffer_idx as usize].fields.len() as u8;
             field_groups[*buffer_idx as usize].fields.push(AgentSchemaField::Other(*field_type));
-            custom_field_descriptors
-                .push(AgentFieldDescriptor { buffer_idx: *buffer_idx, field_idx });
+            custom_field_descriptors.push((
+                Rc::clone(field_name),
+                AgentFieldDescriptor { buffer_idx: *buffer_idx, field_idx },
+            ));
         }
 
         // set avoid_occupancy_bitfield flags
@@ -382,7 +457,7 @@ impl PatchSchema {
         self.pcolor
     }
 
-    pub fn custom_fields(&self) -> &[AgentFieldDescriptor] {
+    pub fn custom_fields(&self) -> &[(Rc<str>, AgentFieldDescriptor)] {
         &self.custom_fields
     }
 
@@ -390,7 +465,7 @@ impl PatchSchema {
         match var {
             PatchVarDesc::Pos => (self.base_data(), offset_of!(PatchBaseData, position)),
             PatchVarDesc::Pcolor => (self.pcolor(), 0),
-            PatchVarDesc::Custom(field_id) => (self.custom_fields()[field_id], 0),
+            PatchVarDesc::Custom(field_id) => (self.custom_fields()[field_id].1, 0),
         }
     }
 }
@@ -441,7 +516,7 @@ pub fn patch_var_type(schema: &PatchSchema, var: PatchVarDesc) -> ConcreteTy {
         PatchVarDesc::Pcolor => Color::CONCRETE_TY,
         PatchVarDesc::Pos => Point::CONCRETE_TY,
         PatchVarDesc::Custom(field) => {
-            let AgentSchemaField::Other(ty) = schema[schema.custom_fields()[field]] else {
+            let AgentSchemaField::Other(ty) = schema[schema.custom_fields()[field].1] else {
                 unreachable!("this is a custom field, so it cannot be part of the base data");
             };
             ty

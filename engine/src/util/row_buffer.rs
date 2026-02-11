@@ -382,7 +382,9 @@ impl RowBuffer {
 
         // this must be true because we use layout size as the stride in
         // other methods
-        assert!(schema.layout.size() == stride.unwrap());
+        if let Some(stride) = stride {
+            assert!(schema.layout.size() == stride);
+        }
 
         AlignedBytes::new(total_layout)
     }

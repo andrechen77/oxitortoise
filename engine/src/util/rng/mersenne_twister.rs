@@ -11,15 +11,18 @@ const LOWER_MASK: Wr<u32> = Wr(0x7fffffff); // Mask for the lower bits
 const TEMPERING_MASK_B: Wr<u32> = Wr(0x9d2c5680); // Used in tempering
 const TEMPERING_MASK_C: Wr<u32> = Wr(0xefc60000); // Used in tempering
 
-#[derive(Debug)]
+#[derive(derive_more::Debug)]
 pub struct MersenneTwister {
+    #[debug(skip)]
     state_vector: [Wr<u32>; STATE_VECTOR_SIZE],
     /// Index into `state_vector`.
+    #[debug(skip)]
     state_index: usize,
     /// We use the Box-Muller transform to generate two Gaussian random numbers
     /// at a time. Since we can only return a single one per call to
     /// `next_gaussian`, the second one is stored here to be returned on the
     /// next call to `next_gaussian`.
+    #[debug(skip)]
     precomputed_gaussian: Option<f64>,
 }
 
