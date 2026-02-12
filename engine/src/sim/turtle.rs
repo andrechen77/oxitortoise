@@ -30,14 +30,14 @@ use crate::{
 pub const DEFAULT_BREED_NAME: &str = "TURTLES";
 
 /// The who number of a turtle.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Default, PartialOrd, Ord)]
+#[derive(Debug, Copy, Clone, PartialEq, Default, PartialOrd)]
 #[repr(transparent)]
-pub struct TurtleWho(pub u64);
+pub struct TurtleWho(pub f64);
 
 impl TurtleWho {
     fn take_next(&mut self) -> Self {
         let who = *self;
-        self.0 += 1;
+        self.0 += 1.0;
         who
     }
 }

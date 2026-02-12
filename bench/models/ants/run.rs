@@ -20,7 +20,7 @@ use engine::{
     },
     slotmap::SecondaryMap,
     updater::DirtyAggregator,
-    util::rng::CanonRng,
+    util::{rng::CanonRng, row_buffer::RowBuffer},
     workspace::Workspace,
 };
 use oxitortoise_main::LirInstaller;
@@ -79,6 +79,7 @@ fn print_offsets(workspace: &Workspace) {
     print_offsets!(PatchBaseData, plabel);
     print_offsets!(PatchBaseData, plabel_color);
     trace!("globals: {:?}", workspace.world.globals.data.schema());
+    trace!("size of row buffer: {}", size_of::<RowBuffer>());
 }
 
 fn create_workspace(
@@ -174,8 +175,12 @@ fn main() {
     );
 
     print_offsets(&workspace);
-
-    write_to_file("workspace_initial.txt", format!("{:#?}", workspace));
+    for (i, row_buffer) in workspace.world.patches.data.iter().enumerate() {
+        trace!("patch row buffer {}: {:?}", i, row_buffer);
+    }
+    for (i, row_buffer) in workspace.world.turtles.data.iter().enumerate() {
+        trace!("turtle row buffer {}: {:?}", i, row_buffer);
+    }
 
     let mut lir_installer = LirInstaller::default();
     let result = unsafe { lir_installer.install_lir(&lir_program) };
@@ -198,6 +203,10 @@ fn main() {
         panic!("expected a user procedure");
     };
     let setup = functions[&mir_to_lir_fns[&setup_mir_fn_id]];
+    let NameReferent::UserProc(go_mir_fn_id) = global_names.lookup("GO").unwrap() else {
+        panic!("expected a user procedure");
+    };
+    let go = functions[&mir_to_lir_fns[&go_mir_fn_id]];
     let NameReferent::Global(population) = global_names.lookup("POPULATION").unwrap() else {
         panic!("expected a global variable");
     };
@@ -215,14 +224,19 @@ fn main() {
         NlFloat::new(10.0);
 
     let next_int = workspace.rng.clone();
-    let mut execution_context = ExecutionContext {
+    let mut ctx = ExecutionContext {
         workspace: &mut workspace,
         next_int,
         dirty_aggregator: DirtyAggregator::default(),
     };
-    setup.call(&mut execution_context, std::ptr::null_mut());
 
-    write_to_file("workspace_final.txt", format!("{:#?}", workspace));
+    write_to_file("workspace_initial.txt", format!("{:#?}", ctx.workspace));
+    setup.call(&mut ctx, std::ptr::null_mut());
+    write_to_file("workspace_0.txt", format!("{:#?}", ctx.workspace));
+    for i in 1..3 {
+        go.call(&mut ctx, std::ptr::null_mut());
+        write_to_file(format!("workspace_{}.txt", i), format!("{:#?}", ctx.workspace));
+    }
 }
 
 struct ConsoleWriter;

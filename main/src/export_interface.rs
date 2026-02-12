@@ -13,7 +13,6 @@ use engine::{
         topology::Point,
         turtle::{BreedId, TurtleId},
         value::{NlBox, NlFloat, NlList, PackedAny},
-        world::World,
     },
     slotmap::KeyData,
     util::rng::Rng as _,
@@ -40,8 +39,8 @@ pub extern "C" fn oxitortoise_reset_ticks(context: &mut CanonExecutionContext) {
 pub static GET_TICK_INFO: HostFunctionInfo =
     HostFunctionInfo { name: "oxitortoise_get_tick", parameter_types: &[Ptr], return_type: &[F64] };
 #[unsafe(no_mangle)]
-pub extern "C" fn oxitortoise_get_tick(world: &mut World) -> NlFloat {
-    world.tick_counter.get().unwrap() // TODO(mvp) handle error
+pub extern "C" fn oxitortoise_get_tick(context: &mut CanonExecutionContext) -> NlFloat {
+    context.workspace.world.tick_counter.get().unwrap() // TODO(mvp) handle error
 }
 
 pub static ADVANCE_TICK_INFO: HostFunctionInfo = HostFunctionInfo {
@@ -50,8 +49,8 @@ pub static ADVANCE_TICK_INFO: HostFunctionInfo = HostFunctionInfo {
     return_type: &[],
 };
 #[unsafe(no_mangle)]
-pub extern "C" fn oxitortoise_advance_tick(world: &mut World) {
-    world.tick_counter.advance().unwrap(); // TODO(mvp) handle error
+pub extern "C" fn oxitortoise_advance_tick(context: &mut CanonExecutionContext) {
+    context.workspace.world.tick_counter.advance().unwrap(); // TODO(mvp) handle error
 }
 
 // NOTE: HostFunctionInfo had wrong name "reset_ticks", should be "create_turtles"
@@ -137,10 +136,14 @@ pub static PATCH_AT_INFO: HostFunctionInfo = HostFunctionInfo {
     return_type: &[I32],
 };
 #[unsafe(no_mangle)]
-pub extern "C" fn oxitortoise_patch_at(world: &World, point_x: f64, point_y: f64) -> PatchId {
+pub extern "C" fn oxitortoise_patch_at(
+    context: &mut CanonExecutionContext,
+    point_x: f64,
+    point_y: f64,
+) -> PatchId {
     let point = Point { x: point_x, y: point_y };
     let point_int = point.round_to_int();
-    world.topology.patch_at(point_int)
+    context.workspace.world.topology.patch_at(point_int)
 }
 
 pub static ROTATE_TURTLE_INFO: HostFunctionInfo = HostFunctionInfo {
@@ -167,12 +170,16 @@ pub static DIFFUSE_8_SINGLE_VARIABLE_BUFFER_INFO: HostFunctionInfo = HostFunctio
 };
 #[unsafe(no_mangle)]
 pub extern "C" fn oxitortoise_diffuse_8(
-    world: &mut World,
+    context: &mut CanonExecutionContext,
     field: u32, /* AgentFieldDescriptor */
     diffusion_rate: NlFloat,
 ) {
     let field = AgentFieldDescriptor::from_u16(field as u16);
-    engine::sim::topology::diffuse::diffuse_8_single_variable_buffer(world, field, diffusion_rate);
+    engine::sim::topology::diffuse::diffuse_8_single_variable_buffer(
+        &mut context.workspace.world,
+        field,
+        diffusion_rate,
+    );
 }
 
 pub static SCALE_COLOR_INFO: HostFunctionInfo = HostFunctionInfo {
