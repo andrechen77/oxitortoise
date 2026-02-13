@@ -69,7 +69,7 @@ impl Node for Diffuse {
 
     fn pretty_print(&self, program: &Program, mut out: impl fmt::Write) -> fmt::Result {
         PrettyPrinter::new(&mut out).add_struct("Diffuse", |p| {
-            p.add_field("variable", |p| write!(p, "{:?}", self.variable))?;
+            p.add_field_with("variable", |p| write!(p, "{:?}", self.variable))?;
             if let PatchVarDesc::Custom(field) = self.variable {
                 p.add_comment(&program.custom_patch_vars[field].name)?;
             }

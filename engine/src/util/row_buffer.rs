@@ -20,6 +20,10 @@ pub struct AlignedBytes {
     layout: Layout,
 }
 
+// SAFETY: this completely owns the data it references and therefore should be
+// safe to send between threads
+unsafe impl Send for AlignedBytes {}
+
 impl AlignedBytes {
     pub fn new(layout: Layout) -> Self {
         // if the capacity is zero then it should not actually allocate. but

@@ -60,7 +60,7 @@ impl Node for MemLoad {
 
     fn pretty_print(&self, _program: &Program, mut out: impl fmt::Write) -> fmt::Result {
         PrettyPrinter::new(&mut out)
-            .add_struct("MemLoad", |p| p.add_field("offset", |p| write!(p, "{}", self.offset)))
+            .add_struct("MemLoad", |p| p.add_field_with("offset", |p| write!(p, "{}", self.offset)))
     }
 }
 
@@ -117,8 +117,9 @@ impl Node for MemStore {
     }
 
     fn pretty_print(&self, _program: &Program, mut out: impl fmt::Write) -> fmt::Result {
-        PrettyPrinter::new(&mut out)
-            .add_struct("MemStore", |p| p.add_field("offset", |p| write!(p, "{}", self.offset)))
+        PrettyPrinter::new(&mut out).add_struct("MemStore", |p| {
+            p.add_field_with("offset", |p| write!(p, "{}", self.offset))
+        })
     }
 }
 
@@ -158,8 +159,9 @@ impl Node for DeriveField {
     }
 
     fn pretty_print(&self, _program: &Program, mut out: impl fmt::Write) -> fmt::Result {
-        PrettyPrinter::new(&mut out)
-            .add_struct("DeriveField", |p| p.add_field("offset", |p| write!(p, "{}", self.offset)))
+        PrettyPrinter::new(&mut out).add_struct("DeriveField", |p| {
+            p.add_field_with("offset", |p| write!(p, "{}", self.offset))
+        })
     }
 }
 
@@ -209,7 +211,7 @@ impl Node for DeriveElement {
 
     fn pretty_print(&self, _program: &Program, mut out: impl fmt::Write) -> fmt::Result {
         PrettyPrinter::new(&mut out).add_struct("DeriveElement", |p| {
-            p.add_field("stride", |p| write!(p, "{}", self.stride))
+            p.add_field_with("stride", |p| write!(p, "{}", self.stride))
         })
     }
 }

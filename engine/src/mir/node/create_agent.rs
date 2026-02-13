@@ -67,7 +67,7 @@ impl Node for CreateTurtles {
 
     fn pretty_print(&self, program: &Program, mut out: impl fmt::Write) -> fmt::Result {
         PrettyPrinter::new(&mut out).add_struct("CreateTurtles", |p| {
-            p.add_field("breed", |p| write!(p, "{:?}", self.breed))?;
+            p.add_field_with("breed", |p| write!(p, "{:?}", self.breed))?;
             p.add_comment(program.turtle_breeds.name(self.breed))
         })
     }

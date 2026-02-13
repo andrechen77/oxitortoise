@@ -2,7 +2,7 @@
 //! into LIR. No optimization is performed here. Each MIR function will
 //! translate to a single LIR function.
 
-use std::{collections::HashMap, rc::Rc};
+use std::{collections::HashMap, rc::Rc, sync::Arc};
 
 use lir::{
     smallvec::{SmallVec, smallvec},
@@ -190,7 +190,7 @@ fn translate_function_body<I: InstallLir>(
         program: &mir::Program,
         local_to_lir: &mut HashMap<mir::LocalId, LocalLocation>,
         lir_local_var_types: &mut TiVec<lir::VarId, lir::ValType>,
-        lir_debug_var_names: &mut HashMap<lir::VarId, Rc<str>>,
+        lir_debug_var_names: &mut HashMap<lir::VarId, Arc<str>>,
         local_id: mir::LocalId,
     ) {
         let local_decl = &program.locals[local_id];

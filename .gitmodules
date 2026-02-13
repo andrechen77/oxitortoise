@@ -1,3 +1,6 @@
 [submodule "nl2ast"]
 	path = nl2ast
 	url = https://github.com/NetLogo/nl2ast
+[submodule "bench/galapagos"]
+	path = bench/galapagos
+	url = https://github.com/NetLogo/Galapagos.git

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, rc::Rc};
+use std::{collections::HashMap, sync::Arc};
 
 use slotmap::SlotMap;
 
@@ -10,7 +10,7 @@ slotmap::new_key_type! {
 #[derive(Debug, Default)]
 pub struct Shapes {
     #[allow(dead_code)] // remove when used
-    name_map: HashMap<Rc<str>, ShapeId>,
+    name_map: HashMap<Arc<str>, ShapeId>,
     shapes: SlotMap<ShapeId, Shape>,
 }
 
@@ -22,5 +22,5 @@ impl Shapes {
 
 #[derive(Debug)]
 pub struct Shape {
-    pub name: Rc<str>,
+    pub name: Arc<str>,
 }

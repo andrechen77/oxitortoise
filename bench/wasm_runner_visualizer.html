@@ -13,8 +13,38 @@
 	<button id="run_main">
 		<pre>main()</pre>
 	</button>
+	<div id="view-container" style="height: 600px; width: 600px;"></div>
+
+	<!-- <iframe id="nlw-frame" src="https://netlogoweb.org/standalone"
+		style="width:1200px; height:1200px; border:1px solid #ccc;"></iframe> -->
+
+	<!-- these are necessary to get `tortoise_require` to work -->
+	<script src="tortoise-compiler.js"></script>
+	<script src="tortoise-engine.js"></script>
 
 	<script>
+		var nlwFrame = document.getElementById('nlw-frame');
+	</script>
+
+	<script type="module">
+		import ViewController from "http://localhost:9000/assets/javascripts/target/coffee-output/main/beak/widgets/draw/view-controller.js"
+
+		const viewWidget = {
+			fontSize: 11,
+			dimensions: {
+				// TODO get these from the model... somehow
+				maxPxcor: 35,
+				maxPycor: 35,
+				minPxcor: -35,
+				minPycor: -35,
+				patchSize: 7,
+				wrappingAllowedInX: false,
+				wrappingAllowedInY: false,
+			},
+		};
+		const container = document.getElementById('view-container');
+		const viewController = new ViewController(container, viewWidget);
+
 		async function instantiateWasm(modelName) {
 			let wasmResult = null;
 			let importObject = {
@@ -70,18 +100,25 @@
 							return -1;
 						}
 					},
+					"visualize_update": (bytesPtr, bytesLength) => {
+						let mainMemory = wasmResult.instance.exports.memory;
+						let updateStr = new TextDecoder().decode(new Uint8Array(mainMemory.buffer, bytesPtr, bytesLength));
+						let update = eval(`(${updateStr})`);
+						viewController.update(update);
+					}
 				}
 			}
 			wasmResult = await WebAssembly.instantiateStreaming(fetch(`models/${modelName}/run.wasm`), importObject);
 			return wasmResult;
 		}
 
+		var modelName = null;
 		var globalWasm = null;
 
 		async function load() {
 			console.log("loading");
-			let name = document.getElementById('model_name').value;
-			globalWasm = await instantiateWasm(name);
+			modelName = document.getElementById('model_name').value;
+			globalWasm = await instantiateWasm(modelName);
 			console.log("loaded; the module is available at `var globalWasm`");
 		}
 
@@ -92,12 +129,50 @@
 		function runMain() {
 			console.log("running main()");
 			globalWasm.instance.exports.main();
+
+			// loadAndEval("update_setup.txt").then((updateContent) => {
+			// 	console.log(updateContent);
+			// 	viewController.update(updateContent);
+			// });
+			// let nextTick = 0;
+			// setInterval(() => {
+			// 	let filename = `update_go_${nextTick}.txt`;
+			// 	nextTick += 1;
+			// 	let content = null;
+			// 	loadAndEval(filename).then((updateContent) => {
+			// 		console.log(`received`);
+			// 		content = updateContent;
+			// 	});
+			// 	setTimeout(() => {
+			// 		console.log("displaying")
+			// 		if (content != null) {
+			// 			viewController.update(content);
+			// 		}
+			// 	}, 1000);
+			// }, 1000 / 10);
 		}
 
 		document.addEventListener('DOMContentLoaded', function () {
 			document.getElementById('load').addEventListener('click', load);
 			document.getElementById('run_main').addEventListener('click', runMain);
 		});
+
+		// Function to fetch and eval the contents of a file
+		async function loadAndEval(filename) {
+			try {
+				const response = await fetch(`models/${modelName}/updates/${filename}`);
+				if (!response.ok) {
+					throw new Error('Failed to load file');
+				}
+
+				// Get the text content of the file
+				const code = await response.text();
+
+				return eval(`(${code})`);
+			} catch (err) {
+				console.error('Error:', err);
+			}
+		}
 	</script>
 </body>
 

@@ -1,4 +1,4 @@
-use std::{mem::offset_of, rc::Rc};
+use std::{mem::offset_of, rc::Rc, sync::Arc};
 
 use flagset::{FlagSet, flags};
 
@@ -70,7 +70,7 @@ pub enum TurtleUpdate {
 
 #[derive(Debug, Default)]
 pub struct AliveTurtleUpdate {
-    pub breed_name: Option<Rc<str>>,
+    pub breed_name: Option<Arc<str>>,
     pub color: Option<Color>,
     pub heading: Option<Heading>,
     pub label_color: Option<Color>,

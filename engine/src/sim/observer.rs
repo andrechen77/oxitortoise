@@ -2,7 +2,7 @@ use std::{
     collections::HashMap,
     fmt::{self, Debug, Write},
     mem::offset_of,
-    rc::Rc,
+    sync::Arc,
 };
 
 use either::Either;
@@ -65,8 +65,8 @@ impl fmt::Debug for Globals {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut p = PrettyPrinter::new(f);
         p.add_struct("Globals", |p| {
-            p.add_field("globals_schema", |p| write!(p, "{:?}", self.schema))?;
-            p.add_field("globals", |p| {
+            p.add_field_with("globals_schema", |p| write!(p, "{:?}", self.schema))?;
+            p.add_field_with("globals", |p| {
                 p.add_map(
                     self.schema
                         .custom_fields
@@ -105,13 +105,13 @@ impl fmt::Debug for Globals {
 
 #[derive(Debug, Clone)]
 pub struct GlobalsSchema {
-    custom_fields: Vec<(Rc<str>, ConcreteTy)>,
+    custom_fields: Vec<(Arc<str>, ConcreteTy)>,
 }
 
 impl GlobalsSchema {
-    pub fn new(custom_fields: &[(&Rc<str>, ConcreteTy)]) -> Self {
+    pub fn new(custom_fields: &[(&Arc<str>, ConcreteTy)]) -> Self {
         Self {
-            custom_fields: custom_fields.iter().map(|(name, ty)| (Rc::clone(name), *ty)).collect(),
+            custom_fields: custom_fields.iter().map(|(name, ty)| (Arc::clone(name), *ty)).collect(),
         }
     }
 

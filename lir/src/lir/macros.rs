@@ -342,7 +342,7 @@ macro_rules! lir_function {
         $label:ident: { $($inner:tt)* }
     ) => {
         let mut i = 0;
-        let mut debug_var_names: std::collections::HashMap<$crate::VarId, std::rc::Rc<str>> = std::collections::HashMap::new();
+        let mut debug_var_names: std::collections::HashMap<$crate::VarId, std::rc::Arc<str>> = std::collections::HashMap::new();
         $(
             let $param_name: $crate::VarId = i.into();
             debug_var_names.insert($param_name, stringify!($param_name).into());

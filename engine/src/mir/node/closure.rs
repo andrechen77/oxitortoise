@@ -82,7 +82,7 @@ impl Node for Closure {
 
     fn pretty_print(&self, program: &Program, mut out: impl fmt::Write) -> fmt::Result {
         PrettyPrinter::new(&mut out).add_struct("Closure", |p| {
-            p.add_field("body", |p| write!(p, "{:?}", self.body))?;
+            p.add_field_with("body", |p| write!(p, "{:?}", self.body))?;
             if let Some(fn_name) = program.functions[self.body].debug_name.as_deref() {
                 p.add_comment(fn_name)?;
             }

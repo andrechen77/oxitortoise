@@ -113,7 +113,7 @@ impl Node for Ask {
 
     fn pretty_print(&self, _program: &Program, mut out: impl fmt::Write) -> fmt::Result {
         PrettyPrinter::new(&mut out).add_struct("Ask", |p| {
-            p.add_field("recipients", |p| write!(p, "{:?}", self.recipients))
+            p.add_field_with("recipients", |p| write!(p, "{:?}", self.recipients))
         })
     }
 }
@@ -251,8 +251,9 @@ impl Node for Of {
     }
 
     fn pretty_print(&self, _program: &Program, mut out: impl fmt::Write) -> fmt::Result {
-        PrettyPrinter::new(&mut out)
-            .add_struct("Of", |p| p.add_field("recipients", |p| write!(p, "{:?}", self.recipients)))
+        PrettyPrinter::new(&mut out).add_struct("Of", |p| {
+            p.add_field_with("recipients", |p| write!(p, "{:?}", self.recipients))
+        })
     }
 }
 

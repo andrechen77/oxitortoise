@@ -45,7 +45,7 @@
 use std::{
     collections::{HashMap, HashSet},
     fmt::Debug,
-    rc::Rc,
+    sync::Arc,
 };
 
 use derive_more::{Deref, Display, From, Into};
@@ -102,9 +102,9 @@ pub struct Function {
     pub stack_space: usize,
     pub body: Block,
     pub insn_seqs: TiVec<InsnSeqId, TiVec<InsnIdx, InsnKind>>,
-    pub debug_fn_name: Option<Rc<str>>,
-    pub debug_val_names: HashMap<ValRef, Rc<str>>,
-    pub debug_var_names: HashMap<VarId, Rc<str>>,
+    pub debug_fn_name: Option<Arc<str>>,
+    pub debug_val_names: HashMap<ValRef, Arc<str>>,
+    pub debug_var_names: HashMap<VarId, Arc<str>>,
     pub is_entrypoint: bool,
 }
 

@@ -25,15 +25,15 @@ impl Program {
         } = self;
 
         let _ = printer.add_struct("Program", |p| {
-            p.add_field("globals", |p| {
+            p.add_field_with("globals", |p| {
                 p.add_map(
                     globals.iter().enumerate(),
                     |p, index| write!(p, "{}", index),
                     |p, (_, global)| write!(p, "{:?}", global),
                 )
             })?;
-            p.add_field("globals_schema", |p| write!(p, "{:#?}", globals_schema))?;
-            p.add_field("turtle_breeds", |p| match turtle_breeds {
+            p.add_field_with("globals_schema", |p| write!(p, "{:#?}", globals_schema))?;
+            p.add_field_with("turtle_breeds", |p| match turtle_breeds {
                 TurtleBreeds::Full(breeds) => p
                     .add_list(breeds.iter().map(|(breed_id, _)| breed_id), |p, breed_id| {
                         write!(p, "{:?}", breed_id)
@@ -43,23 +43,23 @@ impl Program {
                         write!(p, "{:?}", breed_id)
                     }),
             })?;
-            p.add_field("custom_turtle_vars", |p| {
+            p.add_field_with("custom_turtle_vars", |p| {
                 p.add_map(
                     custom_turtle_vars.iter().enumerate(),
                     |p, index| write!(p, "{}", index),
                     |p, (_, var)| write!(p, "{:?}", var),
                 )
             })?;
-            p.add_field("turtle_schema", |p| write!(p, "{:#?}", turtle_schema))?;
-            p.add_field("custom_patch_vars", |p| {
+            p.add_field_with("turtle_schema", |p| write!(p, "{:#?}", turtle_schema))?;
+            p.add_field_with("custom_patch_vars", |p| {
                 p.add_map(
                     custom_patch_vars.iter().enumerate(),
                     |p, index| write!(p, "{}", index),
                     |p, (_, var)| write!(p, "{:?}", var),
                 )
             })?;
-            p.add_field("patch_schema", |p| write!(p, "{:#?}", patch_schema))?;
-            p.add_field("functions", |p| {
+            p.add_field_with("patch_schema", |p| write!(p, "{:#?}", patch_schema))?;
+            p.add_field_with("functions", |p| {
                 p.add_map(
                     functions.iter(),
                     |p, fn_id| {
@@ -79,13 +79,13 @@ impl Program {
                             is_entrypoint,
                         } = function;
                         p.add_struct("Function", |p| {
-                            p.add_field("debug_name", |p| write!(p, "{:?}", debug_name))?;
-                            p.add_field("is_entrypoint", |p| write!(p, "{}", is_entrypoint))?;
-                            p.add_field("parameters", |p| {
+                            p.add_field_with("debug_name", |p| write!(p, "{:?}", debug_name))?;
+                            p.add_field_with("is_entrypoint", |p| write!(p, "{}", is_entrypoint))?;
+                            p.add_field_with("parameters", |p| {
                                 p.add_list(parameters.iter(), |p, param| write!(p, "{:?}", param))
                             })?;
-                            p.add_field("return_ty", |p| write!(p, "{:?}", return_ty))?;
-                            p.add_field("locals", |p| {
+                            p.add_field_with("return_ty", |p| write!(p, "{:?}", return_ty))?;
+                            p.add_field_with("locals", |p| {
                                 p.add_map(
                                     locals
                                         .iter()
@@ -94,7 +94,7 @@ impl Program {
                                     |p, local_decl| write!(p, "{:?}", local_decl),
                                 )
                             })?;
-                            p.add_field("nodes", |p| {
+                            p.add_field_with("nodes", |p| {
                                 p.add_struct("", |p| {
                                     // collect all nodes reachable from the start of the function
                                     struct NodeCollectorVisitor {

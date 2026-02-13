@@ -59,7 +59,7 @@ impl Node for CallUserFn {
 
     fn pretty_print(&self, program: &Program, mut out: impl fmt::Write) -> fmt::Result {
         PrettyPrinter::new(&mut out).add_struct("CallUserFn", |p| {
-            p.add_field("target", |p| write!(p, "{:?}", self.target))?;
+            p.add_field_with("target", |p| write!(p, "{:?}", self.target))?;
             if let Some(fn_name) = program.functions[self.target].debug_name.as_deref() {
                 p.add_comment(fn_name)?;
             }

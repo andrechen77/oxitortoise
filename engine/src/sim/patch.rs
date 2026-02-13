@@ -4,6 +4,7 @@ use std::{
     mem::offset_of,
     ops::Index,
     rc::Rc,
+    sync::Arc,
 };
 
 use derive_more::derive::From;
@@ -289,9 +290,9 @@ impl fmt::Debug for Patches {
         let mut p = PrettyPrinter::new(f);
         let Patches { data: _, patch_schema, num_patches, fallback_custom_fields: _ } = self;
         p.add_struct("Patches", |p| {
-            p.add_field("patch_schema", |p| write!(p, "{:?}", patch_schema))?;
-            p.add_field("num_patches", |p| write!(p, "{}", num_patches))?;
-            p.add_field("patches", |p| {
+            p.add_field_with("patch_schema", |p| write!(p, "{:?}", patch_schema))?;
+            p.add_field_with("num_patches", |p| write!(p, "{}", num_patches))?;
+            p.add_field_with("patches", |p| {
                 p.add_map(
                     self.patch_ids().map(|id| (id, ())),
                     |p, id| write!(p, "{:?}", id),
@@ -310,10 +311,10 @@ fn pretty_print_patch(
 ) -> fmt::Result {
     p.add_struct("Patch", |p| {
         // add builtin fields
-        p.add_field("base", |p| {
+        p.add_field_with("base", |p| {
             write!(p, "{:?}", patches.get_patch_base_data(id).expect("patch must be valid"))
         })?;
-        p.add_field("pcolor", |p| {
+        p.add_field_with("pcolor", |p| {
             write!(p, "{:?}", patches.get_patch_pcolor(id).expect("patch must be valid"))
         })?;
 
@@ -322,7 +323,7 @@ fn pretty_print_patch(
             let AgentSchemaField::Other(ty) = patches.schema()[*field_desc] else {
                 panic!("field at index {:?} should be a custom field", field_desc);
             };
-            p.add_field(&field_name, |p| {
+            p.add_field_with(&field_name, |p| {
                 fn print_field<T: Reflect + fmt::Debug>(
                     p: &mut PrettyPrinter<impl Write>,
                     patches: &Patches,
@@ -382,13 +383,13 @@ pub enum PatchVarDesc {
 pub struct PatchSchema {
     pcolor: AgentFieldDescriptor,
     field_groups: Vec<AgentSchemaFieldGroup>,
-    custom_fields: Vec<(Rc<str>, AgentFieldDescriptor)>,
+    custom_fields: Vec<(Arc<str>, AgentFieldDescriptor)>,
 }
 
 impl PatchSchema {
     pub fn new(
         pcolor_buffer_idx: u8,
-        custom_fields: &[(&Rc<str>, ConcreteTy, u8)],
+        custom_fields: &[(&Arc<str>, ConcreteTy, u8)],
         avoid_occupancy_bitfield: &[u8],
     ) -> Self {
         // create field groups vector and add base data group
@@ -419,7 +420,7 @@ impl PatchSchema {
             let field_idx = field_groups[*buffer_idx as usize].fields.len() as u8;
             field_groups[*buffer_idx as usize].fields.push(AgentSchemaField::Other(*field_type));
             custom_field_descriptors.push((
-                Rc::clone(field_name),
+                Arc::clone(field_name),
                 AgentFieldDescriptor { buffer_idx: *buffer_idx, field_idx },
             ));
         }
@@ -457,7 +458,7 @@ impl PatchSchema {
         self.pcolor
     }
 
-    pub fn custom_fields(&self) -> &[(Rc<str>, AgentFieldDescriptor)] {
+    pub fn custom_fields(&self) -> &[(Arc<str>, AgentFieldDescriptor)] {
         &self.custom_fields
     }
 

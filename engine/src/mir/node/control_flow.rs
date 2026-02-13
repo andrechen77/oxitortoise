@@ -225,6 +225,6 @@ impl Node for Break {
 
     fn pretty_print(&self, _program: &Program, mut out: impl fmt::Write) -> fmt::Result {
         PrettyPrinter::new(&mut out)
-            .add_struct("Break", |p| p.add_field("target", |p| write!(p, "{:?}", self.target)))
+            .add_struct("Break", |p| p.add_field_with("target", |p| write!(p, "{:?}", self.target)))
     }
 }

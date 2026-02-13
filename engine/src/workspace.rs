@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc};
+use std::sync::{Arc, Mutex};
 
 use crate::{sim::world::World, util::rng::CanonRng};
 
@@ -6,5 +6,5 @@ use crate::{sim::world::World, util::rng::CanonRng};
 #[repr(C)]
 pub struct Workspace {
     pub world: World,
-    pub rng: Rc<RefCell<CanonRng>>,
+    pub rng: Arc<Mutex<CanonRng>>,
 }

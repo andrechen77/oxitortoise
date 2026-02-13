@@ -55,7 +55,7 @@ impl Node for GetLocalVar {
 
     fn pretty_print(&self, program: &Program, mut out: impl fmt::Write) -> fmt::Result {
         PrettyPrinter::new(&mut out).add_struct("GetLocalVar", |p| {
-            p.add_field("local_id", |p| write!(p, "{:?}", self.local_id))?;
+            p.add_field_with("local_id", |p| write!(p, "{:?}", self.local_id))?;
             if let Some(var_name) = program.locals[self.local_id].debug_name.as_deref() {
                 p.add_comment(var_name)?;
             }
@@ -124,7 +124,7 @@ impl Node for SetLocalVar {
 
     fn pretty_print(&self, program: &Program, mut out: impl fmt::Write) -> fmt::Result {
         PrettyPrinter::new(&mut out).add_struct("SetLocalVar", |p| {
-            p.add_field("local_id", |p| write!(p, "{:?}", self.local_id))?;
+            p.add_field_with("local_id", |p| write!(p, "{:?}", self.local_id))?;
             if let Some(var_name) = program.locals[self.local_id].debug_name.as_deref() {
                 p.add_comment(var_name)?;
             }

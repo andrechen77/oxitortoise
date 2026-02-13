@@ -79,7 +79,7 @@ impl Node for GetGlobalVar {
 
     fn pretty_print(&self, program: &Program, mut out: impl fmt::Write) -> fmt::Result {
         PrettyPrinter::new(&mut out).add_struct("GetGlobalVar", |p| {
-            p.add_field("var", |p| write!(p, "{}", self.index))?;
+            p.add_field_with("var", |p| write!(p, "{}", self.index))?;
             p.add_comment(&program.globals[self.index].name)
         })
     }
@@ -174,7 +174,7 @@ impl Node for GetTurtleVar {
 
     fn pretty_print(&self, program: &Program, mut out: impl fmt::Write) -> fmt::Result {
         PrettyPrinter::new(&mut out).add_struct("GetTurtleVar", |p| {
-            p.add_field("var", |p| write!(p, "{:?}", self.var))?;
+            p.add_field_with("var", |p| write!(p, "{:?}", self.var))?;
             if let TurtleVarDesc::Custom(field) = self.var {
                 p.add_comment(&program.custom_turtle_vars[field].name)?;
             }
@@ -249,7 +249,7 @@ impl Node for SetTurtleVar {
             TurtleVarDesc::Custom(field) => program.custom_turtle_vars[field].name.as_ref(),
         };
         PrettyPrinter::new(&mut out).add_struct("SetTurtleVar", |p| {
-            p.add_field("var", |p| write!(p, "{:?}", self.var))?;
+            p.add_field_with("var", |p| write!(p, "{:?}", self.var))?;
             p.add_comment(var_name)
         })
     }
@@ -396,7 +396,7 @@ impl Node for GetPatchVar {
 
     fn pretty_print(&self, program: &Program, mut out: impl fmt::Write) -> fmt::Result {
         PrettyPrinter::new(&mut out).add_struct("GetPatchVar", |p| {
-            p.add_field("var", |p| write!(p, "{:?}", self.var))?;
+            p.add_field_with("var", |p| write!(p, "{:?}", self.var))?;
             if let PatchVarDesc::Custom(field) = self.var {
                 p.add_comment(&program.custom_patch_vars[field].name)?;
             }
@@ -461,7 +461,7 @@ impl Node for SetPatchVar {
 
     fn pretty_print(&self, program: &Program, mut out: impl fmt::Write) -> fmt::Result {
         PrettyPrinter::new(&mut out).add_struct("SetPatchVar", |p| {
-            p.add_field("var", |p| write!(p, "{:?}", self.var))?;
+            p.add_field_with("var", |p| write!(p, "{:?}", self.var))?;
             if let PatchVarDesc::Custom(field) = self.var {
                 p.add_comment(&program.custom_patch_vars[field].name)?;
             }
@@ -601,7 +601,7 @@ impl Node for GetPatchVarAsTurtleOrPatch {
 
     fn pretty_print(&self, program: &Program, mut out: impl fmt::Write) -> fmt::Result {
         PrettyPrinter::new(&mut out).add_struct("GetPatchVarAsTurtleOrPatch", |p| {
-            p.add_field("var", |p| write!(p, "{:?}", self.var))?;
+            p.add_field_with("var", |p| write!(p, "{:?}", self.var))?;
             if let PatchVarDesc::Custom(field) = self.var {
                 p.add_comment(&program.custom_patch_vars[field].name)?;
             }
@@ -693,7 +693,7 @@ impl Node for SetPatchVarAsTurtleOrPatch {
 
     fn pretty_print(&self, program: &Program, mut out: impl fmt::Write) -> fmt::Result {
         PrettyPrinter::new(&mut out).add_struct("SetPatchVarAsTurtleOrPatch", |p| {
-            p.add_field("var", |p| write!(p, "{:?}", self.var))?;
+            p.add_field_with("var", |p| write!(p, "{:?}", self.var))?;
             if let PatchVarDesc::Custom(field) = self.var {
                 p.add_comment(&program.custom_patch_vars[field].name)?;
             }

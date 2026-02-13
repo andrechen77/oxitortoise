@@ -56,8 +56,9 @@ impl Node for Constant {
     }
 
     fn pretty_print(&self, _program: &Program, mut out: impl fmt::Write) -> fmt::Result {
-        PrettyPrinter::new(&mut out)
-            .add_struct("Constant", |p| p.add_field("value", |p| write!(p, "{:?}", self.value)))
+        PrettyPrinter::new(&mut out).add_struct("Constant", |p| {
+            p.add_field_with("value", |p| write!(p, "{:?}", self.value))
+        })
     }
 }
 

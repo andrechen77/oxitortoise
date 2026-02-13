@@ -64,7 +64,8 @@ impl Node for CheckNobody {
     }
 
     fn pretty_print(&self, _program: &Program, mut out: impl fmt::Write) -> fmt::Result {
-        PrettyPrinter::new(&mut out)
-            .add_struct("CheckNobody", |p| p.add_field("negate", |p| write!(p, "{}", self.negate)))
+        PrettyPrinter::new(&mut out).add_struct("CheckNobody", |p| {
+            p.add_field_with("negate", |p| write!(p, "{}", self.negate))
+        })
     }
 }

@@ -256,7 +256,7 @@ impl Node for PatchRelative {
 
     fn pretty_print(&self, _program: &Program, mut out: impl fmt::Write) -> fmt::Result {
         PrettyPrinter::new(&mut out).add_struct("PatchRelative", |p| {
-            p.add_field("relative_loc", |p| write!(p, "{:?}", self.relative_loc))
+            p.add_field_with("relative_loc", |p| write!(p, "{:?}", self.relative_loc))
         })
     }
 }

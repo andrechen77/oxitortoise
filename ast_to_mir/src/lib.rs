@@ -1,6 +1,7 @@
 // #![feature(if_let_guard, slice_as_array)]
 
-use std::{collections::HashMap, rc::Rc};
+use std::collections::HashMap;
+use std::sync::Arc;
 
 use engine::mir::BreedPartial;
 use engine::sim::turtle::DEFAULT_BREED_NAME;
@@ -34,11 +35,11 @@ use crate::ast::Ast;
 #[derive(Debug, Default)]
 pub struct GlobalScope {
     constants: HashMap<&'static str, fn() -> NodeKind>,
-    global_vars: HashMap<Rc<str>, usize>,
-    patch_vars: HashMap<Rc<str>, PatchVarDesc>,
-    turtle_vars: HashMap<Rc<str>, TurtleVarDesc>,
-    turtle_breeds: HashMap<Rc<str>, BreedId>,
-    functions: HashMap<Rc<str>, FunctionId>,
+    global_vars: HashMap<Arc<str>, usize>,
+    patch_vars: HashMap<Arc<str>, PatchVarDesc>,
+    turtle_vars: HashMap<Arc<str>, TurtleVarDesc>,
+    turtle_breeds: HashMap<Arc<str>, BreedId>,
+    functions: HashMap<Arc<str>, FunctionId>,
     // TODO(mvp) add link variables
 }
 
@@ -69,11 +70,11 @@ impl GlobalScope {
             ("BLUE", || NodeKind::from(node::Constant { value: UnpackedAny::Float(105.0) })),
             ("VIOLET", || NodeKind::from(node::Constant { value: UnpackedAny::Float(115.0) })),
         ]);
-        self.patch_vars.extend([(Rc::from("PCOLOR"), PatchVarDesc::Pcolor)]);
+        self.patch_vars.extend([(Arc::from("PCOLOR"), PatchVarDesc::Pcolor)]);
         self.turtle_vars.extend([
-            (Rc::from("WHO"), TurtleVarDesc::Who),
-            (Rc::from("COLOR"), TurtleVarDesc::Color),
-            (Rc::from("SIZE"), TurtleVarDesc::Size),
+            (Arc::from("WHO"), TurtleVarDesc::Who),
+            (Arc::from("COLOR"), TurtleVarDesc::Color),
+            (Arc::from("SIZE"), TurtleVarDesc::Size),
         ]);
         self.turtle_breeds.extend([(DEFAULT_BREED_NAME.into(), default_turtle_breed)]);
     }
@@ -150,14 +151,14 @@ pub fn ast_to_mir(ast: Ast) -> anyhow::Result<ParseResult> {
     // create the default turtle breed
     let default_turtle_breed = mir
         .turtle_breeds
-        .insert(BreedPartial { name: Rc::from("TURTLES"), singular_name: Rc::from("turtle") });
+        .insert(BreedPartial { name: Arc::from("TURTLES"), singular_name: Arc::from("turtle") });
 
     // add builtin names to the global scope
     mir.global_names.add_builtins(default_turtle_breed);
 
     // create the global variables
     for name in global_var_names {
-        let name: Rc<str> = name.to_uppercase().into();
+        let name: Arc<str> = name.to_uppercase().into();
         let decl = CustomVarDecl { name: name.clone(), ty: NlAbstractTy::Top.into() };
         let index = mir.global_vars.len();
         mir.global_vars.push(decl);
@@ -166,7 +167,7 @@ pub fn ast_to_mir(ast: Ast) -> anyhow::Result<ParseResult> {
     }
     // add custom patch variables
     for (i, name) in patch_var_names.into_iter().enumerate() {
-        let name: Rc<str> = name.to_uppercase().into();
+        let name: Arc<str> = name.to_uppercase().into();
         let patch_var_id = PatchVarDesc::Custom(i);
         trace!("Adding patch variable `{}` with id {:?}", name, patch_var_id);
         mir.global_names.patch_vars.insert(name.clone(), patch_var_id);
@@ -174,7 +175,7 @@ pub fn ast_to_mir(ast: Ast) -> anyhow::Result<ParseResult> {
     }
     // add custom turtle variables
     for (i, name) in turtle_var_names.into_iter().enumerate() {
-        let name: Rc<str> = name.to_uppercase().into();
+        let name: Arc<str> = name.to_uppercase().into();
         let turtle_var_id = TurtleVarDesc::Custom(i);
         trace!("Adding turtle variable `{}` with id {:?}", name, turtle_var_id);
         mir.global_names.turtle_vars.insert(name.clone(), turtle_var_id);
@@ -297,7 +298,7 @@ fn build_function_info(
     // add user-defined parameters
     let mut local_names = HashMap::new();
     for name in arg_names {
-        let name: Rc<str> = name.to_uppercase().into();
+        let name: Arc<str> = name.to_uppercase().into();
         let local_id = mir.locals.insert(LocalDeclaration {
             debug_name: Some(name.clone()),
             ty: NlAbstractTy::Top.into(),
@@ -383,13 +384,13 @@ enum AgentClass {
 /// Holds information about a function while it is being built.
 #[derive(Debug)]
 pub struct FnInfo {
-    debug_name: Rc<str>,
+    debug_name: Arc<str>,
     env_param: Option<LocalId>,
     context_param: Option<LocalId>,
     self_param: Option<LocalId>,
     positional_params: Vec<LocalId>,
     return_ty: NlAbstractTy,
-    local_names: HashMap<Rc<str>, LocalId>,
+    local_names: HashMap<Arc<str>, LocalId>,
     num_internal_bodies: usize,
 }
 
@@ -457,7 +458,7 @@ fn translate_node(ast_node: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) -> (NodeId
     let mut breaking_node = false;
     let node = match ast_node {
         N::LetBinding { var_name, value } => {
-            translate_let_binding(Rc::from(var_name.as_str()), *value, ctx.reborrow())
+            translate_let_binding(Arc::from(var_name.as_str()), *value, ctx.reborrow())
         }
         N::CommandProcCall { name, args } => {
             let referent = ctx
@@ -837,7 +838,7 @@ fn translate_statement_block(
 }
 
 fn translate_let_binding(
-    name: Rc<str>,
+    name: Arc<str>,
     value: ast::Node,
     mut ctx: FnBodyBuilderCtx<'_>,
 ) -> NodeKind {
@@ -880,7 +881,7 @@ fn translate_ephemeral_closure(
     // generate a procedure name
     let parent_fn_info = &mut ctx.mir.aux_fn_info[parent_fn_id];
     let parent_fn_bodies = &mut parent_fn_info.num_internal_bodies;
-    let proc_name = Rc::from(format!("{} body {}", parent_fn_info.debug_name, *parent_fn_bodies));
+    let proc_name = Arc::from(format!("{} body {}", parent_fn_info.debug_name, *parent_fn_bodies));
     *parent_fn_bodies += 1;
 
     // calculate the function parameters

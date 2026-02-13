@@ -8,6 +8,7 @@ use std::fmt::{self, Debug, Write};
 use std::mem::offset_of;
 use std::ops::Index;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use derive_more::derive::{From, Into};
 use either::Either;
@@ -313,11 +314,11 @@ impl fmt::Debug for Turtles {
             breeds,
         } = self;
         p.add_struct("Turtles", |p| {
-            p.add_field("breeds", |p| write!(p, "{:?}", breeds))?;
-            p.add_field("turtle_schema", |p| write!(p, "{:?}", turtle_schema))?;
-            p.add_field("num_turtles", |p| write!(p, "{}", num_turtles))?;
-            p.add_field("next_who", |p| write!(p, "{:?}", next_who))?;
-            p.add_field("turtles", |p| {
+            p.add_field_with("breeds", |p| write!(p, "{:?}", breeds))?;
+            p.add_field_with("turtle_schema", |p| write!(p, "{:?}", turtle_schema))?;
+            p.add_field_with("num_turtles", |p| write!(p, "{}", num_turtles))?;
+            p.add_field_with("next_who", |p| write!(p, "{:?}", next_who))?;
+            p.add_field_with("turtles", |p| {
                 p.add_map(
                     self.turtle_ids().map(|t| (t, ())),
                     |p, id| write!(p, "{:?}", id),
@@ -336,13 +337,13 @@ fn pretty_print_turtle(
 ) -> fmt::Result {
     p.add_struct("Turtle", |p| {
         // add builtin fields
-        p.add_field("base", |p| {
+        p.add_field_with("base", |p| {
             write!(p, "{:?}", turtles.get_turtle_base_data(id).expect("turtle must be valid"))
         })?;
-        p.add_field("pos", |p| {
+        p.add_field_with("pos", |p| {
             write!(p, "{:?}", turtles.get_turtle_position(id).expect("turtle must be valid"))
         })?;
-        p.add_field("heading", |p| {
+        p.add_field_with("heading", |p| {
             write!(p, "{:?}", turtles.get_turtle_heading(id).expect("turtle must be valid"))
         })?;
 
@@ -351,7 +352,7 @@ fn pretty_print_turtle(
             let AgentSchemaField::Other(ty) = turtles.schema()[*field_desc] else {
                 panic!("field at index {:?} should not be base data", field_desc);
             };
-            p.add_field(&field_name, |p| {
+            p.add_field_with(&field_name, |p| {
                 fn print_field<T: Reflect + Debug>(
                     p: &mut PrettyPrinter<impl Write>,
                     turtles: &Turtles,
@@ -414,8 +415,8 @@ slotmap::new_key_type! {
 
 #[derive(Debug)]
 pub struct Breed {
-    pub name: Rc<str>,
-    pub singular_name: Rc<str>,
+    pub name: Arc<str>,
+    pub singular_name: Arc<str>,
     /// Which fields of the turtle record are active for this breed.
     pub active_custom_fields: Vec<AgentFieldDescriptor>,
 }
@@ -446,14 +447,14 @@ pub struct TurtleSchema {
     position: AgentFieldDescriptor,
     heading: AgentFieldDescriptor,
     field_groups: Vec<AgentSchemaFieldGroup>,
-    custom_fields: Vec<(Rc<str>, AgentFieldDescriptor)>,
+    custom_fields: Vec<(Arc<str>, AgentFieldDescriptor)>,
 }
 
 impl TurtleSchema {
     pub fn new(
         heading_buffer_idx: u8,
         position_buffer_idx: u8,
-        custom_fields: &[(&Rc<str>, ConcreteTy, u8)],
+        custom_fields: &[(&Arc<str>, ConcreteTy, u8)],
         avoid_occupancy_bitfield: &[u8],
     ) -> Self {
         // create field groups vector and add base data group
@@ -489,7 +490,7 @@ impl TurtleSchema {
             let idx_within_buffer = field_group.fields.len();
             field_group.fields.push(AgentSchemaField::Other(*field_type));
             custom_field_descriptors.push((
-                Rc::clone(name),
+                Arc::clone(name),
                 AgentFieldDescriptor {
                     buffer_idx: *buffer_idx,
                     field_idx: idx_within_buffer as u8,
@@ -541,7 +542,7 @@ impl TurtleSchema {
         self.position
     }
 
-    pub fn custom_fields(&self) -> &[(Rc<str>, AgentFieldDescriptor)] {
+    pub fn custom_fields(&self) -> &[(Arc<str>, AgentFieldDescriptor)] {
         &self.custom_fields
     }
 

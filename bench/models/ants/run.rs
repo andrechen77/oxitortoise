@@ -1,4 +1,9 @@
-use std::{cell::RefCell, io, rc::Rc};
+use std::{
+    cell::RefCell,
+    io,
+    rc::Rc,
+    sync::{Arc, Mutex},
+};
 
 use ast_to_mir::{NameReferent, ParseResult, add_cheats, serde_json};
 use engine::{
@@ -105,9 +110,11 @@ fn create_workspace(
             tick_counter: Tick::default(),
             shapes: Shapes::default(),
         },
-        rng: Rc::new(RefCell::new(CanonRng::new(0))),
+        rng: Arc::new(Mutex::new(CanonRng::new(0))),
     }
 }
+
+static WORKSPACE: Mutex<Option<Workspace>> = Mutex::new(None);
 
 fn main() {
     tracing_subscriber::registry()
@@ -199,14 +206,6 @@ fn main() {
         }
     };
 
-    let NameReferent::UserProc(setup_mir_fn_id) = global_names.lookup("SETUP").unwrap() else {
-        panic!("expected a user procedure");
-    };
-    let setup = functions[&mir_to_lir_fns[&setup_mir_fn_id]];
-    let NameReferent::UserProc(go_mir_fn_id) = global_names.lookup("GO").unwrap() else {
-        panic!("expected a user procedure");
-    };
-    let go = functions[&mir_to_lir_fns[&go_mir_fn_id]];
     let NameReferent::Global(population) = global_names.lookup("POPULATION").unwrap() else {
         panic!("expected a global variable");
     };
@@ -222,7 +221,29 @@ fn main() {
     *workspace.world.globals.get_mut::<NlFloat>(diffusion_rate).unwrap_left() = NlFloat::new(50.0);
     *workspace.world.globals.get_mut::<NlFloat>(evaporation_rate).unwrap_left() =
         NlFloat::new(10.0);
+    visualize_update(workspace.world.generate_js_update_full());
 
+    // *WORKSPACE.lock().unwrap() = Some(workspace);
+
+    let NameReferent::UserProc(setup_mir_fn_id) = global_names.lookup("SETUP").unwrap() else {
+        panic!("expected a user procedure");
+    };
+    let setup = functions[&mir_to_lir_fns[&setup_mir_fn_id]];
+    let NameReferent::UserProc(go_mir_fn_id) = global_names.lookup("GO").unwrap() else {
+        panic!("expected a user procedure");
+    };
+    let go = functions[&mir_to_lir_fns[&go_mir_fn_id]];
+    let next_int = workspace.rng.clone();
+    let mut ctx = ExecutionContext {
+        workspace: &mut workspace,
+        next_int,
+        dirty_aggregator: DirtyAggregator::default(),
+    };
+    setup.call(&mut ctx, std::ptr::null_mut());
+    visualize_update(ctx.workspace.world.generate_js_update_full());
+
+    // let go_loop = async move {
+    let mut workspace = workspace;
     let next_int = workspace.rng.clone();
     let mut ctx = ExecutionContext {
         workspace: &mut workspace,
@@ -230,14 +251,28 @@ fn main() {
         dirty_aggregator: DirtyAggregator::default(),
     };
 
-    write_to_file("workspace_initial.txt", format!("{:#?}", ctx.workspace));
-    setup.call(&mut ctx, std::ptr::null_mut());
-    write_to_file("workspace_0.txt", format!("{:#?}", ctx.workspace));
-    for i in 1..3 {
+    for i in 1..1000 {
         go.call(&mut ctx, std::ptr::null_mut());
-        write_to_file(format!("workspace_{}.txt", i), format!("{:#?}", ctx.workspace));
+        visualize_update(ctx.workspace.world.generate_js_update_full());
     }
+    // };
+    // *GO_LOOP.lock().unwrap() = Some(Box::new(go_loop));
 }
+
+// extern "C" fn poll_go_loop() {
+//     let workspace = WORKSPACE.lock().unwrap();
+//     let Some(workspace) = workspace.as_mut() else {
+//         return;
+//     };
+//     let next_int = workspace.rng.clone();
+//     let mut ctx = ExecutionContext {
+//         workspace: &mut workspace,
+//         next_int,
+//         dirty_aggregator: DirtyAggregator::default(),
+//     };
+//     go.call(&mut ctx, std::ptr::null_mut());
+//     visualize_update(ctx.workspace.world.generate_js_update_full());
+// }
 
 struct ConsoleWriter;
 
@@ -262,7 +297,7 @@ impl<'a> MakeWriter<'a> for ConsoleWriterFactory {
     }
 }
 
-pub use debug_print::{write_to_console, write_to_file};
+pub use debug_print::{visualize_update, write_to_console, write_to_file};
 
 #[cfg(not(target_arch = "wasm32"))]
 mod debug_print {
@@ -281,6 +316,10 @@ mod debug_print {
         let filename = filename.as_ref();
         let buf = buf.as_ref();
         fs::write(filename, buf).unwrap();
+    }
+
+    pub fn visualize_update(update: impl AsRef<[u8]>) {
+        write_to_file("update_visualize.txt", update.as_ref());
     }
 }
 
@@ -301,6 +340,11 @@ mod debug_print {
         };
     }
 
+    pub fn visualize_update(update: impl AsRef<[u8]>) {
+        let update = update.as_ref();
+        unsafe { r#extern::visualize_update(update.as_ptr(), update.len()) };
+    }
+
     mod r#extern {
         unsafe extern "C" {
             pub fn write_to_console(message: *const u8, length: usize);
@@ -311,6 +355,8 @@ mod debug_print {
                 bytes: *const u8,
                 bytes_length: usize,
             );
+
+            pub fn visualize_update(update: *const u8, length: usize);
         }
     }
 }

@@ -34,7 +34,7 @@ impl<W: Write> PrettyPrinter<W> {
         write!(self, "}}")
     }
 
-    pub fn add_field(
+    pub fn add_field_with(
         &mut self,
         name: &str,
         then: impl FnOnce(&mut Self) -> fmt::Result,
@@ -43,6 +43,10 @@ impl<W: Write> PrettyPrinter<W> {
         write!(self, "{}: ", name)?;
         then(self)?;
         write!(self, ",")
+    }
+
+    pub fn add_field(&mut self, name: &str, value: impl fmt::Debug) -> fmt::Result {
+        self.add_field_with(name, |p| write!(p, "{:?}", value))
     }
 
     pub fn add_comment(&mut self, comment: &str) -> fmt::Result {

@@ -1,4 +1,4 @@
-use std::{cell::RefCell, ops::Deref};
+use std::{ops::Deref, sync::Mutex};
 
 mod mersenne_twister;
 
@@ -10,10 +10,10 @@ pub trait Rng {
 impl<T, R> Rng for T
 where
     R: Rng + ?Sized,
-    T: Deref<Target = RefCell<R>>,
+    T: Deref<Target = Mutex<R>>,
 {
     fn next_int(&mut self, max: i64) -> i64 {
-        self.borrow_mut().next_int(max)
+        self.lock().unwrap().next_int(max)
     }
 }
 

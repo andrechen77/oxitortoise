@@ -13,7 +13,7 @@ impl Program {
         let mut p = PrettyPrinter::new(&mut out);
         let Program { user_functions } = self;
         let _ = p.add_struct("Lir", |p| {
-            p.add_field("user_functions", |p| {
+            p.add_field_with("user_functions", |p| {
                 p.add_map(
                     user_functions.iter(),
                     |p, fn_id| {
@@ -33,9 +33,11 @@ impl Program {
                             ..
                         } = function;
                         p.add_struct("Function", |p| {
-                            p.add_field("debug_name", |p| write!(p, "{:?}", debug_fn_name))?;
-                            p.add_field("num_parameters", |p| write!(p, "{}", num_parameters))?;
-                            p.add_field("local_vars", |p| {
+                            p.add_field_with("debug_name", |p| write!(p, "{:?}", debug_fn_name))?;
+                            p.add_field_with("num_parameters", |p| {
+                                write!(p, "{}", num_parameters)
+                            })?;
+                            p.add_field_with("local_vars", |p| {
                                 p.add_list(
                                     local_vars.iter_enumerated(),
                                     |p, (local_var_id, local_var_ty)| {
@@ -49,8 +51,8 @@ impl Program {
                                     },
                                 )
                             })?;
-                            p.add_field("stack_space", |p| write!(p, "{}", stack_space))?;
-                            p.add_field("body", |p| {
+                            p.add_field_with("stack_space", |p| write!(p, "{}", stack_space))?;
+                            p.add_field_with("body", |p| {
                                 write!(p, "{}", body)?;
                                 pretty_print_seq(p, self, function, body.body)
                             })

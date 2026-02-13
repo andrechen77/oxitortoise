@@ -1,6 +1,6 @@
 // TODO(doc) all of MIR
 
-use std::{fmt, rc::Rc};
+use std::{fmt, rc::Rc, sync::Arc};
 
 use ambassador::{Delegate, delegatable_trait};
 use derive_more::derive::{Display, From, TryInto};
@@ -74,13 +74,13 @@ impl TurtleBreeds {
 
 #[derive(Debug)]
 pub struct BreedPartial {
-    pub name: Rc<str>,
-    pub singular_name: Rc<str>,
+    pub name: Arc<str>,
+    pub singular_name: Arc<str>,
 }
 
 #[derive(Debug)]
 pub struct CustomVarDecl {
-    pub name: Rc<str>,
+    pub name: Arc<str>,
     pub ty: MirTy,
 }
 
@@ -88,7 +88,7 @@ pub type Nodes = SlotMap<NodeId, NodeKind>;
 
 #[derive(derive_more::Debug)]
 pub struct Function {
-    pub debug_name: Option<Rc<str>>,
+    pub debug_name: Option<Arc<str>>,
     pub is_entrypoint: bool,
     /// A list of local variables which are parameters to the function. This
     /// includes implicit parameters such as the closure environment, the
@@ -111,7 +111,7 @@ new_key_type! {
 
 #[derive(Clone, Debug)]
 pub struct LocalDeclaration {
-    pub debug_name: Option<Rc<str>>,
+    pub debug_name: Option<Arc<str>>,
     pub ty: MirTy,
     pub storage: LocalStorage,
 }

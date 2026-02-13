@@ -123,8 +123,9 @@ impl Node for BinaryOperation {
     }
 
     fn pretty_print(&self, _program: &Program, mut out: impl std::fmt::Write) -> std::fmt::Result {
-        PrettyPrinter::new(&mut out)
-            .add_struct("BinaryOperation", |p| p.add_field("op", |p| write!(p, "{:?}", self.op)))
+        PrettyPrinter::new(&mut out).add_struct("BinaryOperation", |p| {
+            p.add_field_with("op", |p| write!(p, "{:?}", self.op))
+        })
     }
 
     fn write_lir_execution<I: InstallLir>(
@@ -237,7 +238,7 @@ impl Node for UnaryOp {
 
     fn pretty_print(&self, _program: &Program, mut out: impl std::fmt::Write) -> std::fmt::Result {
         PrettyPrinter::new(&mut out)
-            .add_struct("UnaryOp", |p| p.add_field("op", |p| write!(p, "{:?}", self.op)))
+            .add_struct("UnaryOp", |p| p.add_field_with("op", |p| write!(p, "{:?}", self.op)))
     }
 
     fn write_lir_execution<I: InstallLir>(
