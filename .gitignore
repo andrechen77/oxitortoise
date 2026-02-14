@@ -1,8 +1,11 @@
 /.cargo
 
-/dots
 /target
 
-/program.txt
-
 output
+
+*.mir
+*.wasm
+*.wat
+*.lir
+*.disass
