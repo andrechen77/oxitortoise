@@ -1,4 +1,4 @@
-use std::{mem::offset_of, rc::Rc, sync::Arc};
+use std::{mem::offset_of, sync::Arc};
 
 use flagset::{FlagSet, flags};
 

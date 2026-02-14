@@ -1,7 +1,5 @@
 use std::{
-    cell::RefCell,
     io,
-    rc::Rc,
     sync::{Arc, Mutex},
 };
 
@@ -114,7 +112,7 @@ fn create_workspace(
     }
 }
 
-static WORKSPACE: Mutex<Option<Workspace>> = Mutex::new(None);
+// static WORKSPACE: Mutex<Option<Workspace>> = Mutex::new(None);
 
 fn main() {
     tracing_subscriber::registry()
@@ -251,7 +249,7 @@ fn main() {
         dirty_aggregator: DirtyAggregator::default(),
     };
 
-    for i in 1..1000 {
+    for _i in 1..1000 {
         go.call(&mut ctx, std::ptr::null_mut());
         visualize_update(ctx.workspace.world.generate_js_update_full());
     }

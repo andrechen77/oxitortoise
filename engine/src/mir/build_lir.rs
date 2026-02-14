@@ -2,7 +2,7 @@
 //! into LIR. No optimization is performed here. Each MIR function will
 //! translate to a single LIR function.
 
-use std::{collections::HashMap, rc::Rc, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 use lir::{
     smallvec::{SmallVec, smallvec},

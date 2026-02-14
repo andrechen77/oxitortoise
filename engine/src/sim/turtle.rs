@@ -7,7 +7,6 @@ use std::collections::HashMap;
 use std::fmt::{self, Debug, Write};
 use std::mem::offset_of;
 use std::ops::Index;
-use std::rc::Rc;
 use std::sync::Arc;
 
 use derive_more::derive::{From, Into};
@@ -352,7 +351,7 @@ fn pretty_print_turtle(
             let AgentSchemaField::Other(ty) = turtles.schema()[*field_desc] else {
                 panic!("field at index {:?} should not be base data", field_desc);
             };
-            p.add_field_with(&field_name, |p| {
+            p.add_field_with(field_name, |p| {
                 fn print_field<T: Reflect + Debug>(
                     p: &mut PrettyPrinter<impl Write>,
                     turtles: &Turtles,

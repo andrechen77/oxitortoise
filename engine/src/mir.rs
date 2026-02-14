@@ -1,6 +1,6 @@
 // TODO(doc) all of MIR
 
-use std::{fmt, rc::Rc, sync::Arc};
+use std::{fmt, sync::Arc};
 
 use ambassador::{Delegate, delegatable_trait};
 use derive_more::derive::{Display, From, TryInto};

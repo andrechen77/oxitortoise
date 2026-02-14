@@ -4,6 +4,7 @@ use crate::{
 };
 
 #[derive(Default, Debug)]
+#[allow(dead_code)] // strings will be used eventually, just not at this stage of development
 pub struct NlString(String);
 
 impl NlString {

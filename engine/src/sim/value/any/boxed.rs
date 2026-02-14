@@ -94,13 +94,13 @@ impl BoxedAny {
         unsafe { self.inner.byte_add(offset) }.cast()
     }
 
-    pub fn deref<T: Reflect>(&self) -> &T {
+    pub fn deref_as<T: Reflect>(&self) -> &T {
         let ptr = self.ptr_to_val::<T>();
         // SAFETY: the pointer is valid and the type matches
         unsafe { &*ptr.as_ptr() }
     }
 
-    pub fn deref_mut<T: Reflect>(&mut self) -> &mut T {
+    pub fn deref_as_mut<T: Reflect>(&mut self) -> &mut T {
         let ptr = self.ptr_to_val::<T>();
         // SAFETY: the pointer is valid and the type matches
         unsafe { &mut *ptr.as_ptr() }
@@ -126,13 +126,13 @@ impl Drop for BoxedAny {
 impl Debug for BoxedAny {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.ty() == NlBool::CONCRETE_TY {
-            write!(f, "{:?}", self.deref::<NlBool>())?;
+            write!(f, "{:?}", self.deref_as::<NlBool>())?;
         } else if self.ty() == NlFloat::CONCRETE_TY {
-            write!(f, "{:?}", self.deref::<NlFloat>())?;
+            write!(f, "{:?}", self.deref_as::<NlFloat>())?;
         } else if self.ty() == NlList::CONCRETE_TY {
-            write!(f, "{:?}", self.deref::<NlList>())?;
+            write!(f, "{:?}", self.deref_as::<NlList>())?;
         } else if self.ty() == NlString::CONCRETE_TY {
-            write!(f, "{:?}", self.deref::<NlString>())?;
+            write!(f, "{:?}", self.deref_as::<NlString>())?;
         } else {
             write!(f, "BoxedAny(unknown type {:?})", self.ty())?;
         }

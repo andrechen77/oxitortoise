@@ -54,7 +54,7 @@ impl From<Color> for NlFloat {
 
 impl From<TurtleWho> for NlFloat {
     fn from(value: TurtleWho) -> Self {
-        NlFloat(value.0 as f64)
+        NlFloat(value.0)
     }
 }
 

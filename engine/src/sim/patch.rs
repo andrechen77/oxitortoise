@@ -3,7 +3,6 @@ use std::{
     fmt::{self, Write},
     mem::offset_of,
     ops::Index,
-    rc::Rc,
     sync::Arc,
 };
 
@@ -323,7 +322,7 @@ fn pretty_print_patch(
             let AgentSchemaField::Other(ty) = patches.schema()[*field_desc] else {
                 panic!("field at index {:?} should be a custom field", field_desc);
             };
-            p.add_field_with(&field_name, |p| {
+            p.add_field_with(field_name, |p| {
                 fn print_field<T: Reflect + fmt::Debug>(
                     p: &mut PrettyPrinter<impl Write>,
                     patches: &Patches,
