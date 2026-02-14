@@ -300,8 +300,8 @@ pub static PATCH_RIGHT_AND_AHEAD_INFO: HostFunctionInfo = HostFunctionInfo {
 pub extern "C" fn oxitortoise_patch_right_and_ahead(
     context: &mut CanonExecutionContext,
     turtle_id: u64,
-    distance: NlFloat,
     angle: NlFloat,
+    distance: NlFloat,
 ) -> OptionPatchId {
     // TODO: this is a lot of logic. it should be in the engine
     let world = &mut context.workspace.world;
