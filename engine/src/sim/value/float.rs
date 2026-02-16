@@ -9,8 +9,11 @@ use crate::{
 
 /// A double-precision floating-point number which is guaranteed to be finite
 /// (not Infinity or NaN).
-#[derive(Debug, Display, Default, Clone, Copy, From, PartialEq, PartialOrd)] // TODO(mvp) implement Ord and Eq
-#[derive(Neg, Add, AddAssign, Sub, SubAssign, Mul, MulAssign, Div, DivAssign)] // FIXME these impls don't guarantee that the result is finite
+#[derive(Debug, Display, Default, Clone, Copy, From, PartialEq, PartialOrd)]
+// TODO(mvp) implement Ord and Eq
+// FIXME these impls don't guarantee that the result is finite. add similar
+// changes to the compilation of arithmetic operations in the MIR
+#[derive(Neg, Add, AddAssign, Sub, SubAssign, Mul, MulAssign, Div, DivAssign)]
 #[mul(forward)]
 #[div(forward)]
 #[repr(transparent)]
