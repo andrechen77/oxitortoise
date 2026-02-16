@@ -68,7 +68,7 @@ impl TurtleId {
     }
 }
 
-static TURTLE_ID_TYPE_INFO: TypeInfo = TypeInfo::new::<TurtleId>(TypeInfoOptions {
+static TURTLE_ID_TYPE_INFO: TypeInfo = TypeInfo::new_copy::<TurtleId>(TypeInfoOptions {
     is_zeroable: false,
     mem_repr: Some(&[(0, lir::MemOpType::I64)]),
 });
@@ -167,7 +167,7 @@ impl Turtles {
                 size: value::NlFloat::new(1.0),
                 shape_name,
             };
-            self.data[0].as_mut().unwrap().row_mut(id.0.index as usize).insert(0, base_data);
+            self.data[0].as_mut().unwrap().row_mut(id.0.index as usize).set(0, base_data);
 
             // set builtin variables that aren't in the base data
             let heading_desc = self.turtle_schema.heading();
@@ -175,13 +175,13 @@ impl Turtles {
                 .as_mut()
                 .unwrap()
                 .row_mut(id.0.index as usize)
-                .insert(heading_desc.field_idx as usize, heading);
+                .set(heading_desc.field_idx as usize, heading);
             let position_desc = self.turtle_schema.position();
             self.data[position_desc.buffer_idx as usize]
                 .as_mut()
                 .unwrap()
                 .row_mut(id.0.index as usize)
-                .insert(position_desc.field_idx as usize, spawn_point);
+                .set(position_desc.field_idx as usize, spawn_point);
 
             // put in the default value for custom fields
             let custom_fields = &self.breeds[breed].active_custom_fields;
@@ -194,7 +194,7 @@ impl Turtles {
                         .as_mut()
                         .unwrap()
                         .row_mut(idx.index as usize)
-                        .insert_zeroable(field.field_idx as usize);
+                        .set_zero(field.field_idx as usize);
                 } else {
                     self.fallback_custom_fields.insert((id, field), PackedAny::ZERO);
                 }
@@ -397,7 +397,7 @@ pub struct TurtleBaseData {
 }
 
 static TURTLE_BASE_DATA_TYPE_INFO: TypeInfo =
-    TypeInfo::new::<TurtleBaseData>(TypeInfoOptions { is_zeroable: false, mem_repr: None });
+    TypeInfo::new_drop::<TurtleBaseData>(TypeInfoOptions { is_zeroable: false, mem_repr: None });
 
 unsafe impl Reflect for TurtleBaseData {
     const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&TURTLE_BASE_DATA_TYPE_INFO);

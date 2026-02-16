@@ -21,7 +21,7 @@ use crate::util::reflection::Reflect;
 use crate::util::reflection::TypeInfo;
 use crate::util::reflection::TypeInfoOptions;
 
-static UNTYPED_PTR_INFO: TypeInfo = TypeInfo::new::<*mut u8>(TypeInfoOptions {
+static UNTYPED_PTR_INFO: TypeInfo = TypeInfo::new_copy::<*mut u8>(TypeInfoOptions {
     is_zeroable: false,
     mem_repr: Some(&[(0, lir::MemOpType::Ptr)]),
 });
@@ -34,7 +34,7 @@ impl ConstTypeName for *mut u8 {
 }
 
 static UNIT_INFO: TypeInfo =
-    TypeInfo::new::<()>(TypeInfoOptions { is_zeroable: false, mem_repr: Some(&[]) });
+    TypeInfo::new_copy::<()>(TypeInfoOptions { is_zeroable: false, mem_repr: Some(&[]) });
 unsafe impl Reflect for () {
     const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&UNIT_INFO);
 }
@@ -45,7 +45,7 @@ impl ConstTypeName for () {
 
 // QUESTION should this type even exist? if so, we'd need a unified place to
 // put all information about it such as the fact that it's 32 bits.
-static U32_INFO: TypeInfo = TypeInfo::new::<u32>(TypeInfoOptions {
+static U32_INFO: TypeInfo = TypeInfo::new_copy::<u32>(TypeInfoOptions {
     is_zeroable: false,
     mem_repr: Some(&[(0, lir::MemOpType::I32)]),
 });

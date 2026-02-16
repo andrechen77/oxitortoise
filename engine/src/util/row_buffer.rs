@@ -233,40 +233,51 @@ impl<'a, B: AsRef<[u8]> + AsMut<[u8]> + 'a> Row<'a, B> {
         }
     }
 
-    pub fn insert<T: Reflect>(&mut self, field_idx: usize, value: T) {
+    pub fn set<T: Reflect>(&mut self, field_idx: usize, value: T) {
         assert_eq!(self.schema.fields[field_idx].r#type, T::CONCRETE_TY, "type mismatch");
 
-        // if the field is already present, panic. we could technically just
-        // drop the existing value, or return the new value to the caller, but
-        // in the context of this codebase I don't see a reason the user might
-        // want to do that
-        if self.has_field(field_idx) {
-            panic!("field at index {} is already present", field_idx);
+        let ptr_to_val = self.get_ptr_mut(field_idx).cast::<T>();
+
+        // if the field is already present, drop the existing value to replace it
+        if self.has_field(field_idx)
+            && let Some(drop_fn) = T::CONCRETE_TY.info().drop_fn
+        {
+            // SAFETY: we checked that the type tag matches, so this is the
+            // right function to call. we know this value is actually present.
+            // this value will not be read again because the field is
+            // overwritten immediately in this function
+            unsafe { drop_fn(ptr_to_val.cast()) };
         }
 
         // write the value to the row buffer
-        let ptr = self.get_ptr_mut(field_idx) as *mut T;
         // SAFETY: the type tag matches, and the schema has the correct
         // type and size for the field
-        unsafe { std::ptr::write(ptr, value) };
+        unsafe { std::ptr::write(ptr_to_val, value) };
 
         // set the occupancy bit
-        self.mark_present(field_idx);
+        // SAFETY: a valid value has been written to the field above
+        unsafe { self.mark_present(field_idx) };
     }
 
-    /// Marks some value in the field as present without any initialization. If
-    /// the field is not present, then the field's memory is already zeroed out,
-    /// which should be valid for the type at the given index.
-    pub fn insert_zeroable(&mut self, field_idx: usize) {
+    /// Marks some value in the field as present without any initialization.
+    pub fn init_zeroable(&mut self, field_idx: usize) {
         let type_info = self.schema.fields[field_idx].r#type.info();
         if !type_info.is_zeroable {
             panic!("field at index {} is not zeroable", field_idx);
         }
 
-        // set the occupancy bit. we don't need to do anything else because we
+        // set the occupancy bit.
+        // SAFETY: we don't need to do anything else because we
         // whether the field is absent (in which case it is all zeros due to
-        // mark_absent) or present, it is valid
-        self.mark_present(field_idx);
+        // mark_absent) or present, it is valid at the current bit pattern
+        unsafe { self.mark_present(field_idx) };
+    }
+
+    pub fn set_zero(&mut self, field_idx: usize) {
+        self.init_zeroable(field_idx);
+        // SAFETY: we know the field is valid at the zero bit pattern because of
+        // the above call to init_zeroable
+        unsafe { self.zero_field(field_idx) };
     }
 
     pub fn take<T: Reflect>(&mut self, field_idx: usize) -> Option<T> {
@@ -303,19 +314,27 @@ impl<'a, B: AsRef<[u8]> + AsMut<[u8]> + 'a> Row<'a, B> {
             }
 
             let field_type = self.schema.fields[field_idx].r#type;
-            let drop_fn = field_type.info().drop_fn;
-            // SAFETY: we used the type tag for this field to get the right
-            // function to call to drop the value. we know this value is
-            // actually present. this value will not be read again because the
-            // field will be marked as not present in the following line
-            unsafe { drop_fn(self.get_ptr_mut(field_idx)) };
+            if let Some(drop_fn) = field_type.info().drop_fn {
+                // SAFETY: we used the type tag for this field to get the right
+                // function to call to drop the value. we know this value is
+                // actually present. this value will not be read again because the
+                // field will be marked as not present in the following line
+                unsafe { drop_fn(self.get_ptr_mut(field_idx)) };
+            }
             if self.schema.occupancy_bitfield_len != 0 {
                 self.mark_absent(field_idx);
             }
         }
     }
 
-    fn mark_present(&mut self, field_idx: usize) {
+    /// Marks the field at `field_idx` as present in the occupancy bitfield.
+    /// This does not initialize the field's memory, which must be done
+    /// separately.
+    ///
+    /// # Safety
+    ///
+    /// The caller must guarantee that a valid value exists at that field.
+    unsafe fn mark_present(&mut self, field_idx: usize) {
         // handle the case where the occupancy bitfield is omitted due to
         // always-present fields
         if self.schema.occupancy_bitfield_len == 0 {
@@ -328,7 +347,8 @@ impl<'a, B: AsRef<[u8]> + AsMut<[u8]> + 'a> Row<'a, B> {
     }
 
     /// Marks the field at `field_idx` as absent in the occupancy bitfield.
-    /// Also zeroes the field's memory.
+    /// Also zeroes the field's memory. This does not drop the value, which must
+    /// be done separately.
     fn mark_absent(&mut self, field_idx: usize) {
         // handle the case where the occupancy bitfield is omitted due to
         // always-present fields
@@ -341,6 +361,15 @@ impl<'a, B: AsRef<[u8]> + AsMut<[u8]> + 'a> Row<'a, B> {
         self.data.as_mut()[byte_offset] &= !(1 << bit_offset);
 
         // zero the field's memory
+        // SAFETY: the field is marked as absent
+        unsafe { self.zero_field(field_idx) };
+    }
+
+    /// # Safety
+    ///
+    /// The caller must guarantee that the field is either valid at the zero bit
+    /// pattern, or marked as absent (to prevent attempts to read the field).
+    unsafe fn zero_field(&mut self, field_idx: usize) {
         let RowSchemaField { offset, size, .. } = self.schema.fields[field_idx];
         self.data.as_mut()[offset..offset + size].fill(0);
     }
@@ -612,7 +641,7 @@ mod tests {
     use super::*;
 
     // provide these impls for testing purposes only
-    static U32_TYPE_INFO: TypeInfo = TypeInfo::new::<u32>(TypeInfoOptions {
+    static U32_TYPE_INFO: TypeInfo = TypeInfo::new_copy::<u32>(TypeInfoOptions {
         is_zeroable: true,
         mem_repr: Some(&[(0, lir::MemOpType::I32)]),
     });
@@ -620,14 +649,14 @@ mod tests {
         const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&U32_TYPE_INFO);
     }
     static STRING_TYPE_INFO: TypeInfo =
-        TypeInfo::new::<String>(TypeInfoOptions { is_zeroable: false, mem_repr: None });
+        TypeInfo::new_drop::<String>(TypeInfoOptions { is_zeroable: false, mem_repr: None });
     unsafe impl Reflect for String {
         const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&STRING_TYPE_INFO);
     }
     impl ConstTypeName for String {
         const TYPE_NAME: &'static str = "String";
     }
-    static F64_TYPE_INFO: TypeInfo = TypeInfo::new::<f64>(TypeInfoOptions {
+    static F64_TYPE_INFO: TypeInfo = TypeInfo::new_copy::<f64>(TypeInfoOptions {
         is_zeroable: true,
         mem_repr: Some(&[(0, lir::MemOpType::F64)]),
     });
@@ -637,7 +666,7 @@ mod tests {
     impl ConstTypeName for f64 {
         const TYPE_NAME: &'static str = "f64";
     }
-    static BOOL_TYPE_INFO: TypeInfo = TypeInfo::new::<bool>(TypeInfoOptions {
+    static BOOL_TYPE_INFO: TypeInfo = TypeInfo::new_copy::<bool>(TypeInfoOptions {
         is_zeroable: true,
         mem_repr: Some(&[(0, lir::MemOpType::I8)]),
     });
@@ -656,7 +685,7 @@ mod tests {
         buffer.ensure_capacity(1);
         {
             let mut row = buffer.row_mut(0);
-            row.insert::<u32>(0, 42);
+            row.set::<u32>(0, 42);
         }
         let row = buffer.row(0);
         assert_eq!(row.get::<u32>(0), Some(&42));
@@ -671,9 +700,9 @@ mod tests {
 
         {
             let mut row = buffer.row_mut(0);
-            row.insert::<u32>(0, 42);
-            row.insert::<String>(1, "hello".to_string());
-            row.insert::<f64>(2, 3.14);
+            row.set::<u32>(0, 42);
+            row.set::<String>(1, "hello".to_string());
+            row.set::<f64>(2, 3.14);
         }
 
         let row = buffer.row(0);
@@ -695,8 +724,8 @@ mod tests {
         {
             let mut row = buffer.row_mut(0);
             // only insert fields 0 and 2, leave 1 and 3 empty
-            row.insert::<u32>(0, 100);
-            row.insert::<f64>(2, 2.718);
+            row.set::<u32>(0, 100);
+            row.set::<f64>(2, 2.718);
         }
 
         let row = buffer.row(0);
@@ -727,9 +756,9 @@ mod tests {
             let mut row = buffer.row_mut(0);
 
             // insert fields
-            row.insert::<u32>(0, 42);
-            row.insert::<String>(1, "hello".to_string());
-            row.insert::<f64>(2, 3.14);
+            row.set::<u32>(0, 42);
+            row.set::<String>(1, "hello".to_string());
+            row.set::<f64>(2, 3.14);
 
             // verify they are present
             assert!(row.has_field(0));
@@ -767,7 +796,7 @@ mod tests {
 
         {
             let mut row = buffer.row_mut(0);
-            row.insert::<u32>(0, 42);
+            row.set::<u32>(0, 42);
         }
 
         let row = buffer.row(0);
@@ -797,19 +826,19 @@ mod tests {
         buffer.ensure_capacity(3);
         {
             let mut row0 = buffer.row_mut(0);
-            row0.insert::<u32>(0, 100);
-            row0.insert::<String>(1, "first".to_string());
-            row0.insert::<f64>(2, 1.0);
+            row0.set::<u32>(0, 100);
+            row0.set::<String>(1, "first".to_string());
+            row0.set::<f64>(2, 1.0);
         }
         {
             let mut row1 = buffer.row_mut(1);
-            row1.insert::<u32>(0, 200);
-            row1.insert::<f64>(2, 2.0);
+            row1.set::<u32>(0, 200);
+            row1.set::<f64>(2, 2.0);
             // leave field 1 empty
         }
         {
             let mut row2 = buffer.row_mut(2);
-            row2.insert::<String>(1, "third".to_string());
+            row2.set::<String>(1, "third".to_string());
             // leave fields 0 and 2 empty
         }
 
@@ -835,8 +864,8 @@ mod tests {
         // verify that we can still insert into new rows after expansion
         {
             let mut row100 = buffer.row_mut(100);
-            row100.insert::<u32>(0, 1000);
-            row100.insert::<String>(1, "hundredth".to_string());
+            row100.set::<u32>(0, 1000);
+            row100.set::<String>(1, "hundredth".to_string());
         }
 
         let row100 = buffer.row(100);
@@ -867,11 +896,11 @@ mod tests {
         for row_idx in 0..num_rows {
             let mut row = buffer.row_mut(row_idx);
 
-            row.insert::<bool>(0, (row_idx & 1) != 0);
-            row.insert::<bool>(1, (row_idx & 2) != 0);
-            row.insert::<u32>(2, row_idx as u32);
-            row.insert::<f64>(3, row_idx as f64);
-            row.insert::<String>(4, row_idx.to_string());
+            row.set::<bool>(0, (row_idx & 1) != 0);
+            row.set::<bool>(1, (row_idx & 2) != 0);
+            row.set::<u32>(2, row_idx as u32);
+            row.set::<f64>(3, row_idx as f64);
+            row.set::<String>(4, row_idx.to_string());
         }
 
         // verify all rows have correct data
@@ -902,18 +931,18 @@ mod tests {
         // populate with some data
         {
             let mut row0 = buffer.row_mut(0);
-            row0.insert::<u32>(0, 42);
-            row0.insert::<String>(1, "hello".to_string());
+            row0.set::<u32>(0, 42);
+            row0.set::<String>(1, "hello".to_string());
         }
         {
             let mut row1 = buffer.row_mut(1);
-            row1.insert::<u32>(0, 100);
-            row1.insert::<String>(1, "world".to_string());
+            row1.set::<u32>(0, 100);
+            row1.set::<String>(1, "world".to_string());
         }
         {
             let mut row2 = buffer.row_mut(2);
-            row2.insert::<u32>(0, 999);
-            row2.insert::<String>(1, "test".to_string());
+            row2.set::<u32>(0, 999);
+            row2.set::<String>(1, "test".to_string());
         }
 
         // create new schema with (String, u32) - reversed order
@@ -922,8 +951,8 @@ mod tests {
         // change schema, taking ownership of values
         buffer.change_schema(new_schema, |mut old_row, mut new_row| {
             // take the old values and insert them in new positions
-            new_row.insert::<u32>(1, old_row.take::<u32>(0).unwrap());
-            new_row.insert::<String>(0, old_row.take::<String>(1).unwrap());
+            new_row.set::<u32>(1, old_row.take::<u32>(0).unwrap());
+            new_row.set::<String>(0, old_row.take::<String>(1).unwrap());
         });
 
         // verify the data is now in the new schema
@@ -950,7 +979,7 @@ mod tests {
             let mut row = buffer.row_mut(0);
 
             // insert a nonzero value
-            row.insert::<u32>(0, 42);
+            row.set::<u32>(0, 42);
             assert_eq!(row.get::<u32>(0), Some(&42));
 
             // take the value out
@@ -959,7 +988,7 @@ mod tests {
             assert_eq!(row.get::<u32>(0), None);
 
             // insert zeroable
-            row.insert_zeroable(0);
+            row.init_zeroable(0);
             assert_eq!(row.get::<u32>(0), Some(&0));
         }
     }
@@ -973,19 +1002,19 @@ mod tests {
         // populate multiple rows with data
         {
             let mut row0 = buffer.row_mut(0);
-            row0.insert::<u32>(0, 100);
-            row0.insert::<String>(1, "first".to_string());
-            row0.insert::<f64>(2, 1.0);
+            row0.set::<u32>(0, 100);
+            row0.set::<String>(1, "first".to_string());
+            row0.set::<f64>(2, 1.0);
         }
         {
             let mut row1 = buffer.row_mut(1);
-            row1.insert::<u32>(0, 200);
-            row1.insert::<f64>(2, 2.0);
+            row1.set::<u32>(0, 200);
+            row1.set::<f64>(2, 2.0);
             // leave field 1 empty
         }
         {
             let mut row2 = buffer.row_mut(2);
-            row2.insert::<String>(1, "third".to_string());
+            row2.set::<String>(1, "third".to_string());
             // leave fields 0 and 2 empty
         }
 

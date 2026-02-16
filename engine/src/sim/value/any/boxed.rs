@@ -113,9 +113,11 @@ impl Drop for BoxedAny {
         // SAFETY: the layout is correct because it came from the actual type
         // tag
         let val_ptr = unsafe { self.ptr_to_val_with_layout(type_info.layout) };
-        // SAFETY: the passed pointer is valid per `BoxedAny`'s invariants, and
-        // since we are in the drop implementation, it will never be used again
-        unsafe { (type_info.drop_fn)(val_ptr.as_ptr()) };
+        if let Some(drop_fn) = type_info.drop_fn {
+            // SAFETY: the passed pointer is valid per `BoxedAny`'s invariants, and
+            // since we are in the drop implementation, it will never be used again
+            unsafe { drop_fn(val_ptr.as_ptr()) };
+        }
 
         // now that the value has been dropped, we can/should dealloc the memory
         let (all_layout, _) = layout_and_val_offset(type_info.layout);

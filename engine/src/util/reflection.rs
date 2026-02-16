@@ -60,13 +60,13 @@ pub struct TypeInfo {
     /// should deallocate any memory that the value itself owns, but does not
     /// deallocate the memory that the value itself inhabits (that is the
     /// responsibility of whoever owns the value, i.e. the caller of this
-    /// function)
+    /// function). None indicates that the type is `Copy`.
     ///
     /// # Safety
     ///
     /// The caller must guarantee that the passed pointer is a valid pointer to
     /// T that can be dropped, and that that value will never be used again.
-    pub drop_fn: unsafe fn(*mut u8),
+    pub drop_fn: Option<unsafe fn(*mut u8)>,
     /// Each value that maps as a separate register when this type is
     /// loaded from or stored into memory corresponds to a tuple of the offset
     /// and LIR type of the value.
@@ -89,24 +89,37 @@ impl TypeInfo {
     /// Generates a `TypeInfo` for the given type, where all fields are
     /// guaranteed correct except for those specified in the `options`
     /// parameter.
-    pub const fn new<T: 'static + ConstTypeName>(options: TypeInfoOptions) -> Self {
+    pub const fn new_drop<T: 'static + ConstTypeName>(options: TypeInfoOptions) -> Self {
         let TypeInfoOptions { is_zeroable, mem_repr } = options;
 
         Self {
             debug_name: T::TYPE_NAME,
             layout: Layout::new::<T>(),
             is_zeroable,
-            drop_fn: drop_impl::<T>,
+            drop_fn: Some(drop_impl::<T>),
             mem_repr,
         }
     }
 
+    pub const fn new_copy<T: 'static + Copy + ConstTypeName>(options: TypeInfoOptions) -> Self {
+        let TypeInfoOptions { is_zeroable, mem_repr } = options;
+
+        Self {
+            debug_name: T::TYPE_NAME,
+            layout: Layout::new::<T>(),
+            is_zeroable,
+            drop_fn: None,
+            mem_repr,
+        }
+    }
+
+    // types that can only be referenced through pointer
     pub const fn new_opaque<T: 'static + ConstTypeName>() -> Self {
         Self {
             debug_name: T::TYPE_NAME,
             layout: Layout::new::<T>(),
             is_zeroable: false,
-            drop_fn: drop_impl::<T>,
+            drop_fn: Some(drop_impl::<T>),
             mem_repr: None,
         }
     }

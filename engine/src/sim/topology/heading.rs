@@ -68,7 +68,7 @@ impl From<NlFloat> for Heading {
     }
 }
 
-static HEADING_TYPE_INFO: TypeInfo = TypeInfo::new::<Heading>(TypeInfoOptions {
+static HEADING_TYPE_INFO: TypeInfo = TypeInfo::new_copy::<Heading>(TypeInfoOptions {
     is_zeroable: true,
     mem_repr: Some(&[(0, lir::MemOpType::F64)]),
 });

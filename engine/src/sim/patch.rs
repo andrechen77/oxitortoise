@@ -44,7 +44,7 @@ impl Default for PatchId {
     }
 }
 
-static PATCH_ID_TYPE_INFO: TypeInfo = TypeInfo::new::<PatchId>(TypeInfoOptions {
+static PATCH_ID_TYPE_INFO: TypeInfo = TypeInfo::new_copy::<PatchId>(TypeInfoOptions {
     is_zeroable: false,
     mem_repr: Some(&[(0, lir::MemOpType::I32)]),
 });
@@ -108,55 +108,7 @@ impl Patches {
         for buffer in patches.data.iter_mut().filter_map(|b| b.as_mut()) {
             buffer.ensure_capacity(patches.num_patches as usize);
         }
-        let TopologySpec { min_pxcor, max_pycor, patches_height, patches_width, .. } =
-            topology_spec;
-        for j in 0..*patches_height {
-            for i in 0..*patches_width {
-                let x = min_pxcor + i;
-                let y = max_pycor - j;
-                let position = Point { x: x as CoordFloat, y: y as CoordFloat };
-                // topology_spec.patch_at(position) should just return an
-                // increasing index anyway but this is more robust (even though
-                // it's literally the same thing just requiring more
-                // optimization)
-                let id = topology_spec.patch_at(PointInt { x, y });
-
-                // initialize base data
-                let base_data = PatchBaseData {
-                    position,
-                    plabel: String::new(),
-                    plabel_color: Color::BLACK, // FIXME use a more sensible default
-                };
-                patches.data[0].as_mut().unwrap().row_mut(id.0 as usize).insert(0, base_data);
-
-                // initialize other builtins
-                let pcolor_desc = patches.patch_schema.pcolor();
-                patches.data[pcolor_desc.buffer_idx as usize]
-                    .as_mut()
-                    .unwrap()
-                    .row_mut(id.0 as usize)
-                    .insert_zeroable(pcolor_desc.field_idx as usize);
-
-                // initialize custom fields
-                for &(_, field) in patches.patch_schema.custom_fields() {
-                    let AgentSchemaField::Other(r#type) = &patches.patch_schema[field] else {
-                        panic!("field at index {:?} should be a custom field", field);
-                    };
-                    if r#type.info().is_zeroable {
-                        patches.data[field.buffer_idx as usize]
-                            .as_mut()
-                            .unwrap()
-                            .row_mut(id.0 as usize)
-                            .insert_zeroable(field.field_idx as usize);
-                    } else {
-                        patches.fallback_custom_fields.insert((id, field), PackedAny::ZERO);
-                    }
-                }
-                // TODO(wishlist) can reduce code duplication by using a helper
-                // function for initialization of the custom fields of turtles,
-                // patches, and links
-            }
-        }
+        patches.clear_patch_variables(topology_spec);
 
         patches
     }
@@ -246,7 +198,7 @@ impl Patches {
             .as_mut()
             .unwrap()
             .row_mut(id.0 as usize)
-            .insert(field.field_idx as usize, value);
+            .set(field.field_idx as usize, value);
         if self.fallback_custom_fields.contains_key(&(id, field)) {
             self.fallback_custom_fields.remove(&(id, field));
         }
@@ -275,8 +227,70 @@ impl Patches {
     }
 
     /// Resets all patch variables to their default values.
-    pub fn clear_patch_variables(&mut self) {
-        // TODO(mvp) implement clearing patch variables
+    pub fn clear_patch_variables(&mut self, topology_spec: &TopologySpec) {
+        self.fallback_custom_fields.clear();
+
+        let TopologySpec { min_pxcor, max_pycor, patches_height, patches_width, .. } =
+            topology_spec;
+        for j in 0..*patches_height {
+            for i in 0..*patches_width {
+                let x = min_pxcor + i;
+                let y = max_pycor - j;
+                let position = Point { x: x as CoordFloat, y: y as CoordFloat };
+                // topology_spec.patch_at(position) should just return an
+                // increasing index anyway but this is more robust (even though
+                // it's literally the same thing just requiring more
+                // optimization)
+                let id = topology_spec.patch_at(PointInt { x, y });
+
+                // initialize base data
+                let base_data = PatchBaseData {
+                    position,
+                    plabel: String::new(),
+                    plabel_color: Color::BLACK, // FIXME use a more sensible default
+                };
+                self.data[0].as_mut().unwrap().row_mut(id.0 as usize).set(0, base_data);
+
+                // initialize other builtins
+                let pcolor_desc = self.patch_schema.pcolor();
+
+                if let Some(pcolor) = self.data[pcolor_desc.buffer_idx as usize]
+                    .as_mut()
+                    .unwrap()
+                    .row(id.0 as usize)
+                    .get::<Color>(pcolor_desc.field_idx as usize)
+                {
+                    if pcolor.to_float().get() % 10.0 > 1.0 {
+                        tracing::trace!("pcolor is not black, break here");
+                    }
+                }
+
+                self.data[pcolor_desc.buffer_idx as usize]
+                    .as_mut()
+                    .unwrap()
+                    .row_mut(id.0 as usize)
+                    .set_zero(pcolor_desc.field_idx as usize);
+
+                // initialize custom fields
+                for &(_, field) in self.patch_schema.custom_fields() {
+                    let AgentSchemaField::Other(r#type) = &self.patch_schema[field] else {
+                        panic!("field at index {:?} should be a custom field", field);
+                    };
+                    if r#type.info().is_zeroable {
+                        self.data[field.buffer_idx as usize]
+                            .as_mut()
+                            .unwrap()
+                            .row_mut(id.0 as usize)
+                            .set_zero(field.field_idx as usize);
+                    } else {
+                        self.fallback_custom_fields.insert((id, field), PackedAny::ZERO);
+                    }
+                }
+                // TODO(wishlist) can reduce code duplication by using a helper
+                // function for initialization of the custom fields of turtles,
+                // patches, and links
+            }
+        }
     }
 
     pub fn patch_ids(&self) -> impl Iterator<Item = PatchId> + '_ {
@@ -361,7 +375,7 @@ pub struct PatchBaseData {
 }
 
 static PATCH_BASE_DATA_TYPE_INFO: TypeInfo =
-    TypeInfo::new::<PatchBaseData>(TypeInfoOptions { is_zeroable: false, mem_repr: None });
+    TypeInfo::new_drop::<PatchBaseData>(TypeInfoOptions { is_zeroable: false, mem_repr: None });
 
 impl ConstTypeName for PatchBaseData {
     const TYPE_NAME: &'static str = "PatchBaseData";

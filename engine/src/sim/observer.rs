@@ -31,7 +31,7 @@ impl Globals {
         // initialize variables to zero
         for (var_id, (_, ty)) in schema.custom_fields.iter().enumerate() {
             if ty.info().is_zeroable {
-                data.row_mut(0).insert_zeroable(var_id);
+                data.row_mut(0).set_zero(var_id);
             } else {
                 fallback_fields.insert(var_id, PackedAny::ZERO);
             }

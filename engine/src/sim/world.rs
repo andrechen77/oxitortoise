@@ -21,7 +21,7 @@ pub struct World {
 impl World {
     pub fn clear_all(&mut self) {
         // self.observer.borrow_mut().clear_globals();
-        self.patches.clear_patch_variables();
+        self.patches.clear_patch_variables(self.topology.spec());
         self.turtles.clear();
         /*
         @observer.resetPerspective()

@@ -109,7 +109,7 @@ impl PackedAny {
     }
 }
 
-static PACKED_ANY_TYPE_INFO: TypeInfo = TypeInfo::new::<PackedAny>(TypeInfoOptions {
+static PACKED_ANY_TYPE_INFO: TypeInfo = TypeInfo::new_drop::<PackedAny>(TypeInfoOptions {
     is_zeroable: true,
     mem_repr: Some(&[(0, lir::MemOpType::F64)]),
 });
