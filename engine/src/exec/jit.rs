@@ -53,16 +53,20 @@ impl JitEntrypoint {
         Self { fn_ptr }
     }
 
-    pub fn call(&self, context: &mut CanonExecutionContext, args: *mut u8) {
+    // TODO define the safety line for this function. for now, just make all
+    // calls unsafe since the function can do literally anything and it depends
+    // on the specific function being wrapped.
+    #[allow(clippy::missing_safety_doc)]
+    pub unsafe fn call(&self, context: &mut CanonExecutionContext, args: *mut u8) {
         (self.fn_ptr)(context, args)
     }
 }
 
 #[repr(C)]
 pub struct JitCallback<'env, Arg, Ret> {
-    pub env: *mut u8,
-    pub fn_ptr: extern "C" fn(*mut u8, &mut CanonExecutionContext, Arg) -> Ret,
-    pub _phantom: PhantomData<&'env mut ()>,
+    env: *mut u8,
+    fn_ptr: extern "C" fn(*mut u8, &mut CanonExecutionContext, Arg) -> Ret,
+    _phantom: PhantomData<&'env mut ()>,
 }
 
 impl<'env, Arg, Ret> JitCallback<'env, Arg, Ret> {
@@ -73,7 +77,18 @@ impl<'env, Arg, Ret> JitCallback<'env, Arg, Ret> {
     /// The index of the arguments parameter when calling a callback function.
     pub const PARAM_ARG_IDX: usize = 2;
 
-    pub fn call_mut(&mut self, context: &mut CanonExecutionContext, arg: Arg) -> Ret {
+    pub fn new(
+        env: *mut u8,
+        fn_ptr: extern "C" fn(*mut u8, &mut CanonExecutionContext, Arg) -> Ret,
+    ) -> Self {
+        Self { env, fn_ptr, _phantom: PhantomData }
+    }
+
+    // TODO define the safety line for this function. for now, just make all
+    // calls unsafe since the function can do literally anything and it depends
+    // on the specific function being wrapped.
+    #[allow(clippy::missing_safety_doc)]
+    pub unsafe fn call_mut(&mut self, context: &mut CanonExecutionContext, arg: Arg) -> Ret {
         (self.fn_ptr)(self.env, context, arg)
     }
 }

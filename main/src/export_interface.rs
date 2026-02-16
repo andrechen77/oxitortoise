@@ -1,5 +1,3 @@
-use std::marker::PhantomData;
-
 use engine::{
     exec::{CanonExecutionContext, helpers, jit::JitCallback},
     lir::{
@@ -74,10 +72,10 @@ pub extern "C" fn oxitortoise_create_turtles(
 ) {
     let breed: BreedId = KeyData::from_ffi(breed).into();
     let position = Point { x: 0.0, y: 0.0 };
-    let mut birth_command =
-        JitCallback { env: birth_command_env, fn_ptr: birth_command_fn_ptr, _phantom: PhantomData };
+    let mut birth_command = JitCallback::new(birth_command_env, birth_command_fn_ptr);
     helpers::create_turtles(context, breed, count, position, |context, turtle_id| {
-        birth_command.call_mut(context, turtle_id.to_ffi())
+        // TODO document safety concerns
+        unsafe { birth_command.call_mut(context, turtle_id.to_ffi()) }
     });
 }
 
@@ -92,9 +90,10 @@ pub extern "C" fn oxitortoise_for_all_turtles(
     block_env: *mut u8,
     block_fn_ptr: extern "C" fn(*mut u8, &mut CanonExecutionContext, u64 /* TurtleId */) -> (),
 ) {
-    let mut block = JitCallback { env: block_env, fn_ptr: block_fn_ptr, _phantom: PhantomData };
+    let mut block = JitCallback::new(block_env, block_fn_ptr);
     helpers::for_all_turtles(context, |context, turtle_id| {
-        block.call_mut(context, turtle_id.to_ffi())
+        // TODO document safety concerns
+        unsafe { block.call_mut(context, turtle_id.to_ffi()) }
     });
 }
 
@@ -109,8 +108,11 @@ pub extern "C" fn oxitortoise_for_all_patches(
     block_env: *mut u8,
     block_fn_ptr: extern "C" fn(*mut u8, &mut CanonExecutionContext, PatchId) -> (),
 ) {
-    let mut block = JitCallback { env: block_env, fn_ptr: block_fn_ptr, _phantom: PhantomData };
-    helpers::for_all_patches(context, |context, patch_id| block.call_mut(context, patch_id));
+    let mut block = JitCallback::new(block_env, block_fn_ptr);
+    helpers::for_all_patches(context, |context, patch_id| {
+        // TODO document safety concerns
+        unsafe { block.call_mut(context, patch_id) }
+    });
 }
 
 pub static EUCLIDEAN_DISTANCE_NO_WRAP_INFO: HostFunctionInfo = HostFunctionInfo {

@@ -237,7 +237,7 @@ fn main() {
         next_int,
         dirty_aggregator: DirtyAggregator::default(),
     };
-    setup.call(&mut ctx, std::ptr::null_mut());
+    unsafe { setup.call(&mut ctx, std::ptr::null_mut()) };
     visualize_update(ctx.workspace.world.generate_js_update_full());
 
     // let go_loop = async move {
@@ -250,7 +250,7 @@ fn main() {
     };
 
     for _i in 1..1000 {
-        go.call(&mut ctx, std::ptr::null_mut());
+        unsafe { go.call(&mut ctx, std::ptr::null_mut()) };
         visualize_update(ctx.workspace.world.generate_js_update_full());
     }
     // };
