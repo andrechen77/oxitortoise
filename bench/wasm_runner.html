@@ -13,6 +13,15 @@
 	<button id="run_main">
 		<pre>main()</pre>
 	</button>
+	<button id="run_setup">
+		<pre>setup()</pre>
+	</button>
+	<button id="run_go">
+		<pre>go()</pre>
+	</button>
+	<button id="run_perf_trials">
+		<pre>perf_trials()</pre>
+	</button>
 
 	<script>
 		async function instantiateWasm(modelName) {
@@ -70,18 +79,22 @@
 							return -1;
 						}
 					},
+					"visualize_update": (bytesPtr, bytesLength) => {
+						console.log("module tried to visualize update", bytesPtr, bytesLength);
+					}
 				}
 			}
 			wasmResult = await WebAssembly.instantiateStreaming(fetch(`models/${modelName}/run.wasm`), importObject);
 			return wasmResult;
 		}
 
+		var modelName = null;
 		var globalWasm = null;
 
 		async function load() {
 			console.log("loading");
-			let name = document.getElementById('model_name').value;
-			globalWasm = await instantiateWasm(name);
+			modelName = document.getElementById('model_name').value;
+			globalWasm = await instantiateWasm(modelName);
 			console.log("loaded; the module is available at `var globalWasm`");
 		}
 
@@ -91,12 +104,29 @@
 
 		function runMain() {
 			console.log("running main()");
-			globalWasm.instance.exports.main();
+			globalWasm.instance.exports["main"]();
+		}
+		function runSetup() {
+			console.log("running setup()");
+			globalWasm.instance.exports["call_setup"]();
+		}
+		function runGo() {
+			console.log("running go()");
+			globalWasm.instance.exports["call_go"]();
+		}
+		function runPerfTrials() {
+			console.time("perf_trials");
+			globalWasm.instance.exports["perf_trials"]();
+			console.timeEnd("perf_trials");
+			alert("perf trials complete");
 		}
 
 		document.addEventListener('DOMContentLoaded', function () {
 			document.getElementById('load').addEventListener('click', load);
 			document.getElementById('run_main').addEventListener('click', runMain);
+			document.getElementById('run_setup').addEventListener('click', runSetup);
+			document.getElementById('run_go').addEventListener('click', runGo);
+			document.getElementById('run_perf_trials').addEventListener('click', runPerfTrials);
 		});
 	</script>
 </body>

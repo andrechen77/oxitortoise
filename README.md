@@ -30,7 +30,7 @@ user-facing interface for the compiler.
 - The generated WebAssembly is dynamically instantiated (i.e. hot-loaded as a
   JIT would do).
 
-A script exists at `/debug_ants` to build and debug `run.rs`. When in the
+A script exists at `/bench/run.sh` to build and debug `run.rs`. When in the
 browser page to run the file, press "Load" to load the Wasm module representing
 the `run.rs` script, and "main()" to run the main function once it is loaded.
 The module will contain debug info with source maps. I have found that using

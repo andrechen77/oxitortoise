@@ -271,14 +271,49 @@ extern "C" fn call_go() {
     let NameReferent::UserProc(fn_id) = global_names.lookup("GO").unwrap() else {
         panic!("expected a user procedure");
     };
-    let setup = lir_to_callable[&mir_to_lir_fns[&fn_id]];
+    let go = lir_to_callable[&mir_to_lir_fns[&fn_id]];
 
     // call the function
     let next_int = workspace.rng.clone();
     let mut ctx =
         ExecutionContext { workspace, next_int, dirty_aggregator: DirtyAggregator::default() };
-    unsafe { setup.call(&mut ctx, std::ptr::null_mut()) };
+    unsafe { go.call(&mut ctx, std::ptr::null_mut()) };
     visualize_update(ctx.workspace.world.generate_js_update_full());
+}
+
+#[unsafe(no_mangle)]
+extern "C" fn perf_trials() {
+    let mut compile_result = COMPILE_RESULT.lock().unwrap();
+    let Some(compile_result) = compile_result.as_mut() else {
+        panic!("no compile result");
+    };
+    let CompileResult { workspace, global_names, mir_to_lir_fns, lir_to_callable } = compile_result;
+
+    // find the functions by name
+    let NameReferent::UserProc(fn_id) = global_names.lookup("SETUP").unwrap() else {
+        panic!("expected a user procedure");
+    };
+    let setup = lir_to_callable[&mir_to_lir_fns[&fn_id]];
+    let NameReferent::UserProc(fn_id) = global_names.lookup("GO").unwrap() else {
+        panic!("expected a user procedure");
+    };
+    let go = lir_to_callable[&mir_to_lir_fns[&fn_id]];
+
+    // set up the execution context
+    let next_int = workspace.rng.clone();
+    let mut ctx =
+        ExecutionContext { workspace, next_int, dirty_aggregator: DirtyAggregator::default() };
+
+    // run the simulation
+    for _trial in 0..1 {
+        // call setup
+        unsafe { setup.call(&mut ctx, std::ptr::null_mut()) };
+
+        // call go
+        for _tick in 0..1000 {
+            unsafe { go.call(&mut ctx, std::ptr::null_mut()) };
+        }
+    }
 }
 
 struct ConsoleWriter;
