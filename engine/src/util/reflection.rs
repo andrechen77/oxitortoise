@@ -17,29 +17,33 @@ pub unsafe trait Reflect: 'static {
     /// N.B. This should be defined as a reference to an actual static object,
     /// as in the following.
     /// ```rust
-    /// use oxitortoise_engine::util::reflection::{ConcreteTy, Reflect, TypeInfo, TypeInfoOptions};
+    /// use oxitortoise_engine::util::reflection::{ConcreteTy, Reflect, TypeInfo, TypeInfoOptions, ConstTypeName};
     ///
     /// struct MyType;
-    /// static MY_TYPE_INFO: TypeInfo = TypeInfo::new::<MyType>(TypeInfoOptions {
-    ///     debug_name: "MyType",
+    /// static MY_TYPE_INFO: TypeInfo = TypeInfo::new_drop::<MyType>(TypeInfoOptions {
     ///     is_zeroable: true,
-    ///     lir_repr: None,
+    ///     mem_repr: None,
     /// });
-    /// impl Reflect for MyType {
+    /// unsafe impl Reflect for MyType {
     ///     const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&MY_TYPE_INFO);
+    /// }
+    /// impl ConstTypeName for MyType {
+    ///     const TYPE_NAME: &'static str = "MyType";
     /// }
     /// ```
     /// DO NOT define it like the following.
     /// ```rust
-    /// use oxitortoise_engine::util::reflection::{ConcreteTy, Reflect, TypeInfo, TypeInfoOptions};
+    /// use oxitortoise_engine::util::reflection::{ConcreteTy, Reflect, TypeInfo, TypeInfoOptions, ConstTypeName};
     ///
     /// struct MyType;
-    /// impl Reflect for MyType {
-    ///     const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&TypeInfo::new::<MyType>(TypeInfoOptions {
-    ///        debug_name: "MyType",
+    /// unsafe impl Reflect for MyType {
+    ///     const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&TypeInfo::new_drop::<MyType>(TypeInfoOptions {
     ///         is_zeroable: true,
-    ///         lir_repr: None,
+    ///         mem_repr: None,
     ///     }));
+    /// }
+    /// impl ConstTypeName for MyType {
+    ///     const TYPE_NAME: &'static str = "MyType";
     /// }
     /// ```
     /// Defining it like the above may create references to different objects
