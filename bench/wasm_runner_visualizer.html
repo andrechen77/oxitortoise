@@ -13,18 +13,17 @@
 	<button id="run_main">
 		<pre>main()</pre>
 	</button>
+	<button id="run_setup">
+		<pre>setup()</pre>
+	</button>
+	<button id="run_go">
+		<pre>go()</pre>
+	</button>
 	<div id="view-container" style="height: 600px; width: 600px;"></div>
-
-	<!-- <iframe id="nlw-frame" src="https://netlogoweb.org/standalone"
-		style="width:1200px; height:1200px; border:1px solid #ccc;"></iframe> -->
 
 	<!-- these are necessary to get `tortoise_require` to work -->
 	<script src="tortoise-compiler.js"></script>
 	<script src="tortoise-engine.js"></script>
-
-	<script>
-		var nlwFrame = document.getElementById('nlw-frame');
-	</script>
 
 	<script type="module">
 		import ViewController from "http://localhost:9000/assets/javascripts/target/coffee-output/main/beak/widgets/draw/view-controller.js"
@@ -128,51 +127,25 @@
 
 		function runMain() {
 			console.log("running main()");
-			globalWasm.instance.exports.main();
+			globalWasm.instance.exports["main"]();
+		}
 
-			// loadAndEval("update_setup.txt").then((updateContent) => {
-			// 	console.log(updateContent);
-			// 	viewController.update(updateContent);
-			// });
-			// let nextTick = 0;
-			// setInterval(() => {
-			// 	let filename = `update_go_${nextTick}.txt`;
-			// 	nextTick += 1;
-			// 	let content = null;
-			// 	loadAndEval(filename).then((updateContent) => {
-			// 		console.log(`received`);
-			// 		content = updateContent;
-			// 	});
-			// 	setTimeout(() => {
-			// 		console.log("displaying")
-			// 		if (content != null) {
-			// 			viewController.update(content);
-			// 		}
-			// 	}, 1000);
-			// }, 1000 / 10);
+		function runSetup() {
+			console.log("running setup()");
+			globalWasm.instance.exports["call_setup"]();
+		}
+
+		function runGo() {
+			console.log("running go()");
+			globalWasm.instance.exports["call_go"]();
 		}
 
 		document.addEventListener('DOMContentLoaded', function () {
 			document.getElementById('load').addEventListener('click', load);
 			document.getElementById('run_main').addEventListener('click', runMain);
+			document.getElementById('run_setup').addEventListener('click', runSetup);
+			document.getElementById('run_go').addEventListener('click', runGo);
 		});
-
-		// Function to fetch and eval the contents of a file
-		async function loadAndEval(filename) {
-			try {
-				const response = await fetch(`models/${modelName}/updates/${filename}`);
-				if (!response.ok) {
-					throw new Error('Failed to load file');
-				}
-
-				// Get the text content of the file
-				const code = await response.text();
-
-				return eval(`(${code})`);
-			} catch (err) {
-				console.error('Error:', err);
-			}
-		}
 	</script>
 </body>
 

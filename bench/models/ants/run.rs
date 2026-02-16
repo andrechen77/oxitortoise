@@ -1,13 +1,18 @@
 use std::{
+    collections::HashMap,
     io,
     sync::{Arc, Mutex},
 };
 
-use ast_to_mir::{NameReferent, ParseResult, add_cheats, serde_json};
+use ast_to_mir::{GlobalScope, NameReferent, ParseResult, add_cheats, serde_json};
 use engine::{
-    exec::{ExecutionContext, jit::InstallLir as _},
+    exec::{
+        ExecutionContext,
+        jit::{InstallLir as _, JitEntrypoint},
+    },
+    lir,
     mir::{
-        TurtleBreeds, mir_to_lir,
+        self, TurtleBreeds, mir_to_lir,
         transforms::{lower, optimize_of_agent_type, peephole_transform},
         type_inference::narrow_types,
     },
@@ -112,7 +117,14 @@ fn create_workspace(
     }
 }
 
-// static WORKSPACE: Mutex<Option<Workspace>> = Mutex::new(None);
+struct CompileResult {
+    workspace: Workspace,
+    global_names: GlobalScope,
+    mir_to_lir_fns: HashMap<mir::FunctionId, lir::FunctionId>,
+    lir_to_callable: HashMap<lir::FunctionId, JitEntrypoint>,
+}
+
+static COMPILE_RESULT: Mutex<Option<CompileResult>> = Mutex::new(None);
 
 fn main() {
     tracing_subscriber::registry()
@@ -191,7 +203,7 @@ fn main() {
     let result = unsafe { lir_installer.install_lir(&lir_program) };
     let name = "model.wasm";
     write_to_file(name, lir_installer.module_bytes);
-    let functions = match result {
+    let lir_to_callable = match result {
         Ok(functions) => {
             for fn_id in functions.keys() {
                 info!("installed entrypoint function {:?}", fn_id);
@@ -221,56 +233,53 @@ fn main() {
         NlFloat::new(10.0);
     visualize_update(workspace.world.generate_js_update_full());
 
-    // *WORKSPACE.lock().unwrap() = Some(workspace);
-
-    let NameReferent::UserProc(setup_mir_fn_id) = global_names.lookup("SETUP").unwrap() else {
-        panic!("expected a user procedure");
-    };
-    let setup = functions[&mir_to_lir_fns[&setup_mir_fn_id]];
-    let NameReferent::UserProc(go_mir_fn_id) = global_names.lookup("GO").unwrap() else {
-        panic!("expected a user procedure");
-    };
-    let go = functions[&mir_to_lir_fns[&go_mir_fn_id]];
-    let next_int = workspace.rng.clone();
-    let mut ctx = ExecutionContext {
-        workspace: &mut workspace,
-        next_int,
-        dirty_aggregator: DirtyAggregator::default(),
-    };
-    unsafe { setup.call(&mut ctx, std::ptr::null_mut()) };
-    visualize_update(ctx.workspace.world.generate_js_update_full());
-
-    // let go_loop = async move {
-    let mut workspace = workspace;
-    let next_int = workspace.rng.clone();
-    let mut ctx = ExecutionContext {
-        workspace: &mut workspace,
-        next_int,
-        dirty_aggregator: DirtyAggregator::default(),
-    };
-
-    for _i in 1..1000 {
-        unsafe { go.call(&mut ctx, std::ptr::null_mut()) };
-        visualize_update(ctx.workspace.world.generate_js_update_full());
-    }
-    // };
-    // *GO_LOOP.lock().unwrap() = Some(Box::new(go_loop));
+    *COMPILE_RESULT.lock().unwrap() =
+        Some(CompileResult { workspace, global_names, mir_to_lir_fns, lir_to_callable });
 }
 
-// extern "C" fn poll_go_loop() {
-//     let workspace = WORKSPACE.lock().unwrap();
-//     let Some(workspace) = workspace.as_mut() else {
-//         return;
-//     };
-//     let next_int = workspace.rng.clone();
-//     let mut ctx = ExecutionContext {
-//         workspace: &mut workspace,
-//         next_int,
-//         dirty_aggregator: DirtyAggregator::default(),
-//     };
-//     go.call(&mut ctx, std::ptr::null_mut());
-//     visualize_update(ctx.workspace.world.generate_js_update_full());
-// }
+#[unsafe(no_mangle)]
+extern "C" fn call_setup() {
+    let mut compile_result = COMPILE_RESULT.lock().unwrap();
+    let Some(compile_result) = compile_result.as_mut() else {
+        panic!("no compile result");
+    };
+    let CompileResult { workspace, global_names, mir_to_lir_fns, lir_to_callable } = compile_result;
+
+    // find the function by name
+    let NameReferent::UserProc(fn_id) = global_names.lookup("SETUP").unwrap() else {
+        panic!("expected a user procedure");
+    };
+    let setup = lir_to_callable[&mir_to_lir_fns[&fn_id]];
+
+    // call the function
+    let next_int = workspace.rng.clone();
+    let mut ctx =
+        ExecutionContext { workspace, next_int, dirty_aggregator: DirtyAggregator::default() };
+    unsafe { setup.call(&mut ctx, std::ptr::null_mut()) };
+    visualize_update(ctx.workspace.world.generate_js_update_full());
+}
+
+#[unsafe(no_mangle)]
+extern "C" fn call_go() {
+    let mut compile_result = COMPILE_RESULT.lock().unwrap();
+    let Some(compile_result) = compile_result.as_mut() else {
+        panic!("no compile result");
+    };
+    let CompileResult { workspace, global_names, mir_to_lir_fns, lir_to_callable } = compile_result;
+
+    // find the function by name
+    let NameReferent::UserProc(fn_id) = global_names.lookup("GO").unwrap() else {
+        panic!("expected a user procedure");
+    };
+    let setup = lir_to_callable[&mir_to_lir_fns[&fn_id]];
+
+    // call the function
+    let next_int = workspace.rng.clone();
+    let mut ctx =
+        ExecutionContext { workspace, next_int, dirty_aggregator: DirtyAggregator::default() };
+    unsafe { setup.call(&mut ctx, std::ptr::null_mut()) };
+    visualize_update(ctx.workspace.world.generate_js_update_full());
+}
 
 struct ConsoleWriter;
 
