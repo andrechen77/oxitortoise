@@ -30,11 +30,14 @@ user-facing interface for the compiler.
 - The generated WebAssembly is dynamically instantiated (i.e. hot-loaded as a
   JIT would do).
 
-A script exists at `/bench/run.sh` to build and debug `run.rs`. When in the
-browser page to run the file, press "Load" to load the Wasm module representing
-the `run.rs` script, and "main()" to run the main function once it is loaded.
-The module will contain debug info with source maps. I have found that using
-Google Chrome with the ["C/C++ DevTools Support
+A script exists at `/bench/build.sh` to build `run.rs`. You will have to start a
+web server in the `bench` folder (probably using `python3 -m http.server 8000`),
+as well as start an instance of Galapagos (using `sbt start` in the
+`bench/galapagos` folder). When in the browser page to run the file, press
+"Load" to load the Wasm module representing the `run.rs` script, and "main()" to
+run the main function once it is loaded. The module will contain debug info with
+source maps. I have found that using Google Chrome with the ["C/C++ DevTools
+Support
 (DWARF)"](https://chromewebstore.google.com/detail/cc++-devtools-support-dwa/pdcpmagijalfljmkmjngeonclgbbannb)
 extension is the best way to get these to work.
 

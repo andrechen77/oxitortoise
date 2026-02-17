@@ -10,45 +10,48 @@
 <body>
 	<input type="text" id="model_name" placeholder="Model Name">
 	<button id="load">Load</button>
-	<button id="run_main">
-		<pre>main()</pre>
-	</button>
 	<button id="run_perf_trials">
 		perf trials
 	</button>
 
-	<script src="tortoise-compiler.js"></script>
-	<script src="tortoise-engine.js"></script>
+	<script src="http://localhost:9000/netlogo-engine.js"></script>
+	<script src="http://localhost:9000/tortoise-compiler.js"></script>
 
 	<script>
 		var modelName = null;
 
 		async function load() {
-			console.log("loading");
 			modelName = document.getElementById('model_name').value;
-			const urlResp = await fetch(`models/${modelName}/tortoise_output_link.txt`);
-			const url = await urlResp.text();
-			const modelCodeResp = await fetch(url);
-			const modelCode = await modelCodeResp.text();
-			const blobUrl = URL.createObjectURL(new Blob([modelCode], { type: 'text/javascript' }));
-			const script = document.createElement('script');
-			script.src = blobUrl;
-			script.async = true;
-			document.body.appendChild(script);
-			await new Promise((resolve, reject) => {
-				script.onload = () => resolve();
-				script.onerror = () => reject(new Error(`Failed to load script at ${script.src}`))
-			});
-			console.log("loaded");
+			console.log(`loading model ${modelName}`);
+
+			const nlogox = await fetch(`models/${modelName}/model.nlogox`).then(r => r.text());
+
+			const compileResult = new BrowserCompiler().fromNlogoXML(nlogox, [], { code: "", widgets: [] });
+			if (compileResult.model.success) {
+				const modelCode = compileResult.model.result;
+				const blobUrl = URL.createObjectURL(new Blob([modelCode], { type: 'text/javascript' }));
+				const script = document.createElement('script');
+				script.src = blobUrl;
+				script.async = true;
+				document.body.appendChild(script);
+				await new Promise((resolve, reject) => {
+					script.onload = () => resolve();
+					script.onerror = () => reject(new Error(`Failed to load script at ${script.src}`))
+				});
+				console.log(`loaded model ${modelName}`);
+			} else {
+				console.error(`failed to compile model ${modelName}`);
+			}
 		}
 
 		function runPerfTrials() {
 			console.time("perf_trials");
-			window.ProcedurePrims.callCommand("perf_trials")
+			perfTrials();
 			console.timeEnd("perf_trials");
 			alert("perf trials complete");
 		}
-		function perfTrials(timerName) {
+
+		function perfTrials() {
 			for (let trial = 0; trial < 1; trial++) {
 				window.ProcedurePrims.callCommand("setup")
 				for (let tick = 0; tick < 1000; tick++) {
