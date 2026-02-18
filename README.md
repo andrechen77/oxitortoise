@@ -31,7 +31,7 @@ user-facing interface for the compiler.
   JIT would do).
 
 A script exists at `/bench/build.sh` to build `run.rs`. You will have to start a
-web server in the `bench` folder (probably using `python3 -m http.server 8000`),
+web server in the root folder (probably using `python3 -m http.server 8000`),
 as well as start an instance of Galapagos (using `sbt start` in the
 `bench/galapagos` folder). When in the browser page to run the file, press
 "Load" to load the Wasm module representing the `run.rs` script, and "main()" to

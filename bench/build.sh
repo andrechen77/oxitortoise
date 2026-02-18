@@ -16,6 +16,6 @@ fi
 MODEL_NAME=ants
 TARGET=wasm32-unknown-unknown
 
-RUSTFLAGS="--remap-path-prefix=$PWD=../../.." cargo build --bin $MODEL_NAME --target $TARGET $BUILD_FLAGS
+RUSTFLAGS="--remap-path-prefix=$(dirname $PWD)=../../.." cargo build --bin $MODEL_NAME --target $TARGET $BUILD_FLAGS
 
 mv ../target/$TARGET/$PROFILE/$MODEL_NAME.wasm models/$MODEL_NAME/run.wasm
