@@ -56,10 +56,12 @@ pub fn mir_to_lir<I: InstallLir>(
     let mut entrypoints = HashMap::new();
     for mir_fn_id in mir.functions.keys().filter(|id| mir.functions[*id].is_entrypoint) {
         let shim = create_entrypoint_shim(mir, mir_fn_id, &mut builder);
-        // allocate a new function id for the shim function
-        let lir_fn_id = user_function_tracker.insert(());
-        lir_fn_bodies.insert(lir_fn_id, shim);
-        entrypoints.insert(mir_fn_id, lir_fn_id);
+        if let Some(shim) = shim {
+            // allocate a new function id for the shim function
+            let lir_fn_id = user_function_tracker.insert(());
+            lir_fn_bodies.insert(lir_fn_id, shim);
+            entrypoints.insert(mir_fn_id, lir_fn_id);
+        }
     }
 
     (lir::Program { user_functions: lir_fn_bodies }, entrypoints)
@@ -285,54 +287,76 @@ fn translate_function_body<I: InstallLir>(
     fn_builder.product
 }
 
+// returns None if we don't know how to create the shim.
+// TODO complete this function so that it never returns None.
 fn create_entrypoint_shim(
     program: &mir::Program,
     target_fn_id: mir::FunctionId,
     program_builder: &mut LirProgramBuilder,
-) -> lir::Function {
+) -> Option<lir::Function> {
     // TODO document the assumptions that are made here about parameter types,
     // order, etc, and ideally couple this function to the code that relies on
     // those assumptions (e.g. the definition of JitEntrypoint).
 
-    let params: TiVec<lir::VarId, lir::ValType> = ti_vec![lir::ValType::Ptr, lir::ValType::Ptr];
+    // context pointer, pointer to variadic args, and number of args
+    let params: TiVec<lir::VarId, lir::ValType> =
+        ti_vec![lir::ValType::Ptr, lir::ValType::Ptr, lir::ValType::I32];
 
-    // let target_function = &program.functions[target_fn_id];
     let (target_arg_types, target_returns) = translate_function_signature(program, target_fn_id);
 
     let mut target_args = Vec::new();
 
-    let mut insn_seq: TiVec<lir::InsnIdx, lir::InsnKind> = TiVec::new();
-    // context argument
-    let context = insn_seq.push_and_get_key(lir::InsnKind::VarLoad { var_id: 0.into() });
-    let context = lir::ValRef(lir::InsnPc(lir::InsnSeqId(0), context), 0);
+    let mut insn_seqs: TiVec<lir::InsnSeqId, TiVec<lir::InsnIdx, lir::InsnKind>> = TiVec::new();
+    let main_seq_id = insn_seqs.push_and_get_key(TiVec::new());
+    let main_seq = &mut insn_seqs[main_seq_id];
+
+    // check the number of non-context arguments
+    let num_args = main_seq.push_and_get_key(lir::InsnKind::VarLoad { var_id: 2.into() });
+    let num_args = lir::ValRef(lir::InsnPc(main_seq_id, num_args), 0);
+    let expected_num_args = main_seq.push_and_get_key(lir::InsnKind::Const(lir::Value::I32(
+        u32::try_from(target_arg_types.len()).unwrap() - 1,
+    )));
+    let expected_num_args = lir::ValRef(lir::InsnPc(main_seq_id, expected_num_args), 0);
+    let is_num_args_correct = main_seq.push_and_get_key(lir::InsnKind::BinaryOp {
+        op: lir::BinaryOpcode::INeq,
+        lhs: num_args,
+        rhs: expected_num_args,
+    });
+    let is_num_args_correct = lir::ValRef(lir::InsnPc(main_seq_id, is_num_args_correct), 0);
+    // this could probably be a panic or unreachable but this works for now
+    main_seq.push_and_get_key(lir::InsnKind::ConditionalBreak {
+        target: main_seq_id,
+        condition: is_num_args_correct,
+        values: Box::new([]),
+    });
+
+    // load context argument
+    let context = main_seq.push_and_get_key(lir::InsnKind::VarLoad { var_id: 0.into() });
+    let context = lir::ValRef(lir::InsnPc(main_seq_id, context), 0);
     target_args.push(context);
-    // pointer to variadic args
-    let ptr_to_args = insn_seq.push_and_get_key(lir::InsnKind::VarLoad { var_id: 1.into() });
-    let ptr_to_args = lir::ValRef(lir::InsnPc(lir::InsnSeqId(0), ptr_to_args), 0);
-    for (i, arg) in target_arg_types.iter().skip(1).enumerate() {
-        let idx = insn_seq.push_and_get_key(lir::InsnKind::MemLoad {
-            r#type: lir::MemOpType::from_val_type(*arg),
-            offset: i * 8,
-            ptr: ptr_to_args,
-        });
-        let val = lir::ValRef(lir::InsnPc(lir::InsnSeqId(0), idx), 0);
-        target_args.push(val);
+
+    // we would load variadic arguments here. however, this would require
+    // converting the array of PackedAny to a sequence of values which possibly
+    // might be some other types, which is not yet implemented. there used to be
+    // code here that just loads the values at the types declared by the target
+    // function, when in fact they would be passed as PackedAny
+    if target_arg_types.len() != 1 {
+        return None;
     }
 
     // push the call to the target function
-    insn_seq.push_and_get_key(lir::InsnKind::CallUserFunction {
+    main_seq.push_and_get_key(lir::InsnKind::CallUserFunction {
         function: program_builder.available_user_functions[&target_fn_id],
         output_type: target_returns,
         args: target_args.into_boxed_slice(),
     });
 
     // push a break instruction that returns unit
-    insn_seq
+    main_seq
         .push_and_get_key(lir::InsnKind::Break { target: lir::InsnSeqId(0), values: Box::new([]) });
 
-    let insn_seqs = ti_vec![insn_seq];
     let num_parameters = params.len();
-    lir::Function {
+    Some(lir::Function {
         local_vars: params,
         num_parameters,
         stack_space: 0,
@@ -342,5 +366,5 @@ fn create_entrypoint_shim(
         debug_var_names: HashMap::new(), // TODO
         is_entrypoint: true,
         debug_fn_name: Some(format!("entrypoint_shim {}", target_fn_id).into()),
-    }
+    })
 }

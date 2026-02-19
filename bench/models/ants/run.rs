@@ -8,7 +8,7 @@ use ast_to_mir::{GlobalScope, NameReferent, ParseResult, add_cheats, serde_json}
 use engine::{
     exec::{
         ExecutionContext,
-        jit::{InstallLir as _, JitEntrypoint},
+        jit::{InstallLir, InstalledObj as _},
     },
     lir,
     mir::{
@@ -121,7 +121,7 @@ struct CompileResult {
     workspace: Workspace,
     global_names: GlobalScope,
     mir_to_lir_fns: HashMap<mir::FunctionId, lir::FunctionId>,
-    lir_to_callable: HashMap<lir::FunctionId, JitEntrypoint>,
+    installed_obj: <LirInstaller as InstallLir>::Obj,
 }
 
 static COMPILE_RESULT: Mutex<Option<CompileResult>> = Mutex::new(None);
@@ -203,13 +203,8 @@ fn main() {
     let result = unsafe { lir_installer.install_lir(&lir_program) };
     let name = "model.wasm";
     write_to_file(name, lir_installer.module_bytes);
-    let lir_to_callable = match result {
-        Ok(functions) => {
-            for fn_id in functions.keys() {
-                info!("installed entrypoint function {:?}", fn_id);
-            }
-            functions
-        }
+    let installed_obj = match result {
+        Ok(obj) => obj,
         Err(_error) => {
             error!("failed to install LIR program");
             panic!();
@@ -234,7 +229,7 @@ fn main() {
     visualize_update(workspace.world.generate_js_update_full());
 
     *COMPILE_RESULT.lock().unwrap() =
-        Some(CompileResult { workspace, global_names, mir_to_lir_fns, lir_to_callable });
+        Some(CompileResult { workspace, global_names, mir_to_lir_fns, installed_obj });
 }
 
 #[unsafe(no_mangle)]
@@ -243,19 +238,19 @@ extern "C" fn call_setup() {
     let Some(compile_result) = compile_result.as_mut() else {
         panic!("no compile result");
     };
-    let CompileResult { workspace, global_names, mir_to_lir_fns, lir_to_callable } = compile_result;
+    let CompileResult { workspace, global_names, mir_to_lir_fns, installed_obj } = compile_result;
 
     // find the function by name
     let NameReferent::UserProc(fn_id) = global_names.lookup("SETUP").unwrap() else {
         panic!("expected a user procedure");
     };
-    let setup = lir_to_callable[&mir_to_lir_fns[&fn_id]];
+    let setup = installed_obj.entrypoint(mir_to_lir_fns[&fn_id]);
 
     // call the function
     let next_int = workspace.rng.clone();
     let mut ctx =
         ExecutionContext { workspace, next_int, dirty_aggregator: DirtyAggregator::default() };
-    unsafe { setup.call(&mut ctx, std::ptr::null_mut()) };
+    setup.call(&mut ctx, vec![]);
     visualize_update(ctx.workspace.world.generate_js_update_full());
 }
 
@@ -265,19 +260,19 @@ extern "C" fn call_go() {
     let Some(compile_result) = compile_result.as_mut() else {
         panic!("no compile result");
     };
-    let CompileResult { workspace, global_names, mir_to_lir_fns, lir_to_callable } = compile_result;
+    let CompileResult { workspace, global_names, mir_to_lir_fns, installed_obj } = compile_result;
 
     // find the function by name
     let NameReferent::UserProc(fn_id) = global_names.lookup("GO").unwrap() else {
         panic!("expected a user procedure");
     };
-    let go = lir_to_callable[&mir_to_lir_fns[&fn_id]];
+    let go = installed_obj.entrypoint(mir_to_lir_fns[&fn_id]);
 
     // call the function
     let next_int = workspace.rng.clone();
     let mut ctx =
         ExecutionContext { workspace, next_int, dirty_aggregator: DirtyAggregator::default() };
-    unsafe { go.call(&mut ctx, std::ptr::null_mut()) };
+    go.call(&mut ctx, vec![]);
     visualize_update(ctx.workspace.world.generate_js_update_full());
 }
 
@@ -287,17 +282,17 @@ extern "C" fn perf_trials() {
     let Some(compile_result) = compile_result.as_mut() else {
         panic!("no compile result");
     };
-    let CompileResult { workspace, global_names, mir_to_lir_fns, lir_to_callable } = compile_result;
+    let CompileResult { workspace, global_names, mir_to_lir_fns, installed_obj } = compile_result;
 
     // find the functions by name
     let NameReferent::UserProc(fn_id) = global_names.lookup("SETUP").unwrap() else {
         panic!("expected a user procedure");
     };
-    let setup = lir_to_callable[&mir_to_lir_fns[&fn_id]];
+    let setup = installed_obj.entrypoint(mir_to_lir_fns[&fn_id]);
     let NameReferent::UserProc(fn_id) = global_names.lookup("GO").unwrap() else {
         panic!("expected a user procedure");
     };
-    let go = lir_to_callable[&mir_to_lir_fns[&fn_id]];
+    let go = installed_obj.entrypoint(mir_to_lir_fns[&fn_id]);
 
     // set up the execution context
     let next_int = workspace.rng.clone();
@@ -307,11 +302,11 @@ extern "C" fn perf_trials() {
     // run the simulation
     for _trial in 0..1 {
         // call setup
-        unsafe { setup.call(&mut ctx, std::ptr::null_mut()) };
+        setup.call(&mut ctx, vec![]);
 
         // call go
         for _tick in 0..1000 {
-            unsafe { go.call(&mut ctx, std::ptr::null_mut()) };
+            go.call(&mut ctx, vec![]);
         }
     }
 }

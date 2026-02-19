@@ -4,13 +4,56 @@ use std::{
     sync::{LazyLock, Mutex},
 };
 
+use crate::export_interface::*;
+
 use engine::{
     exec::{
         ExecutionContext,
-        jit::{InstallLirError, JitEntrypoint},
+        jit::{HostFunctionTable, InstallLir, InstallLirError, InstalledObj, JitEntrypoint},
     },
     lir,
+    sim::value::PackedAny,
 };
+use lir::HostFunction as Hf;
+
+#[derive(Default)]
+pub struct LirInstaller {
+    pub module_bytes: Vec<u8>,
+}
+
+impl InstallLir for LirInstaller {
+    type Obj = Obj;
+
+    const HOST_FUNCTION_TABLE: HostFunctionTable = HostFunctionTable {
+        clear_all: Hf(&CLEAR_ALL_INFO),
+        reset_ticks: Hf(&RESET_TICKS_INFO),
+        advance_tick: Hf(&ADVANCE_TICK_INFO),
+        get_tick: Hf(&GET_TICK_INFO),
+        create_turtles: Hf(&CREATE_TURTLES_INFO),
+        ask_all_turtles: Hf(&ASK_ALL_TURTLES_INFO),
+        ask_all_patches: Hf(&ASK_ALL_PATCHES_INFO),
+        euclidean_distance_no_wrap: Hf(&EUCLIDEAN_DISTANCE_NO_WRAP_INFO),
+        list_new: Hf(&LIST_NEW_INFO),
+        list_push: Hf(&LIST_PUSH_INFO),
+        one_of_list: Hf(&ONE_OF_LIST_INFO),
+        scale_color: Hf(&SCALE_COLOR_INFO),
+        rotate_turtle: Hf(&ROTATE_TURTLE_INFO),
+        turtle_forward: Hf(&TURTLE_FORWARD_INFO),
+        patch_at: Hf(&PATCH_AT_INFO),
+        random_int: Hf(&RANDOM_INT_INFO),
+        any_binary_op: Hf(&ANY_BINARY_OP_INFO),
+        any_bool_binary_op: Hf(&ANY_BOOL_BINARY_OP_INFO),
+        patch_ahead: Hf(&PATCH_AHEAD_INFO),
+        patch_right_and_ahead: Hf(&PATCH_RIGHT_AND_AHEAD_INFO),
+        diffuse_8_single_variable_buffer: Hf(&DIFFUSE_8_SINGLE_VARIABLE_BUFFER_INFO),
+    };
+
+    unsafe fn install_lir(&mut self, lir: &lir::Program) -> Result<Self::Obj, InstallLirError> {
+        let (result, module_bytes) = unsafe { install_lir(lir) };
+        self.module_bytes = module_bytes;
+        result
+    }
+}
 
 static FUNCTION_INSTALLER: LazyLock<Mutex<FunctionInstaller>> = LazyLock::new(|| {
     // SAFETY: the function installer is the only code that interacts with the
@@ -20,9 +63,7 @@ static FUNCTION_INSTALLER: LazyLock<Mutex<FunctionInstaller>> = LazyLock::new(||
     Mutex::new(unsafe { FunctionInstaller::new() })
 });
 
-pub unsafe fn install_lir(
-    lir: &lir::Program,
-) -> (Result<HashMap<lir::FunctionId, JitEntrypoint>, InstallLirError>, Vec<u8>) {
+pub unsafe fn install_lir(lir: &lir::Program) -> (Result<Obj, InstallLirError>, Vec<u8>) {
     unsafe {
         let Ok(mut installer) = FUNCTION_INSTALLER.lock() else {
             return (Err(InstallLirError::InstallerPoisoned), vec![]);
@@ -107,7 +148,7 @@ impl FunctionInstaller {
     unsafe fn install_lir(
         &mut self,
         lir: &lir::Program,
-    ) -> (Result<HashMap<lir::FunctionId, JitEntrypoint>, InstallLirError>, Vec<u8>) {
+    ) -> (Result<Obj, InstallLirError>, Vec<u8>) {
         struct A<'a>(&'a mut BinaryHeap<Reverse<usize>>);
         impl<'a> lir_to_wasm::FnTableSlotAllocator for A<'a> {
             fn allocate_slot(&mut self) -> usize {
@@ -137,7 +178,7 @@ impl FunctionInstaller {
         }
 
         // return the function pointers to the installed functions.
-        let jit_entries = HashMap::from_iter(
+        let entrypoints = HashMap::from_iter(
             lir.user_functions
                 .iter()
                 .filter_map(
@@ -150,20 +191,35 @@ impl FunctionInstaller {
                     // TODO for sanity, verify that each entrypoint has the signature
                     // specified in `JitEntrypoint`. However, Wasm should already catch
                     // if we indirectly call a function with the wrong signature.
-                    let entrypoint = JitEntrypoint::new(
-                        // SAFETY: in the wasm32 target, a function pointer is
-                        // represented by a i32 indicating the slot in the
-                        // function table, so they literally have the same ABI
-                        unsafe {
-                            std::mem::transmute::<
-                                usize,
-                                extern "C" fn(&mut ExecutionContext, *mut u8),
-                            >(slot)
-                        },
-                    );
-                    (lir_fn_id, entrypoint)
+
+                    // SAFETY: in the wasm32 target, a function pointer is
+                    // represented by a i32 indicating the slot in the
+                    // function table, so they literally have the same ABI
+                    let fn_ptr = unsafe {
+                        std::mem::transmute::<
+                            usize,
+                            unsafe extern "C" fn(&mut ExecutionContext, *mut PackedAny, u32),
+                        >(slot)
+                    };
+                    (lir_fn_id, fn_ptr)
                 }),
         );
-        (Ok(jit_entries), module_bytes)
+        (Ok(Obj { entrypoints }), module_bytes)
+    }
+}
+
+pub struct Obj {
+    entrypoints:
+        HashMap<lir::FunctionId, unsafe extern "C" fn(&mut ExecutionContext, *mut PackedAny, u32)>,
+}
+
+impl InstalledObj for Obj {
+    fn entrypoint(&self, fn_id: lir::FunctionId) -> JitEntrypoint<'_> {
+        let fn_ptr = self.entrypoints[&fn_id];
+        // SAFETY: according to the safety requirements of the
+        // [`InstallLir::install_lir`] the entrypoint functions satisfy the
+        // safety requirements of `JitEntrypoint::new`, and this is an
+        // entrypoint function.
+        unsafe { JitEntrypoint::new(fn_ptr) }
     }
 }

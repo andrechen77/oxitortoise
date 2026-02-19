@@ -59,7 +59,12 @@ pub static CREATE_TURTLES_INFO: HostFunctionInfo = HostFunctionInfo {
     return_type: &[],
 };
 #[unsafe(no_mangle)]
-pub extern "C" fn oxitortoise_create_turtles(
+/// # Safety
+///
+/// The passed-in env and function pointer will be used to create a
+/// [`JitCallback`] that needs to be live for the duration of this function
+/// call. See [`JitCallback::new`] for the safety requirements on the caller.
+pub unsafe extern "C" fn oxitortoise_create_turtles(
     context: &mut CanonExecutionContext,
     breed: u64,
     count: NlFloat,
@@ -72,10 +77,10 @@ pub extern "C" fn oxitortoise_create_turtles(
 ) {
     let breed: BreedId = KeyData::from_ffi(breed).into();
     let position = Point { x: 0.0, y: 0.0 };
-    let mut birth_command = JitCallback::new(birth_command_env, birth_command_fn_ptr);
+    // SAFETY: precondition
+    let mut birth_command = unsafe { JitCallback::new(birth_command_env, birth_command_fn_ptr) };
     helpers::create_turtles(context, breed, count, position, |context, turtle_id| {
-        // TODO document safety concerns
-        unsafe { birth_command.call_mut(context, turtle_id.to_ffi()) }
+        birth_command.call_mut(context, turtle_id.to_ffi())
     });
 }
 
@@ -84,16 +89,21 @@ pub static ASK_ALL_TURTLES_INFO: HostFunctionInfo = HostFunctionInfo {
     parameter_types: &[Ptr, Ptr, FnPtr],
     return_type: &[],
 };
+/// # Safety
+///
+/// The passed-in env and function pointer will be used to create a
+/// [`JitCallback`] that needs to be live for the duration of this function
+/// call. See [`JitCallback::new`] for the safety requirements on the caller.
 #[unsafe(no_mangle)]
 pub extern "C" fn oxitortoise_for_all_turtles(
     context: &mut CanonExecutionContext,
     block_env: *mut u8,
     block_fn_ptr: extern "C" fn(*mut u8, &mut CanonExecutionContext, u64 /* TurtleId */) -> (),
 ) {
-    let mut block = JitCallback::new(block_env, block_fn_ptr);
+    // SAFETY: precondition
+    let mut block = unsafe { JitCallback::new(block_env, block_fn_ptr) };
     helpers::for_all_turtles(context, |context, turtle_id| {
-        // TODO document safety concerns
-        unsafe { block.call_mut(context, turtle_id.to_ffi()) }
+        block.call_mut(context, turtle_id.to_ffi())
     });
 }
 
@@ -102,17 +112,20 @@ pub static ASK_ALL_PATCHES_INFO: HostFunctionInfo = HostFunctionInfo {
     parameter_types: &[Ptr, Ptr, FnPtr],
     return_type: &[],
 };
+/// # Safety
+///
+/// The passed-in env and function pointer will be used to create a
+/// [`JitCallback`] that needs to be live for the duration of this function
+/// call. See [`JitCallback::new`] for the safety requirements on the caller.
 #[unsafe(no_mangle)]
 pub extern "C" fn oxitortoise_for_all_patches(
     context: &mut CanonExecutionContext,
     block_env: *mut u8,
     block_fn_ptr: extern "C" fn(*mut u8, &mut CanonExecutionContext, PatchId) -> (),
 ) {
-    let mut block = JitCallback::new(block_env, block_fn_ptr);
-    helpers::for_all_patches(context, |context, patch_id| {
-        // TODO document safety concerns
-        unsafe { block.call_mut(context, patch_id) }
-    });
+    // SAFETY: precondition
+    let mut block = unsafe { JitCallback::new(block_env, block_fn_ptr) };
+    helpers::for_all_patches(context, |context, patch_id| block.call_mut(context, patch_id));
 }
 
 pub static EUCLIDEAN_DISTANCE_NO_WRAP_INFO: HostFunctionInfo = HostFunctionInfo {
