@@ -12,6 +12,7 @@ lir = { path = "../lir", package = "oxitortoise_lir" }
 tracing = "0.1.41"
 ambassador = "0.4.2"
 pretty_print = { path = "../pretty_print" }
+ffi_translate = { path = "../ffi_translate/ffi_translate" }
 
 [features]
 runtime-unsafety = []

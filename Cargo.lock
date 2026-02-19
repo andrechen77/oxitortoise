@@ -334,6 +334,30 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4443176a9f2c162692bd3d352d745ef9413eec5782a80d8fd6f8a1ac692a07f7"
 
 [[package]]
+name = "ffi_translate"
+version = "0.1.0"
+dependencies = [
+ "ffi_translate_impl",
+ "ffi_translate_macro",
+]
+
+[[package]]
+name = "ffi_translate_impl"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.106",
+]
+
+[[package]]
+name = "ffi_translate_macro"
+version = "0.1.0"
+dependencies = [
+ "ffi_translate_impl",
+]
+
+[[package]]
 name = "flagset"
 version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -532,6 +556,7 @@ dependencies = [
  "ambassador",
  "derive_more 1.0.0",
  "either",
+ "ffi_translate",
  "flagset",
  "oxitortoise_lir",
  "pretty_print",

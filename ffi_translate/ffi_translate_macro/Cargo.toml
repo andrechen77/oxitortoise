@@ -1,0 +1,10 @@
+[package]
+name = "ffi_translate_macro"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+ffi_translate_impl = { path = "../ffi_translate_impl" }

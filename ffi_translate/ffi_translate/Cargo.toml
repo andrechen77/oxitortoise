@@ -1,0 +1,8 @@
+[package]
+name = "ffi_translate"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ffi_translate_impl = { path = "../ffi_translate_impl" }
+ffi_translate_macro = { path = "../ffi_translate_macro" }
