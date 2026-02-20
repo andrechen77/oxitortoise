@@ -300,7 +300,7 @@ extern "C" fn perf_trials() {
         ExecutionContext { workspace, next_int, dirty_aggregator: DirtyAggregator::default() };
 
     // run the simulation
-    for _trial in 0..1 {
+    for _trial in 0..100 {
         // call setup
         setup.call(&mut ctx, vec![]);
 

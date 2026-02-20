@@ -23,100 +23,35 @@
 		<pre>perf_trials()</pre>
 	</button>
 
-	<script>
-		async function instantiateWasm(modelName) {
-			let wasmResult = null;
-			let importObject = {
-				env: {
-					"write_to_console": (message, length) => {
-						let mem = wasmResult.instance.exports.memory.buffer;
-						let str = new TextDecoder().decode(new Uint8Array(mem, message, length));
-						console.log(str);
-					},
-					"write_to_file": (namePtr, nameLength, bytesPtr, bytesLength) => {
-						let mainMemory = wasmResult.instance.exports.memory;
-						let bytes = new Uint8Array(mainMemory.buffer, bytesPtr, bytesLength);
-						let name = new TextDecoder().decode(new Uint8Array(mainMemory.buffer, namePtr, nameLength));
-						let blob = new Blob([bytes], { type: "application/octet-stream" });
-						let url = URL.createObjectURL(blob);
-						let a = document.createElement('a');
-						a.href = url;
-						a.download = name;
-						document.body.appendChild(a);
-						a.click();
-						document.body.removeChild(a);
-						URL.revokeObjectURL(url);
-					},
-					"instantiate_module": (auxModuleBufStart, auxModuleBufLen) => {
-						try {
-							console.log("instantiating module", auxModuleBufStart, auxModuleBufLen);
-
-							let mainMemory = wasmResult.instance.exports["memory"];
-							let auxModuleBuffer = new Uint8Array(mainMemory.buffer, auxModuleBufStart, auxModuleBufLen);
-
-							// instantiate the auxiliary module
-							let auxModule = new WebAssembly.Module(auxModuleBuffer);
-							let auxInstance = new WebAssembly.Instance(auxModule, {
-								"env": {
-									...wasmResult.instance.exports
-								}
-							});
-
-							return true;
-						} catch (e) {
-							console.error(e);
-							return false;
-						}
-					},
-					"grow_function_table": (numSlots) => {
-						console.log("growing function table by ", numSlots);
-						let mainTable = wasmResult.instance.exports["__indirect_function_table"];
-						try {
-							let latest_index = mainTable.grow(numSlots);
-							return latest_index;
-						} catch (e) {
-							console.error(e);
-							return -1;
-						}
-					},
-					"visualize_update": (bytesPtr, bytesLength) => {
-						console.log("module tried to visualize update", bytesPtr, bytesLength);
-					}
-				}
-			}
-			wasmResult = await WebAssembly.instantiateStreaming(fetch(`models/${modelName}/run.wasm`), importObject);
-			return wasmResult;
-		}
+	<script type="module">
+		import { instantiateWasm } from './wasm_runner.js';
 
 		var modelName = null;
-		var globalWasm = null;
+		var wasmInstance = null;
 
 		async function load() {
 			console.log("loading");
 			modelName = document.getElementById('model_name').value;
-			globalWasm = await instantiateWasm(modelName);
-			console.log("loaded; the module is available at `var globalWasm`");
-		}
-
-		function getMem(addr, length = 4) {
-			return new Uint8Array(globalWasm.instance.exports.memory.buffer, addr, length);
+			const modulePath = `models/${modelName}/run.wasm`;
+			wasmInstance = await instantiateWasm(modulePath);
+			console.log("loaded");
 		}
 
 		function runMain() {
 			console.log("running main()");
-			globalWasm.instance.exports["main"]();
+			wasmInstance.exports["main"]();
 		}
 		function runSetup() {
 			console.log("running setup()");
-			globalWasm.instance.exports["call_setup"]();
+			wasmInstance.exports["call_setup"]();
 		}
 		function runGo() {
 			console.log("running go()");
-			globalWasm.instance.exports["call_go"]();
+			wasmInstance.exports["call_go"]();
 		}
 		function runPerfTrials() {
 			console.time("perf_trials");
-			globalWasm.instance.exports["perf_trials"]();
+			wasmInstance.exports["perf_trials"]();
 			console.timeEnd("perf_trials");
 			alert("perf trials complete");
 		}

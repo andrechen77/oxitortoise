@@ -1,12 +1,12 @@
 `oxitortoise` is a reimplementation of the NetLogo engine in Rust and
-WebAssembly.
+WebAssembly. `oxitortoise` compiles NetLogo models into WebAssembly code which
+runs in the same environment as the `oxitortoise` engine.
 
 This document contains instructions for how to build and run the prototype.
 
-# building and running a test instance of the Ants model
+# test instance of the Ants model
 
-`oxitortoise` compiles NetLogo models into WebAssembly code which runs in the
-same environment as the `oxitortoise` engine.
+## description of `run.rs`
 
 [`run.rs`](/bench/models/ants/run.rs) is currently the core of the prototype.
 You can think of this as a script that pulls in components from the rest of the
@@ -30,14 +30,30 @@ user-facing interface for the compiler.
 - The generated WebAssembly is dynamically instantiated (i.e. hot-loaded as a
   JIT would do).
 
-A script exists at `/bench/build.sh` to build `run.rs`. You will have to start a
-web server in the root folder (probably using `python3 -m http.server 8000`),
-as well as start an instance of Galapagos (using `sbt start` in the
-`bench/galapagos` folder). When in the browser page to run the file, press
-"Load" to load the Wasm module representing the `run.rs` script, and "main()" to
-run the main function once it is loaded. The module will contain debug info with
-source maps. I have found that using Google Chrome with the ["C/C++ DevTools
-Support
+## how to build and run
+
+A script exists at `/bench/convert_ast.sh` to build the AST from the `.nlogox`
+file; pass the name of the model (e.g. `ants`). The result is placed in the
+corresponding model's folder.
+
+A script exists at `/bench/build.sh` to build `run.rs`; pass the `release`
+argument to the script to build in release mode. The result is placed in the
+model's folder.
+
+There are two ways to run the finished binary.
+
+To benchmark headlessly, run the Node program in `/bench/headless`. It will use a
+headless Chromium browser instance to run the program.
+
+To run with an actual browser, start a web server
+
+You will have to start a web server in the root folder (probably using `python3
+-m http.server 8000`). If you want a visualization, also start an instance of
+Galapagos (using `sbt start` in the `bench/galapagos` folder). When in the
+browser page to run the file, press "Load" to load the Wasm module representing
+the `run.rs` script, and "main()" to run the main function once it is loaded.
+The module will contain debug info with source maps. I have found that using
+Google Chrome with the ["C/C++ DevTools Support
 (DWARF)"](https://chromewebstore.google.com/detail/cc++-devtools-support-dwa/pdcpmagijalfljmkmjngeonclgbbannb)
 extension is the best way to get these to work.
 
