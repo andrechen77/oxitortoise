@@ -2,7 +2,7 @@ use quote::quote;
 use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
 use syn::token::Comma;
-use syn::{parse2, FnArg, Ident, ItemFn, LitStr, Pat, Token};
+use syn::{parse2, FnArg, Ident, ItemFn, LitStr, Pat, Token, Type};
 
 /// Trait for types that can be decomposed into FFI-safe components for passing
 /// across FFI boundaries.
@@ -103,6 +103,7 @@ pub fn ffi_translate_impl(
 
     // generate decomposed arguments and recompose statements
     let mut new_inputs: Vec<FnArg> = Vec::new();
+    let mut new_inputs_types: Vec<Type> = Vec::new();
     let mut recompose_stmts = Vec::new();
     let mut original_args = Vec::new();
 
@@ -124,9 +125,10 @@ pub fn ffi_translate_impl(
             let component_arg_name =
                 Ident::new(&format!("{}_{}", param_name, i), param_name.span());
             let component_ty = quote! {
-                <<#param_ty as ffi_translate::FfiCompose>::Components as ffi_translate::ComponentIndex<#i>>::Component
+                <<#param_ty as Fc>::Components as Ci<#i>>::Component
             };
             new_inputs.push(parse2(quote! { #component_arg_name: #component_ty }).unwrap());
+            new_inputs_types.push(parse2(component_ty).unwrap());
         }
 
         // generate recompose statement matching the example syntax
@@ -140,7 +142,7 @@ pub fn ffi_translate_impl(
 
         // match the example: recompose((a_0, a_1)) or recompose((b_0,))
         recompose_stmts.push(quote! {
-            let #param_name = <#param_ty as ffi_translate::FfiCompose>::recompose((#(#component_args),*));
+            let #param_name = <#param_ty as Fc>::recompose((#(#component_args),*));
         });
 
         original_args.push(quote! { #param_name });
@@ -159,9 +161,20 @@ pub fn ffi_translate_impl(
         mod #module_name {
             use super::*;
 
+            use ::lir::{HostFunctionInfo, AsLir};
+            use ::ffi_translate::FfiCompose as Fc;
+            use ::ffi_translate::ComponentIndex as Ci;
+
+            pub static INFO: HostFunctionInfo = HostFunctionInfo {
+                name: #export_name_string,
+                parameter_types: &[
+                    #(<#new_inputs_types as AsLir>::Type,)*
+                ],
+            };
+
             #[unsafe(export_name = #export_name_string)]
             fn #export_name #generics(
-                #(#new_inputs),*
+                #(#new_inputs,)*
             ) #output
             #where_clause
             {
@@ -269,6 +282,8 @@ mod tests {
 
         let output = ffi_translate_impl(args, input);
 
+        println!("output: {}", output.to_string());
+
         // Try to parse the result as valid Rust code
         let _ = syn::parse2::<syn::File>(output.clone())
             .expect("generated code should parse successfully");
@@ -280,15 +295,31 @@ mod tests {
             }
             mod my_function {
                 use super::*;
+
+                use ::lir::{HostFunctionInfo, AsLir};
+                use ::ffi_translate::FfiCompose as Fc;
+                use ::ffi_translate::ComponentIndex as Ci;
+
+                pub static INFO: HostFunctionInfo = HostFunctionInfo {
+                    name: "my_function_unmangled",
+                    parameter_types: &[
+                        < < <MyPair as Fc>::Components as Ci<0usize> >::Component as AsLir>::Type,
+                        < < <MyPair as Fc>::Components as Ci<1usize> >::Component as AsLir>::Type,
+                        < < <MyPair as Fc>::Components as Ci<0usize> >::Component as AsLir>::Type,
+                        < < <MyPair as Fc>::Components as Ci<1usize> >::Component as AsLir>::Type,
+                    ],
+                };
+
+
                 #[unsafe(export_name = "my_function_unmangled")]
                 fn my_function_unmangled(
-                    a_0: < <MyPair as ffi_translate::FfiCompose>::Components as ffi_translate::ComponentIndex<0usize> >::Component,
-                    a_1: < <MyPair as ffi_translate::FfiCompose>::Components as ffi_translate::ComponentIndex<1usize> >::Component,
-                    b_0: < <MyPair as ffi_translate::FfiCompose>::Components as ffi_translate::ComponentIndex<0usize> >::Component,
-                    b_1: < <MyPair as ffi_translate::FfiCompose>::Components as ffi_translate::ComponentIndex<1usize> >::Component
+                    a_0: < <MyPair as Fc>::Components as Ci<0usize> >::Component,
+                    a_1: < <MyPair as Fc>::Components as Ci<1usize> >::Component,
+                    b_0: < <MyPair as Fc>::Components as Ci<0usize> >::Component,
+                    b_1: < <MyPair as Fc>::Components as Ci<1usize> >::Component,
                 ) {
-                    let a = <MyPair as ffi_translate::FfiCompose>::recompose((a_0, a_1));
-                    let b = <MyPair as ffi_translate::FfiCompose>::recompose((b_0, b_1));
+                    let a = <MyPair as Fc>::recompose((a_0, a_1));
+                    let b = <MyPair as Fc>::recompose((b_0, b_1));
                     super::my_function(a, b)
                 }
             }
