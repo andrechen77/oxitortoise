@@ -62,7 +62,3 @@ export async function instantiateWasm(modulePath) {
 	wasmInstance = wasmResult.instance;
 	return wasmInstance;
 }
-
-async function hello() {
-	console.log("hello");
-}
