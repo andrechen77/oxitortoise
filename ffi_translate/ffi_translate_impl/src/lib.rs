@@ -2,7 +2,7 @@ use quote::quote;
 use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
 use syn::token::Comma;
-use syn::{parse2, FnArg, Ident, ItemFn, LitStr, Pat, Token, Type};
+use syn::{parse2, FnArg, Ident, ItemFn, LitStr, Pat, ReturnType, Token, Type};
 
 /// Trait for types that can be decomposed into FFI-safe components for passing
 /// across FFI boundaries.
@@ -150,6 +150,10 @@ pub fn ffi_translate_impl(
 
     // build the new function
     let output = &input_fn.sig.output;
+    let output_type: &[&Type] = match output {
+        ReturnType::Type(_, ty) => &[&ty],
+        ReturnType::Default => &[],
+    };
     let generics = &input_fn.sig.generics;
     let where_clause = &input_fn.sig.generics.where_clause;
     let module_name = original_fn.clone();
@@ -168,8 +172,9 @@ pub fn ffi_translate_impl(
             pub static INFO: HostFunctionInfo = HostFunctionInfo {
                 name: #export_name_string,
                 parameter_types: &[
-                    #(<#new_inputs_types as AsLir>::Type,)*
+                    #(<#new_inputs_types as AsLir>::TYPE,)*
                 ],
+                return_type: &[#(<#output_type as AsLir>::TYPE,)*],
             };
 
             #[unsafe(export_name = #export_name_string)]
@@ -266,9 +271,7 @@ mod tests {
     use quote::quote;
 
     #[test]
-    fn test_my_function_example() {
-        // This is the function from engine/src/lib.rs
-        // Note: The macro only processes the function, not the struct/impl
+    fn without_return_type() {
         let input = quote! {
             #[other_attributes]
             fn my_function(a: MyPair, b: MyPair) {
@@ -281,8 +284,6 @@ mod tests {
         };
 
         let output = ffi_translate_impl(args, input);
-
-        println!("output: {}", output.to_string());
 
         // Try to parse the result as valid Rust code
         let _ = syn::parse2::<syn::File>(output.clone())
@@ -303,11 +304,12 @@ mod tests {
                 pub static INFO: HostFunctionInfo = HostFunctionInfo {
                     name: "my_function_unmangled",
                     parameter_types: &[
-                        < < <MyPair as Fc>::Components as Ci<0usize> >::Component as AsLir>::Type,
-                        < < <MyPair as Fc>::Components as Ci<1usize> >::Component as AsLir>::Type,
-                        < < <MyPair as Fc>::Components as Ci<0usize> >::Component as AsLir>::Type,
-                        < < <MyPair as Fc>::Components as Ci<1usize> >::Component as AsLir>::Type,
+                        < < <MyPair as Fc>::Components as Ci<0usize> >::Component as AsLir>::TYPE,
+                        < < <MyPair as Fc>::Components as Ci<1usize> >::Component as AsLir>::TYPE,
+                        < < <MyPair as Fc>::Components as Ci<0usize> >::Component as AsLir>::TYPE,
+                        < < <MyPair as Fc>::Components as Ci<1usize> >::Component as AsLir>::TYPE,
                     ],
+                    return_type: &[],
                 };
 
 
@@ -318,6 +320,68 @@ mod tests {
                     b_0: < <MyPair as Fc>::Components as Ci<0usize> >::Component,
                     b_1: < <MyPair as Fc>::Components as Ci<1usize> >::Component,
                 ) {
+                    let a = <MyPair as Fc>::recompose((a_0, a_1));
+                    let b = <MyPair as Fc>::recompose((b_0, b_1));
+                    super::my_function(a, b)
+                }
+            }
+        };
+
+        assert_eq!(output.to_string(), expected.to_string());
+    }
+
+    #[test]
+    fn with_return_type() {
+        let input = quote! {
+            #[other_attributes]
+            fn my_function(a: MyPair, b: MyPair) -> Thing {
+                do_something()
+            }
+        };
+
+        let args = quote! {
+            unsafe_export_name = "my_function_unmangled", args_composition(2, 2)
+        };
+
+        let output = ffi_translate_impl(args, input);
+
+        println!("output: {}", output.to_string());
+
+        // Try to parse the result as valid Rust code
+        let _ = syn::parse2::<syn::File>(output.clone())
+            .expect("generated code should parse successfully");
+
+        let expected = quote! {
+            #[other_attributes]
+            fn my_function(a: MyPair, b: MyPair) -> Thing {
+                do_something()
+            }
+            mod my_function {
+                use super::*;
+
+                use ::lir::{HostFunctionInfo, AsLir};
+                use ::ffi_translate::FfiCompose as Fc;
+                use ::ffi_translate::ComponentIndex as Ci;
+
+                pub static INFO: HostFunctionInfo = HostFunctionInfo {
+                    name: "my_function_unmangled",
+                    parameter_types: &[
+                        < < <MyPair as Fc>::Components as Ci<0usize> >::Component as AsLir>::TYPE,
+                        < < <MyPair as Fc>::Components as Ci<1usize> >::Component as AsLir>::TYPE,
+                        < < <MyPair as Fc>::Components as Ci<0usize> >::Component as AsLir>::TYPE,
+                        < < <MyPair as Fc>::Components as Ci<1usize> >::Component as AsLir>::TYPE,
+                    ],
+                    return_type: &[<Thing as AsLir>::TYPE,],
+                };
+
+
+                #[unsafe(export_name = "my_function_unmangled")]
+                fn my_function_unmangled(
+                    a_0: < <MyPair as Fc>::Components as Ci<0usize> >::Component,
+                    a_1: < <MyPair as Fc>::Components as Ci<1usize> >::Component,
+                    b_0: < <MyPair as Fc>::Components as Ci<0usize> >::Component,
+                    b_1: < <MyPair as Fc>::Components as Ci<1usize> >::Component,
+                ) -> Thing {
                     let a = <MyPair as Fc>::recompose((a_0, a_1));
                     let b = <MyPair as Fc>::recompose((b_0, b_1));
                     super::my_function(a, b)
