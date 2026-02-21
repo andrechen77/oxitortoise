@@ -32,13 +32,13 @@ user-facing interface for the compiler.
 
 ## how to build and run
 
-A script exists at `/bench/convert_ast.sh` to build the AST from the `.nlogox`
-file; pass the name of the model (e.g. `ants`). The result is placed in the
-corresponding model's folder.
+The script at `/bench/convert_ast.sh` will build the AST from the `.nlogox`
+file.
 
-A script exists at `/bench/build.sh` to build `run.rs`; pass the `release`
-argument to the script to build in release mode. The result is placed in the
-model's folder.
+The script at `/bench/build.sh` will build `run.rs`; pass the `release`
+argument to the script to build in release mode.
+
+Script artifacts will be placed in the corresponding model's folder.
 
 There are two ways to run the finished binary.
 
