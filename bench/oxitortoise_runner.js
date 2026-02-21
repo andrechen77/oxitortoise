@@ -1,4 +1,4 @@
-export async function instantiateWasm(modulePath) {
+export async function instantiateWasm(modulePath, visualizeUpdate) {
 	let wasmInstance = null;
 	const importObject = {
 		'env': {
@@ -54,7 +54,9 @@ export async function instantiateWasm(modulePath) {
 				}
 			},
 			'visualize_update': (bytesPtr, bytesLen) => {
-				console.log("module tried to visualize update", bytesPtr, bytesLen);
+				let mainMemory = wasmResult.instance.exports.memory;
+				let updateStr = new TextDecoder().decode(new Uint8Array(mainMemory.buffer, bytesPtr, bytesLen));
+				visualizeUpdate(updateStr);
 			}
 		}
 	};
