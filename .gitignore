@@ -9,3 +9,4 @@ output
 *.wat
 *.lir
 *.disass
+ast.json
