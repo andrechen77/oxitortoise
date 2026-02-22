@@ -8,7 +8,7 @@ use pretty_print::PrettyPrinter;
 use crate::{
     exec::jit::InstallLir,
     hir::{
-        FunctionId, HirTy, LocalId, NlAbstractTy, Node, NodeId, Program, WriteLirError,
+        HirTy, LocalId, NlAbstractTy, Node, NodeId, Program, WriteLirError,
         build_lir::{LirInsnBuilder, LocalLocation},
     },
 };
@@ -28,7 +28,7 @@ impl Node for GetLocalVar {
         vec![]
     }
 
-    fn output_type(&self, program: &Program, _fn_id: FunctionId) -> HirTy {
+    fn output_type(&self, program: &Program) -> HirTy {
         program.locals[self.local_id].ty.clone()
     }
 
@@ -81,7 +81,7 @@ impl Node for SetLocalVar {
         vec![("val", self.value)]
     }
 
-    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> HirTy {
+    fn output_type(&self, _program: &Program) -> HirTy {
         NlAbstractTy::Unit.into()
     }
 

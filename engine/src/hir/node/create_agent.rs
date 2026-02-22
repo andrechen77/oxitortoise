@@ -8,10 +8,7 @@ use slotmap::Key as _;
 
 use crate::{
     exec::jit::InstallLir,
-    hir::{
-        FunctionId, HirTy, NlAbstractTy, Node, NodeId, Program, WriteLirError,
-        build_lir::LirInsnBuilder,
-    },
+    hir::{HirTy, NlAbstractTy, Node, NodeId, Program, WriteLirError, build_lir::LirInsnBuilder},
     sim::turtle::BreedId,
 };
 
@@ -36,7 +33,7 @@ impl Node for CreateTurtles {
         vec![("ctx", self.context), ("num", self.num_turtles), ("body", self.body)]
     }
 
-    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> HirTy {
+    fn output_type(&self, _program: &Program) -> HirTy {
         NlAbstractTy::Unit.into()
     }
 

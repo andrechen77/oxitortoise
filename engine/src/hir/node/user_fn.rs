@@ -26,7 +26,7 @@ impl Node for CallUserFn {
         self.args.iter().map(|&id| ("arg", id)).collect()
     }
 
-    fn output_type(&self, program: &Program, _fn_id: FunctionId) -> HirTy {
+    fn output_type(&self, program: &Program) -> HirTy {
         program.functions[self.target].return_ty.clone()
     }
 

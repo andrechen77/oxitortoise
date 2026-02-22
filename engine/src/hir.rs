@@ -130,7 +130,7 @@ pub struct WriteLirError;
 /// A local transformation that can be applied to a node. The function
 /// returns `true` if the transformation was successfully applied, `false`
 /// otherwise.
-pub type NodeTransform = Box<dyn FnOnce(&mut Program, FunctionId, NodeId) -> bool>;
+pub type NodeTransform = Box<dyn FnOnce(&mut Program, NodeId) -> bool>;
 
 /// Some kind of computation that takes inputs and produces outputs. The output
 /// of a node is immutable, though may change between instances if the node is
@@ -149,7 +149,7 @@ pub trait Node {
 
     /// For certain low level nodes it doesn't make sense to have an abstract
     /// output type; those should return `None`.
-    fn output_type(&self, program: &Program, fn_id: FunctionId) -> HirTy;
+    fn output_type(&self, program: &Program) -> HirTy;
 
     /// Returns a possible local transformation that could apply to this node.
     /// This can return at most one transformation, even if multiple are

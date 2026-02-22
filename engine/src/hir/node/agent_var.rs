@@ -40,7 +40,7 @@ impl Node for GetGlobalVar {
         vec![("context", self.context)]
     }
 
-    fn output_type(&self, program: &Program, _fn_id: FunctionId) -> HirTy {
+    fn output_type(&self, program: &Program) -> HirTy {
         let Some(var) = program.globals.get(self.index) else {
             panic!("Unknown global var index: {:?}", self.index);
         };
@@ -53,11 +53,7 @@ impl Node for GetGlobalVar {
         _fn_id: FunctionId,
         _my_node_id: NodeId,
     ) -> Option<NodeTransform> {
-        fn lower_get_global_var(
-            program: &mut Program,
-            fn_id: FunctionId,
-            my_node_id: NodeId,
-        ) -> bool {
+        fn lower_get_global_var(program: &mut Program, my_node_id: NodeId) -> bool {
             let NodeKind::GetGlobalVar(my_node) = program.nodes[my_node_id] else {
                 return false;
             };
@@ -68,7 +64,7 @@ impl Node for GetGlobalVar {
             let field = NodeKind::from(node::MemLoad {
                 ptr: data_row,
                 offset: field_offset,
-                ty: my_node.output_type(program, fn_id).repr(),
+                ty: my_node.output_type(program).repr(),
             });
             program.nodes[my_node_id] = field;
             true
@@ -128,7 +124,7 @@ impl Node for GetTurtleVar {
         vec![("context", self.context), ("turtle", self.turtle)]
     }
 
-    fn output_type(&self, program: &Program, _fn_id: FunctionId) -> HirTy {
+    fn output_type(&self, program: &Program) -> HirTy {
         // TODO(wishlist) this should probably be refactored into a function
         match self.var {
             TurtleVarDesc::Who => NlAbstractTy::Float.into(),
@@ -147,11 +143,7 @@ impl Node for GetTurtleVar {
         _fn_id: FunctionId,
         _my_node_id: NodeId,
     ) -> Option<NodeTransform> {
-        fn lower_get_turtle_var(
-            program: &mut Program,
-            fn_id: FunctionId,
-            my_node_id: NodeId,
-        ) -> bool {
+        fn lower_get_turtle_var(program: &mut Program, my_node_id: NodeId) -> bool {
             let NodeKind::GetTurtleVar(my_node) = program.nodes[my_node_id] else {
                 return false;
             };
@@ -163,7 +155,7 @@ impl Node for GetTurtleVar {
             let field = NodeKind::from(node::MemLoad {
                 ptr: data_row,
                 offset: field_offset,
-                ty: my_node.output_type(program, fn_id).repr(),
+                ty: my_node.output_type(program).repr(),
             });
             program.nodes[my_node_id] = field;
             true
@@ -203,7 +195,7 @@ impl Node for SetTurtleVar {
     fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
         vec![("context", self.context), ("turtle", self.turtle), ("value", self.value)]
     }
-    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> HirTy {
+    fn output_type(&self, _program: &Program) -> HirTy {
         NlAbstractTy::Unit.into()
     }
 
@@ -213,11 +205,7 @@ impl Node for SetTurtleVar {
         _fn_id: FunctionId,
         _my_node_id: NodeId,
     ) -> Option<NodeTransform> {
-        fn lower_set_turtle_var(
-            program: &mut Program,
-            _fn_id: FunctionId,
-            my_node_id: NodeId,
-        ) -> bool {
+        fn lower_set_turtle_var(program: &mut Program, my_node_id: NodeId) -> bool {
             let NodeKind::SetTurtleVar(my_node) = program.nodes[my_node_id] else {
                 return false;
             };
@@ -310,7 +298,7 @@ impl Node for TurtleIdToIndex {
         vec![("turtle_id", self.turtle_id)]
     }
 
-    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> HirTy {
+    fn output_type(&self, _program: &Program) -> HirTy {
         U32_CONCRETE_TY.into()
     }
 
@@ -355,7 +343,7 @@ impl Node for GetPatchVar {
         vec![("context", self.context), ("patch", self.patch)]
     }
 
-    fn output_type(&self, program: &Program, _fn_id: FunctionId) -> HirTy {
+    fn output_type(&self, program: &Program) -> HirTy {
         match self.var {
             PatchVarDesc::Pcolor => NlAbstractTy::Color.into(),
             PatchVarDesc::Pos => NlAbstractTy::Point.into(),
@@ -369,11 +357,7 @@ impl Node for GetPatchVar {
         _fn_id: FunctionId,
         _my_node_id: NodeId,
     ) -> Option<NodeTransform> {
-        fn lower_get_patch_var(
-            program: &mut Program,
-            fn_id: FunctionId,
-            my_node_id: NodeId,
-        ) -> bool {
+        fn lower_get_patch_var(program: &mut Program, my_node_id: NodeId) -> bool {
             let NodeKind::GetPatchVar(my_node) = program.nodes[my_node_id] else {
                 return false;
             };
@@ -385,7 +369,7 @@ impl Node for GetPatchVar {
             let field = NodeKind::from(node::MemLoad {
                 ptr: data_row,
                 offset: field_offset,
-                ty: my_node.output_type(program, fn_id).repr(),
+                ty: my_node.output_type(program).repr(),
             });
             program.nodes[my_node_id] = field;
 
@@ -426,7 +410,7 @@ impl Node for SetPatchVar {
         vec![("context", self.context), ("patch", self.patch), ("value", self.value)]
     }
 
-    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> HirTy {
+    fn output_type(&self, _program: &Program) -> HirTy {
         NlAbstractTy::Unit.into()
     }
 
@@ -436,11 +420,7 @@ impl Node for SetPatchVar {
         _fn_id: FunctionId,
         _my_node_id: NodeId,
     ) -> Option<NodeTransform> {
-        fn lower_set_patch_var(
-            program: &mut Program,
-            _fn_id: FunctionId,
-            my_node_id: NodeId,
-        ) -> bool {
+        fn lower_set_patch_var(program: &mut Program, my_node_id: NodeId) -> bool {
             let NodeKind::SetPatchVar(SetPatchVar { context, patch, var, value }) =
                 program.nodes[my_node_id]
             else {
@@ -529,7 +509,7 @@ impl Node for GetPatchVarAsTurtleOrPatch {
         vec![("context", self.context), ("agent", self.agent)]
     }
 
-    fn output_type(&self, program: &Program, _fn_id: FunctionId) -> HirTy {
+    fn output_type(&self, program: &Program) -> HirTy {
         // TODO(wishlist) refactor to deduplicate with GetPatchVar
         match self.var {
             PatchVarDesc::Pcolor => NlAbstractTy::Color.into(),
@@ -544,11 +524,7 @@ impl Node for GetPatchVarAsTurtleOrPatch {
         _fn_id: FunctionId,
         _my_node_id: NodeId,
     ) -> Option<NodeTransform> {
-        fn decompose_get_patch_var(
-            program: &mut Program,
-            fn_id: FunctionId,
-            my_node_id: NodeId,
-        ) -> bool {
+        fn decompose_get_patch_var(program: &mut Program, my_node_id: NodeId) -> bool {
             let NodeKind::GetPatchVarAsTurtleOrPatch(GetPatchVarAsTurtleOrPatch {
                 context,
                 agent,
@@ -559,7 +535,7 @@ impl Node for GetPatchVarAsTurtleOrPatch {
             };
 
             match program.nodes[agent]
-                .output_type(program, fn_id)
+                .output_type(program)
                 .abstr
                 .expect("agent must have an abstract type")
             {
@@ -632,7 +608,7 @@ impl Node for SetPatchVarAsTurtleOrPatch {
         vec![("context", self.context), ("agent", self.agent), ("value", self.value)]
     }
 
-    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> HirTy {
+    fn output_type(&self, _program: &Program) -> HirTy {
         NlAbstractTy::Unit.into()
     }
 
@@ -646,48 +622,42 @@ impl Node for SetPatchVarAsTurtleOrPatch {
         let context = self.context;
         let var = self.var;
         let value = self.value;
-        let transform =
-            move |program: &mut Program, fn_id: FunctionId, my_node_id: NodeId| match program.nodes
-                [agent]
-                .output_type(program, fn_id)
-                .abstr
-                .unwrap()
-            {
-                NlAbstractTy::Patch => {
-                    program.nodes[my_node_id] =
-                        NodeKind::from(node::SetPatchVar { context, patch: agent, var, value });
-                    true
-                }
-                NlAbstractTy::Turtle => {
-                    let xcor = program.nodes.insert(NodeKind::from(node::GetTurtleVar {
-                        context,
-                        turtle: agent,
-                        var: TurtleVarDesc::Xcor,
-                    }));
+        let transform = move |program: &mut Program, my_node_id: NodeId| match program.nodes[agent]
+            .output_type(program)
+            .abstr
+            .unwrap()
+        {
+            NlAbstractTy::Patch => {
+                program.nodes[my_node_id] =
+                    NodeKind::from(node::SetPatchVar { context, patch: agent, var, value });
+                true
+            }
+            NlAbstractTy::Turtle => {
+                let xcor = program.nodes.insert(NodeKind::from(node::GetTurtleVar {
+                    context,
+                    turtle: agent,
+                    var: TurtleVarDesc::Xcor,
+                }));
 
-                    let ycor = program.nodes.insert(NodeKind::from(node::GetTurtleVar {
-                        context,
-                        turtle: agent,
-                        var: TurtleVarDesc::Ycor,
-                    }));
+                let ycor = program.nodes.insert(NodeKind::from(node::GetTurtleVar {
+                    context,
+                    turtle: agent,
+                    var: TurtleVarDesc::Ycor,
+                }));
 
-                    let patch_here = program.nodes.insert(NodeKind::from(node::PatchAt {
-                        context,
-                        x: xcor,
-                        y: ycor,
-                    }));
+                let patch_here = program.nodes.insert(NodeKind::from(node::PatchAt {
+                    context,
+                    x: xcor,
+                    y: ycor,
+                }));
 
-                    program.nodes[my_node_id] = NodeKind::from(node::SetPatchVar {
-                        context,
-                        patch: patch_here,
-                        var,
-                        value,
-                    });
+                program.nodes[my_node_id] =
+                    NodeKind::from(node::SetPatchVar { context, patch: patch_here, var, value });
 
-                    true
-                }
-                _ => false,
-            };
+                true
+            }
+            _ => false,
+        };
         Some(Box::new(transform))
     }
 

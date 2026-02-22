@@ -7,10 +7,7 @@ use pretty_print::PrettyPrinter;
 
 use crate::{
     exec::jit::InstallLir,
-    hir::{
-        FunctionId, HirTy, NlAbstractTy, Node, NodeId, Program, WriteLirError,
-        build_lir::LirInsnBuilder,
-    },
+    hir::{HirTy, NlAbstractTy, Node, NodeId, Program, WriteLirError, build_lir::LirInsnBuilder},
 };
 
 /// https://docs.netlogo.org/dict/scale-color.html
@@ -31,7 +28,7 @@ impl Node for ScaleColor {
         vec![("color", self.color), ("num", self.number), ("r1", self.range1), ("r2", self.range2)]
     }
 
-    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> HirTy {
+    fn output_type(&self, _program: &Program) -> HirTy {
         NlAbstractTy::Color.into()
     }
 

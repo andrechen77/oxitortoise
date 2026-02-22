@@ -29,21 +29,21 @@ impl Node for Distancexy {
         vec![("agent", self.agent), ("x", self.x), ("y", self.y)]
     }
 
-    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> HirTy {
+    fn output_type(&self, _program: &Program) -> HirTy {
         NlAbstractTy::Float.into()
     }
 
     fn peephole_transform(
         &self,
         program: &Program,
-        fn_id: FunctionId,
+        _fn_id: FunctionId,
         _my_node_id: NodeId,
     ) -> Option<NodeTransform> {
         // if the agent is a turtle
-        let agent_type = program.nodes[self.agent].output_type(program, fn_id);
+        let agent_type = program.nodes[self.agent].output_type(program);
 
-        Some(Box::new(move |program, fn_id, my_node_id| {
-            decompose_distancexy(program, fn_id, my_node_id, agent_type)
+        Some(Box::new(move |program, my_node_id| {
+            decompose_distancexy(program, my_node_id, agent_type)
         }))
     }
 
@@ -52,12 +52,7 @@ impl Node for Distancexy {
     }
 }
 
-fn decompose_distancexy(
-    program: &mut Program,
-    _fn_id: FunctionId,
-    my_node_id: NodeId,
-    agent_type: HirTy,
-) -> bool {
+fn decompose_distancexy(program: &mut Program, my_node_id: NodeId, agent_type: HirTy) -> bool {
     let &NodeKind::Distancexy(Distancexy { context, agent, x, y }) = &program.nodes[my_node_id]
     else {
         return false;

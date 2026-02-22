@@ -6,10 +6,7 @@ use pretty_print::PrettyPrinter;
 
 use crate::{
     exec::jit::InstallLir,
-    hir::{
-        FunctionId, HirTy, NlAbstractTy, Node, NodeId, Program, WriteLirError,
-        build_lir::LirInsnBuilder,
-    },
+    hir::{HirTy, NlAbstractTy, Node, NodeId, Program, WriteLirError, build_lir::LirInsnBuilder},
 };
 
 #[derive(Debug)]
@@ -29,7 +26,7 @@ impl Node for SetDefaultShape {
         vec![("breed", self.breed), ("shape", self.shape)]
     }
 
-    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> HirTy {
+    fn output_type(&self, _program: &Program) -> HirTy {
         NlAbstractTy::Unit.into()
     }
 

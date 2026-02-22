@@ -37,7 +37,7 @@ impl Node for Ask {
         deps
     }
 
-    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> HirTy {
+    fn output_type(&self, _program: &Program) -> HirTy {
         NlAbstractTy::Unit.into()
     }
 
@@ -52,7 +52,7 @@ impl Node for Ask {
         // just checking for a specific node. this would require augmenting the
         // type system to include special types for "entire agent class"
 
-        fn type_erase_ask(program: &mut Program, _fn_id: FunctionId, my_node_id: NodeId) -> bool {
+        fn type_erase_ask(program: &mut Program, my_node_id: NodeId) -> bool {
             let &NodeKind::Ask(Ask { context: _, recipients, body: _ }) =
                 &program.nodes[my_node_id]
             else {
@@ -142,9 +142,9 @@ impl Node for Of {
         deps
     }
 
-    fn output_type(&self, program: &Program, fn_id: FunctionId) -> HirTy {
+    fn output_type(&self, program: &Program) -> HirTy {
         let NlAbstractTy::Closure(closure) = program.nodes[self.body]
-            .output_type(program, fn_id)
+            .output_type(program)
             .abstr
             .expect("closure must have an abstract type")
         else {
@@ -160,11 +160,7 @@ impl Node for Of {
         _fn_id: FunctionId,
         _my_node_id: NodeId,
     ) -> Option<NodeTransform> {
-        fn narrow_recipient_type(
-            program: &mut Program,
-            fn_id: FunctionId,
-            my_node_id: NodeId,
-        ) -> bool {
+        fn narrow_recipient_type(program: &mut Program, my_node_id: NodeId) -> bool {
             let &NodeKind::Of(Of { context: _, recipients, body: _ }) = &program.nodes[my_node_id]
             else {
                 return false;
@@ -173,7 +169,7 @@ impl Node for Of {
             let Some(recipients_node) = recipients.node() else {
                 return false;
             };
-            let recipients_type = program.nodes[recipients_node].output_type(program, fn_id);
+            let recipients_type = program.nodes[recipients_node].output_type(program);
             match recipients_type.abstr.expect("recipients must have an abstract type") {
                 NlAbstractTy::Turtle => {
                     let NodeKind::Of(Of { context: _, recipients, body: _ }) =
@@ -213,7 +209,7 @@ impl Node for Of {
 
         // find the output type of the closure
         let NlAbstractTy::Closure(ClosureType { arg_ty: _, return_ty }) = program.nodes[self.body]
-            .output_type(program, lir_builder.fn_id)
+            .output_type(program)
             .abstr
             .expect("closure must have an abstract type")
         else {

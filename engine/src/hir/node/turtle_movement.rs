@@ -32,7 +32,7 @@ impl Node for TurtleRotate {
         vec![("ctx", self.context), ("turtle", self.turtle), ("angle", self.angle)]
     }
 
-    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> HirTy {
+    fn output_type(&self, _program: &Program) -> HirTy {
         NlAbstractTy::Unit.into()
     }
 
@@ -82,7 +82,7 @@ impl Node for TurtleForward {
         vec![("ctx", self.context), ("turtle", self.turtle), ("dist", self.distance)]
     }
 
-    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> HirTy {
+    fn output_type(&self, _program: &Program) -> HirTy {
         NlAbstractTy::Unit.into()
     }
 
@@ -132,7 +132,7 @@ impl Node for CanMove {
         vec![("ctx", self.context), ("turtle", self.turtle), ("dist", self.distance)]
     }
 
-    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> HirTy {
+    fn output_type(&self, _program: &Program) -> HirTy {
         NlAbstractTy::Boolean.into()
     }
 
@@ -142,11 +142,7 @@ impl Node for CanMove {
         _fn_id: FunctionId,
         _my_node_id: NodeId,
     ) -> Option<NodeTransform> {
-        fn break_down_can_move(
-            program: &mut Program,
-            _fn_id: FunctionId,
-            my_node_id: NodeId,
-        ) -> bool {
+        fn break_down_can_move(program: &mut Program, my_node_id: NodeId) -> bool {
             let &NodeKind::CanMove(CanMove { context, turtle, distance }) =
                 &program.nodes[my_node_id]
             else {
@@ -208,7 +204,7 @@ impl Node for PatchRelative {
         deps
     }
 
-    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> HirTy {
+    fn output_type(&self, _program: &Program) -> HirTy {
         NlAbstractTy::Patch.into()
     }
 

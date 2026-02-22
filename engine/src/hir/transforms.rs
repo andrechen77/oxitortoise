@@ -21,7 +21,7 @@ impl Node for Placeholder {
         panic!()
     }
 
-    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> HirTy {
+    fn output_type(&self, _program: &Program) -> HirTy {
         panic!()
     }
 
@@ -62,7 +62,7 @@ pub fn lower(program: &mut Program, fn_id: FunctionId) {
 
     for (transform, node_id) in visitor.transformations {
         trace!("Applying lowering expansion to node {:?}", node_id);
-        transform(program, fn_id, node_id);
+        transform(program, node_id);
     }
 }
 
@@ -91,7 +91,7 @@ pub fn peephole_transform(program: &mut Program, fn_id: FunctionId) {
             "Applying peephole transformation to node {:?} {:?}",
             node_id, program.nodes[node_id]
         );
-        transform(program, fn_id, node_id);
+        transform(program, node_id);
     }
 }
 
@@ -107,7 +107,7 @@ pub fn optimize_of_agent_type(program: &mut Program, fn_id: FunctionId) {
         type_changes: Vec<(LocalId, HirTy)>,
     }
     impl HirVisitor for Visitor {
-        fn visit_node(&mut self, program: &Program, fn_id: FunctionId, node_id: NodeId) {
+        fn visit_node(&mut self, program: &Program, _fn_id: FunctionId, node_id: NodeId) {
             let node = &program.nodes[node_id];
 
             if let NodeKind::Of(of) = &node {
@@ -122,7 +122,7 @@ pub fn optimize_of_agent_type(program: &mut Program, fn_id: FunctionId) {
                 let self_param_id =
                     program.functions[closure.body].parameters[ClosureType::PARAM_ARG_IDX];
 
-                let ty = recipients.output_type(program, fn_id).clone();
+                let ty = recipients.output_type(program).clone();
                 self.type_changes.push((self_param_id, ty));
             }
         }

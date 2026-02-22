@@ -7,10 +7,7 @@ use pretty_print::PrettyPrinter;
 
 use crate::{
     exec::jit::InstallLir,
-    hir::{
-        FunctionId, HirTy, NlAbstractTy, Node, NodeId, Program, WriteLirError,
-        build_lir::LirInsnBuilder,
-    },
+    hir::{HirTy, NlAbstractTy, Node, NodeId, Program, WriteLirError, build_lir::LirInsnBuilder},
 };
 
 #[derive(Debug)]
@@ -28,7 +25,7 @@ impl Node for ResetTicks {
         vec![("ctx", self.context)]
     }
 
-    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> HirTy {
+    fn output_type(&self, _program: &Program) -> HirTy {
         NlAbstractTy::Unit.into()
     }
 
@@ -68,7 +65,7 @@ impl Node for AdvanceTick {
         vec![("ctx", self.context)]
     }
 
-    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> HirTy {
+    fn output_type(&self, _program: &Program) -> HirTy {
         NlAbstractTy::Unit.into()
     }
 
@@ -108,7 +105,7 @@ impl Node for GetTick {
         vec![("ctx", self.context)]
     }
 
-    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> HirTy {
+    fn output_type(&self, _program: &Program) -> HirTy {
         NlAbstractTy::Float.into()
     }
 

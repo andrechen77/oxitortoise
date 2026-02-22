@@ -7,7 +7,7 @@ use pretty_print::PrettyPrinter;
 
 use crate::{
     exec::jit::InstallLir,
-    hir::{FunctionId, HirTy, Node, NodeId, Program, WriteLirError, build_lir::LirInsnBuilder},
+    hir::{HirTy, Node, NodeId, Program, WriteLirError, build_lir::LirInsnBuilder},
     util::reflection::{ConcreteTy, Reflect},
 };
 
@@ -30,7 +30,7 @@ impl Node for MemLoad {
         vec![("ptr", self.ptr)]
     }
 
-    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> HirTy {
+    fn output_type(&self, _program: &Program) -> HirTy {
         self.ty.into()
     }
 
@@ -83,7 +83,7 @@ impl Node for MemStore {
         true
     }
 
-    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> HirTy {
+    fn output_type(&self, _program: &Program) -> HirTy {
         HirTy::default()
     }
 
@@ -97,7 +97,7 @@ impl Node for MemStore {
             panic!("expected a node that outputs a pointer to be a single LIR value");
         };
 
-        let ty = program.nodes[self.value].output_type(program, lir_builder.fn_id).repr();
+        let ty = program.nodes[self.value].output_type(program).repr();
         let mem_repr = ty.info().mem_repr.expect("mem store value type must have known ABI");
         let values = lir_builder.get_node_results::<I>(program, self.value).to_owned();
         assert_eq!(
@@ -140,7 +140,7 @@ impl Node for DeriveField {
         vec![("ptr", self.ptr)]
     }
 
-    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> HirTy {
+    fn output_type(&self, _program: &Program) -> HirTy {
         <*mut u8 as Reflect>::CONCRETE_TY.into()
     }
 
@@ -184,7 +184,7 @@ impl Node for DeriveElement {
         vec![("ptr", self.ptr), ("idx", self.index)]
     }
 
-    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> HirTy {
+    fn output_type(&self, _program: &Program) -> HirTy {
         <*mut u8 as Reflect>::CONCRETE_TY.into()
     }
 

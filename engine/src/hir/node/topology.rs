@@ -35,7 +35,7 @@ impl Node for OffsetDistanceByHeading {
         vec![("pos", self.position), ("amt", self.amt), ("heading", self.heading)]
     }
 
-    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> HirTy {
+    fn output_type(&self, _program: &Program) -> HirTy {
         todo!("TODO(mvp) return Point type")
     }
 
@@ -72,7 +72,7 @@ impl Node for PatchAt {
         vec![("ctx", self.context), ("x", self.x), ("y", self.y)]
     }
 
-    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> HirTy {
+    fn output_type(&self, _program: &Program) -> HirTy {
         NlAbstractTy::Patch.into()
     }
 
@@ -119,7 +119,7 @@ impl Node for MaxPxcor {
         vec![("ctx", self.context)]
     }
 
-    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> HirTy {
+    fn output_type(&self, _program: &Program) -> HirTy {
         NlAbstractTy::Float.into()
     }
 
@@ -129,11 +129,7 @@ impl Node for MaxPxcor {
         _fn_id: FunctionId,
         _my_node_id: NodeId,
     ) -> Option<NodeTransform> {
-        fn lower_get_max_pxcor(
-            program: &mut Program,
-            _fn_id: FunctionId,
-            my_node_id: NodeId,
-        ) -> bool {
+        fn lower_get_max_pxcor(program: &mut Program, my_node_id: NodeId) -> bool {
             let &NodeKind::MaxPxcor(MaxPxcor { context }) = &program.nodes[my_node_id] else {
                 return false;
             };
@@ -179,7 +175,7 @@ impl Node for MaxPycor {
         vec![("ctx", self.context)]
     }
 
-    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> HirTy {
+    fn output_type(&self, _program: &Program) -> HirTy {
         NlAbstractTy::Float.into()
     }
 
@@ -189,11 +185,7 @@ impl Node for MaxPycor {
         _fn_id: FunctionId,
         _my_node_id: NodeId,
     ) -> Option<NodeTransform> {
-        fn lower_get_max_pycor(
-            program: &mut Program,
-            _fn_id: FunctionId,
-            my_node_id: NodeId,
-        ) -> bool {
+        fn lower_get_max_pycor(program: &mut Program, my_node_id: NodeId) -> bool {
             let &NodeKind::MaxPycor(MaxPycor { context }) = &program.nodes[my_node_id] else {
                 return false;
             };
@@ -241,7 +233,7 @@ impl Node for EuclideanDistanceNoWrap {
         vec![("a", self.a), ("b", self.b)]
     }
 
-    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> HirTy {
+    fn output_type(&self, _program: &Program) -> HirTy {
         NlAbstractTy::Float.into()
     }
 
@@ -284,7 +276,7 @@ impl Node for PointConstructor {
         vec![("x", self.x), ("y", self.y)]
     }
 
-    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> HirTy {
+    fn output_type(&self, _program: &Program) -> HirTy {
         NlAbstractTy::Point.into()
     }
 

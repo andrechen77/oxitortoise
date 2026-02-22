@@ -10,7 +10,7 @@ use tracing::trace;
 use crate::{
     exec::jit::InstallLir,
     hir::{
-        FunctionId, HirTy, NlAbstractTy, Node, NodeId, NodeKind, Program, WriteLirError,
+        HirTy, NlAbstractTy, Node, NodeId, NodeKind, Program, WriteLirError,
         build_lir::LirInsnBuilder,
     },
 };
@@ -69,14 +69,14 @@ impl Node for Block {
         self.statements.iter().map(|&id| ("stmt", id)).collect()
     }
 
-    fn output_type(&self, program: &Program, fn_id: FunctionId) -> HirTy {
+    fn output_type(&self, program: &Program) -> HirTy {
         let mut output_type = NlAbstractTy::Bottom;
         for &come_from in &self.come_from {
             let NodeKind::Break(Break { target: _, value }) = program.nodes[come_from] else {
                 panic!("expected a Break node");
             };
             let break_ty = value.map_or(NlAbstractTy::Unit, |v| {
-                program.nodes[v].output_type(program, fn_id).abstr.unwrap()
+                program.nodes[v].output_type(program).abstr.unwrap()
             });
             output_type = output_type.join(break_ty);
         }
@@ -111,9 +111,9 @@ impl Node for IfElse {
         vec![("cond", self.condition), ("then", self.then_block), ("else", self.else_block)]
     }
 
-    fn output_type(&self, program: &Program, fn_id: FunctionId) -> HirTy {
-        let then_ty = program.nodes[self.then_block].output_type(program, fn_id).abstr.unwrap();
-        let else_ty = program.nodes[self.else_block].output_type(program, fn_id).abstr.unwrap();
+    fn output_type(&self, program: &Program) -> HirTy {
+        let then_ty = program.nodes[self.then_block].output_type(program).abstr.unwrap();
+        let else_ty = program.nodes[self.else_block].output_type(program).abstr.unwrap();
         then_ty.join(else_ty).into()
     }
 
@@ -146,7 +146,7 @@ impl Node for IfElse {
             panic!("a condition should evaluate to a single LIR value");
         };
         trace!("calculating output type for if-else in function {:?}", lir_builder.fn_id);
-        let my_output_type = self.output_type(program, lir_builder.fn_id).repr();
+        let my_output_type = self.output_type(program).repr();
         lir_builder.push_lir_insn(lir::InsnKind::IfElse(lir::IfElse {
             condition,
             output_type: my_output_type
@@ -176,7 +176,7 @@ impl Node for Repeat {
         vec![("num_repetitions", self.num_repetitions), ("body", self.body_block)]
     }
 
-    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> HirTy {
+    fn output_type(&self, _program: &Program) -> HirTy {
         NlAbstractTy::Unit.into()
     }
 
@@ -203,7 +203,7 @@ impl Node for Break {
         self.value.iter().map(|&id| ("value", id)).collect()
     }
 
-    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> HirTy {
+    fn output_type(&self, _program: &Program) -> HirTy {
         // a break diverges, it never returns
         NlAbstractTy::Bottom.into()
     }

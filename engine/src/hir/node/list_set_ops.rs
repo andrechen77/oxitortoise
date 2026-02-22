@@ -7,10 +7,7 @@ use pretty_print::PrettyPrinter;
 
 use crate::{
     exec::jit::InstallLir,
-    hir::{
-        FunctionId, HirTy, NlAbstractTy, Node, NodeId, Program, WriteLirError,
-        build_lir::LirInsnBuilder,
-    },
+    hir::{HirTy, NlAbstractTy, Node, NodeId, Program, WriteLirError, build_lir::LirInsnBuilder},
     sim::value::{NlBox, NlList},
     util::reflection::Reflect as _,
 };
@@ -30,9 +27,9 @@ impl Node for OneOf {
         vec![("ctx", self.context), ("op", self.operand)]
     }
 
-    fn output_type(&self, program: &Program, fn_id: FunctionId) -> HirTy {
+    fn output_type(&self, program: &Program) -> HirTy {
         let out_type = match program.nodes[self.operand]
-            .output_type(program, fn_id)
+            .output_type(program)
             .abstr
             .expect("operand must have an abstract type")
         {
@@ -58,8 +55,7 @@ impl Node for OneOf {
             panic!("expected node outputting list to be a single LIR value")
         };
 
-        let operand_type =
-            program.nodes[self.operand].output_type(program, lir_builder.fn_id).repr();
+        let operand_type = program.nodes[self.operand].output_type(program).repr();
 
         if operand_type == <NlBox<NlList>>::CONCRETE_TY {
             let insn = lir::generate_host_function_call(

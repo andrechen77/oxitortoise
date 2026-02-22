@@ -7,10 +7,7 @@ use pretty_print::PrettyPrinter;
 
 use crate::{
     exec::jit::InstallLir,
-    hir::{
-        FunctionId, HirTy, NlAbstractTy, Node, NodeId, Program, WriteLirError,
-        build_lir::LirInsnBuilder,
-    },
+    hir::{HirTy, NlAbstractTy, Node, NodeId, Program, WriteLirError, build_lir::LirInsnBuilder},
     sim::value::UnpackedAny,
 };
 
@@ -28,7 +25,7 @@ impl Node for Constant {
         vec![]
     }
 
-    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> HirTy {
+    fn output_type(&self, _program: &Program) -> HirTy {
         match self.value {
             UnpackedAny::Float(_) => NlAbstractTy::Float,
             UnpackedAny::Bool(_) => NlAbstractTy::Boolean,
@@ -76,7 +73,7 @@ impl Node for ListLiteral {
         self.items.iter().map(|&id| ("item", id)).collect()
     }
 
-    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> HirTy {
+    fn output_type(&self, _program: &Program) -> HirTy {
         NlAbstractTy::List { element_ty: Box::new(NlAbstractTy::Top) }.into()
     }
 

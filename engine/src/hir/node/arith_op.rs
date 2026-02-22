@@ -56,7 +56,7 @@ impl Node for BinaryOperation {
         vec![("context", self.context), ("lhs", self.lhs), ("rhs", self.rhs)]
     }
 
-    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> HirTy {
+    fn output_type(&self, _program: &Program) -> HirTy {
         match self.op {
             BinaryOpcode::Add => NlAbstractTy::Numeric,
             BinaryOpcode::Sub => NlAbstractTy::Numeric,
@@ -80,11 +80,7 @@ impl Node for BinaryOperation {
         _fn_id: FunctionId,
         _my_node_id: NodeId,
     ) -> Option<NodeTransform> {
-        fn decompose_with_check_nobody(
-            program: &mut Program,
-            fn_id: FunctionId,
-            my_node_id: NodeId,
-        ) -> bool {
+        fn decompose_with_check_nobody(program: &mut Program, my_node_id: NodeId) -> bool {
             let &NodeKind::BinaryOperation(BinaryOperation { context, op, lhs, rhs }) =
                 &program.nodes[my_node_id]
             else {
@@ -92,11 +88,11 @@ impl Node for BinaryOperation {
             };
 
             let lhs_type = program.nodes[lhs]
-                .output_type(program, fn_id)
+                .output_type(program)
                 .abstr
                 .expect("operand must have an abstract type");
             let rhs_type = program.nodes[rhs]
-                .output_type(program, fn_id)
+                .output_type(program)
                 .abstr
                 .expect("operand must have an abstract type");
 
@@ -137,8 +133,8 @@ impl Node for BinaryOperation {
         // TODO(mvp) be prepared for other possible input types and adjust
         // the implementation accordingly
         // TODO(mvp) assert that the types of the operands are compatible with the operation
-        let lhs_type = program.nodes[self.lhs].output_type(program, lir_builder.fn_id).repr();
-        let rhs_type = program.nodes[self.rhs].output_type(program, lir_builder.fn_id).repr();
+        let lhs_type = program.nodes[self.lhs].output_type(program).repr();
+        let rhs_type = program.nodes[self.rhs].output_type(program).repr();
 
         let &[lhs] = lir_builder.get_node_results::<I>(program, self.lhs) else {
             unimplemented!();
@@ -228,7 +224,7 @@ impl Node for UnaryOp {
         vec![("operand", self.operand)]
     }
 
-    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> HirTy {
+    fn output_type(&self, _program: &Program) -> HirTy {
         match self.op {
             UnaryOpcode::Neg => NlAbstractTy::Numeric,
             UnaryOpcode::Not => NlAbstractTy::Boolean,

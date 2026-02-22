@@ -5,10 +5,7 @@ use pretty_print::PrettyPrinter;
 
 use crate::{
     exec::jit::InstallLir,
-    hir::{
-        FunctionId, HirTy, NlAbstractTy, Node, NodeId, Program, WriteLirError,
-        build_lir::LirInsnBuilder,
-    },
+    hir::{HirTy, NlAbstractTy, Node, NodeId, Program, WriteLirError, build_lir::LirInsnBuilder},
     sim::patch::OptionPatchId,
     util::reflection::Reflect,
 };
@@ -29,7 +26,7 @@ impl Node for CheckNobody {
         vec![("ctx", self.context), ("agent", self.agent)]
     }
 
-    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> HirTy {
+    fn output_type(&self, _program: &Program) -> HirTy {
         NlAbstractTy::Boolean.into()
     }
 
@@ -37,10 +34,9 @@ impl Node for CheckNobody {
         &self,
         program: &Program,
         my_node_id: NodeId,
-
         lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
-        let operand_type = program.nodes[self.agent].output_type(program, lir_builder.fn_id).repr();
+        let operand_type = program.nodes[self.agent].output_type(program).repr();
         if operand_type == OptionPatchId::CONCRETE_TY {
             let &[agent] = lir_builder.get_node_results::<I>(program, self.agent) else {
                 panic!("expected a node that outputs a patch ID to be a single LIR register");

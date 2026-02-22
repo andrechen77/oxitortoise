@@ -31,7 +31,7 @@ impl Node for Closure {
         vec![]
     }
 
-    fn output_type(&self, program: &Program, _fn_id: FunctionId) -> HirTy {
+    fn output_type(&self, program: &Program) -> HirTy {
         let body_arg = program.functions[self.body].parameters[ClosureType::PARAM_ARG_IDX];
         let arg_ty = program.locals[body_arg]
             .ty

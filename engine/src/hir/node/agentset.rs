@@ -5,7 +5,7 @@ use pretty_print::PrettyPrinter;
 use crate::{
     exec::jit::InstallLir,
     hir::{
-        FunctionId, HirTy,
+        HirTy,
         NlAbstractTy::{self, Patch, Turtle},
         Node, NodeId, Program, WriteLirError,
         build_lir::LirInsnBuilder,
@@ -28,7 +28,7 @@ impl Node for Agentset {
         vec![]
     }
 
-    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> HirTy {
+    fn output_type(&self, _program: &Program) -> HirTy {
         let typ = match self {
             Agentset::AllTurtles => Turtle,
             Agentset::AllPatches => Patch,

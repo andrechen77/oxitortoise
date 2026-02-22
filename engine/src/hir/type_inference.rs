@@ -37,11 +37,11 @@ pub fn narrow_types(program: &mut Program) {
         types: ProgramTypes,
     }
     impl HirVisitor for Visitor {
-        fn visit_node(&mut self, program: &Program, fn_id: FunctionId, node_id: NodeId) {
+        fn visit_node(&mut self, program: &Program, _fn_id: FunctionId, node_id: NodeId) {
             #[allow(clippy::single_match)] // we intend to add other branches later
             match program.nodes[node_id] {
                 NodeKind::SetLocalVar(SetLocalVar { local_id, value }) => {
-                    let ty = program.nodes[value].output_type(program, fn_id).abstr.unwrap();
+                    let ty = program.nodes[value].output_type(program).abstr.unwrap();
                     let existing_ty = self
                         .types
                         .locals
@@ -70,7 +70,7 @@ pub fn narrow_types(program: &mut Program) {
 
             // find the return type of the function
             let root_node = program.functions[fn_id].root_node;
-            let return_ty = program.nodes[root_node].output_type(program, fn_id).abstr.unwrap();
+            let return_ty = program.nodes[root_node].output_type(program).abstr.unwrap();
             // since a function body already encompasses all possible return
             // types, we don't need to do extra joining here.
             visitor.types.returns.insert(fn_id, return_ty);
