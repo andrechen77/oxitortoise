@@ -4,18 +4,19 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use ast_to_mir::{GlobalScope, NameReferent, ParseResult, add_cheats, serde_json};
+use ast_to_hir::{add_cheats, serde_json, GlobalScope, NameReferent, ParseResult};
 use engine::{
     exec::{
-        ExecutionContext,
         jit::{InstallLir, InstalledObj as _},
+        ExecutionContext,
     },
-    lir,
-    mir::{
-        self, TurtleBreeds, mir_to_lir,
+    hir::{
+        self, hir_to_lir,
         transforms::{lower, optimize_of_agent_type, peephole_transform},
         type_inference::narrow_types,
+        TurtleBreeds,
     },
+    lir,
     sim::{
         observer::{Globals, GlobalsSchema},
         patch::{PatchBaseData, PatchSchema, Patches},
@@ -32,10 +33,10 @@ use engine::{
     workspace::Workspace,
 };
 use oxitortoise_main::LirInstaller;
-use tracing::{Level, error, info, trace};
+use tracing::{error, info, trace, Level};
 use tracing_subscriber::{
-    Layer as _, filter::Targets, fmt::MakeWriter, layer::SubscriberExt as _,
-    util::SubscriberInitExt as _,
+    filter::Targets, fmt::MakeWriter, layer::SubscriberExt as _, util::SubscriberInitExt as _,
+    Layer as _,
 };
 
 macro_rules! print_offsets {
@@ -120,7 +121,7 @@ fn create_workspace(
 struct CompileResult {
     workspace: Workspace,
     global_names: GlobalScope,
-    mir_to_lir_fns: HashMap<mir::FunctionId, lir::FunctionId>,
+    hir_to_lir_fns: HashMap<hir::FunctionId, lir::FunctionId>,
     installed_obj: <LirInstaller as InstallLir>::Obj,
 }
 
@@ -135,7 +136,7 @@ fn main() {
                 .with_filter(
                     Targets::new()
                         .with_target("oxitortoise_engine", Level::INFO)
-                        .with_target("oxitortoise_ast_to_mir", Level::INFO)
+                        .with_target("oxitortoise_ast_to_hir", Level::INFO)
                         .with_target("ants", Level::TRACE)
                         .with_target("oxitortoise_main", Level::TRACE)
                         .with_target("oxitortoise_lir_to_wasm", Level::INFO),
@@ -147,16 +148,16 @@ fn main() {
 
     let ast = include_str!("ast.json");
     let ast = serde_json::from_str(ast).unwrap();
-    let ParseResult { mut program, global_names, fn_info } = ast_to_mir::ast_to_mir(ast).unwrap();
+    let ParseResult { mut program, global_names, fn_info } = ast_to_hir::ast_to_hir(ast).unwrap();
 
     info!("applying cheats");
     let cheats = include_str!("cheats.json");
     let cheats = serde_json::from_str(cheats).unwrap();
     add_cheats(&cheats, &mut program, &global_names, &fn_info);
 
-    let mir_filename = "before.mir";
-    let mir_str = program.pretty_print();
-    write_to_file(mir_filename, mir_str);
+    let hir_filename = "before.hir";
+    let hir_str = program.pretty_print();
+    write_to_file(hir_filename, hir_str);
 
     let fn_ids: Vec<_> = program.functions.keys().collect();
     narrow_types(&mut program);
@@ -171,11 +172,11 @@ fn main() {
         peephole_transform(&mut program, fn_id);
         lower(&mut program, fn_id);
     }
-    let mir_filename = "after.mir";
-    let mir_str = program.pretty_print();
-    write_to_file(mir_filename, mir_str);
+    let hir_filename = "after.hir";
+    let hir_str = program.pretty_print();
+    write_to_file(hir_filename, hir_str);
 
-    let (lir_program, mir_to_lir_fns) = mir_to_lir::<LirInstaller>(&program);
+    let (lir_program, hir_to_lir_fns) = hir_to_lir::<LirInstaller>(&program);
     let lir_str = lir_program.pretty_print();
     let lir_filename = "model.lir";
     write_to_file(lir_filename, lir_str);
@@ -232,7 +233,7 @@ fn main() {
     visualize_update(workspace.world.generate_js_update_full());
 
     *COMPILE_RESULT.lock().unwrap() =
-        Some(CompileResult { workspace, global_names, mir_to_lir_fns, installed_obj });
+        Some(CompileResult { workspace, global_names, hir_to_lir_fns, installed_obj });
 
     #[cfg(not(target_arch = "wasm32"))]
     {
@@ -251,13 +252,13 @@ extern "C" fn call_setup() {
     let Some(compile_result) = compile_result.as_mut() else {
         panic!("no compile result");
     };
-    let CompileResult { workspace, global_names, mir_to_lir_fns, installed_obj } = compile_result;
+    let CompileResult { workspace, global_names, hir_to_lir_fns, installed_obj } = compile_result;
 
     // find the function by name
     let NameReferent::UserProc(fn_id) = global_names.lookup("SETUP").unwrap() else {
         panic!("expected a user procedure");
     };
-    let setup = installed_obj.entrypoint(mir_to_lir_fns[&fn_id]);
+    let setup = installed_obj.entrypoint(hir_to_lir_fns[&fn_id]);
 
     // call the function
     let next_int = workspace.rng.clone();
@@ -273,13 +274,13 @@ extern "C" fn call_go() {
     let Some(compile_result) = compile_result.as_mut() else {
         panic!("no compile result");
     };
-    let CompileResult { workspace, global_names, mir_to_lir_fns, installed_obj } = compile_result;
+    let CompileResult { workspace, global_names, hir_to_lir_fns, installed_obj } = compile_result;
 
     // find the function by name
     let NameReferent::UserProc(fn_id) = global_names.lookup("GO").unwrap() else {
         panic!("expected a user procedure");
     };
-    let go = installed_obj.entrypoint(mir_to_lir_fns[&fn_id]);
+    let go = installed_obj.entrypoint(hir_to_lir_fns[&fn_id]);
 
     // call the function
     let next_int = workspace.rng.clone();
@@ -295,17 +296,17 @@ extern "C" fn perf_trials() {
     let Some(compile_result) = compile_result.as_mut() else {
         panic!("no compile result");
     };
-    let CompileResult { workspace, global_names, mir_to_lir_fns, installed_obj } = compile_result;
+    let CompileResult { workspace, global_names, hir_to_lir_fns, installed_obj } = compile_result;
 
     // find the functions by name
     let NameReferent::UserProc(fn_id) = global_names.lookup("SETUP").unwrap() else {
         panic!("expected a user procedure");
     };
-    let setup = installed_obj.entrypoint(mir_to_lir_fns[&fn_id]);
+    let setup = installed_obj.entrypoint(hir_to_lir_fns[&fn_id]);
     let NameReferent::UserProc(fn_id) = global_names.lookup("GO").unwrap() else {
         panic!("expected a user procedure");
     };
-    let go = installed_obj.entrypoint(mir_to_lir_fns[&fn_id]);
+    let go = installed_obj.entrypoint(hir_to_lir_fns[&fn_id]);
 
     // set up the execution context
     let next_int = workspace.rng.clone();

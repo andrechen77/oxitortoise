@@ -5,7 +5,8 @@ edition = "2024"
 
 [dependencies]
 engine = { path = "../engine", package = "oxitortoise_engine" }
-ast_to_mir = { path = "../ast_to_mir", package = "oxitortoise_ast_to_mir" }
+lir_to_wasm = { path = "../lir_to_wasm", package = "oxitortoise_lir_to_wasm" }
+ast_to_hir = { path = "../ast_to_hir", package = "oxitortoise_ast_to_hir" }
 tracing = "0.1.41"
 tracing-subscriber = "0.3.20"
 

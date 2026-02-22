@@ -6,7 +6,7 @@ pub extern crate lir;
 pub extern crate slotmap;
 
 pub mod exec;
-pub mod mir;
+pub mod hir;
 pub mod sim;
 pub mod updater;
 pub mod util;

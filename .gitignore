@@ -4,7 +4,7 @@
 
 output
 
-*.mir
+*.hir
 *.wasm
 *.wat
 *.lir

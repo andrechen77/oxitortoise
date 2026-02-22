@@ -12,7 +12,7 @@ use crate::{
 #[derive(Debug, Display, Default, Clone, Copy, From, PartialEq, PartialOrd)]
 // TODO(mvp) implement Ord and Eq
 // FIXME these impls don't guarantee that the result is finite. add similar
-// changes to the compilation of arithmetic operations in the MIR
+// changes to the compilation of arithmetic operations in the HIR
 #[derive(Neg, Add, AddAssign, Sub, SubAssign, Mul, MulAssign, Div, DivAssign)]
 #[mul(forward)]
 #[div(forward)]

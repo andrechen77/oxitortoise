@@ -12,7 +12,7 @@ use pretty_print::PrettyPrinter;
 
 use super::topology::Point;
 use crate::{
-    mir,
+    hir,
     sim::{
         agent_schema::{AgentFieldDescriptor, AgentSchemaField, AgentSchemaFieldGroup},
         color::Color,
@@ -499,7 +499,7 @@ impl Index<AgentFieldDescriptor> for PatchSchema {
 }
 
 /// See [`calc_turtle_var_offset`].
-pub fn calc_patch_var_offset(mir: &mir::Program, var: PatchVarDesc) -> (usize, usize, usize) {
+pub fn calc_patch_var_offset(hir: &hir::Program, var: PatchVarDesc) -> (usize, usize, usize) {
     fn stride_and_field_offset(
         patch_schema: &PatchSchema,
         field: AgentFieldDescriptor,
@@ -514,7 +514,7 @@ pub fn calc_patch_var_offset(mir: &mir::Program, var: PatchVarDesc) -> (usize, u
         (stride, field_offset)
     }
 
-    let patch_schema = mir.patch_schema.as_ref().unwrap();
+    let patch_schema = hir.patch_schema.as_ref().unwrap();
     let (buffer_idx, stride, field_offset) = {
         let (field_desc, additional_offset) = patch_schema.field_desc_and_offset(var);
         let (stride, field_offset) = stride_and_field_offset(patch_schema, field_desc);

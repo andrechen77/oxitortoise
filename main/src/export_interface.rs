@@ -4,7 +4,7 @@ use engine::{
         HostFunctionInfo,
         ValType::{F64, FnPtr, I32, I64, Ptr},
     },
-    mir::node::BinaryOpcode,
+    hir::node::BinaryOpcode,
     sim::{
         agent_schema::AgentFieldDescriptor,
         patch::{OptionPatchId, PatchId},

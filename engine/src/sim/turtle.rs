@@ -14,7 +14,7 @@ use either::Either;
 use pretty_print::PrettyPrinter;
 use slotmap::SecondaryMap;
 
-use crate::mir;
+use crate::hir;
 use crate::sim::agent_schema::{AgentFieldDescriptor, AgentSchemaField, AgentSchemaFieldGroup};
 use crate::sim::topology::Heading;
 use crate::sim::value::agentset::TurtleSet;
@@ -99,7 +99,7 @@ pub struct Turtles {
     /// The number of turtles in the world.
     num_turtles: u64,
     // TODO(mvp) this should be a secondary map, using the breed ids generated
-    // during MIR creation
+    // during HIR creation
     /// The breeds of turtles.
     breeds: SecondaryMap<BreedId, Breed>,
 }
@@ -580,14 +580,14 @@ impl Index<AgentFieldDescriptor> for TurtleSchema {
 /// row to the required field.
 ///
 /// ```ignore
-/// let mir: &mir::Program;
+/// let hir: &hir::Program;
 /// let turtles: &Turtles;
 /// let var_desc: TurtleVarDesc;
-/// let (buffer_offset, stride, field_offset) = calc_turtle_var_offset(mir, var_desc);
+/// let (buffer_offset, stride, field_offset) = calc_turtle_var_offset(hir, var_desc);
 /// let ptr_turtles = turtles as *const u8;
 /// let field = *(*ptr_turtles.byte_add(buffer_offset).cast::<*const *const u8>()).byte_add(stride * agent_idx + field_offset);
 /// ```
-pub fn calc_turtle_var_offset(mir: &mir::Program, var: TurtleVarDesc) -> (usize, usize, usize) {
+pub fn calc_turtle_var_offset(hir: &hir::Program, var: TurtleVarDesc) -> (usize, usize, usize) {
     fn stride_and_field_offset(
         turtle_schema: &TurtleSchema,
         field: AgentFieldDescriptor,
@@ -602,7 +602,7 @@ pub fn calc_turtle_var_offset(mir: &mir::Program, var: TurtleVarDesc) -> (usize,
         (stride, field_offset)
     }
 
-    let turtle_schema = mir.turtle_schema.as_ref().unwrap();
+    let turtle_schema = hir.turtle_schema.as_ref().unwrap();
     let (buffer_idx, stride, field_offset) = {
         let (field_desc, additional_offset) = turtle_schema.field_desc_and_offset(var);
         let (stride, field_offset) = stride_and_field_offset(turtle_schema, field_desc);

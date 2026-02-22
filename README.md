@@ -18,14 +18,14 @@ user-facing interface for the compiler.
   [file](/bench/models/ants/ast.json) is loaded. This JSON was obtained using
   [nl2ast](https://github.com/NetLogo/nl2ast/tree).
 - The AST is converted into the compiler's internal program representation,
-  called MIR.
+  called HIR.
 - A [`cheats.json`](/bench/models/ants/cheats.json) file is read and parsed;
   this is used to inject information into the compiler pipeline that the
   compiler currently does not yet have algorithms for. This information is added
-  to the MIR.
-- A variety of transformations on the MIR is run to simplify and lower it until
+  to the HIR.
+- A variety of transformations on the HIR is run to simplify and lower it until
   it can be converted into LIR.
-- The transformed MIR is converted into LIR (another internal representation)
+- The transformed HIR is converted into LIR (another internal representation)
   and then turned into WebAssembly.
 - The generated WebAssembly is dynamically instantiated (i.e. hot-loaded as a
   JIT would do).
@@ -60,5 +60,5 @@ extension is the best way to get these to work.
 When running `run.rs`, it might try to download intermediate compiler artifacts
 for debugging purposes. You can use
 [`wasm-tools`](https://github.com/bytecodealliance/wasm-tools) to read the Wasm
-artifacts and any DOT graph visualizer for the MIR graphs.
+artifacts and any DOT graph visualizer for the HIR graphs.
 

@@ -538,7 +538,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "42f5e15c9953c5e4ccceeb2e7382a716482c34515315f7b03532b8b4e8393d2d"
 
 [[package]]
-name = "oxitortoise_ast_to_mir"
+name = "oxitortoise_ast_to_hir"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -605,7 +605,7 @@ version = "0.1.0"
 dependencies = [
  "cranelift-jit",
  "cranelift-native",
- "oxitortoise_ast_to_mir",
+ "oxitortoise_ast_to_hir",
  "oxitortoise_engine",
  "oxitortoise_lir_to_cranelift",
  "oxitortoise_lir_to_wasm",

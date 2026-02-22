@@ -9,7 +9,7 @@ use either::Either;
 use pretty_print::PrettyPrinter;
 
 use crate::{
-    mir,
+    hir,
     sim::value::{NlBool, NlFloat, NlList, NlString, PackedAny},
     util::{
         reflection::{ConcreteTy, Reflect},
@@ -123,7 +123,7 @@ impl GlobalsSchema {
 /// Similar to [`calc_turtle_var_offset`], but excluding the returned stride
 /// value (since there is only one instance of each global variable and
 /// therefore only one row).
-pub fn calc_global_var_offset(program: &mir::Program, var: usize) -> (usize, usize) {
+pub fn calc_global_var_offset(program: &hir::Program, var: usize) -> (usize, usize) {
     let row_schema = program.globals_schema.as_ref().unwrap().make_row_schema();
 
     (offset_of!(Globals, data), row_schema.field(var).offset)

@@ -1,0 +1,137 @@
+//! Primitives for interacting with the tick counter.
+
+use std::fmt;
+
+use lir::smallvec::smallvec;
+use pretty_print::PrettyPrinter;
+
+use crate::{
+    exec::jit::InstallLir,
+    hir::{
+        FunctionId, HirTy, NlAbstractTy, Node, NodeId, Program, WriteLirError,
+        build_lir::LirInsnBuilder,
+    },
+};
+
+#[derive(Debug)]
+pub struct ResetTicks {
+    /// The execution context to use.
+    pub context: NodeId,
+}
+
+impl Node for ResetTicks {
+    fn is_pure(&self) -> bool {
+        false
+    }
+
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
+        vec![("ctx", self.context)]
+    }
+
+    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> HirTy {
+        NlAbstractTy::Unit.into()
+    }
+
+    fn write_lir_execution<I: InstallLir>(
+        &self,
+        program: &Program,
+        _my_node_id: NodeId,
+        lir_builder: &mut LirInsnBuilder,
+    ) -> Result<(), WriteLirError> {
+        let &[ctx_ptr] = lir_builder.get_node_results::<I>(program, self.context) else {
+            panic!("expected node outputting context pointer to be a single LIR value")
+        };
+        lir_builder.push_lir_insn(lir::generate_host_function_call(
+            I::HOST_FUNCTION_TABLE.reset_ticks,
+            Box::new([ctx_ptr]),
+        ));
+        Ok(())
+    }
+
+    fn pretty_print(&self, _program: &Program, mut out: impl fmt::Write) -> fmt::Result {
+        PrettyPrinter::new(&mut out).add_struct("ResetTicks", |_| Ok(()))
+    }
+}
+
+#[derive(Debug)]
+pub struct AdvanceTick {
+    /// The context whose tick is being advanced.
+    pub context: NodeId,
+}
+
+impl Node for AdvanceTick {
+    fn is_pure(&self) -> bool {
+        false
+    }
+
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
+        vec![("ctx", self.context)]
+    }
+
+    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> HirTy {
+        NlAbstractTy::Unit.into()
+    }
+
+    fn write_lir_execution<I: InstallLir>(
+        &self,
+        program: &Program,
+        _my_node_id: NodeId,
+        lir_builder: &mut LirInsnBuilder,
+    ) -> Result<(), WriteLirError> {
+        let &[ctx_ptr] = lir_builder.get_node_results::<I>(program, self.context) else {
+            panic!("expected node outputting context pointer to be a single LIR value")
+        };
+        lir_builder.push_lir_insn(lir::generate_host_function_call(
+            I::HOST_FUNCTION_TABLE.advance_tick,
+            Box::new([ctx_ptr]),
+        ));
+        Ok(())
+    }
+
+    fn pretty_print(&self, _program: &Program, mut out: impl fmt::Write) -> fmt::Result {
+        PrettyPrinter::new(&mut out).add_struct("AdvanceTick", |_| Ok(()))
+    }
+}
+
+#[derive(Debug)]
+pub struct GetTick {
+    /// The context whose tick is being gotten.
+    pub context: NodeId,
+}
+
+impl Node for GetTick {
+    fn is_pure(&self) -> bool {
+        true
+    }
+
+    fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
+        vec![("ctx", self.context)]
+    }
+
+    fn output_type(&self, _program: &Program, _fn_id: FunctionId) -> HirTy {
+        NlAbstractTy::Float.into()
+    }
+
+    fn write_lir_execution<I: InstallLir>(
+        &self,
+        program: &Program,
+        my_node_id: NodeId,
+        lir_builder: &mut LirInsnBuilder,
+    ) -> Result<(), WriteLirError> {
+        let &[ctx_ptr] = lir_builder.get_node_results::<I>(program, self.context) else {
+            panic!("expected node outputting context pointer to be a single LIR value")
+        };
+        let pc = lir_builder.push_lir_insn(lir::generate_host_function_call(
+            I::HOST_FUNCTION_TABLE.get_tick,
+            Box::new([ctx_ptr]),
+        ));
+
+        lir_builder.node_to_lir.insert(my_node_id, smallvec![lir::ValRef(pc, 0)]);
+
+        Ok(())
+    }
+
+    fn pretty_print(&self, _program: &Program, mut out: impl fmt::Write) -> fmt::Result {
+        PrettyPrinter::new(&mut out).add_struct("GetTick", |_| Ok(()))
+    }
+}
