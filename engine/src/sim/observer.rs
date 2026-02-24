@@ -72,7 +72,7 @@ impl fmt::Debug for Globals {
                         .custom_fields
                         .iter()
                         .enumerate()
-                        .map(|(i, (name, ty))| (&**name, (i, *ty))),
+                        .map(|(i, (name, ty))| (&**name, (i, ty))),
                     |p, name| write!(p, "{:?}", name),
                     |p, (_, (i, ty))| {
                         fn print_field<T: Reflect + Debug>(
@@ -85,13 +85,13 @@ impl fmt::Debug for Globals {
                                 Either::Right(field) => write!(p, "fallback {:?}", field),
                             }
                         }
-                        if ty == NlFloat::CONCRETE_TY {
+                        if *ty == NlFloat::ty() {
                             print_field::<NlFloat>(p, self, i)
-                        } else if ty == NlBool::CONCRETE_TY {
+                        } else if *ty == NlBool::ty() {
                             print_field::<NlBool>(p, self, i)
-                        } else if ty == NlString::CONCRETE_TY {
+                        } else if *ty == NlString::ty() {
                             print_field::<NlString>(p, self, i)
-                        } else if ty == NlList::CONCRETE_TY {
+                        } else if *ty == NlList::ty() {
                             print_field::<NlList>(p, self, i)
                         } else {
                             write!(p, "unknown type {:?}", ty)
@@ -109,14 +109,20 @@ pub struct GlobalsSchema {
 }
 
 impl GlobalsSchema {
-    pub fn new(custom_fields: &[(&Arc<str>, ConcreteTy)]) -> Self {
+    pub fn new(custom_fields: &[(&Arc<str>, &ConcreteTy)]) -> Self {
         Self {
-            custom_fields: custom_fields.iter().map(|(name, ty)| (Arc::clone(name), *ty)).collect(),
+            custom_fields: custom_fields
+                .iter()
+                .map(|(name, ty)| (Arc::clone(name), (*ty).clone()))
+                .collect(),
         }
     }
 
     pub fn make_row_schema(&self) -> RowSchema {
-        RowSchema::new(&self.custom_fields.iter().map(|(_, ty)| *ty).collect::<Vec<_>>(), true)
+        RowSchema::new(
+            &self.custom_fields.iter().map(|(_, ty)| (*ty).clone()).collect::<Vec<_>>(),
+            true,
+        )
     }
 }
 

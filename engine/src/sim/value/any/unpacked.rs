@@ -27,11 +27,11 @@ pub enum UnpackedAny {
 impl UnpackedAny {
     pub fn ty(&self) -> ConcreteTy {
         match self {
-            UnpackedAny::Bool(_) => NlBool::CONCRETE_TY,
-            UnpackedAny::Float(_) => NlFloat::CONCRETE_TY,
-            UnpackedAny::Nobody => NlBool::CONCRETE_TY,
-            UnpackedAny::Turtle(_) => TurtleId::CONCRETE_TY,
-            UnpackedAny::Patch(_) => PatchId::CONCRETE_TY,
+            UnpackedAny::Bool(_) => NlBool::ty(),
+            UnpackedAny::Float(_) => NlFloat::ty(),
+            UnpackedAny::Nobody => NlBool::ty(),
+            UnpackedAny::Turtle(_) => TurtleId::ty(),
+            UnpackedAny::Patch(_) => PatchId::ty(),
             UnpackedAny::Link(_) => todo!("add link id"),
             UnpackedAny::Other(_) => todo!("match on the inner type"),
         }

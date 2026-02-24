@@ -1,8 +1,11 @@
-use std::ops::{Index, IndexMut};
+use std::{
+    ops::{Index, IndexMut},
+    sync::LazyLock,
+};
 
 use crate::{
     sim::value::{NlBox, NlFloat, PackedAny, r#box::generate_box_type_info},
-    util::reflection::{ConcreteTy, ConstTypeName, Reflect, TypeInfo},
+    util::reflection::{ConcreteTy, Reflect, TypeInfo},
 };
 
 #[derive(Default, Debug)]
@@ -14,20 +17,20 @@ impl NlList {
     }
 }
 
-impl ConstTypeName for NlList {
-    const TYPE_NAME: &'static str = "NlList";
-}
-
-static LIST_TYPE_INFO: TypeInfo = TypeInfo::new_opaque::<NlList>();
-
 unsafe impl Reflect for NlList {
-    const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&LIST_TYPE_INFO);
+    fn ty() -> ConcreteTy {
+        static TY: LazyLock<ConcreteTy> =
+            LazyLock::new(|| ConcreteTy::new(&TypeInfo::new_opaque::<NlList>()));
+        TY.clone()
+    }
 }
-
-static BOX_LIST_TYPE_INFO: TypeInfo = generate_box_type_info::<NlList>();
 
 unsafe impl Reflect for NlBox<NlList> {
-    const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&BOX_LIST_TYPE_INFO);
+    fn ty() -> ConcreteTy {
+        static TY: LazyLock<ConcreteTy> =
+            LazyLock::new(|| ConcreteTy::new(&generate_box_type_info::<NlList>()));
+        TY.clone()
+    }
 }
 
 impl NlList {

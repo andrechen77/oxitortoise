@@ -3,7 +3,7 @@ use std::{
     fmt::{self, Write},
     mem::offset_of,
     ops::Index,
-    sync::Arc,
+    sync::{Arc, LazyLock},
 };
 
 use derive_more::derive::From;
@@ -20,7 +20,7 @@ use crate::{
         value::{NlBool, NlFloat, NlList, NlString, PackedAny},
     },
     util::{
-        reflection::{ConcreteTy, ConstTypeName, Reflect, TypeInfo, TypeInfoOptions},
+        reflection::{ConcreteTy, MemRepr, Reflect, TypeInfo, TypeInfoOptions},
         row_buffer::{self, RowBuffer, RowSchema},
     },
 };
@@ -44,17 +44,16 @@ impl Default for PatchId {
     }
 }
 
-static PATCH_ID_TYPE_INFO: TypeInfo = TypeInfo::new_copy::<PatchId>(TypeInfoOptions {
-    is_zeroable: false,
-    mem_repr: Some(&[(0, lir::ValType::I32)]),
-});
-
-impl ConstTypeName for PatchId {
-    const TYPE_NAME: &'static str = "PatchId";
-}
-
 unsafe impl Reflect for PatchId {
-    const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&PATCH_ID_TYPE_INFO);
+    fn ty() -> ConcreteTy {
+        static TY: LazyLock<ConcreteTy> = LazyLock::new(|| {
+            ConcreteTy::new(&TypeInfo::new_copy::<PatchId>(TypeInfoOptions {
+                is_zeroable: false,
+                mem_repr: Some(MemRepr::Single(lir::ValType::I32)),
+            }))
+        });
+        TY.clone()
+    }
 }
 
 /// Exactly the same as [`PatchId`], but it can represent "nobody" at the -1
@@ -64,9 +63,16 @@ unsafe impl Reflect for PatchId {
 pub struct OptionPatchId(pub u32);
 
 // make a copy with a different identity
-static OPTION_PATCH_ID_TYPE_INFO: TypeInfo = PATCH_ID_TYPE_INFO;
 unsafe impl Reflect for OptionPatchId {
-    const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&OPTION_PATCH_ID_TYPE_INFO);
+    fn ty() -> ConcreteTy {
+        static TY: LazyLock<ConcreteTy> = LazyLock::new(|| {
+            ConcreteTy::new(&TypeInfo::new_copy::<OptionPatchId>(TypeInfoOptions {
+                is_zeroable: false,
+                mem_repr: Some(MemRepr::Single(lir::ValType::I32)),
+            }))
+        });
+        TY.clone()
+    }
 }
 
 impl OptionPatchId {
@@ -333,7 +339,7 @@ fn pretty_print_patch(
 
         // add custom fields
         for (field_name, field_desc) in patches.schema().custom_fields() {
-            let AgentSchemaField::Other(ty) = patches.schema()[*field_desc] else {
+            let AgentSchemaField::Other(ty) = &patches.schema()[*field_desc] else {
                 panic!("field at index {:?} should be a custom field", field_desc);
             };
             p.add_field_with(field_name, |p| {
@@ -349,13 +355,13 @@ fn pretty_print_patch(
                         Some(Either::Right(field)) => write!(p, "fallback {:?}", field),
                     }
                 }
-                if ty == NlFloat::CONCRETE_TY {
+                if *ty == NlFloat::ty() {
                     print_field::<NlFloat>(p, patches, id, *field_desc)
-                } else if ty == NlBool::CONCRETE_TY {
+                } else if *ty == NlBool::ty() {
                     print_field::<NlBool>(p, patches, id, *field_desc)
-                } else if ty == NlString::CONCRETE_TY {
+                } else if *ty == NlString::ty() {
                     print_field::<NlString>(p, patches, id, *field_desc)
-                } else if ty == NlList::CONCRETE_TY {
+                } else if *ty == NlList::ty() {
                     print_field::<NlList>(p, patches, id, *field_desc)
                 } else {
                     write!(p, "unknown type {:?}", ty)
@@ -374,15 +380,16 @@ pub struct PatchBaseData {
     // TODO add some way of tracking what turtles are on this patch.
 }
 
-static PATCH_BASE_DATA_TYPE_INFO: TypeInfo =
-    TypeInfo::new_drop::<PatchBaseData>(TypeInfoOptions { is_zeroable: false, mem_repr: None });
-
-impl ConstTypeName for PatchBaseData {
-    const TYPE_NAME: &'static str = "PatchBaseData";
-}
-
 unsafe impl Reflect for PatchBaseData {
-    const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&PATCH_BASE_DATA_TYPE_INFO);
+    fn ty() -> ConcreteTy {
+        static TY: LazyLock<ConcreteTy> = LazyLock::new(|| {
+            ConcreteTy::new(&TypeInfo::new_drop::<PatchBaseData>(TypeInfoOptions {
+                is_zeroable: false,
+                mem_repr: None,
+            }))
+        });
+        TY.clone()
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -423,15 +430,15 @@ impl PatchSchema {
         }
 
         // add pcolor field
-        field_groups[pcolor_buffer_idx as usize]
-            .fields
-            .push(AgentSchemaField::Other(Color::CONCRETE_TY));
+        field_groups[pcolor_buffer_idx as usize].fields.push(AgentSchemaField::Other(Color::ty()));
 
         // add custom fields and collect their descriptors
         let mut custom_field_descriptors = Vec::new();
         for (field_name, field_type, buffer_idx) in custom_fields {
             let field_idx = field_groups[*buffer_idx as usize].fields.len() as u8;
-            field_groups[*buffer_idx as usize].fields.push(AgentSchemaField::Other(*field_type));
+            field_groups[*buffer_idx as usize]
+                .fields
+                .push(AgentSchemaField::Other(field_type.clone()));
             custom_field_descriptors.push((
                 Arc::clone(field_name),
                 AgentFieldDescriptor { buffer_idx: *buffer_idx, field_idx },
@@ -527,13 +534,13 @@ pub fn calc_patch_var_offset(hir: &hir::Program, var: PatchVarDesc) -> (usize, u
 
 pub fn patch_var_type(schema: &PatchSchema, var: PatchVarDesc) -> ConcreteTy {
     match var {
-        PatchVarDesc::Pcolor => Color::CONCRETE_TY,
-        PatchVarDesc::Pos => Point::CONCRETE_TY,
+        PatchVarDesc::Pcolor => Color::ty(),
+        PatchVarDesc::Pos => Point::ty(),
         PatchVarDesc::Custom(field) => {
-            let AgentSchemaField::Other(ty) = schema[schema.custom_fields()[field].1] else {
+            let AgentSchemaField::Other(ty) = &schema[schema.custom_fields()[field].1] else {
                 unreachable!("this is a custom field, so it cannot be part of the base data");
             };
-            ty
+            ty.clone()
         }
     }
 }

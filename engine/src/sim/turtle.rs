@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::fmt::{self, Debug, Write};
 use std::mem::offset_of;
 use std::ops::Index;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 
 use derive_more::derive::{From, Into};
 use either::Either;
@@ -20,7 +20,7 @@ use crate::sim::topology::Heading;
 use crate::sim::value::agentset::TurtleSet;
 use crate::sim::value::{NlBool, NlFloat, NlList, NlString, PackedAny};
 use crate::util::gen_slot_tracker::{GenIndex, GenSlotTracker};
-use crate::util::reflection::{ConcreteTy, ConstTypeName, Reflect, TypeInfo, TypeInfoOptions};
+use crate::util::reflection::{ConcreteTy, MemRepr, Reflect, TypeInfo, TypeInfoOptions};
 use crate::util::row_buffer::{RowBuffer, RowSchema};
 use crate::{
     sim::{color::Color, topology::Point, value},
@@ -68,19 +68,17 @@ impl TurtleId {
     }
 }
 
-static TURTLE_ID_TYPE_INFO: TypeInfo = TypeInfo::new_copy::<TurtleId>(TypeInfoOptions {
-    is_zeroable: false,
-    mem_repr: Some(&[(0, lir::ValType::I64)]),
-});
-
 unsafe impl Reflect for TurtleId {
-    const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&TURTLE_ID_TYPE_INFO);
+    fn ty() -> ConcreteTy {
+        static TY: LazyLock<ConcreteTy> = LazyLock::new(|| {
+            ConcreteTy::new(&TypeInfo::new_copy::<TurtleId>(TypeInfoOptions {
+                is_zeroable: false,
+                mem_repr: Some(MemRepr::Single(lir::ValType::I64)),
+            }))
+        });
+        TY.clone()
+    }
 }
-
-impl ConstTypeName for TurtleId {
-    const TYPE_NAME: &'static str = "TurtleId";
-}
-
 pub struct Turtles {
     /// The who number to be given to the next turtle; also how many turtles
     /// have been created since the last `clear-turtles`.
@@ -348,7 +346,7 @@ fn pretty_print_turtle(
 
         // add custom fields
         for (field_name, field_desc) in turtles.schema().custom_fields() {
-            let AgentSchemaField::Other(ty) = turtles.schema()[*field_desc] else {
+            let AgentSchemaField::Other(ty) = &turtles.schema()[*field_desc] else {
                 panic!("field at index {:?} should not be base data", field_desc);
             };
             p.add_field_with(field_name, |p| {
@@ -364,13 +362,13 @@ fn pretty_print_turtle(
                         Some(Either::Right(field)) => write!(p, "fallback {:?}", field),
                     }
                 }
-                if ty == NlFloat::CONCRETE_TY {
+                if *ty == NlFloat::ty() {
                     print_field::<NlFloat>(p, turtles, id, *field_desc)
-                } else if ty == NlBool::CONCRETE_TY {
+                } else if *ty == NlBool::ty() {
                     print_field::<NlBool>(p, turtles, id, *field_desc)
-                } else if ty == NlString::CONCRETE_TY {
+                } else if *ty == NlString::ty() {
                     print_field::<NlString>(p, turtles, id, *field_desc)
-                } else if ty == NlList::CONCRETE_TY {
+                } else if *ty == NlList::ty() {
                     print_field::<NlList>(p, turtles, id, *field_desc)
                 } else {
                     write!(p, "unknown type {:?}", ty)
@@ -396,15 +394,16 @@ pub struct TurtleBaseData {
     pub size: value::NlFloat,
 }
 
-static TURTLE_BASE_DATA_TYPE_INFO: TypeInfo =
-    TypeInfo::new_drop::<TurtleBaseData>(TypeInfoOptions { is_zeroable: false, mem_repr: None });
-
 unsafe impl Reflect for TurtleBaseData {
-    const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&TURTLE_BASE_DATA_TYPE_INFO);
-}
-
-impl ConstTypeName for TurtleBaseData {
-    const TYPE_NAME: &'static str = "TurtleBaseData";
+    fn ty() -> ConcreteTy {
+        static TY: LazyLock<ConcreteTy> = LazyLock::new(|| {
+            ConcreteTy::new(&TypeInfo::new_drop::<TurtleBaseData>(TypeInfoOptions {
+                is_zeroable: false,
+                mem_repr: None,
+            }))
+        });
+        TY.clone()
+    }
 }
 
 slotmap::new_key_type! {
@@ -477,17 +476,17 @@ impl TurtleSchema {
         // add heading and position fields
         let heading_group = &mut field_groups[heading_buffer_idx as usize];
         let heading_field_idx = heading_group.fields.len() as u8;
-        heading_group.fields.push(AgentSchemaField::Other(Heading::CONCRETE_TY));
+        heading_group.fields.push(AgentSchemaField::Other(Heading::ty()));
         let position_group = &mut field_groups[position_buffer_idx as usize];
         let position_field_idx = position_group.fields.len() as u8;
-        position_group.fields.push(AgentSchemaField::Other(Point::CONCRETE_TY));
+        position_group.fields.push(AgentSchemaField::Other(Point::ty()));
 
         // add custom fields
         let mut custom_field_descriptors = Vec::new();
         for (name, field_type, buffer_idx) in custom_fields {
             let field_group = &mut field_groups[usize::from(*buffer_idx)];
             let idx_within_buffer = field_group.fields.len();
-            field_group.fields.push(AgentSchemaField::Other(*field_type));
+            field_group.fields.push(AgentSchemaField::Other(field_type.clone()));
             custom_field_descriptors.push((
                 Arc::clone(name),
                 AgentFieldDescriptor {
@@ -615,17 +614,17 @@ pub fn calc_turtle_var_offset(hir: &hir::Program, var: TurtleVarDesc) -> (usize,
 
 pub fn turtle_var_type(schema: &TurtleSchema, var: TurtleVarDesc) -> ConcreteTy {
     match var {
-        TurtleVarDesc::Who => NlFloat::CONCRETE_TY,
-        TurtleVarDesc::Color => Color::CONCRETE_TY,
-        TurtleVarDesc::Size => NlFloat::CONCRETE_TY,
-        TurtleVarDesc::Pos => Point::CONCRETE_TY,
-        TurtleVarDesc::Xcor => NlFloat::CONCRETE_TY,
-        TurtleVarDesc::Ycor => NlFloat::CONCRETE_TY,
+        TurtleVarDesc::Who => NlFloat::ty(),
+        TurtleVarDesc::Color => Color::ty(),
+        TurtleVarDesc::Size => NlFloat::ty(),
+        TurtleVarDesc::Pos => Point::ty(),
+        TurtleVarDesc::Xcor => NlFloat::ty(),
+        TurtleVarDesc::Ycor => NlFloat::ty(),
         TurtleVarDesc::Custom(field) => {
-            let AgentSchemaField::Other(ty) = schema[schema.custom_fields()[field].1] else {
+            let AgentSchemaField::Other(ty) = &schema[schema.custom_fields()[field].1] else {
                 unreachable!("this is a custom field, so it cannot be part of the base data");
             };
-            ty
+            ty.clone()
         }
     }
 }

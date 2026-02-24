@@ -68,17 +68,17 @@ pub(crate) fn make_row_schemas<A: Reflect, const N: usize>(
         // the types and sizes of the fields in this buffer
         let mut field_types = Vec::new();
         for (field_idx, buffer_field) in buffer_fields.fields.iter().enumerate() {
-            let type_id = match buffer_field {
+            let ty = match buffer_field {
                 AgentSchemaField::BaseData => {
                     if (buffer_idx, field_idx) == (0, 0) {
-                        A::CONCRETE_TY
+                        A::ty()
                     } else {
                         panic!("Base data can only be the first field in the first buffer.");
                     }
                 }
-                AgentSchemaField::Other(r#type) => *r#type,
+                AgentSchemaField::Other(r#type) => r#type.clone(),
             };
-            field_types.push(type_id);
+            field_types.push(ty);
         }
 
         Some(RowSchema::new(&field_types, !buffer_fields.avoid_occupancy_bitfield))

@@ -1,10 +1,7 @@
-use std::alloc::Layout;
-
-// QUESTION what is this the correct place to put the unsafe invariant?
-// the boundary between safe and unsafe code is hard to think about when the
-// entire compiler is one big unsafe abstraction. however, if possible I'd like
-// to establish a boundary where authors are expected to double-triple check
-// that their associated `TypeInfo` is correct.
+use std::{
+    alloc::Layout,
+    sync::{Arc, LazyLock},
+};
 
 /// A trait to indicate that the compiler can generate code to manipulate values
 /// of this type.
@@ -14,46 +11,49 @@ use std::alloc::Layout;
 /// Implementors must guarantee that the associated `TypeInfo` is correct, as
 /// the information will be used to generate and run unsafe code.
 pub unsafe trait Reflect: 'static {
-    /// N.B. This should be defined as a reference to an actual static object,
-    /// as in the following.
+    // TODO update the docs to reflect the new API
+    /// This should return the same `ConcreteTy` instance every time it is called. See [`ConcreteTy::new`].
     /// ```rust
     /// use oxitortoise_engine::util::reflection::{ConcreteTy, Reflect, TypeInfo, TypeInfoOptions, ConstTypeName};
     ///
     /// struct MyType;
-    /// static MY_TYPE_INFO: TypeInfo = TypeInfo::new_drop::<MyType>(TypeInfoOptions {
-    ///     is_zeroable: true,
-    ///     mem_repr: None,
-    /// });
     /// unsafe impl Reflect for MyType {
     ///     const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&MY_TYPE_INFO);
-    /// }
-    /// impl ConstTypeName for MyType {
-    ///     const TYPE_NAME: &'static str = "MyType";
+    ///     fn ty() -> ConcreteTy {
+    ///         static TY: LazyLock<ConcreteTy> = LazyLock::new(|| {
+    ///             ConcreteTy::new(&TypeInfo::new_drop::<MyType>(TypeInfoOptions {
+    ///                 is_zeroable: true,
+    ///                 mem_repr: None,
+    ///             }))
+    ///         });
+    ///         TY.clone()
+    ///     }
     /// }
     /// ```
-    /// DO NOT define it like the following.
+    /// DO NOT define it like the following. This will create new `ConcreteTy`
+    /// instances each time it is called which will not compare equal.
     /// ```rust
     /// use oxitortoise_engine::util::reflection::{ConcreteTy, Reflect, TypeInfo, TypeInfoOptions, ConstTypeName};
     ///
     /// struct MyType;
     /// unsafe impl Reflect for MyType {
-    ///     const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&TypeInfo::new_drop::<MyType>(TypeInfoOptions {
-    ///         is_zeroable: true,
-    ///         mem_repr: None,
-    ///     }));
-    /// }
-    /// impl ConstTypeName for MyType {
-    ///     const TYPE_NAME: &'static str = "MyType";
+    ///     const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&MY_TYPE_INFO);
+    ///     fn ty() -> ConcreteTy {
+    ///         ConcreteTy::new(&TypeInfo::new_drop::<MyType>(TypeInfoOptions {
+    ///             is_zeroable: true,
+    ///             mem_repr: None,
+    ///         }))
+    ///     }
     /// }
     /// ```
     /// Defining it like the above may create references to different objects
     /// each time the constant is used; these objects will not compare equal.
-    const CONCRETE_TY: ConcreteTy;
+    fn ty() -> ConcreteTy;
 }
 
 /// Information about a type that is used by the engine to generate code that
 /// manipulates values of the corresponding type.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct TypeInfo {
     pub debug_name: &'static str,
     pub layout: Layout,
@@ -71,16 +71,22 @@ pub struct TypeInfo {
     /// The caller must guarantee that the passed pointer is a valid pointer to
     /// T that can be dropped, and that that value will never be used again.
     pub drop_fn: Option<unsafe fn(*mut u8)>,
-    /// Each value that maps as a separate register when this type is
-    /// loaded from or stored into memory corresponds to a tuple of the offset
-    /// and LIR type of the value.
-    pub mem_repr: Option<&'static [(usize, lir::ValType)]>,
+    /// The memory representation of the type. None if this is an opaque type.
+    pub mem_repr: Option<MemRepr>,
+}
+
+#[derive(Debug, Clone)]
+pub enum MemRepr {
+    /// Represents the fields of the type in memory along with their offsets.
+    Compound(Vec<(usize, ConcreteTy)>),
+    /// Represents the type as a single LIR value.
+    Single(lir::ValType),
 }
 
 /// A helper struct to pass as options to [`TypeInfo::new`]
 pub struct TypeInfoOptions {
     pub is_zeroable: bool,
-    pub mem_repr: Option<&'static [(usize, lir::ValType)]>,
+    pub mem_repr: Option<MemRepr>,
 }
 
 unsafe fn drop_impl<T>(ptr: *mut u8) {
@@ -93,11 +99,11 @@ impl TypeInfo {
     /// Generates a `TypeInfo` for the given type, where all fields are
     /// guaranteed correct except for those specified in the `options`
     /// parameter.
-    pub const fn new_drop<T: 'static + ConstTypeName>(options: TypeInfoOptions) -> Self {
+    pub fn new_drop<T: 'static>(options: TypeInfoOptions) -> Self {
         let TypeInfoOptions { is_zeroable, mem_repr } = options;
 
         Self {
-            debug_name: T::TYPE_NAME,
+            debug_name: std::any::type_name::<T>(),
             layout: Layout::new::<T>(),
             is_zeroable,
             drop_fn: Some(drop_impl::<T>),
@@ -105,11 +111,11 @@ impl TypeInfo {
         }
     }
 
-    pub const fn new_copy<T: 'static + Copy + ConstTypeName>(options: TypeInfoOptions) -> Self {
+    pub fn new_copy<T: 'static + Copy>(options: TypeInfoOptions) -> Self {
         let TypeInfoOptions { is_zeroable, mem_repr } = options;
 
         Self {
-            debug_name: T::TYPE_NAME,
+            debug_name: std::any::type_name::<T>(),
             layout: Layout::new::<T>(),
             is_zeroable,
             drop_fn: None,
@@ -118,9 +124,9 @@ impl TypeInfo {
     }
 
     // types that can only be referenced through pointer
-    pub const fn new_opaque<T: 'static + ConstTypeName>() -> Self {
+    pub fn new_opaque<T: 'static>() -> Self {
         Self {
-            debug_name: T::TYPE_NAME,
+            debug_name: std::any::type_name::<T>(),
             layout: Layout::new::<T>(),
             is_zeroable: false,
             drop_fn: Some(drop_impl::<T>),
@@ -131,28 +137,69 @@ impl TypeInfo {
 
 /// A concrete type representation in the NetLogo engine. The same NetLogo
 /// language type may have multiple concrete type representation.
-#[derive(Clone, Copy, derive_more::Debug)]
+#[derive(Clone, derive_more::Debug)]
 #[debug("{}", self.info().debug_name)]
-pub struct ConcreteTy(&'static TypeInfo);
+pub struct ConcreteTy(Arc<TypeInfo>);
 
 impl ConcreteTy {
-    pub const fn new(info: &'static TypeInfo) -> Self {
-        Self(info)
+    /// If this function is called multiple times with the same `info`, it will
+    /// return different `ConcreteTy` instances that will not compare equal.
+    /// Call this function once per type.
+    pub fn new(info: &TypeInfo) -> Self {
+        Self(Arc::new(info.clone()))
     }
 
-    pub const fn info(&self) -> &'static TypeInfo {
-        self.0
+    pub fn info(&self) -> &TypeInfo {
+        &self.0
     }
 }
 
 impl PartialEq for ConcreteTy {
     fn eq(&self, other: &Self) -> bool {
-        std::ptr::eq(self.0 as *const TypeInfo, other.0 as *const TypeInfo)
+        std::ptr::eq(Arc::as_ptr(&self.0), Arc::as_ptr(&other.0))
     }
 }
 
-// TODO(wishlist) once stable, use const_type_name to automatically generate this
-/// A trait to fill in for the `const_type_name` until it is stable.
-pub trait ConstTypeName {
-    const TYPE_NAME: &'static str;
+// static UNTYPED_PTR_INFO: TypeInfo = TypeInfo::new_copy::<*mut u8>(TypeInfoOptions {
+//     is_zeroable: false,
+//     mem_repr: Some(&[(0, lir::MemOpType::Ptr)]),
+// });
+// unsafe impl Reflect for *mut u8 {
+//     const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&UNTYPED_PTR_INFO);
+// }
+
+unsafe impl Reflect for () {
+    fn ty() -> ConcreteTy {
+        static TY: LazyLock<ConcreteTy> = LazyLock::new(|| {
+            ConcreteTy::new(&TypeInfo::new_copy::<()>(TypeInfoOptions {
+                is_zeroable: true,
+                mem_repr: Some(MemRepr::Single(lir::ValType::Ptr)),
+            }))
+        });
+        TY.clone()
+    }
+}
+
+unsafe impl Reflect for u32 {
+    fn ty() -> ConcreteTy {
+        static TY: LazyLock<ConcreteTy> = LazyLock::new(|| {
+            ConcreteTy::new(&TypeInfo::new_copy::<u32>(TypeInfoOptions {
+                is_zeroable: false,
+                mem_repr: Some(MemRepr::Single(lir::ValType::I32)),
+            }))
+        });
+        TY.clone()
+    }
+}
+
+unsafe impl Reflect for f64 {
+    fn ty() -> ConcreteTy {
+        static TY: LazyLock<ConcreteTy> = LazyLock::new(|| {
+            ConcreteTy::new(&TypeInfo::new_copy::<f32>(TypeInfoOptions {
+                is_zeroable: true,
+                mem_repr: Some(MemRepr::Single(lir::ValType::F64)),
+            }))
+        });
+        TY.clone()
+    }
 }

@@ -202,18 +202,18 @@ impl NlAbstractTy {
     pub fn repr(&self) -> ConcreteTy {
         // TODO(mvp) add machine types for all abstract types
         match self {
-            Self::Unit => <()>::CONCRETE_TY,
-            Self::Top => PackedAny::CONCRETE_TY,
+            Self::Unit => <()>::ty(),
+            Self::Top => PackedAny::ty(),
             Self::Bottom => unimplemented!("bottom type has no concrete representation"),
-            Self::Numeric => NlFloat::CONCRETE_TY,
-            Self::Color => Color::CONCRETE_TY,
-            Self::Float => NlFloat::CONCRETE_TY,
-            Self::Boolean => NlBool::CONCRETE_TY,
+            Self::Numeric => NlFloat::ty(),
+            Self::Color => Color::ty(),
+            Self::Float => NlFloat::ty(),
+            Self::Boolean => NlBool::ty(),
             Self::String => todo!(),
-            Self::Point => Point::CONCRETE_TY,
-            Self::Agent => PackedAny::CONCRETE_TY,
-            Self::Patch => OptionPatchId::CONCRETE_TY,
-            Self::Turtle => TurtleId::CONCRETE_TY,
+            Self::Point => Point::ty(),
+            Self::Agent => PackedAny::ty(),
+            Self::Patch => OptionPatchId::ty(),
+            Self::Turtle => TurtleId::ty(),
             Self::Link => todo!(""),
             Self::Agentset { agent_type: _ } => todo!(""),
             // If a type is just "nobody", then it is inhabited by only one
@@ -224,7 +224,7 @@ impl NlAbstractTy {
             // representation.
             Self::Nobody => unimplemented!("nobody type has no concrete representation"),
             Self::Closure(_) => todo!(),
-            Self::List { element_ty } if **element_ty == Self::Top => <NlBox<NlList>>::CONCRETE_TY,
+            Self::List { element_ty } if **element_ty == Self::Top => <NlBox<NlList>>::ty(),
             Self::List { element_ty: _ } => todo!(),
         }
     }

@@ -118,7 +118,7 @@ impl RowSchema {
         // https://doc.rust-lang.org/std/alloc/struct.Layout.html#method.extend
         let mut overall_layout = Layout::from_size_align(occupancy_bitfield_len, 1)
             .expect("this layout should be valid");
-        for &field_type in types_and_layouts {
+        for field_type in types_and_layouts {
             // safety relies on the fact that this function returns a correct
             // answer
             let field_layout = field_type.info().layout;
@@ -127,7 +127,11 @@ impl RowSchema {
             let (new_layout, offset) = overall_layout
                 .extend(field_layout)
                 .expect("records should not be so big as to overflow");
-            fields.push(RowSchemaField { offset, r#type: field_type, size: field_layout.size() });
+            fields.push(RowSchemaField {
+                offset,
+                r#type: field_type.clone(),
+                size: field_layout.size(),
+            });
             overall_layout = new_layout;
         }
         // add padding at the end to align with itself
@@ -149,7 +153,7 @@ impl RowSchema {
         let field = &self.fields[0];
 
         // field must be of type T and at offset 0
-        if field.r#type != T::CONCRETE_TY || field.offset != 0 {
+        if field.r#type != T::ty() || field.offset != 0 {
             return false;
         }
 
@@ -183,7 +187,7 @@ impl<'a, B: AsRef<[u8]> + 'a> Row<'a, B> {
 
     pub fn get<T: Reflect>(&self, field_idx: usize) -> Option<&'a T> {
         // verify that the type tag matches
-        assert_eq!(self.schema.fields[field_idx].r#type, T::CONCRETE_TY, "type mismatch");
+        assert_eq!(self.schema.fields[field_idx].r#type, T::ty(), "type mismatch");
 
         let ptr = self.get_ptr(field_idx);
         // check if the field is actually present
@@ -222,7 +226,7 @@ impl<'a, B: AsRef<[u8]> + AsMut<[u8]> + 'a> Row<'a, B> {
 
     pub fn get_mut<T: Reflect>(&mut self, field_idx: usize) -> Option<&'a mut T> {
         // same implementation as self.get
-        assert_eq!(self.schema.fields[field_idx].r#type, T::CONCRETE_TY, "type mismatch");
+        assert_eq!(self.schema.fields[field_idx].r#type, T::ty(), "type mismatch");
 
         let ptr = self.get_ptr_mut(field_idx);
         if self.has_field(field_idx) {
@@ -234,13 +238,13 @@ impl<'a, B: AsRef<[u8]> + AsMut<[u8]> + 'a> Row<'a, B> {
     }
 
     pub fn set<T: Reflect>(&mut self, field_idx: usize, value: T) {
-        assert_eq!(self.schema.fields[field_idx].r#type, T::CONCRETE_TY, "type mismatch");
+        assert_eq!(self.schema.fields[field_idx].r#type, T::ty(), "type mismatch");
 
         let ptr_to_val = self.get_ptr_mut(field_idx).cast::<T>();
 
         // if the field is already present, drop the existing value to replace it
         if self.has_field(field_idx)
-            && let Some(drop_fn) = T::CONCRETE_TY.info().drop_fn
+            && let Some(drop_fn) = T::ty().info().drop_fn
         {
             // SAFETY: we checked that the type tag matches, so this is the
             // right function to call. we know this value is actually present.
@@ -281,7 +285,7 @@ impl<'a, B: AsRef<[u8]> + AsMut<[u8]> + 'a> Row<'a, B> {
     }
 
     pub fn take<T: Reflect>(&mut self, field_idx: usize) -> Option<T> {
-        assert_eq!(self.schema.fields[field_idx].r#type, T::CONCRETE_TY, "type mismatch");
+        assert_eq!(self.schema.fields[field_idx].r#type, T::ty(), "type mismatch");
 
         if self.schema.occupancy_bitfield_len == 0 {
             panic!("cannot take a field if the occupancy bitfield is omitted");
@@ -313,7 +317,7 @@ impl<'a, B: AsRef<[u8]> + AsMut<[u8]> + 'a> Row<'a, B> {
                 continue;
             }
 
-            let field_type = self.schema.fields[field_idx].r#type;
+            let field_type = &self.schema.fields[field_idx].r#type;
             if let Some(drop_fn) = field_type.info().drop_fn {
                 // SAFETY: we used the type tag for this field to get the right
                 // function to call to drop the value. we know this value is
@@ -636,51 +640,40 @@ impl<T: Copy> std::ops::IndexMut<usize> for Array<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::util::reflection::{ConstTypeName, TypeInfo, TypeInfoOptions};
+    use std::sync::LazyLock;
+
+    use crate::util::reflection::{MemRepr, TypeInfo, TypeInfoOptions};
 
     use super::*;
 
     // provide these impls for testing purposes only
-    static U32_TYPE_INFO: TypeInfo = TypeInfo::new_copy::<u32>(TypeInfoOptions {
-        is_zeroable: true,
-        mem_repr: Some(&[(0, lir::ValType::I32)]),
-    });
-    unsafe impl Reflect for u32 {
-        const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&U32_TYPE_INFO);
-    }
-    static STRING_TYPE_INFO: TypeInfo =
-        TypeInfo::new_drop::<String>(TypeInfoOptions { is_zeroable: false, mem_repr: None });
     unsafe impl Reflect for String {
-        const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&STRING_TYPE_INFO);
+        fn ty() -> ConcreteTy {
+            static TY: LazyLock<ConcreteTy> = LazyLock::new(|| {
+                ConcreteTy::new(&TypeInfo::new_drop::<String>(TypeInfoOptions {
+                    is_zeroable: false,
+                    mem_repr: None,
+                }))
+            });
+            TY.clone()
+        }
     }
-    impl ConstTypeName for String {
-        const TYPE_NAME: &'static str = "String";
-    }
-    static F64_TYPE_INFO: TypeInfo = TypeInfo::new_copy::<f64>(TypeInfoOptions {
-        is_zeroable: true,
-        mem_repr: Some(&[(0, lir::ValType::F64)]),
-    });
-    unsafe impl Reflect for f64 {
-        const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&F64_TYPE_INFO);
-    }
-    impl ConstTypeName for f64 {
-        const TYPE_NAME: &'static str = "f64";
-    }
-    static BOOL_TYPE_INFO: TypeInfo = TypeInfo::new_copy::<bool>(TypeInfoOptions {
-        is_zeroable: true,
-        mem_repr: Some(&[(0, lir::ValType::I8)]),
-    });
     unsafe impl Reflect for bool {
-        const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&BOOL_TYPE_INFO);
-    }
-    impl ConstTypeName for bool {
-        const TYPE_NAME: &'static str = "bool";
+        fn ty() -> ConcreteTy {
+            static TY: LazyLock<ConcreteTy> = LazyLock::new(|| {
+                ConcreteTy::new(&TypeInfo::new_copy::<bool>(TypeInfoOptions {
+                    is_zeroable: true,
+                    mem_repr: Some(MemRepr::Single(lir::ValType::I8)),
+                }))
+            });
+            TY.clone()
+        }
     }
 
     #[test]
     fn test_basic_insert_retrieve() {
         // Schema with a single u32 field
-        let schema = RowSchema::new(&[u32::CONCRETE_TY], true);
+        let schema = RowSchema::new(&[u32::ty()], true);
         let mut buffer = RowBuffer::new(schema);
         buffer.ensure_capacity(1);
         {
@@ -693,8 +686,7 @@ mod tests {
 
     #[test]
     fn test_heterogeneous_fields() {
-        let schema =
-            RowSchema::new(&[u32::CONCRETE_TY, String::CONCRETE_TY, f64::CONCRETE_TY], true);
+        let schema = RowSchema::new(&[u32::ty(), String::ty(), f64::ty()], true);
         let mut buffer = RowBuffer::new(schema);
         buffer.ensure_capacity(1);
 
@@ -714,10 +706,7 @@ mod tests {
     #[test]
     fn test_sparse_fields() {
         // create a schema with 4 fields but only insert 2 of them
-        let schema = RowSchema::new(
-            &[u32::CONCRETE_TY, String::CONCRETE_TY, f64::CONCRETE_TY, bool::CONCRETE_TY],
-            true,
-        );
+        let schema = RowSchema::new(&[u32::ty(), String::ty(), f64::ty(), bool::ty()], true);
         let mut buffer = RowBuffer::new(schema);
         buffer.ensure_capacity(1);
 
@@ -747,8 +736,7 @@ mod tests {
 
     #[test]
     fn test_insert_and_take() {
-        let schema =
-            RowSchema::new(&[u32::CONCRETE_TY, String::CONCRETE_TY, f64::CONCRETE_TY], true);
+        let schema = RowSchema::new(&[u32::ty(), String::ty(), f64::ty()], true);
         let mut buffer = RowBuffer::new(schema);
         buffer.ensure_capacity(1);
 
@@ -790,7 +778,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "type mismatch")]
     fn test_type_mismatch_present_field() {
-        let schema = RowSchema::new(&[u32::CONCRETE_TY], true);
+        let schema = RowSchema::new(&[u32::ty()], true);
         let mut buffer = RowBuffer::new(schema);
         buffer.ensure_capacity(1);
 
@@ -807,7 +795,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "type mismatch")]
     fn test_type_mismatch_absent_field() {
-        let schema = RowSchema::new(&[u32::CONCRETE_TY], true);
+        let schema = RowSchema::new(&[u32::ty()], true);
         let mut buffer = RowBuffer::new(schema);
         buffer.ensure_capacity(1);
 
@@ -818,8 +806,7 @@ mod tests {
 
     #[test]
     fn test_capacity_expansion_preserves_data() {
-        let schema =
-            RowSchema::new(&[u32::CONCRETE_TY, String::CONCRETE_TY, f64::CONCRETE_TY], true);
+        let schema = RowSchema::new(&[u32::ty(), String::ty(), f64::ty()], true);
         let mut buffer = RowBuffer::new(schema);
 
         // insert data into the first few rows
@@ -876,16 +863,8 @@ mod tests {
 
     #[test]
     fn test_massive_row_count() {
-        let schema = RowSchema::new(
-            &[
-                bool::CONCRETE_TY,
-                bool::CONCRETE_TY,
-                u32::CONCRETE_TY,
-                f64::CONCRETE_TY,
-                String::CONCRETE_TY,
-            ],
-            true,
-        );
+        let schema =
+            RowSchema::new(&[bool::ty(), bool::ty(), u32::ty(), f64::ty(), String::ty()], true);
         let mut buffer = RowBuffer::new(schema);
 
         // create 200 rows with predictable values
@@ -925,7 +904,7 @@ mod tests {
     #[test]
     fn test_change_schema() {
         // create initial buffer with (u32, String) schema
-        let old_schema = RowSchema::new(&[u32::CONCRETE_TY, String::CONCRETE_TY], true);
+        let old_schema = RowSchema::new(&[u32::ty(), String::ty()], true);
         let mut buffer = RowBuffer::new_with_capacity(old_schema, 3);
 
         // populate with some data
@@ -946,7 +925,7 @@ mod tests {
         }
 
         // create new schema with (String, u32) - reversed order
-        let new_schema = RowSchema::new(&[String::CONCRETE_TY, u32::CONCRETE_TY], true);
+        let new_schema = RowSchema::new(&[String::ty(), u32::ty()], true);
 
         // change schema, taking ownership of values
         buffer.change_schema(new_schema, |mut old_row, mut new_row| {
@@ -971,7 +950,7 @@ mod tests {
 
     #[test]
     fn test_insert_zeroable() {
-        let schema = RowSchema::new(&[u32::CONCRETE_TY], true);
+        let schema = RowSchema::new(&[u32::ty()], true);
         let mut buffer = RowBuffer::new(schema);
         buffer.ensure_capacity(1);
 
@@ -995,8 +974,7 @@ mod tests {
 
     #[test]
     fn test_clear() {
-        let schema =
-            RowSchema::new(&[u32::CONCRETE_TY, String::CONCRETE_TY, f64::CONCRETE_TY], true);
+        let schema = RowSchema::new(&[u32::ty(), String::ty(), f64::ty()], true);
         let mut buffer = RowBuffer::new_with_capacity(schema, 3);
 
         // populate multiple rows with data
@@ -1061,7 +1039,7 @@ mod tests {
 
     #[test]
     fn test_basic_always_present() {
-        let schema = RowSchema::new(&[u32::CONCRETE_TY], false);
+        let schema = RowSchema::new(&[u32::ty()], false);
         let mut buffer = RowBuffer::new(schema);
         buffer.ensure_capacity(1);
         {
@@ -1075,8 +1053,7 @@ mod tests {
 
     #[test]
     fn test_heterogeneous_always_present() {
-        let schema =
-            RowSchema::new(&[u32::CONCRETE_TY, bool::CONCRETE_TY, f64::CONCRETE_TY], false);
+        let schema = RowSchema::new(&[u32::ty(), bool::ty(), f64::ty()], false);
         let mut buffer = RowBuffer::new(schema);
         buffer.ensure_capacity(1);
         {
@@ -1093,10 +1070,7 @@ mod tests {
 
     #[test]
     fn test_massive_always_present() {
-        let schema = RowSchema::new(
-            &[bool::CONCRETE_TY, bool::CONCRETE_TY, u32::CONCRETE_TY, f64::CONCRETE_TY],
-            false,
-        );
+        let schema = RowSchema::new(&[bool::ty(), bool::ty(), u32::ty(), f64::ty()], false);
         let mut buffer = RowBuffer::new(schema);
         let num_rows = 200;
         buffer.ensure_capacity(num_rows);
@@ -1118,7 +1092,7 @@ mod tests {
 
     #[test]
     fn test_insert_zeroable_always_present() {
-        let schema = RowSchema::new(&[u32::CONCRETE_TY], false);
+        let schema = RowSchema::new(&[u32::ty()], false);
         let mut buffer = RowBuffer::new(schema);
         buffer.ensure_capacity(1);
         {
@@ -1136,14 +1110,14 @@ mod tests {
     )]
     fn test_panic_nonzeroable_always_present() {
         // String is not zeroable
-        let schema = RowSchema::new(&[String::CONCRETE_TY], false);
+        let schema = RowSchema::new(&[String::ty()], false);
         let _ = RowBuffer::new(schema);
     }
 
     #[test]
     #[should_panic(expected = "cannot take a field if the occupancy bitfield is omitted")]
     fn test_panic_take_always_present() {
-        let schema = RowSchema::new(&[u32::CONCRETE_TY], false);
+        let schema = RowSchema::new(&[u32::ty()], false);
         let mut buffer = RowBuffer::new(schema);
         buffer.ensure_capacity(1);
         let mut row = buffer.row_mut(0);
@@ -1153,7 +1127,7 @@ mod tests {
     #[test]
     fn test_take_array() {
         // create a schema with a single u32 field, always present
-        let schema = RowSchema::new(&[u32::CONCRETE_TY], false);
+        let schema = RowSchema::new(&[u32::ty()], false);
         let mut buffer = RowBuffer::new_with_capacity(schema, 5);
 
         // populate the buffer with some values
@@ -1188,7 +1162,7 @@ mod tests {
     #[should_panic(expected = "cannot reinterpret the row buffer as an array of type u32")]
     fn test_take_array_wrong_type() {
         // create a schema with a single f64 field, always present
-        let schema = RowSchema::new(&[f64::CONCRETE_TY], false);
+        let schema = RowSchema::new(&[f64::ty()], false);
         let mut buffer = RowBuffer::new_with_capacity(schema, 3);
 
         // try to take as u32 - should panic
@@ -1199,7 +1173,7 @@ mod tests {
     #[should_panic(expected = "cannot reinterpret the row buffer as an array of type u32")]
     fn test_take_array_multiple_fields() {
         // create a schema with multiple fields, always present
-        let schema = RowSchema::new(&[u32::CONCRETE_TY, f64::CONCRETE_TY], false);
+        let schema = RowSchema::new(&[u32::ty(), f64::ty()], false);
         let mut buffer = RowBuffer::new_with_capacity(schema, 3);
 
         // try to take as u32 - should panic because there are multiple fields
@@ -1210,7 +1184,7 @@ mod tests {
     #[should_panic(expected = "cannot reinterpret the row buffer as an array of type u32")]
     fn test_take_array_with_occupancy_bitfield() {
         // create a schema with occupancy bitfield (sparse fields)
-        let schema = RowSchema::new(&[u32::CONCRETE_TY], true);
+        let schema = RowSchema::new(&[u32::ty()], true);
         let mut buffer = RowBuffer::new_with_capacity(schema, 3);
 
         // try to take as u32 - should panic because there's an occupancy bitfield

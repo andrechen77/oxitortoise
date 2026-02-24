@@ -1,6 +1,6 @@
 use derive_more::derive::{Deref, DerefMut};
 
-use crate::util::reflection::{ConstTypeName, TypeInfo, TypeInfoOptions};
+use crate::util::reflection::{MemRepr, TypeInfo, TypeInfoOptions};
 
 #[derive(Deref, DerefMut)]
 #[repr(transparent)]
@@ -12,15 +12,11 @@ impl<T> NlBox<T> {
     }
 }
 
-pub const fn generate_box_type_info<T: 'static + ConstTypeName>() -> TypeInfo {
+pub fn generate_box_type_info<T: 'static>() -> TypeInfo {
     // it is important that the generated TypeInfo applies to every
     // possible type T
     TypeInfo::new_drop::<NlBox<T>>(TypeInfoOptions {
         is_zeroable: false,
-        mem_repr: Some(&[(0, lir::ValType::Ptr)]),
+        mem_repr: Some(MemRepr::Single(lir::ValType::Ptr)),
     })
-}
-
-impl<T> ConstTypeName for NlBox<T> {
-    const TYPE_NAME: &'static str = "NlBox<?>";
 }

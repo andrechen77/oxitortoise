@@ -1,6 +1,8 @@
+use std::sync::LazyLock;
+
 use crate::{
     sim::value::{NlBox, r#box::generate_box_type_info},
-    util::reflection::{ConcreteTy, ConstTypeName, Reflect, TypeInfo},
+    util::reflection::{ConcreteTy, Reflect, TypeInfo},
 };
 
 #[derive(Default, Debug)]
@@ -13,16 +15,18 @@ impl NlString {
     }
 }
 
-impl ConstTypeName for NlString {
-    const TYPE_NAME: &'static str = "NlString";
-}
-
-static STRING_TYPE_INFO: TypeInfo = TypeInfo::new_opaque::<NlString>();
 unsafe impl Reflect for NlString {
-    const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&STRING_TYPE_INFO);
+    fn ty() -> ConcreteTy {
+        static TY: LazyLock<ConcreteTy> =
+            LazyLock::new(|| ConcreteTy::new(&TypeInfo::new_opaque::<NlString>()));
+        TY.clone()
+    }
 }
 
-static BOX_STRING_TYPE_INFO: TypeInfo = generate_box_type_info::<NlString>();
 unsafe impl Reflect for NlBox<NlString> {
-    const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&BOX_STRING_TYPE_INFO);
+    fn ty() -> ConcreteTy {
+        static TY: LazyLock<ConcreteTy> =
+            LazyLock::new(|| ConcreteTy::new(&generate_box_type_info::<NlString>()));
+        TY.clone()
+    }
 }
