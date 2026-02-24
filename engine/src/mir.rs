@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use crate::{sim::value::UnpackedAny, util::reflection::ConcreteTy};
 
-pub mod from_hir;
+pub mod builder;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct FunctionId(u32);
@@ -11,7 +11,7 @@ pub struct FunctionId(u32);
 pub struct LocalId(u32);
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
-pub struct ControlFlowConstructId(u32);
+pub struct Label(u32);
 
 #[derive(Debug, Default)]
 pub struct Program {
@@ -20,6 +20,7 @@ pub struct Program {
 
 #[derive(Debug)]
 pub struct Function {
+    // TODO specify the parameters
     /// Holds every local variable used in the function body, including
     /// parameters, temporaries, and return values.
     pub local_decls: HashMap<LocalId, LocalDecl>,
@@ -53,23 +54,21 @@ pub enum CtrlFlowConstruct {
 
 #[derive(Debug)]
 pub struct Block {
-    pub id: ControlFlowConstructId,
+    pub label: Option<Label>,
     pub statements: Vec<Statement>,
 }
 
 #[derive(Debug)]
 pub struct IfElse {
-    pub id: ControlFlowConstructId,
     pub condition: Place,
-    pub then_block: Vec<Statement>,
-    pub else_block: Vec<Statement>,
+    pub then: Box<Statement>,
+    pub r#else: Box<Statement>,
 }
 
 #[derive(Debug)]
 pub struct Loop {
-    pub id: ControlFlowConstructId,
     pub num_repetitions: Place,
-    pub statements: Vec<Statement>,
+    pub statements: Box<Statement>,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
@@ -107,7 +106,7 @@ pub enum PlaceOperand {
 pub enum ElementaryStatement {
     /// Breaks out the specified control flow construct. Not yet sure what
     /// breaking from a loop should do.
-    Break { target: ControlFlowConstructId },
+    Break { target: Label },
     /// Drops the value in the source place, making it dead.
     Drop { src: Place },
     /// Performs some operation and assigns the result to the destination place.
@@ -131,5 +130,17 @@ pub enum Operation {
 impl From<LocalId> for Place {
     fn from(local: LocalId) -> Self {
         Place { local, projections: Vec::new() }
+    }
+}
+
+/// Consolidates a sequence of statements into a single statement. If there is
+/// only one statement, it is returned as is. If there are multiple statements,
+/// a block is created with the statements.
+pub fn consolidate_statements(statements: Vec<Statement>) -> Statement {
+    if statements.len() == 1 {
+        let mut statements = statements;
+        statements.pop().expect("we checked that the length is 1")
+    } else {
+        Statement::CtrlFlow(CtrlFlowConstruct::Block(Block { label: None, statements }))
     }
 }

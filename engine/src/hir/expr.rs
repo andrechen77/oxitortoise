@@ -1,0 +1,168 @@
+// Foundational expressions such as control flow and scope are defined here.
+// More specialized expression kinds are defined in their respective submodules.
+
+use std::collections::HashMap;
+
+use crate::{
+    hir::{Expr, ExprKind, HirToLirFnBuilder, Label, LocalDecl, LocalId, NlAbstractTy, Program},
+    mir,
+};
+
+mod agent_var;
+
+/// An expression that defines a set of mutable local variables that can be
+/// written and read in the evaluation of an inner expression.
+#[derive(Debug)]
+pub struct Scope {
+    pub locals: HashMap<LocalId, LocalDecl>,
+    pub inner: Box<ExprKind>,
+}
+
+impl Expr for Scope {
+    fn output_type(&self, program: &super::Program) -> super::NlAbstractTy {
+        self.inner.output_type(program)
+    }
+
+    fn visit_childen(&self, mut visitor: impl FnMut(&ExprKind)) {
+        visitor(&self.inner);
+    }
+
+    fn write_mir_execution(&self, builder: &mut HirToLirFnBuilder, local_out: mir::LocalId) {
+        for (local_id, decl) in &self.locals {
+            let mir_local_decl =
+                mir::LocalDecl { debug_name: decl.debug_name.clone(), ty: decl.ty.repr() };
+            let mir_local_id = builder.lir.create_local(mir_local_decl);
+            builder.translator.locals.insert(*local_id, mir_local_id);
+        }
+        builder.translate_expr(&self.inner, Some(local_out));
+
+        // the scope does not remove the locals after the inner expression is
+        // evaluated. At the time this code was written, this did not seem to be
+        // an issue.
+    }
+}
+
+/// An expression that represents multiple expressions evaluated in order.
+#[derive(Debug)]
+pub struct Block {
+    pub label: Label,
+    pub statements: Vec<ExprKind>,
+}
+
+impl Expr for Block {
+    fn output_type(&self, program: &Program) -> NlAbstractTy {
+        // This does not really need to be an option but since we move out of it
+        // for a split second to do the join, the compiler requires it.
+        // Logically it is never None.
+        let mut output_type = Some(NlAbstractTy::Bottom);
+        self.visit_childen(|expr| {
+            if let ExprKind::Break(Break { target, value }) = expr
+                && *target == self.label
+            {
+                let break_ty = value.output_type(program);
+                output_type = Some(output_type.take().unwrap().join(break_ty));
+            }
+        });
+        output_type.unwrap()
+    }
+
+    fn visit_childen(&self, mut visitor: impl FnMut(&ExprKind)) {
+        for stmt in &self.statements {
+            visitor(stmt);
+        }
+    }
+
+    fn write_mir_execution(&self, builder: &mut HirToLirFnBuilder, local_out: mir::LocalId) {
+        let label = builder.lir.create_label();
+
+        // make this label visible to child expressions
+        builder.translator.ctrl_flow_constructs.insert(self.label, (label, local_out));
+
+        // translate the statements in the block
+        let (statements, _) = builder.with_inner_statement_seq(|builder| {
+            for expr in &self.statements {
+                builder.translate_expr(expr, None);
+            }
+        });
+
+        // create a block statement with the translated statements
+        let block = mir::Statement::CtrlFlow(mir::CtrlFlowConstruct::Block(mir::Block {
+            label: Some(label),
+            statements,
+        }));
+        builder.lir.add_statement(block);
+    }
+}
+
+#[derive(Debug)]
+pub struct IfElse {
+    pub condition: Box<ExprKind>,
+    pub then: Box<ExprKind>,
+    pub r#else: Box<ExprKind>,
+}
+
+impl Expr for IfElse {
+    fn output_type(&self, program: &Program) -> NlAbstractTy {
+        let then_ty = self.then.output_type(program);
+        let else_ty = self.r#else.output_type(program);
+        then_ty.join(else_ty)
+    }
+
+    fn visit_childen(&self, mut visitor: impl FnMut(&ExprKind)) {
+        visitor(&self.condition);
+        visitor(&self.then);
+        visitor(&self.r#else);
+    }
+
+    fn write_mir_execution(&self, builder: &mut HirToLirFnBuilder, local_out: mir::LocalId) {
+        let condition = builder.translate_expr(&self.condition, None);
+        let (then_stmts, _) = builder.with_inner_statement_seq(|builder| {
+            builder.translate_expr(&self.then, Some(local_out))
+        });
+        let then = mir::consolidate_statements(then_stmts);
+        let (else_stmts, _) = builder.with_inner_statement_seq(|builder| {
+            builder.translate_expr(&self.r#else, Some(local_out))
+        });
+        let r#else = mir::consolidate_statements(else_stmts);
+
+        let if_else = mir::Statement::CtrlFlow(mir::CtrlFlowConstruct::IfElse(mir::IfElse {
+            condition: condition.into(),
+            then: Box::new(then),
+            r#else: Box::new(r#else),
+        }));
+        builder.lir.add_statement(if_else);
+    }
+}
+
+#[derive(Debug)]
+pub struct Break {
+    pub target: Label,
+    pub value: Box<ExprKind>,
+}
+
+impl Expr for Break {
+    fn output_type(&self, _program: &Program) -> NlAbstractTy {
+        // a break diverges, it never returns
+        NlAbstractTy::Bottom
+    }
+
+    fn visit_childen(&self, visitor: impl FnMut(&ExprKind)) {
+        self.value.visit_childen(visitor);
+    }
+
+    fn write_mir_execution(&self, builder: &mut HirToLirFnBuilder, break_local_out: mir::LocalId) {
+        // ignore this value, a break never returns
+        let _ = break_local_out;
+
+        let (target_label, target_local_out) =
+            builder.translator.ctrl_flow_constructs[&self.target];
+
+        // assign the break's value to the target local instead
+        builder.translate_expr(&self.value, Some(target_local_out));
+
+        // and add the break statement
+        builder.lir.add_statement(mir::Statement::Elementary(mir::ElementaryStatement::Break {
+            target: target_label,
+        }));
+    }
+}
