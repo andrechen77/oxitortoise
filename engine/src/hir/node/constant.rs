@@ -8,6 +8,7 @@ use pretty_print::PrettyPrinter;
 use crate::{
     exec::jit::InstallLir,
     hir::{HirTy, NlAbstractTy, Node, NodeId, Program, WriteLirError, build_lir::LirInsnBuilder},
+    mir::{self, from_hir::MirFunctionBuilder},
     sim::value::UnpackedAny,
 };
 
@@ -50,6 +51,17 @@ impl Node for Constant {
             }
             _ => todo!("TODO(mvp) include other variants"),
         }
+    }
+
+    fn write_mir_execution(
+        &self,
+        _program: &Program,
+        _my_node_id: NodeId,
+        builder: &mut MirFunctionBuilder<'_>,
+        local_out: mir::LocalId,
+    ) {
+        builder
+            .add_operation(local_out.into(), mir::Operation::Const { value: self.value.clone() });
     }
 
     fn pretty_print(&self, _program: &Program, mut out: impl fmt::Write) -> fmt::Result {

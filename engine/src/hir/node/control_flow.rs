@@ -13,6 +13,7 @@ use crate::{
         HirTy, NlAbstractTy, Node, NodeId, NodeKind, Program, WriteLirError,
         build_lir::LirInsnBuilder,
     },
+    mir::{self, from_hir::MirFunctionBuilder},
 };
 
 /// A node representing a block of statements that are sequentially executed.
@@ -97,6 +98,20 @@ impl Node for Block {
         Ok(())
     }
 
+    fn write_mir_execution(
+        &self,
+        program: &Program,
+        my_node_id: NodeId,
+        builder: &mut MirFunctionBuilder<'_>,
+        local_out: mir::LocalId,
+    ) {
+        builder.add_block(my_node_id, local_out, |builder| {
+            for &stmt in &self.statements {
+                builder.translate_hir_node(program, stmt);
+            }
+        });
+    }
+
     fn pretty_print(&self, _program: &Program, mut out: impl fmt::Write) -> fmt::Result {
         PrettyPrinter::new(&mut out).add_struct("Block", |_| Ok(()))
     }
@@ -162,6 +177,27 @@ impl Node for IfElse {
         Ok(())
     }
 
+    fn write_mir_execution(
+        &self,
+        program: &Program,
+        my_node_id: NodeId,
+        builder: &mut MirFunctionBuilder<'_>,
+        local_out: mir::LocalId,
+    ) {
+        let condition = builder.translate_hir_node(program, self.condition);
+        builder.add_if_else(
+            my_node_id,
+            local_out,
+            condition.into(),
+            |builder| {
+                builder.translate_hir_node(program, self.then_block);
+            },
+            |builder| {
+                builder.translate_hir_node(program, self.else_block);
+            },
+        );
+    }
+
     fn pretty_print(&self, _program: &Program, mut out: impl fmt::Write) -> fmt::Result {
         PrettyPrinter::new(&mut out).add_struct("IfElse", |_| Ok(()))
     }
@@ -186,6 +222,20 @@ impl Node for Repeat {
         _my_node_id: NodeId,
         _lir_builder: &mut LirInsnBuilder,
     ) -> Result<(), WriteLirError> {
+        todo!()
+    }
+
+    fn write_mir_execution(
+        &self,
+        program: &Program,
+        my_node_id: NodeId,
+        builder: &mut MirFunctionBuilder<'_>,
+        local_out: mir::LocalId,
+    ) {
+        let _ = program;
+        let _ = my_node_id;
+        let _ = builder;
+        let _ = local_out;
         todo!()
     }
 
@@ -221,6 +271,18 @@ impl Node for Break {
         );
         lir_builder.push_lir_insn(lir::InsnKind::Break { target, values });
         Ok(())
+    }
+
+    fn write_mir_execution(
+        &self,
+        program: &Program,
+        my_node_id: NodeId,
+        builder: &mut MirFunctionBuilder<'_>,
+        _local_out: mir::LocalId,
+    ) {
+        // if the break evaluates to a value, we need to assign it to the target block's output
+        let value = self.value.map(|v| builder.translate_hir_node(program, v).into());
+        builder.add_break(my_node_id, value);
     }
 
     fn pretty_print(&self, _program: &Program, mut out: impl fmt::Write) -> fmt::Result {

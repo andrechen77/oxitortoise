@@ -9,6 +9,7 @@ use slotmap::{SecondaryMap, SlotMap, new_key_type};
 use crate::{
     exec::jit::InstallLir,
     hir::build_lir::LirInsnBuilder,
+    mir::{self, from_hir::MirFunctionBuilder},
     sim::{
         color::Color,
         observer::GlobalsSchema,
@@ -207,6 +208,19 @@ pub trait Node {
         let _ = my_node_id;
         let _ = lir_builder;
         Err(WriteLirError)
+    }
+
+    fn write_mir_execution(
+        &self,
+        program: &Program,
+        my_node_id: NodeId,
+        builder: &mut MirFunctionBuilder<'_>,
+        local_out: mir::LocalId,
+    ) {
+        let _ = program;
+        let _ = my_node_id;
+        let _ = builder;
+        let _ = local_out;
     }
 
     fn pretty_print(&self, program: &Program, out: impl fmt::Write) -> fmt::Result;
