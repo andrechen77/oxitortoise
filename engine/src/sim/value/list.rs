@@ -4,7 +4,7 @@ use std::{
 };
 
 use crate::{
-    sim::value::{NlBox, NlFloat, PackedAny, r#box::generate_box_type_info},
+    sim::value::{NlFloat, PackedAny},
     util::reflection::{ConcreteTy, Reflect, TypeInfo},
 };
 
@@ -21,14 +21,6 @@ unsafe impl Reflect for NlList {
     fn ty() -> ConcreteTy {
         static TY: LazyLock<ConcreteTy> =
             LazyLock::new(|| ConcreteTy::new(&TypeInfo::new_opaque::<NlList>()));
-        TY.clone()
-    }
-}
-
-unsafe impl Reflect for NlBox<NlList> {
-    fn ty() -> ConcreteTy {
-        static TY: LazyLock<ConcreteTy> =
-            LazyLock::new(|| ConcreteTy::new(&generate_box_type_info::<NlList>()));
         TY.clone()
     }
 }
