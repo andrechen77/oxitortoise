@@ -10,50 +10,13 @@ use std::{
 ///
 /// Implementors must guarantee that the associated `TypeInfo` is correct, as
 /// the information will be used to generate and run unsafe code.
-pub unsafe trait Reflect: 'static {
-    // TODO update the docs to reflect the new API
-    /// This should return the same `ConcreteTy` instance every time it is called. See [`ConcreteTy::new`].
-    /// ```rust
-    /// use oxitortoise_engine::util::reflection::{ConcreteTy, Reflect, TypeInfo, TypeInfoOptions, ConstTypeName};
-    ///
-    /// struct MyType;
-    /// unsafe impl Reflect for MyType {
-    ///     const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&MY_TYPE_INFO);
-    ///     fn ty() -> ConcreteTy {
-    ///         static TY: LazyLock<ConcreteTy> = LazyLock::new(|| {
-    ///             ConcreteTy::new(&TypeInfo::new_drop::<MyType>(TypeInfoOptions {
-    ///                 is_zeroable: true,
-    ///                 mem_repr: None,
-    ///             }))
-    ///         });
-    ///         TY.clone()
-    ///     }
-    /// }
-    /// ```
-    /// DO NOT define it like the following. This will create new `ConcreteTy`
-    /// instances each time it is called which will not compare equal.
-    /// ```rust
-    /// use oxitortoise_engine::util::reflection::{ConcreteTy, Reflect, TypeInfo, TypeInfoOptions, ConstTypeName};
-    ///
-    /// struct MyType;
-    /// unsafe impl Reflect for MyType {
-    ///     const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&MY_TYPE_INFO);
-    ///     fn ty() -> ConcreteTy {
-    ///         ConcreteTy::new(&TypeInfo::new_drop::<MyType>(TypeInfoOptions {
-    ///             is_zeroable: true,
-    ///             mem_repr: None,
-    ///         }))
-    ///     }
-    /// }
-    /// ```
-    /// Defining it like the above may create references to different objects
-    /// each time the constant is used; these objects will not compare equal.
+pub unsafe trait Reflect {
     fn ty() -> ConcreteTy;
 }
 
 /// Information about a type that is used by the engine to generate code that
 /// manipulates values of the corresponding type.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TypeInfo {
     pub debug_name: &'static str,
     pub layout: Layout,
@@ -75,7 +38,7 @@ pub struct TypeInfo {
     pub mem_repr: Option<MemRepr>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum MemRepr {
     /// Represents the fields of the type in memory along with their offsets.
     Compound(Vec<(usize, ConcreteTy)>),
@@ -142,9 +105,6 @@ impl TypeInfo {
 pub struct ConcreteTy(Arc<TypeInfo>);
 
 impl ConcreteTy {
-    /// If this function is called multiple times with the same `info`, it will
-    /// return different `ConcreteTy` instances that will not compare equal.
-    /// Call this function once per type.
     pub fn new(info: &TypeInfo) -> Self {
         Self(Arc::new(info.clone()))
     }
@@ -156,7 +116,7 @@ impl ConcreteTy {
 
 impl PartialEq for ConcreteTy {
     fn eq(&self, other: &Self) -> bool {
-        std::ptr::eq(Arc::as_ptr(&self.0), Arc::as_ptr(&other.0))
+        std::ptr::eq(Arc::as_ptr(&self.0), Arc::as_ptr(&other.0)) || self.info() == other.info()
     }
 }
 
