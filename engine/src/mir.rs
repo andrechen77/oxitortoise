@@ -1,8 +1,18 @@
 use std::{collections::HashMap, sync::Arc};
 
-use crate::{sim::value::UnpackedAny, util::reflection::ConcreteTy};
+use crate::{
+    sim::value::BoxedAny,
+    util::reflection::{ConcreteTy, TypeInfo},
+};
 
 pub mod builder;
+
+#[derive(Debug)]
+pub struct HostFunctionInfo {
+    pub debug_name: &'static str,
+    pub parameter_types: &'static [&'static TypeInfo],
+    pub return_type: &'static TypeInfo,
+}
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct FunctionId(u32);
@@ -136,18 +146,44 @@ pub enum Operation {
     /// Directly produces the operand.
     Operand(PlaceOperand),
     /// Produces a new instance of the specified value.
-    Const { value: UnpackedAny },
+    Const { value: BoxedAny }, // use BoxedAny because it can represent non-NetLogo types too
+    /// A binary arithmetic between two scalars.
+    ///
+    /// Since the operands are scalars, we can directly use the LIR opcode
+    /// representation without having to define yet another opcode enum.
+    BinaryOp { opcode: lir::BinaryOpcode, lhs: PlaceOperand, rhs: PlaceOperand },
+    /// A unary arithmetic operation on a scalar.
+    ///
+    /// Since the operand is a scalar, we can directly use the LIR opcode
+    /// representation without having to define yet another opcode enum.
+    UnaryOp { opcode: lir::UnaryOpcode, operand: PlaceOperand },
     /// Calls a user function, taking the function's arguments from the given
     /// places and producing the return value.
     CallUserFunction { function: FunctionId, args: Vec<PlaceOperand> },
     /// Calls a host function, taking the function's arguments from the given
     /// places and producing the return value.
-    CallHostFunction { /* TODO refer to the host function */ args: Vec<PlaceOperand> },
+    CallHostFunction { function: &'static HostFunctionInfo, args: Vec<PlaceOperand> },
+}
+
+impl LocalId {
+    pub fn place(self) -> Place {
+        self.into()
+    }
 }
 
 impl From<LocalId> for Place {
     fn from(local: LocalId) -> Self {
         Place { local, projections: Vec::new() }
+    }
+}
+
+impl Place {
+    pub fn move_out(self) -> PlaceOperand {
+        PlaceOperand::Move(self)
+    }
+
+    pub fn borrow(self) -> PlaceOperand {
+        PlaceOperand::Borrow(self)
     }
 }
 

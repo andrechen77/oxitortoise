@@ -28,7 +28,7 @@ pub mod expr;
 // pub mod transforms;
 // pub mod type_inference;
 
-use build_mir::HirToLirFnBuilder;
+pub use build_mir::HirToMirFnBuilder;
 
 new_key_type! {
     #[derive(Display)]
@@ -85,7 +85,7 @@ pub trait Expr {
     /// output type; those should return `None`.
     fn output_type(&self, program: &Program) -> NlAbstractTy;
 
-    fn visit_childen(&self, visitor: impl FnMut(&ExprKind));
+    fn visit_children(&self, visitor: impl FnMut(&ExprKind));
 
     /// Writes the MIR statements that correspond to the calculation represented
     /// by this expression. This means executing any necessary side effelts and
@@ -95,7 +95,7 @@ pub trait Expr {
     /// Implementations may use [`MirFunctionBuilder::translate_hir_node`] to get
     /// the MIR values for the dependencies, which will recursively call
     /// `write_mir_execution` if necessary.
-    fn write_mir_execution(&self, builder: &mut HirToLirFnBuilder, local_out: mir::LocalId);
+    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, local_out: mir::LocalId);
 }
 
 #[derive(Debug, From, TryInto, Delegate)]

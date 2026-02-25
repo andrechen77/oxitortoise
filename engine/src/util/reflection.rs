@@ -151,6 +151,10 @@ impl TypeInfo {
             mem_repr: None,
         }
     }
+
+    pub fn concrete_ty(&'static self) -> ConcreteTy {
+        ConcreteTy::Static(self)
+    }
 }
 
 /// A concrete type representation in the NetLogo engine. The same NetLogo

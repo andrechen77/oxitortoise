@@ -12,12 +12,13 @@ use pretty_print::PrettyPrinter;
 
 use super::topology::Point;
 use crate::{
-    hir,
+    hir::{self, HirToMirFnBuilder},
+    mir,
     sim::{
         agent_schema::{AgentFieldDescriptor, AgentSchemaField, AgentSchemaFieldGroup},
         color::Color,
         topology::{CoordFloat, PointInt, TopologySpec},
-        value::{NlBool, NlFloat, NlList, NlString, PackedAny},
+        value::{BoxedAny, NlBool, NlFloat, NlList, NlString, PackedAny},
     },
     util::{
         reflection::{ConcreteTy, MemRepr, Reflect, TypeInfo},
@@ -66,6 +67,29 @@ unsafe impl Reflect for OptionPatchId {
 
 impl OptionPatchId {
     pub const NOBODY: Self = Self(u32::MAX);
+
+    /// Writes the MIR statements to check if the given operand is nobody.
+    /// The result is stored in the given out local.
+    pub fn write_check_nobody(
+        builder: &mut HirToMirFnBuilder,
+        negate: bool,
+        local_out: mir::LocalId,
+        operand: mir::LocalId,
+    ) {
+        let sentinel_pl = builder.lir.add_operation(
+            mir::LocalDecl { debug_name: None, ty: OptionPatchId::TYPE_INFO.concrete_ty() },
+            mir::Operation::Const { value: BoxedAny::new(OptionPatchId::NOBODY) },
+        );
+        let opcode = if negate { lir::BinaryOpcode::INeq } else { lir::BinaryOpcode::IEq };
+        builder.lir.add_operation_with_dst(
+            local_out.into(),
+            mir::Operation::BinaryOp {
+                opcode,
+                lhs: operand.place().move_out(),
+                rhs: sentinel_pl.place().move_out(),
+            },
+        );
+    }
 }
 
 impl From<PatchId> for OptionPatchId {

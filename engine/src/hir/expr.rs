@@ -4,11 +4,13 @@
 use std::collections::HashMap;
 
 use crate::{
-    hir::{Expr, ExprKind, HirToLirFnBuilder, Label, LocalDecl, LocalId, NlAbstractTy, Program},
+    hir::{Expr, ExprKind, HirToMirFnBuilder, Label, LocalDecl, LocalId, NlAbstractTy, Program},
     mir,
 };
 
 mod agent_var;
+mod agentset;
+mod arith_op;
 
 /// An expression that defines a set of mutable local variables that can be
 /// written and read in the evaluation of an inner expression.
@@ -23,18 +25,18 @@ impl Expr for Scope {
         self.inner.output_type(program)
     }
 
-    fn visit_childen(&self, mut visitor: impl FnMut(&ExprKind)) {
+    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
         visitor(&self.inner);
     }
 
-    fn write_mir_execution(&self, builder: &mut HirToLirFnBuilder, local_out: mir::LocalId) {
+    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, local_out: mir::LocalId) {
         for (local_id, decl) in &self.locals {
             let mir_local_decl =
                 mir::LocalDecl { debug_name: decl.debug_name.clone(), ty: decl.ty.repr() };
             let mir_local_id = builder.lir.create_local(mir_local_decl);
             builder.translator.locals.insert(*local_id, mir_local_id);
         }
-        builder.translate_expr(&self.inner, Some(local_out));
+        self.inner.write_mir_execution(builder, local_out);
 
         // the scope does not remove the locals after the inner expression is
         // evaluated. At the time this code was written, this did not seem to be
@@ -55,7 +57,7 @@ impl Expr for Block {
         // for a split second to do the join, the compiler requires it.
         // Logically it is never None.
         let mut output_type = Some(NlAbstractTy::Bottom);
-        self.visit_childen(|expr| {
+        self.visit_children(|expr| {
             if let ExprKind::Break(Break { target, value }) = expr
                 && *target == self.label
             {
@@ -66,13 +68,13 @@ impl Expr for Block {
         output_type.unwrap()
     }
 
-    fn visit_childen(&self, mut visitor: impl FnMut(&ExprKind)) {
+    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
         for stmt in &self.statements {
             visitor(stmt);
         }
     }
 
-    fn write_mir_execution(&self, builder: &mut HirToLirFnBuilder, local_out: mir::LocalId) {
+    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, local_out: mir::LocalId) {
         let label = builder.lir.create_label();
 
         // make this label visible to child expressions
@@ -81,7 +83,7 @@ impl Expr for Block {
         // translate the statements in the block
         let (statements, _) = builder.with_inner_statement_seq(|builder| {
             for expr in &self.statements {
-                builder.translate_expr(expr, None);
+                builder.translate_expr(expr);
             }
         });
 
@@ -108,20 +110,20 @@ impl Expr for IfElse {
         then_ty.join(else_ty)
     }
 
-    fn visit_childen(&self, mut visitor: impl FnMut(&ExprKind)) {
+    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
         visitor(&self.condition);
         visitor(&self.then);
         visitor(&self.r#else);
     }
 
-    fn write_mir_execution(&self, builder: &mut HirToLirFnBuilder, local_out: mir::LocalId) {
-        let condition = builder.translate_expr(&self.condition, None);
+    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, local_out: mir::LocalId) {
+        let condition = builder.translate_expr(&self.condition);
         let (then_stmts, _) = builder.with_inner_statement_seq(|builder| {
-            builder.translate_expr(&self.then, Some(local_out))
+            self.then.write_mir_execution(builder, local_out);
         });
         let then = mir::consolidate_statements(then_stmts);
         let (else_stmts, _) = builder.with_inner_statement_seq(|builder| {
-            builder.translate_expr(&self.r#else, Some(local_out))
+            self.r#else.write_mir_execution(builder, local_out);
         });
         let r#else = mir::consolidate_statements(else_stmts);
 
@@ -146,11 +148,11 @@ impl Expr for Break {
         NlAbstractTy::Bottom
     }
 
-    fn visit_childen(&self, visitor: impl FnMut(&ExprKind)) {
-        self.value.visit_childen(visitor);
+    fn visit_children(&self, visitor: impl FnMut(&ExprKind)) {
+        self.value.visit_children(visitor);
     }
 
-    fn write_mir_execution(&self, builder: &mut HirToLirFnBuilder, break_local_out: mir::LocalId) {
+    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, break_local_out: mir::LocalId) {
         // ignore this value, a break never returns
         let _ = break_local_out;
 
@@ -158,7 +160,7 @@ impl Expr for Break {
             builder.translator.ctrl_flow_constructs[&self.target];
 
         // assign the break's value to the target local instead
-        builder.translate_expr(&self.value, Some(target_local_out));
+        self.value.write_mir_execution(builder, target_local_out);
 
         // and add the break statement
         builder.lir.add_statement(mir::Statement::Elementary(mir::ElementaryStatement::Break {

@@ -7,7 +7,7 @@ use crate::{
     util::reflection::Reflect as _,
 };
 
-pub struct HirToLirFnBuilder<'a, 'b> {
+pub struct HirToMirFnBuilder<'a, 'b> {
     pub hir: &'a hir::Program,
     pub lir: &'a mut mir::builder::FunctionBuilder<'b>,
     pub translator: &'a mut HirToLirFnTranslator,
@@ -37,25 +37,20 @@ pub enum SelfParam {
     Any(mir::LocalId),
 }
 
-impl<'a, 'b> HirToLirFnBuilder<'a, 'b> {
+impl<'a, 'b> HirToMirFnBuilder<'a, 'b> {
     /// Generates MIR statements to evaluate the given HIR expression with all
-    /// its dependencies. The return value is stored in the provided out local
-    /// or a new local variable. Any temporary values created during evaluation
-    /// are stored in new local variables; this function does not reuse existing
-    /// locals for temporaries.
+    /// its dependencies. The return value is stored in a new out local whose id
+    /// is returned. Any temporary values created during evaluation are stored
+    /// in new local variables; this function does not reuse existing locals for
+    /// temporaries.
     ///
     /// There is currently no checking if dependencies have already been
     /// evaluated.
-    pub fn translate_expr(
-        &mut self,
-        expr: &hir::ExprKind,
-        local_out: Option<mir::LocalId>,
-    ) -> mir::LocalId {
+    pub fn translate_expr(&mut self, expr: &hir::ExprKind) -> mir::LocalId {
+        let output_ty = expr.output_type(self.hir).repr();
         // the expression's output will be stored in this local variable
-        let output_local = local_out.unwrap_or_else(|| {
-            let output_ty = expr.output_type(self.hir).repr();
-            self.lir.create_local(mir::LocalDecl { debug_name: None, ty: output_ty })
-        });
+        let output_local =
+            self.lir.create_local(mir::LocalDecl { debug_name: None, ty: output_ty });
         expr.write_mir_execution(self, output_local);
         output_local
     }
@@ -66,10 +61,10 @@ impl<'a, 'b> HirToLirFnBuilder<'a, 'b> {
     // HirToLirFnBuilder separately, this would not be necessary.
     pub fn with_inner_statement_seq<T>(
         &mut self,
-        f: impl FnOnce(&mut HirToLirFnBuilder<'_, '_>) -> T,
+        f: impl FnOnce(&mut HirToMirFnBuilder<'_, '_>) -> T,
     ) -> (Vec<mir::Statement>, T) {
         self.lir.with_inner_statement_seq(|lir| {
-            let mut builder = HirToLirFnBuilder { hir: self.hir, lir, translator: self.translator };
+            let mut builder = HirToMirFnBuilder { hir: self.hir, lir, translator: self.translator };
             f(&mut builder)
         })
     }
@@ -97,10 +92,10 @@ pub fn hir_to_mir(hir: &hir::Program) -> mir::Program {
         let mut translator = HirToLirFnTranslator::default();
 
         let mut builder =
-            HirToLirFnBuilder { hir, lir: &mut lir_fn_builder, translator: &mut translator };
+            HirToMirFnBuilder { hir, lir: &mut lir_fn_builder, translator: &mut translator };
 
         // add all the nodes to the function body
-        let return_place = builder.translate_expr(&hir_fn.body, None);
+        let return_place = builder.translate_expr(&hir_fn.body);
 
         lir_fn_builder.set_return(return_place);
         lir_fn_builder.finish();

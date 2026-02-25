@@ -4,7 +4,7 @@ use std::mem::offset_of;
 
 use crate::{
     exec::CanonExecutionContext,
-    hir::{Expr, ExprKind, HirToLirFnBuilder, NlAbstractTy, Program},
+    hir::{Expr, ExprKind, HirToMirFnBuilder, NlAbstractTy, Program},
     mir,
     sim::{observer::Globals, patch::PatchVarDesc, turtle::TurtleVarDesc, world::World},
     util::row_buffer::ROW_BUFFER_OFFSET_TO_DATA_PTR,
@@ -25,11 +25,11 @@ impl Expr for GetGlobalVar {
         var.ty.clone()
     }
 
-    fn visit_childen(&self, mut visitor: impl FnMut(&ExprKind)) {
+    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
         let _ = &mut visitor;
     }
 
-    fn write_mir_execution(&self, builder: &mut HirToLirFnBuilder, local_out: mir::LocalId) {
+    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, local_out: mir::LocalId) {
         let context = builder.context_param();
         let var_pl = context_to_global_var_place(builder, context.into(), self.index);
         builder.lir.add_operation_with_dst(
@@ -40,7 +40,7 @@ impl Expr for GetGlobalVar {
 }
 
 fn context_to_global_var_place(
-    builder: &mut HirToLirFnBuilder,
+    builder: &mut HirToMirFnBuilder,
     context: mir::Place,
     var_index: usize,
 ) -> mir::Place {
@@ -126,11 +126,11 @@ impl Expr for GetTurtleVar {
         }
     }
 
-    fn visit_childen(&self, mut visitor: impl FnMut(&ExprKind)) {
+    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
         visitor(&self.turtle);
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToLirFnBuilder, _local_out: mir::LocalId) {
+    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {
         todo!("write_mir_execution for GetTurtleVar");
     }
 }
@@ -188,12 +188,12 @@ impl Expr for SetTurtleVar {
         NlAbstractTy::Unit
     }
 
-    fn visit_childen(&self, mut visitor: impl FnMut(&ExprKind)) {
+    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
         visitor(&self.turtle);
         visitor(&self.value);
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToLirFnBuilder, _local_out: mir::LocalId) {
+    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {
         todo!("write_mir_execution for SetTurtleVar");
     }
 }
@@ -249,11 +249,11 @@ impl Expr for TurtleIdToIndex {
         NlAbstractTy::Numeric
     }
 
-    fn visit_childen(&self, mut visitor: impl FnMut(&ExprKind)) {
+    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
         visitor(&self.turtle_id);
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToLirFnBuilder, _local_out: mir::LocalId) {
+    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {
         todo!("write_mir_execution for TurtleIdToIndex");
     }
 }
@@ -312,11 +312,11 @@ impl Expr for GetPatchVar {
         }
     }
 
-    fn visit_childen(&self, mut visitor: impl FnMut(&ExprKind)) {
+    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
         visitor(&self.patch);
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToLirFnBuilder, _local_out: mir::LocalId) {
+    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {
         todo!("write_mir_execution for GetPatchVar");
     }
 }
@@ -369,12 +369,12 @@ impl Expr for SetPatchVar {
         NlAbstractTy::Unit
     }
 
-    fn visit_childen(&self, mut visitor: impl FnMut(&ExprKind)) {
+    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
         visitor(&self.patch);
         visitor(&self.value);
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToLirFnBuilder, _local_out: mir::LocalId) {
+    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {
         todo!("write_mir_execution for SetPatchVar");
     }
 }
@@ -448,11 +448,11 @@ impl Expr for GetPatchVarAsTurtleOrPatch {
         }
     }
 
-    fn visit_childen(&self, mut visitor: impl FnMut(&ExprKind)) {
+    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
         visitor(&self.agent);
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToLirFnBuilder, _local_out: mir::LocalId) {
+    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {
         todo!("write_mir_execution for GetPatchVarAsTurtleOrPatch");
     }
 }
@@ -506,12 +506,12 @@ impl Expr for SetPatchVarAsTurtleOrPatch {
         NlAbstractTy::Unit
     }
 
-    fn visit_childen(&self, mut visitor: impl FnMut(&ExprKind)) {
+    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
         visitor(&self.agent);
         visitor(&self.value);
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToLirFnBuilder, _local_out: mir::LocalId) {
+    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {
         todo!("write_mir_execution for SetPatchVarAsTurtleOrPatch");
     }
 }
