@@ -12,6 +12,12 @@ members = [
     "ffi_translate/ffi_translate_macro",
 ]
 
+[workspace.dependencies]
+derive_more = { version = "2.1.1", features = ["full"] }
+slotmap = "1.0.7"
+tracing = "0.1.41"
+tracing-subscriber = "0.3.20"
+
 [profile.dev]
 opt-level = 0
 debug = "full"
