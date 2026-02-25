@@ -1,8 +1,10 @@
 use std::collections::HashMap;
 
 use crate::{
+    exec::CanonExecutionContext,
     hir::{self, Expr},
     mir,
+    util::reflection::Reflect as _,
 };
 
 pub struct HirToLirFnBuilder<'a, 'b> {
@@ -11,11 +13,28 @@ pub struct HirToLirFnBuilder<'a, 'b> {
     pub translator: &'a mut HirToLirFnTranslator,
 }
 
+#[derive(Debug, Default)]
 pub struct HirToLirFnTranslator {
     pub locals: HashMap<hir::LocalId, mir::LocalId>,
     /// Maps each HIR label to an MIR label, as well as the output local that
     /// breaks from that label should use.
     pub ctrl_flow_constructs: HashMap<hir::Label, (mir::Label, mir::LocalId)>,
+    /// The local variable that contains the context parameter, if it exists.
+    /// This should be automatically added if any expression in the function
+    /// body needs a context parameter.
+    pub context_param: Option<mir::LocalId>,
+    /// The local variable that contains the self parameter, if it exists. This
+    /// should automatically be added if any expression in the function body
+    /// needs a self parameter.
+    pub self_param: Option<SelfParam>,
+}
+
+#[derive(Debug)]
+pub enum SelfParam {
+    Turtle(mir::LocalId),
+    Patch(mir::LocalId),
+    Link(mir::LocalId),
+    Any(mir::LocalId),
 }
 
 impl<'a, 'b> HirToLirFnBuilder<'a, 'b> {
@@ -54,6 +73,18 @@ impl<'a, 'b> HirToLirFnBuilder<'a, 'b> {
             f(&mut builder)
         })
     }
+
+    /// Returns the local variable that contains the context parameter, creating
+    /// it as a function parameter if it does not exist.
+    pub fn context_param(&mut self) -> mir::LocalId {
+        *self.translator.context_param.get_or_insert_with(|| {
+            self.lir.create_local(mir::LocalDecl {
+                debug_name: None,
+                ty: (&<&mut CanonExecutionContext>::TYPE_INFO).into(),
+            })
+            // TODO add as parameter to the function
+        })
+    }
 }
 
 pub fn hir_to_mir(hir: &hir::Program) -> mir::Program {
@@ -63,8 +94,7 @@ pub fn hir_to_mir(hir: &hir::Program) -> mir::Program {
     for (hir_fn_id, hir_fn) in &hir.functions {
         // create a builder to track state while translating
         let mut lir_fn_builder = builder.create_function();
-        let mut translator =
-            HirToLirFnTranslator { locals: HashMap::new(), ctrl_flow_constructs: HashMap::new() };
+        let mut translator = HirToLirFnTranslator::default();
 
         let mut builder =
             HirToLirFnBuilder { hir, lir: &mut lir_fn_builder, translator: &mut translator };

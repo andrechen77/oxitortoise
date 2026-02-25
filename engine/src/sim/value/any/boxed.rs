@@ -26,7 +26,9 @@ fn layout_and_val_offset(val_layout: Layout) -> (Layout, usize) {
 impl BoxedAny {
     pub fn new<T: Reflect>(value: T) -> Self {
         // allocate memory for the value and its type tag
-        let (layout, value_start) = layout_and_val_offset(T::TYPE_INFO.layout);
+        let (layout, value_start) = layout_and_val_offset(
+            T::TYPE_INFO.layout.expect("type should have a known layout to be used in a BoxedAny"),
+        );
         assert!(layout.size() > 0, "layout size must be greater than 0");
         // SAFETY: we checked that the size is greater than 0
         let all_ptr =
@@ -73,7 +75,9 @@ impl BoxedAny {
     fn ptr_to_val<T: Reflect>(&self) -> NonNull<T> {
         let ty = T::TYPE_INFO;
         assert!(*self.ty() == ty, "type mismatch");
-        let (_, offset) = layout_and_val_offset(ty.layout);
+        let (_, offset) = layout_and_val_offset(
+            ty.layout.expect("type should have a known layout to be used in a BoxedAny"),
+        );
         // SAFETY: since the type tag passed the assertion, we know that the
         // type must be correct and therefore the pointer derived from assuming
         // that type must be in bounds
@@ -112,7 +116,11 @@ impl Drop for BoxedAny {
         let type_info = self.ty().info();
         // SAFETY: the layout is correct because it came from the actual type
         // tag
-        let val_ptr = unsafe { self.ptr_to_val_with_layout(type_info.layout) };
+        let val_ptr = unsafe {
+            self.ptr_to_val_with_layout(
+                type_info.layout.expect("type should have a known layout to be used in a BoxedAny"),
+            )
+        };
         if let Some(drop_fn) = type_info.drop_fn {
             // SAFETY: the passed pointer is valid per `BoxedAny`'s invariants, and
             // since we are in the drop implementation, it will never be used again
@@ -120,7 +128,9 @@ impl Drop for BoxedAny {
         }
 
         // now that the value has been dropped, we can/should dealloc the memory
-        let (all_layout, _) = layout_and_val_offset(type_info.layout);
+        let (all_layout, _) = layout_and_val_offset(
+            type_info.layout.expect("type should have a known layout to be used in a BoxedAny"),
+        );
         unsafe { alloc::dealloc(self.inner.as_ptr().cast(), all_layout) };
     }
 }

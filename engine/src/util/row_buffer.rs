@@ -14,6 +14,27 @@ use std::{
 
 use crate::util::reflection::{ConcreteTy, MemRepr, Reflect, TypeInfo};
 
+/// A stand-in type to represent the bytes pointed to by a RowBuffer. May use
+/// UntypedBytes::TYPE_INFO to turn off type checking for MIR operations.
+pub struct UntypedBytes(());
+
+unsafe impl Reflect for UntypedBytes {
+    const TYPE_INFO: TypeInfo = TypeInfo {
+        debug_name: "UntypedBytes",
+        layout: None,
+        is_zeroable: false,
+        drop_fn: Some(panic_drop_impl),
+        mem_repr: None,
+    };
+}
+fn panic_drop_impl(_ptr: *mut u8) {
+    panic!("UntypedBytes does not have a drop function");
+}
+
+unsafe impl Reflect for *mut UntypedBytes {
+    const TYPE_INFO: TypeInfo = TypeInfo::new_mut_ref_to::<UntypedBytes>("&mut UntypedBytes");
+}
+
 #[derive(Debug)]
 #[repr(C)]
 pub struct AlignedBytes {
@@ -126,7 +147,10 @@ impl RowSchema {
             let field_type = field_type.into();
             // safety relies on the fact that this function returns a correct
             // answer
-            let field_layout = field_type.info().layout;
+            let field_layout = field_type
+                .info()
+                .layout
+                .expect("field type should have a known layout to be used in a RowBuffer");
 
             // append this field to the current layout
             let (new_layout, offset) = overall_layout
@@ -392,6 +416,9 @@ pub struct RowBuffer {
     schema: RowSchema,
 }
 
+pub const ROW_BUFFER_OFFSET_TO_DATA_PTR: usize =
+    offset_of!(RowBuffer, bytes) + offset_of!(AlignedBytes, data);
+
 impl RowBuffer {
     fn make_byte_buffer(schema: &RowSchema, num_rows: usize) -> AlignedBytes {
         //  the layout of all the rows at once
@@ -644,7 +671,7 @@ unsafe impl Reflect for RowBuffer {
         "RowBuffer",
         MemRepr::Compound(&[(
             offset_of!(RowBuffer, bytes) + offset_of!(AlignedBytes, data),
-            &TypeInfo::new_opaque::<*mut u8>("*mut u8"), // TODO find a better way to represent a dynamically typed pointer
+            &<*mut UntypedBytes>::TYPE_INFO,
         )]),
     );
 }

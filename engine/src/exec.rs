@@ -1,6 +1,16 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    mem::offset_of,
+    sync::{Arc, Mutex},
+};
 
-use crate::{updater::DirtyAggregator, util::rng::CanonRng, workspace::Workspace};
+use crate::{
+    updater::DirtyAggregator,
+    util::{
+        reflection::{MemRepr, Reflect, TypeInfo},
+        rng::CanonRng,
+    },
+    workspace::Workspace,
+};
 
 pub mod helpers;
 pub mod jit;
@@ -15,3 +25,18 @@ pub struct ExecutionContext<'w> {
 }
 
 pub type CanonExecutionContext<'w> = ExecutionContext<'w>;
+
+unsafe impl<'w> Reflect for CanonExecutionContext<'w> {
+    const TYPE_INFO: TypeInfo = TypeInfo::new_drop::<CanonExecutionContext<'w>>(
+        "CanonExecutionContext",
+        MemRepr::Compound(&[(
+            offset_of!(CanonExecutionContext<'w>, workspace),
+            &Workspace::TYPE_INFO,
+        )]),
+    );
+}
+
+unsafe impl<'w> Reflect for &'w mut CanonExecutionContext<'w> {
+    const TYPE_INFO: TypeInfo =
+        TypeInfo::new_mut_ref_to::<CanonExecutionContext<'w>>("&mut CanonExecutionContext");
+}

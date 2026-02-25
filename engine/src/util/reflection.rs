@@ -18,7 +18,7 @@ pub unsafe trait Reflect {
 #[derive(Debug, Clone, PartialEq)]
 pub struct TypeInfo {
     pub debug_name: &'static str,
-    pub layout: Layout,
+    pub layout: Option<Layout>,
     /// Whether this type is valid at the all-zero bit pattern *and* represents
     /// the numeric value 0.0.
     pub is_zeroable: bool,
@@ -66,47 +66,44 @@ unsafe fn drop_impl<T>(ptr: *mut u8) {
 }
 
 impl TypeInfo {
-    pub const fn new_drop<T: 'static>(debug_name: &'static str, mem_repr: MemRepr) -> Self {
+    pub const fn new_drop<T>(debug_name: &'static str, mem_repr: MemRepr) -> Self {
         Self {
             debug_name,
-            layout: Layout::new::<T>(),
+            layout: Some(Layout::new::<T>()),
             is_zeroable: false,
             drop_fn: Some(drop_impl::<T>),
             mem_repr: Some(mem_repr),
         }
     }
 
-    pub const fn new_drop_zeroable<T: 'static>(
-        debug_name: &'static str,
-        mem_repr: MemRepr,
-    ) -> Self {
+    pub const fn new_drop_zeroable<T>(debug_name: &'static str, mem_repr: MemRepr) -> Self {
         Self {
             debug_name,
-            layout: Layout::new::<T>(),
+            layout: Some(Layout::new::<T>()),
             is_zeroable: true,
             drop_fn: Some(drop_impl::<T>),
             mem_repr: Some(mem_repr),
         }
     }
 
-    pub const fn new_copy<T: 'static + Copy>(
+    pub const fn new_copy<T: Copy>(
         debug_name: &'static str,
         is_zeroable: bool,
         mem_repr: MemRepr,
     ) -> Self {
         Self {
             debug_name,
-            layout: Layout::new::<T>(),
+            layout: Some(Layout::new::<T>()),
             is_zeroable,
             drop_fn: None,
             mem_repr: Some(mem_repr),
         }
     }
 
-    pub const fn new_mut_ref_to<T: Reflect + 'static>(debug_name: &'static str) -> Self {
+    pub const fn new_mut_ref_to<T: Reflect>(debug_name: &'static str) -> Self {
         Self {
             debug_name,
-            layout: Layout::new::<&mut T>(),
+            layout: Some(Layout::new::<&mut T>()),
             is_zeroable: false,
             drop_fn: None, // mut refs have no destructor, so this is correct
             mem_repr: Some(MemRepr::Pointer { pointee_ty: &T::TYPE_INFO }),
@@ -114,10 +111,10 @@ impl TypeInfo {
     }
 
     // types that can only be referenced through pointer
-    pub const fn new_opaque<T: 'static>(debug_name: &'static str) -> Self {
+    pub const fn new_opaque<T>(debug_name: &'static str) -> Self {
         Self {
             debug_name,
-            layout: Layout::new::<T>(),
+            layout: Some(Layout::new::<T>()),
             is_zeroable: false,
             drop_fn: Some(drop_impl::<T>),
             mem_repr: None,

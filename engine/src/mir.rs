@@ -80,6 +80,23 @@ pub struct Place {
     projections: Vec<Projection>,
 }
 
+impl Place {
+    pub fn proj_deref(mut self) -> Self {
+        self.projections.push(Projection::Deref);
+        self
+    }
+
+    pub fn proj_field(mut self, byte_offset: usize) -> Self {
+        self.projections.push(Projection::Field { byte_offset });
+        self
+    }
+
+    pub fn proj_index(mut self, index: LocalId) -> Self {
+        self.projections.push(Projection::Index(index));
+        self
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum Projection {
     /// With the place having a pointer value, dereferences the pointer and
@@ -89,11 +106,12 @@ pub enum Projection {
     /// at the given byte offset.
     Field { byte_offset: usize },
     /// With the place having an array value, produces the place of the element
-    /// at the index of the given local variable.
+    /// at the index of the given local variable. This never moves from the
+    /// source place since a value used for indexing is always Copy.
     Index(LocalId),
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum PlaceOperand {
     /// Produces an operand by moving out of the place. This is a destructive
     /// move unless the type is Copy.

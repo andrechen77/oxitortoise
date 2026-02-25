@@ -90,8 +90,14 @@ impl<'a> FunctionBuilder<'a> {
         self.program_builder.next_label()
     }
 
-    pub fn add_operation(&mut self, dst: mir::Place, op: Operation) {
+    pub fn add_operation_with_dst(&mut self, dst: mir::Place, op: Operation) {
         self.statements_out.push(Statement::Elementary(ElementaryStatement::Assign { dst, op }));
+    }
+
+    pub fn add_operation(&mut self, local_decl: mir::LocalDecl, op: Operation) -> LocalId {
+        let dst = self.create_local(local_decl);
+        self.add_operation_with_dst(dst.into(), op);
+        dst
     }
 
     /// If the statement is an assignment from an operation, consider using
