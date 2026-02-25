@@ -202,18 +202,18 @@ impl NlAbstractTy {
     pub fn repr(&self) -> ConcreteTy {
         // TODO(mvp) add machine types for all abstract types
         match self {
-            Self::Unit => <()>::ty(),
-            Self::Top => PackedAny::ty(),
+            Self::Unit => (&<()>::TYPE_INFO).into(),
+            Self::Top => (&PackedAny::TYPE_INFO).into(),
             Self::Bottom => unimplemented!("bottom type has no concrete representation"),
-            Self::Numeric => NlFloat::ty(),
-            Self::Color => Color::ty(),
-            Self::Float => NlFloat::ty(),
-            Self::Boolean => NlBool::ty(),
+            Self::Numeric => (&NlFloat::TYPE_INFO).into(),
+            Self::Color => (&Color::TYPE_INFO).into(),
+            Self::Float => (&NlFloat::TYPE_INFO).into(),
+            Self::Boolean => (&NlBool::TYPE_INFO).into(),
             Self::String => todo!(),
-            Self::Point => Point::ty(),
-            Self::Agent => PackedAny::ty(),
-            Self::Patch => OptionPatchId::ty(),
-            Self::Turtle => TurtleId::ty(),
+            Self::Point => (&Point::TYPE_INFO).into(),
+            Self::Agent => (&PackedAny::TYPE_INFO).into(),
+            Self::Patch => (&OptionPatchId::TYPE_INFO).into(),
+            Self::Turtle => (&TurtleId::TYPE_INFO).into(),
             Self::Link => todo!(""),
             Self::Agentset { agent_type: _ } => todo!(""),
             // If a type is just "nobody", then it is inhabited by only one
@@ -224,7 +224,9 @@ impl NlAbstractTy {
             // representation.
             Self::Nobody => unimplemented!("nobody type has no concrete representation"),
             Self::Closure(_) => todo!(),
-            Self::List { element_ty } if **element_ty == Self::Top => <NlBox<NlList>>::ty(),
+            Self::List { element_ty } if **element_ty == Self::Top => {
+                (&<NlBox<NlList>>::TYPE_INFO).into()
+            }
             Self::List { element_ty: _ } => todo!(),
         }
     }

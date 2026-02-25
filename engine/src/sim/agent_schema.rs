@@ -71,7 +71,7 @@ pub(crate) fn make_row_schemas<A: Reflect, const N: usize>(
             let ty = match buffer_field {
                 AgentSchemaField::BaseData => {
                     if (buffer_idx, field_idx) == (0, 0) {
-                        A::ty()
+                        (&A::TYPE_INFO).into()
                     } else {
                         panic!("Base data can only be the first field in the first buffer.");
                     }

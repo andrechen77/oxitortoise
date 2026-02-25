@@ -1,13 +1,10 @@
-use std::{
-    ops::{Add, AddAssign},
-    sync::LazyLock,
-};
+use std::ops::{Add, AddAssign};
 
 use super::CoordFloat;
 use crate::{
     sim::value::{self, NlFloat},
     util::{
-        reflection::{ConcreteTy, MemRepr, Reflect, TypeInfo, TypeInfoOptions},
+        reflection::{MemRepr, Reflect, TypeInfo},
         rng::Rng,
     },
 };
@@ -72,13 +69,6 @@ impl From<NlFloat> for Heading {
 }
 
 unsafe impl Reflect for Heading {
-    fn ty() -> ConcreteTy {
-        static TY: LazyLock<ConcreteTy> = LazyLock::new(|| {
-            ConcreteTy::new(&TypeInfo::new_copy::<Heading>(TypeInfoOptions {
-                is_zeroable: true,
-                mem_repr: Some(MemRepr::Single(lir::ValType::F64)),
-            }))
-        });
-        TY.clone()
-    }
+    const TYPE_INFO: TypeInfo =
+        TypeInfo::new_copy::<Heading>("Heading", true, MemRepr::Single(lir::ValType::F64));
 }

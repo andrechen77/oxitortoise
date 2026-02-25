@@ -1,6 +1,4 @@
-use std::sync::LazyLock;
-
-use crate::util::reflection::{ConcreteTy, Reflect, TypeInfo};
+use crate::util::reflection::{Reflect, TypeInfo};
 
 #[derive(Default, Debug)]
 #[allow(dead_code)] // strings will be used eventually, just not at this stage of development
@@ -13,9 +11,5 @@ impl NlString {
 }
 
 unsafe impl Reflect for NlString {
-    fn ty() -> ConcreteTy {
-        static TY: LazyLock<ConcreteTy> =
-            LazyLock::new(|| ConcreteTy::new(&TypeInfo::new_opaque::<NlString>()));
-        TY.clone()
-    }
+    const TYPE_INFO: TypeInfo = TypeInfo::new_opaque::<NlString>("NlString");
 }

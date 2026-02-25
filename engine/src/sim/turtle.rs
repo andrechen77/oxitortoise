@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::fmt::{self, Debug, Write};
 use std::mem::offset_of;
 use std::ops::Index;
-use std::sync::{Arc, LazyLock};
+use std::sync::Arc;
 
 use derive_more::derive::{From, Into};
 use either::Either;
@@ -20,7 +20,7 @@ use crate::sim::topology::Heading;
 use crate::sim::value::agentset::TurtleSet;
 use crate::sim::value::{NlBool, NlFloat, NlList, NlString, PackedAny};
 use crate::util::gen_slot_tracker::{GenIndex, GenSlotTracker};
-use crate::util::reflection::{ConcreteTy, MemRepr, Reflect, TypeInfo, TypeInfoOptions};
+use crate::util::reflection::{ConcreteTy, MemRepr, Reflect, TypeInfo};
 use crate::util::row_buffer::{RowBuffer, RowSchema};
 use crate::{
     sim::{color::Color, topology::Point, value},
@@ -69,16 +69,10 @@ impl TurtleId {
 }
 
 unsafe impl Reflect for TurtleId {
-    fn ty() -> ConcreteTy {
-        static TY: LazyLock<ConcreteTy> = LazyLock::new(|| {
-            ConcreteTy::new(&TypeInfo::new_copy::<TurtleId>(TypeInfoOptions {
-                is_zeroable: false,
-                mem_repr: Some(MemRepr::Single(lir::ValType::I64)),
-            }))
-        });
-        TY.clone()
-    }
+    const TYPE_INFO: TypeInfo =
+        TypeInfo::new_copy::<TurtleId>("TurtleId", false, MemRepr::Single(lir::ValType::I64));
 }
+
 pub struct Turtles {
     /// The who number to be given to the next turtle; also how many turtles
     /// have been created since the last `clear-turtles`.
@@ -362,13 +356,13 @@ fn pretty_print_turtle(
                         Some(Either::Right(field)) => write!(p, "fallback {:?}", field),
                     }
                 }
-                if *ty == NlFloat::ty() {
+                if *ty == NlFloat::TYPE_INFO {
                     print_field::<NlFloat>(p, turtles, id, *field_desc)
-                } else if *ty == NlBool::ty() {
+                } else if *ty == NlBool::TYPE_INFO {
                     print_field::<NlBool>(p, turtles, id, *field_desc)
-                } else if *ty == NlString::ty() {
+                } else if *ty == NlString::TYPE_INFO {
                     print_field::<NlString>(p, turtles, id, *field_desc)
-                } else if *ty == NlList::ty() {
+                } else if *ty == NlList::TYPE_INFO {
                     print_field::<NlList>(p, turtles, id, *field_desc)
                 } else {
                     write!(p, "unknown type {:?}", ty)
@@ -395,15 +389,7 @@ pub struct TurtleBaseData {
 }
 
 unsafe impl Reflect for TurtleBaseData {
-    fn ty() -> ConcreteTy {
-        static TY: LazyLock<ConcreteTy> = LazyLock::new(|| {
-            ConcreteTy::new(&TypeInfo::new_drop::<TurtleBaseData>(TypeInfoOptions {
-                is_zeroable: false,
-                mem_repr: None,
-            }))
-        });
-        TY.clone()
-    }
+    const TYPE_INFO: TypeInfo = TypeInfo::new_opaque::<TurtleBaseData>("TurtleBaseData");
 }
 
 slotmap::new_key_type! {
@@ -476,10 +462,10 @@ impl TurtleSchema {
         // add heading and position fields
         let heading_group = &mut field_groups[heading_buffer_idx as usize];
         let heading_field_idx = heading_group.fields.len() as u8;
-        heading_group.fields.push(AgentSchemaField::Other(Heading::ty()));
+        heading_group.fields.push(AgentSchemaField::Other((&Heading::TYPE_INFO).into()));
         let position_group = &mut field_groups[position_buffer_idx as usize];
         let position_field_idx = position_group.fields.len() as u8;
-        position_group.fields.push(AgentSchemaField::Other(Point::ty()));
+        position_group.fields.push(AgentSchemaField::Other((&Point::TYPE_INFO).into()));
 
         // add custom fields
         let mut custom_field_descriptors = Vec::new();
@@ -571,6 +557,13 @@ impl Index<AgentFieldDescriptor> for TurtleSchema {
     }
 }
 
+unsafe impl Reflect for Turtles {
+    const TYPE_INFO: TypeInfo = TypeInfo::new_drop::<Turtles>(
+        "Turtles",
+        MemRepr::Compound(&[(offset_of!(Turtles, data), &<[Option<RowBuffer>; 4]>::TYPE_INFO)]),
+    );
+}
+
 /// Returns a tuple indicating how to access a given variable given a pointer
 /// to [`Turtles`]. The first element is the byte offset from the start of the
 /// [`Turtles`] struct to the pointer to row buffer containing the variable.
@@ -614,12 +607,12 @@ pub fn calc_turtle_var_offset(hir: &hir::Program, var: TurtleVarDesc) -> (usize,
 
 pub fn turtle_var_type(schema: &TurtleSchema, var: TurtleVarDesc) -> ConcreteTy {
     match var {
-        TurtleVarDesc::Who => NlFloat::ty(),
-        TurtleVarDesc::Color => Color::ty(),
-        TurtleVarDesc::Size => NlFloat::ty(),
-        TurtleVarDesc::Pos => Point::ty(),
-        TurtleVarDesc::Xcor => NlFloat::ty(),
-        TurtleVarDesc::Ycor => NlFloat::ty(),
+        TurtleVarDesc::Who => (&NlFloat::TYPE_INFO).into(),
+        TurtleVarDesc::Color => (&Color::TYPE_INFO).into(),
+        TurtleVarDesc::Size => (&NlFloat::TYPE_INFO).into(),
+        TurtleVarDesc::Pos => (&Point::TYPE_INFO).into(),
+        TurtleVarDesc::Xcor => (&NlFloat::TYPE_INFO).into(),
+        TurtleVarDesc::Ycor => (&NlFloat::TYPE_INFO).into(),
         TurtleVarDesc::Custom(field) => {
             let AgentSchemaField::Other(ty) = &schema[schema.custom_fields()[field].1] else {
                 unreachable!("this is a custom field, so it cannot be part of the base data");

@@ -1,12 +1,12 @@
 use std::{
     ops::{Add, AddAssign},
-    sync::{LazyLock, OnceLock},
+    sync::OnceLock,
 };
 
 use crate::{
     sim::value::NlFloat,
     util::{
-        reflection::{ConcreteTy, MemRepr, Reflect, TypeInfo, TypeInfoOptions},
+        reflection::{MemRepr, Reflect, TypeInfo},
         rng::Rng,
     },
 };
@@ -70,15 +70,8 @@ impl AddAssign<NlFloat> for Color {
 }
 
 unsafe impl Reflect for Color {
-    fn ty() -> ConcreteTy {
-        static TY: LazyLock<ConcreteTy> = LazyLock::new(|| {
-            ConcreteTy::new(&TypeInfo::new_copy::<Color>(TypeInfoOptions {
-                is_zeroable: true,
-                mem_repr: Some(MemRepr::Single(lir::ValType::F64)),
-            }))
-        });
-        TY.clone()
-    }
+    const TYPE_INFO: TypeInfo =
+        TypeInfo::new_copy::<Color>("Color", true, MemRepr::Single(lir::ValType::F64));
 }
 
 const COLOR_MAX: f64 = 140.0;

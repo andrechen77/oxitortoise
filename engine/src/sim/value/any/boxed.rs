@@ -26,7 +26,7 @@ fn layout_and_val_offset(val_layout: Layout) -> (Layout, usize) {
 impl BoxedAny {
     pub fn new<T: Reflect>(value: T) -> Self {
         // allocate memory for the value and its type tag
-        let (layout, value_start) = layout_and_val_offset(T::ty().info().layout);
+        let (layout, value_start) = layout_and_val_offset(T::TYPE_INFO.layout);
         assert!(layout.size() > 0, "layout size must be greater than 0");
         // SAFETY: we checked that the size is greater than 0
         let all_ptr =
@@ -35,7 +35,7 @@ impl BoxedAny {
         // move the type tag into the allocated memory
         // SAFETY: the ptr is valid for writes and the allocator should have
         // returned a properly aligned pointer
-        unsafe { std::ptr::write(all_ptr.cast::<ConcreteTy>().as_ptr(), T::ty()) };
+        unsafe { std::ptr::write(all_ptr.cast::<ConcreteTy>().as_ptr(), (&T::TYPE_INFO).into()) };
 
         // move the value into the allocated memory
         // SAFETY: we trust that the Layout::extend API correctly gave an offset
@@ -71,9 +71,9 @@ impl BoxedAny {
     /// Obtains a pointer to the actual value stored in this [`BoxedAny`].
     /// Panics if the attempted access type does not match the type tag.
     fn ptr_to_val<T: Reflect>(&self) -> NonNull<T> {
-        let ty = T::ty();
-        assert!(ty == *self.ty(), "type mismatch");
-        let (_, offset) = layout_and_val_offset(ty.info().layout);
+        let ty = T::TYPE_INFO;
+        assert!(*self.ty() == ty, "type mismatch");
+        let (_, offset) = layout_and_val_offset(ty.layout);
         // SAFETY: since the type tag passed the assertion, we know that the
         // type must be correct and therefore the pointer derived from assuming
         // that type must be in bounds
@@ -127,13 +127,13 @@ impl Drop for BoxedAny {
 
 impl Debug for BoxedAny {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if *self.ty() == NlBool::ty() {
+        if *self.ty() == NlBool::TYPE_INFO {
             write!(f, "{:?}", self.deref_as::<NlBool>())?;
-        } else if *self.ty() == NlFloat::ty() {
+        } else if *self.ty() == NlFloat::TYPE_INFO {
             write!(f, "{:?}", self.deref_as::<NlFloat>())?;
-        } else if *self.ty() == NlList::ty() {
+        } else if *self.ty() == NlList::TYPE_INFO {
             write!(f, "{:?}", self.deref_as::<NlList>())?;
-        } else if *self.ty() == NlString::ty() {
+        } else if *self.ty() == NlString::TYPE_INFO {
             write!(f, "{:?}", self.deref_as::<NlString>())?;
         } else {
             write!(f, "BoxedAny(unknown type {:?})", self.ty())?;

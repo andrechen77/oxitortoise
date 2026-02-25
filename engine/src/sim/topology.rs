@@ -1,6 +1,6 @@
-use std::{fmt, mem::offset_of, sync::LazyLock};
+use std::{fmt, mem::offset_of};
 
-use crate::util::reflection::{ConcreteTy, MemRepr, Reflect, TypeInfo, TypeInfoOptions};
+use crate::util::reflection::{MemRepr, Reflect, TypeInfo};
 
 use super::{patch::PatchId, value};
 
@@ -48,18 +48,14 @@ impl Point {
 }
 
 unsafe impl Reflect for Point {
-    fn ty() -> ConcreteTy {
-        static TY: LazyLock<ConcreteTy> = LazyLock::new(|| {
-            ConcreteTy::new(&TypeInfo::new_copy::<Point>(TypeInfoOptions {
-                is_zeroable: true,
-                mem_repr: Some(MemRepr::Compound(vec![
-                    (offset_of!(Point, x), f64::ty()),
-                    (offset_of!(Point, y), f64::ty()),
-                ])),
-            }))
-        });
-        TY.clone()
-    }
+    const TYPE_INFO: TypeInfo = TypeInfo::new_copy::<Point>(
+        "Point",
+        true,
+        MemRepr::Compound(&[
+            (offset_of!(Point, x), &f64::TYPE_INFO),
+            (offset_of!(Point, y), &f64::TYPE_INFO),
+        ]),
+    );
 }
 
 impl fmt::Display for Point {

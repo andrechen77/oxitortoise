@@ -1,7 +1,6 @@
-use std::{
-    alloc::Layout,
-    sync::{Arc, LazyLock},
-};
+use std::{alloc::Layout, sync::Arc};
+
+// TODO what to do about lifetimes? could cause unsafety and sadness
 
 /// A trait to indicate that the compiler can generate code to manipulate values
 /// of this type.
@@ -11,7 +10,7 @@ use std::{
 /// Implementors must guarantee that the associated `TypeInfo` is correct, as
 /// the information will be used to generate and run unsafe code.
 pub unsafe trait Reflect {
-    fn ty() -> ConcreteTy;
+    const TYPE_INFO: TypeInfo;
 }
 
 /// Information about a type that is used by the engine to generate code that
@@ -38,18 +37,26 @@ pub struct TypeInfo {
     pub mem_repr: Option<MemRepr>,
 }
 
+// potential optimization: instead of having the Pointer variant reference
+// the ConcreteTy directly, we could have list the fields of the pointee so that
+// we don't need separate TypeInfo for both T and &mut T if all we want is to
+// use &mut T. This is specifically for &mut Workspace, since we never actually
+// need to drop it, yet we still need to implement Workspace: Reflect to get it
+// it to.
+// The 'const' refers to the fact that the type can be used in a const definition.
 #[derive(Debug, Clone, PartialEq)]
 pub enum MemRepr {
-    /// Represents the fields of the type in memory along with their offsets.
-    Compound(Vec<(usize, ConcreteTy)>),
-    /// Represents the type as a single LIR value.
+    /// The type consists of the following fields as its immediate children,
+    /// with associated byte offsets. This does not need to be a comprehensive
+    /// list, just the fields that the type wants to expose for foreign code
+    /// to access.
+    Compound(&'static [(usize, &'static TypeInfo)]),
+    /// The type is a pointer to another type.
+    Pointer { pointee_ty: &'static TypeInfo },
+    /// The type is an array of another type.
+    Array { element_ty: &'static TypeInfo, length: usize },
+    /// The type is a single LIR value.
     Single(lir::ValType),
-}
-
-/// A helper struct to pass as options to [`TypeInfo::new`]
-pub struct TypeInfoOptions {
-    pub is_zeroable: bool,
-    pub mem_repr: Option<MemRepr>,
 }
 
 unsafe fn drop_impl<T>(ptr: *mut u8) {
@@ -59,37 +66,57 @@ unsafe fn drop_impl<T>(ptr: *mut u8) {
 }
 
 impl TypeInfo {
-    /// Generates a `TypeInfo` for the given type, where all fields are
-    /// guaranteed correct except for those specified in the `options`
-    /// parameter.
-    pub fn new_drop<T: 'static>(options: TypeInfoOptions) -> Self {
-        let TypeInfoOptions { is_zeroable, mem_repr } = options;
-
+    pub const fn new_drop<T: 'static>(debug_name: &'static str, mem_repr: MemRepr) -> Self {
         Self {
-            debug_name: std::any::type_name::<T>(),
+            debug_name,
             layout: Layout::new::<T>(),
-            is_zeroable,
+            is_zeroable: false,
             drop_fn: Some(drop_impl::<T>),
-            mem_repr,
+            mem_repr: Some(mem_repr),
         }
     }
 
-    pub fn new_copy<T: 'static + Copy>(options: TypeInfoOptions) -> Self {
-        let TypeInfoOptions { is_zeroable, mem_repr } = options;
-
+    pub const fn new_drop_zeroable<T: 'static>(
+        debug_name: &'static str,
+        mem_repr: MemRepr,
+    ) -> Self {
         Self {
-            debug_name: std::any::type_name::<T>(),
+            debug_name,
+            layout: Layout::new::<T>(),
+            is_zeroable: true,
+            drop_fn: Some(drop_impl::<T>),
+            mem_repr: Some(mem_repr),
+        }
+    }
+
+    pub const fn new_copy<T: 'static + Copy>(
+        debug_name: &'static str,
+        is_zeroable: bool,
+        mem_repr: MemRepr,
+    ) -> Self {
+        Self {
+            debug_name,
             layout: Layout::new::<T>(),
             is_zeroable,
             drop_fn: None,
-            mem_repr,
+            mem_repr: Some(mem_repr),
+        }
+    }
+
+    pub const fn new_mut_ref_to<T: Reflect + 'static>(debug_name: &'static str) -> Self {
+        Self {
+            debug_name,
+            layout: Layout::new::<&mut T>(),
+            is_zeroable: false,
+            drop_fn: None, // mut refs have no destructor, so this is correct
+            mem_repr: Some(MemRepr::Pointer { pointee_ty: &T::TYPE_INFO }),
         }
     }
 
     // types that can only be referenced through pointer
-    pub fn new_opaque<T: 'static>() -> Self {
+    pub const fn new_opaque<T: 'static>(debug_name: &'static str) -> Self {
         Self {
-            debug_name: std::any::type_name::<T>(),
+            debug_name,
             layout: Layout::new::<T>(),
             is_zeroable: false,
             drop_fn: Some(drop_impl::<T>),
@@ -99,67 +126,65 @@ impl TypeInfo {
 }
 
 /// A concrete type representation in the NetLogo engine. The same NetLogo
-/// language type may have multiple concrete type representation.
+/// language type may have multiple concrete type representations.
 #[derive(Clone, derive_more::Debug)]
-#[debug("{}", self.info().debug_name)]
-pub struct ConcreteTy(Arc<TypeInfo>);
+pub enum ConcreteTy {
+    #[debug("{}", self.info().debug_name)]
+    Dynamic(Arc<TypeInfo>),
+    #[debug("{}", self.info().debug_name)]
+    Static(&'static TypeInfo),
+}
 
 impl ConcreteTy {
-    pub fn new(info: &TypeInfo) -> Self {
-        Self(Arc::new(info.clone()))
-    }
-
     pub fn info(&self) -> &TypeInfo {
-        &self.0
+        match self {
+            ConcreteTy::Dynamic(info) => info,
+            ConcreteTy::Static(info) => info,
+        }
     }
 }
 
 impl PartialEq for ConcreteTy {
     fn eq(&self, other: &Self) -> bool {
-        std::ptr::eq(Arc::as_ptr(&self.0), Arc::as_ptr(&other.0)) || self.info() == other.info()
+        self.info() == other.info()
     }
 }
 
-// static UNTYPED_PTR_INFO: TypeInfo = TypeInfo::new_copy::<*mut u8>(TypeInfoOptions {
-//     is_zeroable: false,
-//     mem_repr: Some(&[(0, lir::MemOpType::Ptr)]),
-// });
-// unsafe impl Reflect for *mut u8 {
-//     const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&UNTYPED_PTR_INFO);
-// }
+impl PartialEq<TypeInfo> for ConcreteTy {
+    fn eq(&self, other: &TypeInfo) -> bool {
+        self.info() == other
+    }
+}
+
+impl From<&ConcreteTy> for ConcreteTy {
+    fn from(ty: &ConcreteTy) -> Self {
+        ty.clone()
+    }
+}
+
+impl From<&'static TypeInfo> for ConcreteTy {
+    fn from(info: &'static TypeInfo) -> Self {
+        ConcreteTy::Static(info)
+    }
+}
+
+impl From<&&'static TypeInfo> for ConcreteTy {
+    fn from(info: &&'static TypeInfo) -> Self {
+        ConcreteTy::Static(info)
+    }
+}
 
 unsafe impl Reflect for () {
-    fn ty() -> ConcreteTy {
-        static TY: LazyLock<ConcreteTy> = LazyLock::new(|| {
-            ConcreteTy::new(&TypeInfo::new_copy::<()>(TypeInfoOptions {
-                is_zeroable: true,
-                mem_repr: Some(MemRepr::Single(lir::ValType::Ptr)),
-            }))
-        });
-        TY.clone()
-    }
+    const TYPE_INFO: TypeInfo =
+        TypeInfo::new_copy::<()>("()", true, MemRepr::Single(lir::ValType::Ptr));
 }
 
 unsafe impl Reflect for u32 {
-    fn ty() -> ConcreteTy {
-        static TY: LazyLock<ConcreteTy> = LazyLock::new(|| {
-            ConcreteTy::new(&TypeInfo::new_copy::<u32>(TypeInfoOptions {
-                is_zeroable: false,
-                mem_repr: Some(MemRepr::Single(lir::ValType::I32)),
-            }))
-        });
-        TY.clone()
-    }
+    const TYPE_INFO: TypeInfo =
+        TypeInfo::new_copy::<u32>("u32", false, MemRepr::Single(lir::ValType::I32));
 }
 
 unsafe impl Reflect for f64 {
-    fn ty() -> ConcreteTy {
-        static TY: LazyLock<ConcreteTy> = LazyLock::new(|| {
-            ConcreteTy::new(&TypeInfo::new_copy::<f32>(TypeInfoOptions {
-                is_zeroable: true,
-                mem_repr: Some(MemRepr::Single(lir::ValType::F64)),
-            }))
-        });
-        TY.clone()
-    }
+    const TYPE_INFO: TypeInfo =
+        TypeInfo::new_copy::<f64>("f64", true, MemRepr::Single(lir::ValType::F64));
 }

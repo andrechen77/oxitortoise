@@ -1,6 +1,6 @@
-use std::{ptr::NonNull, sync::LazyLock};
+use std::ptr::NonNull;
 
-use crate::util::reflection::{ConcreteTy, MemRepr, Reflect, TypeInfo, TypeInfoOptions};
+use crate::util::reflection::{ConcreteTy, MemRepr, Reflect, TypeInfo};
 
 use super::{BoxedAny, UnpackedAny};
 
@@ -110,15 +110,8 @@ impl PackedAny {
 }
 
 unsafe impl Reflect for PackedAny {
-    fn ty() -> ConcreteTy {
-        static TY: LazyLock<ConcreteTy> = LazyLock::new(|| {
-            ConcreteTy::new(&TypeInfo::new_drop::<PackedAny>(TypeInfoOptions {
-                is_zeroable: true,
-                mem_repr: Some(MemRepr::Single(lir::ValType::F64)),
-            }))
-        });
-        TY.clone()
-    }
+    const TYPE_INFO: TypeInfo =
+        TypeInfo::new_drop_zeroable::<PackedAny>("PackedAny", MemRepr::Single(lir::ValType::F64));
 }
 
 impl std::fmt::Debug for PackedAny {

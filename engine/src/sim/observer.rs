@@ -12,7 +12,7 @@ use crate::{
     hir,
     sim::value::{NlBool, NlFloat, NlList, NlString, PackedAny},
     util::{
-        reflection::{ConcreteTy, Reflect},
+        reflection::{ConcreteTy, MemRepr, Reflect, TypeInfo},
         row_buffer::{RowBuffer, RowSchema},
     },
 };
@@ -85,13 +85,13 @@ impl fmt::Debug for Globals {
                                 Either::Right(field) => write!(p, "fallback {:?}", field),
                             }
                         }
-                        if *ty == NlFloat::ty() {
+                        if *ty == NlFloat::TYPE_INFO {
                             print_field::<NlFloat>(p, self, i)
-                        } else if *ty == NlBool::ty() {
+                        } else if *ty == NlBool::TYPE_INFO {
                             print_field::<NlBool>(p, self, i)
-                        } else if *ty == NlString::ty() {
+                        } else if *ty == NlString::TYPE_INFO {
                             print_field::<NlString>(p, self, i)
-                        } else if *ty == NlList::ty() {
+                        } else if *ty == NlList::TYPE_INFO {
                             print_field::<NlList>(p, self, i)
                         } else {
                             write!(p, "unknown type {:?}", ty)
@@ -124,6 +124,13 @@ impl GlobalsSchema {
             true,
         )
     }
+}
+
+unsafe impl Reflect for Globals {
+    const TYPE_INFO: TypeInfo = TypeInfo::new_drop::<Globals>(
+        "Globals",
+        MemRepr::Compound(&[(offset_of!(Globals, data), &RowBuffer::TYPE_INFO)]),
+    );
 }
 
 /// Similar to [`calc_turtle_var_offset`], but excluding the returned stride

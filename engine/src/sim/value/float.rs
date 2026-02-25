@@ -1,12 +1,10 @@
-use std::sync::LazyLock;
-
 use derive_more::derive::{
     Add, AddAssign, Display, Div, DivAssign, From, Mul, MulAssign, Neg, Sub, SubAssign,
 };
 
 use crate::{
     sim::{color::Color, topology::CoordInt, turtle::TurtleWho},
-    util::reflection::{ConcreteTy, MemRepr, Reflect, TypeInfo, TypeInfoOptions},
+    util::reflection::{MemRepr, Reflect, TypeInfo},
 };
 
 /// A double-precision floating-point number which is guaranteed to be finite
@@ -33,16 +31,10 @@ impl NlFloat {
 }
 
 unsafe impl Reflect for NlFloat {
-    fn ty() -> ConcreteTy {
-        static TY: LazyLock<ConcreteTy> = LazyLock::new(|| {
-            ConcreteTy::new(&TypeInfo::new_copy::<NlFloat>(TypeInfoOptions {
-                is_zeroable: true,
-                mem_repr: Some(MemRepr::Single(lir::ValType::F64)),
-            }))
-        });
-        TY.clone()
-    }
+    const TYPE_INFO: TypeInfo =
+        TypeInfo::new_copy::<NlFloat>("NlFloat", true, MemRepr::Single(lir::ValType::F64));
 }
+
 impl From<CoordInt> for NlFloat {
     fn from(value: CoordInt) -> Self {
         NlFloat(value as f64)

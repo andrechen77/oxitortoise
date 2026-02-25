@@ -1,11 +1,8 @@
-use std::{
-    ops::{Index, IndexMut},
-    sync::LazyLock,
-};
+use std::ops::{Index, IndexMut};
 
 use crate::{
     sim::value::{NlFloat, PackedAny},
-    util::reflection::{ConcreteTy, Reflect, TypeInfo},
+    util::reflection::{Reflect, TypeInfo},
 };
 
 #[derive(Default, Debug)]
@@ -18,11 +15,7 @@ impl NlList {
 }
 
 unsafe impl Reflect for NlList {
-    fn ty() -> ConcreteTy {
-        static TY: LazyLock<ConcreteTy> =
-            LazyLock::new(|| ConcreteTy::new(&TypeInfo::new_opaque::<NlList>()));
-        TY.clone()
-    }
+    const TYPE_INFO: TypeInfo = TypeInfo::new_opaque::<NlList>("NlList");
 }
 
 impl NlList {
