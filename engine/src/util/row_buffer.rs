@@ -6,11 +6,14 @@
 //!
 use std::{
     alloc::{Layout, alloc_zeroed, dealloc},
+    any::TypeId,
     marker::PhantomData,
     mem::offset_of,
     ops::{Deref, DerefMut},
     ptr::NonNull,
 };
+
+use either::Either;
 
 use crate::util::reflection::{ConcreteTy, MemRepr, Reflect, TypeInfo};
 
@@ -20,6 +23,7 @@ pub struct UntypedBytes(());
 
 unsafe impl Reflect for UntypedBytes {
     const TYPE_INFO: TypeInfo = TypeInfo {
+        unique_id: Either::Left(TypeId::of::<UntypedBytes>()),
         debug_name: "UntypedBytes",
         layout: None,
         is_zeroable: false,

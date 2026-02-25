@@ -1,4 +1,7 @@
-use std::{alloc::Layout, sync::Arc};
+use std::{alloc::Layout, any::TypeId, sync::Arc};
+
+use derive_more::PartialEq;
+use either::Either;
 
 // TODO what to do about lifetimes? could cause unsafety and sadness
 
@@ -17,10 +20,25 @@ pub unsafe trait Reflect {
 /// manipulates values of the corresponding type.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TypeInfo {
+    /// An identifier that is always different for types that differ by more
+    /// than just lifetimes. This is the only fields used to check for type
+    /// identity.
+    ///
+    /// Between two types that differ only in lifetimes, this will be the same.
+    /// For example, `&mut T<'_>` (for type `T` known at compile time) will use
+    /// the type id of `&'static mut T<'static>`, even though they are not the
+    /// same type.
+    ///
+    /// Types known at compile time are given a [`std::any::TypeId`], while
+    /// types registered at runtime are given a unique integer.
+    pub unique_id: Either<TypeId, u32>,
+    #[partial_eq(skip)]
     pub debug_name: &'static str,
+    #[partial_eq(skip)]
     pub layout: Option<Layout>,
     /// Whether this type is valid at the all-zero bit pattern *and* represents
     /// the numeric value 0.0.
+    #[partial_eq(skip)]
     pub is_zeroable: bool,
     /// The drop function for this type. As is standard for drop functions, this
     /// should deallocate any memory that the value itself owns, but does not
@@ -32,8 +50,13 @@ pub struct TypeInfo {
     ///
     /// The caller must guarantee that the passed pointer is a valid pointer to
     /// T that can be dropped, and that that value will never be used again.
+    // skipped during equality checks to avoid issues with const ptr
+    // comparisons; see
+    // https://doc.rust-lang.org/nightly/core/ptr/fn.fn_addr_eq.html
+    #[partial_eq(skip)]
     pub drop_fn: Option<unsafe fn(*mut u8)>,
     /// The memory representation of the type. None if this is an opaque type.
+    #[partial_eq(skip)]
     pub mem_repr: Option<MemRepr>,
 }
 
@@ -66,8 +89,9 @@ unsafe fn drop_impl<T>(ptr: *mut u8) {
 }
 
 impl TypeInfo {
-    pub const fn new_drop<T>(debug_name: &'static str, mem_repr: MemRepr) -> Self {
+    pub const fn new_drop<T: 'static>(debug_name: &'static str, mem_repr: MemRepr) -> Self {
         Self {
+            unique_id: Either::Left(TypeId::of::<T>()),
             debug_name,
             layout: Some(Layout::new::<T>()),
             is_zeroable: false,
@@ -76,8 +100,12 @@ impl TypeInfo {
         }
     }
 
-    pub const fn new_drop_zeroable<T>(debug_name: &'static str, mem_repr: MemRepr) -> Self {
+    pub const fn new_drop_zeroable<T: 'static>(
+        debug_name: &'static str,
+        mem_repr: MemRepr,
+    ) -> Self {
         Self {
+            unique_id: Either::Left(TypeId::of::<T>()),
             debug_name,
             layout: Some(Layout::new::<T>()),
             is_zeroable: true,
@@ -86,12 +114,13 @@ impl TypeInfo {
         }
     }
 
-    pub const fn new_copy<T: Copy>(
+    pub const fn new_copy<T: Copy + 'static>(
         debug_name: &'static str,
         is_zeroable: bool,
         mem_repr: MemRepr,
     ) -> Self {
         Self {
+            unique_id: Either::Left(TypeId::of::<T>()),
             debug_name,
             layout: Some(Layout::new::<T>()),
             is_zeroable,
@@ -100,8 +129,9 @@ impl TypeInfo {
         }
     }
 
-    pub const fn new_mut_ref_to<T: Reflect>(debug_name: &'static str) -> Self {
+    pub const fn new_mut_ref_to<T: Reflect + 'static>(debug_name: &'static str) -> Self {
         Self {
+            unique_id: Either::Left(TypeId::of::<&'static mut T>()),
             debug_name,
             layout: Some(Layout::new::<&mut T>()),
             is_zeroable: false,
@@ -111,8 +141,9 @@ impl TypeInfo {
     }
 
     // types that can only be referenced through pointer
-    pub const fn new_opaque<T>(debug_name: &'static str) -> Self {
+    pub const fn new_opaque<T: 'static>(debug_name: &'static str) -> Self {
         Self {
+            unique_id: Either::Left(TypeId::of::<T>()),
             debug_name,
             layout: Some(Layout::new::<T>()),
             is_zeroable: false,

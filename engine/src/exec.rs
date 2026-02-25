@@ -27,7 +27,7 @@ pub struct ExecutionContext<'w> {
 pub type CanonExecutionContext<'w> = ExecutionContext<'w>;
 
 unsafe impl<'w> Reflect for CanonExecutionContext<'w> {
-    const TYPE_INFO: TypeInfo = TypeInfo::new_drop::<CanonExecutionContext<'w>>(
+    const TYPE_INFO: TypeInfo = TypeInfo::new_drop::<CanonExecutionContext<'static>>(
         "CanonExecutionContext",
         MemRepr::Compound(&[(
             offset_of!(CanonExecutionContext<'w>, workspace),
@@ -38,5 +38,5 @@ unsafe impl<'w> Reflect for CanonExecutionContext<'w> {
 
 unsafe impl<'w> Reflect for &'w mut CanonExecutionContext<'w> {
     const TYPE_INFO: TypeInfo =
-        TypeInfo::new_mut_ref_to::<CanonExecutionContext<'w>>("&mut CanonExecutionContext");
+        TypeInfo::new_mut_ref_to::<CanonExecutionContext<'static>>("&mut CanonExecutionContext");
 }
