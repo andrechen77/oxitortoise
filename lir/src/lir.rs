@@ -69,9 +69,14 @@ new_key_type! {
 pub struct HostFunctionInfo {
     pub parameter_types: &'static [ValType],
     pub return_type: &'static [ValType],
+    pub addr: *const u8,
     /// Meaningful on Wasm targets only. Import the function by this name.
     pub name: &'static str,
 }
+
+/// The only thing that is not recognized as safe to share is the addr, but that
+/// is always used for a function pointer so it is actually safe to share.
+unsafe impl Sync for HostFunctionInfo {}
 
 #[derive(Debug, Copy, Clone, Deref)]
 #[deref(forward)]

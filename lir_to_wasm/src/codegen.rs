@@ -941,6 +941,7 @@ mod tests {
             name: "defined_elsewhere",
             parameter_types: &[lir::ValType::I32, lir::ValType::F64],
             return_type: &[lir::ValType::F64, lir::ValType::I32],
+            addr: std::ptr::null(), // not used by lir_to_wasm
         });
 
         lir_function! {

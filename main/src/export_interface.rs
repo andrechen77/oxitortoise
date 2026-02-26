@@ -20,22 +20,34 @@ use engine::{
 // signatures of the actual host functions (probably done from the main crate
 // rather than the engine crate).
 
-pub static CLEAR_ALL_INFO: HostFunctionInfo =
-    HostFunctionInfo { name: "oxitortoise_clear_all", parameter_types: &[Ptr], return_type: &[] };
+pub static CLEAR_ALL_INFO: HostFunctionInfo = HostFunctionInfo {
+    name: "oxitortoise_clear_all",
+    parameter_types: &[Ptr],
+    return_type: &[],
+    addr: oxitortoise_clear_all as *const u8,
+};
 #[unsafe(no_mangle)]
 pub extern "C" fn oxitortoise_clear_all(context: &mut CanonExecutionContext) {
     context.workspace.world.clear_all();
 }
 
-pub static RESET_TICKS_INFO: HostFunctionInfo =
-    HostFunctionInfo { name: "oxitortoise_reset_ticks", parameter_types: &[Ptr], return_type: &[] };
+pub static RESET_TICKS_INFO: HostFunctionInfo = HostFunctionInfo {
+    name: "oxitortoise_reset_ticks",
+    parameter_types: &[Ptr],
+    return_type: &[],
+    addr: oxitortoise_reset_ticks as *const u8,
+};
 #[unsafe(no_mangle)]
 pub extern "C" fn oxitortoise_reset_ticks(context: &mut CanonExecutionContext) {
     context.workspace.world.tick_counter.reset();
 }
 
-pub static GET_TICK_INFO: HostFunctionInfo =
-    HostFunctionInfo { name: "oxitortoise_get_tick", parameter_types: &[Ptr], return_type: &[F64] };
+pub static GET_TICK_INFO: HostFunctionInfo = HostFunctionInfo {
+    name: "oxitortoise_get_tick",
+    parameter_types: &[Ptr],
+    return_type: &[F64],
+    addr: oxitortoise_get_tick as *const u8,
+};
 #[unsafe(no_mangle)]
 pub extern "C" fn oxitortoise_get_tick(context: &mut CanonExecutionContext) -> NlFloat {
     context.workspace.world.tick_counter.get().unwrap() // TODO(mvp) handle error
@@ -45,6 +57,7 @@ pub static ADVANCE_TICK_INFO: HostFunctionInfo = HostFunctionInfo {
     name: "oxitortoise_advance_tick",
     parameter_types: &[Ptr],
     return_type: &[],
+    addr: oxitortoise_advance_tick as *const u8,
 };
 #[unsafe(no_mangle)]
 pub extern "C" fn oxitortoise_advance_tick(context: &mut CanonExecutionContext) {
@@ -57,6 +70,7 @@ pub static CREATE_TURTLES_INFO: HostFunctionInfo = HostFunctionInfo {
     name: "oxitortoise_create_turtles",
     parameter_types: &[Ptr, I64, F64, Ptr, FnPtr],
     return_type: &[],
+    addr: oxitortoise_create_turtles as *const u8,
 };
 #[unsafe(no_mangle)]
 /// # Safety
@@ -88,6 +102,7 @@ pub static ASK_ALL_TURTLES_INFO: HostFunctionInfo = HostFunctionInfo {
     name: "oxitortoise_for_all_turtles",
     parameter_types: &[Ptr, Ptr, FnPtr],
     return_type: &[],
+    addr: oxitortoise_for_all_turtles as *const u8,
 };
 /// # Safety
 ///
@@ -111,6 +126,7 @@ pub static ASK_ALL_PATCHES_INFO: HostFunctionInfo = HostFunctionInfo {
     name: "oxitortoise_for_all_patches",
     parameter_types: &[Ptr, Ptr, FnPtr],
     return_type: &[],
+    addr: oxitortoise_for_all_patches as *const u8,
 };
 /// # Safety
 ///
@@ -132,6 +148,7 @@ pub static EUCLIDEAN_DISTANCE_NO_WRAP_INFO: HostFunctionInfo = HostFunctionInfo 
     name: "oxitortoise_distance_euclidean_no_wrap",
     parameter_types: &[F64, F64, F64, F64],
     return_type: &[F64],
+    addr: oxitortoise_distance_euclidean_no_wrap as *const u8,
 };
 #[unsafe(no_mangle)]
 pub extern "C" fn oxitortoise_distance_euclidean_no_wrap(
@@ -149,6 +166,7 @@ pub static PATCH_AT_INFO: HostFunctionInfo = HostFunctionInfo {
     name: "oxitortoise_patch_at",
     parameter_types: &[Ptr, F64, F64],
     return_type: &[I32],
+    addr: oxitortoise_patch_at as *const u8,
 };
 #[unsafe(no_mangle)]
 pub extern "C" fn oxitortoise_patch_at(
@@ -165,6 +183,7 @@ pub static ROTATE_TURTLE_INFO: HostFunctionInfo = HostFunctionInfo {
     name: "oxitortoise_rotate_turtle",
     parameter_types: &[Ptr, I64, F64],
     return_type: &[],
+    addr: oxitortoise_rotate_turtle as *const u8,
 };
 #[unsafe(no_mangle)]
 pub extern "C" fn oxitortoise_rotate_turtle(
@@ -182,6 +201,7 @@ pub static DIFFUSE_8_SINGLE_VARIABLE_BUFFER_INFO: HostFunctionInfo = HostFunctio
     name: "oxitortoise_diffuse_8",
     parameter_types: &[Ptr, I32, F64],
     return_type: &[],
+    addr: oxitortoise_diffuse_8 as *const u8,
 };
 #[unsafe(no_mangle)]
 pub extern "C" fn oxitortoise_diffuse_8(
@@ -201,6 +221,7 @@ pub static SCALE_COLOR_INFO: HostFunctionInfo = HostFunctionInfo {
     name: "oxitortoise_scale_color",
     parameter_types: &[F64, F64, F64, F64],
     return_type: &[F64],
+    addr: oxitortoise_scale_color as *const u8,
 };
 #[unsafe(no_mangle)]
 pub extern "C" fn oxitortoise_scale_color(
@@ -216,6 +237,7 @@ pub static RANDOM_INT_INFO: HostFunctionInfo = HostFunctionInfo {
     name: "oxitortoise_random_int",
     parameter_types: &[Ptr, F64],
     return_type: &[F64],
+    addr: oxitortoise_random_int as *const u8,
 };
 #[unsafe(no_mangle)]
 pub extern "C" fn oxitortoise_random_int(context: &mut CanonExecutionContext, max: f64) -> f64 {
@@ -227,6 +249,7 @@ pub static TURTLE_FORWARD_INFO: HostFunctionInfo = HostFunctionInfo {
     name: "oxitortoise_turtle_forward",
     parameter_types: &[Ptr, I64, F64],
     return_type: &[],
+    addr: oxitortoise_turtle_forward as *const u8,
 };
 #[unsafe(no_mangle)]
 pub extern "C" fn oxitortoise_turtle_forward(
@@ -245,8 +268,12 @@ pub extern "C" fn oxitortoise_turtle_forward(
     }
 }
 
-pub static LIST_NEW_INFO: HostFunctionInfo =
-    HostFunctionInfo { name: "oxitortoise_list_new", parameter_types: &[], return_type: &[Ptr] };
+pub static LIST_NEW_INFO: HostFunctionInfo = HostFunctionInfo {
+    name: "oxitortoise_list_new",
+    parameter_types: &[],
+    return_type: &[Ptr],
+    addr: oxitortoise_list_new as *const u8,
+};
 #[unsafe(no_mangle)]
 pub extern "C" fn oxitortoise_list_new() -> NlBox<NlList> {
     let list = NlList::new();
@@ -257,6 +284,7 @@ pub static LIST_PUSH_INFO: HostFunctionInfo = HostFunctionInfo {
     name: "oxitortoise_list_push",
     parameter_types: &[Ptr, F64],
     return_type: &[Ptr],
+    addr: oxitortoise_list_push as *const u8,
 };
 #[unsafe(no_mangle)]
 pub extern "C" fn oxitortoise_list_push(
@@ -271,6 +299,7 @@ pub static ONE_OF_LIST_INFO: HostFunctionInfo = HostFunctionInfo {
     name: "oxitortoise_one_of_list",
     parameter_types: &[Ptr, Ptr],
     return_type: &[F64],
+    addr: oxitortoise_one_of_list as *const u8,
 };
 #[unsafe(no_mangle)]
 pub extern "C" fn oxitortoise_one_of_list(
@@ -286,6 +315,7 @@ pub static PATCH_AHEAD_INFO: HostFunctionInfo = HostFunctionInfo {
     name: "oxitortoise_patch_ahead",
     parameter_types: &[Ptr, I64, F64],
     return_type: &[I32],
+    addr: oxitortoise_patch_ahead as *const u8,
 };
 #[unsafe(no_mangle)]
 pub extern "C" fn oxitortoise_patch_ahead(
@@ -310,6 +340,7 @@ pub static PATCH_RIGHT_AND_AHEAD_INFO: HostFunctionInfo = HostFunctionInfo {
     name: "oxitortoise_patch_right_and_ahead",
     parameter_types: &[Ptr, I64, F64, F64],
     return_type: &[I32],
+    addr: oxitortoise_patch_right_and_ahead as *const u8,
 };
 #[unsafe(no_mangle)]
 pub extern "C" fn oxitortoise_patch_right_and_ahead(
@@ -337,6 +368,7 @@ pub static ANY_BINARY_OP_INFO: HostFunctionInfo = HostFunctionInfo {
     name: "oxitortoise_any_binary_op",
     parameter_types: &[F64, F64, I32],
     return_type: &[F64],
+    addr: oxitortoise_any_binary_op as *const u8,
 };
 #[unsafe(no_mangle)]
 pub extern "C" fn oxitortoise_any_binary_op(lhs: PackedAny, rhs: PackedAny, op: u32) -> PackedAny {
@@ -354,6 +386,7 @@ pub static ANY_BOOL_BINARY_OP_INFO: HostFunctionInfo = HostFunctionInfo {
     name: "oxitortoise_any_bool_binary_op",
     parameter_types: &[F64, F64, I32],
     return_type: &[I32],
+    addr: oxitortoise_any_bool_binary_op as *const u8,
 };
 
 #[unsafe(no_mangle)]
