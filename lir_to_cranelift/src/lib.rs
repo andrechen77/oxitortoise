@@ -19,7 +19,11 @@ use target_lexicon::Triple;
 
 pub extern crate lir;
 
-pub fn lir_to_cranelift(module: &mut impl clm::Module, lir: &lir::Program, triple: &Triple) {
+pub fn lir_to_cranelift(
+    module: &mut impl clm::Module,
+    lir: &lir::Program,
+    triple: &Triple,
+) -> HashMap<lir::FunctionId, clm::FuncId> {
     let lir::Program { user_functions } = lir;
 
     // make an initial pass over the functions to declare them in the module
@@ -74,9 +78,14 @@ pub fn lir_to_cranelift(module: &mut impl clm::Module, lir: &lir::Program, tripl
         );
 
         module.define_function(lir_to_clm_fn_id[&lir_fn_id], &mut codegen_ctx).unwrap();
+
+        println!("codegen_ctx: {}", codegen_ctx.func);
+
         // cleanup for the next function to reuse the same context
         module.clear_context(&mut codegen_ctx);
     }
+
+    lir_to_clm_fn_id
 }
 
 /// Writes the provided LIR function into `out_function` using
@@ -135,11 +144,27 @@ fn translate_function(
         break_targets: HashMap::new(),
     };
 
-    // write the instructions
+    // declare all local variables
+    for (lir_var_id, var_ty) in lir.local_vars.iter_enumerated() {
+        let cl_var_id = builder.cl.declare_var(translate_val_type(*var_ty, triple));
+        builder.var_map.insert(lir_var_id, cl_var_id);
+    }
+
+    // set up entry block
     let entry_bb = builder.cl.create_block();
     builder.cl.append_block_params_for_function_params(entry_bb);
     builder.cl.seal_block(entry_bb);
     builder.cl.switch_to_block(entry_bb);
+
+    // make parameters available as cranelift variables
+    let lir_parameters = lir.local_vars[..lir.num_parameters.into()].keys();
+    let cl_parameters =
+        builder.cl.block_params(entry_bb).iter().copied().collect::<Vec<_>>().into_iter();
+    for (lir_var_id, cl_val) in lir_parameters.zip(cl_parameters) {
+        builder.cl.def_var(builder.var_map[&lir_var_id], cl_val);
+    }
+
+    // write the instructions
     let return_values = translate_insn_seq_with_end_break(
         &mut builder,
         &lir.body.output_type,
@@ -474,4 +499,78 @@ fn translate_fn_signature(
         .collect();
     let call_conv = isa::CallConv::triple_default(triple);
     clir::Signature { params, returns, call_conv }
+}
+
+#[cfg(test)]
+mod test {
+    use std::sync::Arc;
+
+    use cranelift_codegen::settings;
+    use cranelift_jit::{JITBuilder, JITModule};
+    use lir::{lir_function, slotmap::SlotMap};
+
+    use super::*;
+
+    fn create_isa_and_module() -> (Arc<dyn isa::TargetIsa>, JITModule) {
+        // The ISA and call conv code comes from the following links. In particular,
+        // the forum post specifies that this is the correct way to get the calling
+        // convention for the extern "C" ABI
+        // https://users.rust-lang.org/t/calling-a-rust-function-from-cranelift/103948
+        // https://github.com/bytecodealliance/cranelift-jit-demo/blob/main/src/jit.rs#L29-L39
+        let isa = cranelift_native::builder()
+            .expect("the selected target should be supported")
+            .finish(settings::Flags::new(settings::builder()))
+            .expect("failed to finish ISA");
+
+        let module = JITModule::new(JITBuilder::with_isa(
+            isa.clone(),
+            cranelift_module::default_libcall_names(),
+        ));
+
+        (isa, module)
+    }
+
+    #[test]
+    fn test_return_const() {
+        let mut program = lir::Program::default();
+        let mut functions = SlotMap::with_key();
+        let key = functions.insert(());
+        lir_function! {
+            fn return_const() -> [I32],
+            vars: [],
+            stack_space: 0,
+            main: {
+                break_(main)(constant(I32, 10));
+            }
+        }
+        program.user_functions.insert(key, return_const);
+
+        let (isa, mut module) = create_isa_and_module();
+        lir_to_cranelift(&mut module, &program, isa.triple());
+    }
+
+    #[test]
+    fn test_branch() {
+        let mut program = lir::Program::default();
+        let mut functions = SlotMap::with_key();
+        let key = functions.insert(());
+        lir_function! {
+            fn branch() -> [I32],
+            vars: [],
+            stack_space: 0,
+            main: {
+                [a] = constant(I32, 10);
+                [b] = constant(I32, 20);
+                [] = if_else(-> [])(ULt(a, b)) then: {
+                    break_(main)(constant(I32, 10));
+                } else_: {
+                    break_(main)(constant(I32, 20));
+                };
+            }
+        }
+        program.user_functions.insert(key, branch);
+
+        let (isa, mut module) = create_isa_and_module();
+        lir_to_cranelift(&mut module, &program, isa.triple());
+    }
 }
