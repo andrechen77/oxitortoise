@@ -218,6 +218,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ba3f2a4a680e2fbf196a26c06fcb7a2090b11b05462f74dcae3261ad7af60e25"
 
 [[package]]
+name = "cranelift-module"
+version = "0.129.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "acdf787ae9c4d6fbc4f7842c485853fe4b4f815346b7253a458e936416d57ac8"
+dependencies = [
+ "anyhow",
+ "cranelift-codegen",
+ "cranelift-control",
+]
+
+[[package]]
 name = "cranelift-srcgen"
 version = "0.129.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -493,6 +504,7 @@ version = "0.1.0"
 dependencies = [
  "cranelift-codegen",
  "cranelift-frontend",
+ "cranelift-module",
  "oxitortoise_lir",
  "target-lexicon",
  "tracing",
