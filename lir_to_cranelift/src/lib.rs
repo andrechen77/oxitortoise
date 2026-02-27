@@ -586,4 +586,64 @@ mod test {
         assert_eq!(fn_ptr(10, 20), 10);
         assert_eq!(fn_ptr(20, 10), 10);
     }
+
+    #[test]
+    fn test_mutual_recursion() {
+        let mut program = lir::Program::default();
+        let mut functions = SlotMap::with_key();
+
+        let is_even_id = functions.insert(());
+        let is_odd_id = functions.insert(());
+
+        lir_function! {
+            fn is_even(I32 n) -> [I32],
+            vars: [],
+            stack_space: 0,
+            main: {
+                [n_val] = var_load(n);
+                [] = if_else(-> [])(IEq(n_val, constant(I32, 0))) then: {
+                    break_(main)(constant(I32, 1));
+                } else_: {
+                    [n_minus_one] = ISub(n_val, constant(I32, 1));
+                    [odd_val] = call_user_function(is_odd_id -> [I32])(n_minus_one);
+                    break_(main)(odd_val);
+                };
+            }
+        }
+        lir_function! {
+            fn is_odd(I32 n) -> [I32],
+            vars: [],
+            stack_space: 0,
+            main: {
+                [n_val] = var_load(n);
+                [] = if_else(-> [])(IEq(n_val, constant(I32, 0))) then: {
+                    break_(main)(constant(I32, 0));
+                } else_: {
+                    [n_minus_one] = ISub(n_val, constant(I32, 1));
+                    [even_val] = call_user_function(is_even_id -> [I32])(n_minus_one);
+                    break_(main)(even_val);
+                };
+            }
+        }
+
+        program.user_functions.insert(is_even_id, is_even);
+        program.user_functions.insert(is_odd_id, is_odd);
+
+        let (isa, mut module) = create_isa_and_module();
+        let lir_to_clm_fn_id = lir_to_cranelift(&mut module, &program, isa.triple());
+
+        module.finalize_definitions().unwrap();
+
+        let is_even_ptr = module.get_finalized_function(lir_to_clm_fn_id[&is_even_id]);
+        let is_even_fn: extern "C" fn(i32) -> i32 = unsafe { std::mem::transmute(is_even_ptr) };
+
+        let is_odd_ptr = module.get_finalized_function(lir_to_clm_fn_id[&is_odd_id]);
+        let is_odd_fn: extern "C" fn(i32) -> i32 = unsafe { std::mem::transmute(is_odd_ptr) };
+
+        // Test several values
+        for i in 0..10 {
+            assert_eq!(is_even_fn(i), if i % 2 == 0 { 1 } else { 0 });
+            assert_eq!(is_odd_fn(i), if i % 2 == 1 { 1 } else { 0 });
+        }
+    }
 }
