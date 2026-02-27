@@ -546,31 +546,44 @@ mod test {
         program.user_functions.insert(key, return_const);
 
         let (isa, mut module) = create_isa_and_module();
-        lir_to_cranelift(&mut module, &program, isa.triple());
+        let lir_to_clm_fn_id = lir_to_cranelift(&mut module, &program, isa.triple());
+
+        module.finalize_definitions().unwrap();
+
+        let fn_ptr = module.get_finalized_function(lir_to_clm_fn_id[&key]);
+        let fn_ptr: extern "C" fn() -> i32 = unsafe { std::mem::transmute(fn_ptr) };
+        assert_eq!(fn_ptr(), 10);
     }
 
     #[test]
-    fn test_branch() {
+    fn test_branch_with_params() {
         let mut program = lir::Program::default();
         let mut functions = SlotMap::with_key();
         let key = functions.insert(());
         lir_function! {
-            fn branch() -> [I32],
+            fn find_min(I32 a, I32 b) -> [I32],
             vars: [],
             stack_space: 0,
             main: {
-                [a] = constant(I32, 10);
-                [b] = constant(I32, 20);
-                [] = if_else(-> [])(ULt(a, b)) then: {
-                    break_(main)(constant(I32, 10));
+                [a] = var_load(a);
+                [b] = var_load(b);
+                [] = if_else(-> [])(SLt(a, b)) then: {
+                    break_(main)(a);
                 } else_: {
-                    break_(main)(constant(I32, 20));
+                    break_(main)(b);
                 };
             }
         }
-        program.user_functions.insert(key, branch);
+        program.user_functions.insert(key, find_min);
 
         let (isa, mut module) = create_isa_and_module();
-        lir_to_cranelift(&mut module, &program, isa.triple());
+        let lir_to_clm_fn_id = lir_to_cranelift(&mut module, &program, isa.triple());
+
+        module.finalize_definitions().unwrap();
+
+        let fn_ptr = module.get_finalized_function(lir_to_clm_fn_id[&key]);
+        let fn_ptr: extern "C" fn(i32, i32) -> i32 = unsafe { std::mem::transmute(fn_ptr) };
+        assert_eq!(fn_ptr(10, 20), 10);
+        assert_eq!(fn_ptr(20, 10), 10);
     }
 }
