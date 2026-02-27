@@ -23,7 +23,7 @@ use crate::util::reflection::TypeInfoOptions;
 
 static UNTYPED_PTR_INFO: TypeInfo = TypeInfo::new_copy::<*mut u8>(TypeInfoOptions {
     is_zeroable: false,
-    mem_repr: Some(&[(0, lir::MemOpType::Ptr)]),
+    mem_repr: Some(&[(0, lir::ValType::Ptr)]),
 });
 unsafe impl Reflect for *mut u8 {
     const CONCRETE_TY: ConcreteTy = ConcreteTy::new(&UNTYPED_PTR_INFO);
@@ -47,7 +47,7 @@ impl ConstTypeName for () {
 // put all information about it such as the fact that it's 32 bits.
 static U32_INFO: TypeInfo = TypeInfo::new_copy::<u32>(TypeInfoOptions {
     is_zeroable: false,
-    mem_repr: Some(&[(0, lir::MemOpType::I32)]),
+    mem_repr: Some(&[(0, lir::ValType::I32)]),
 });
 pub const U32_CONCRETE_TY: ConcreteTy = ConcreteTy::new(&U32_INFO);
 

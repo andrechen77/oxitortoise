@@ -8,7 +8,7 @@ pub struct NlBool(pub bool);
 
 static NL_BOOL_TYPE_INFO: TypeInfo = TypeInfo::new_copy::<NlBool>(TypeInfoOptions {
     is_zeroable: true,
-    mem_repr: Some(&[(0, lir::MemOpType::I8)]),
+    mem_repr: Some(&[(0, lir::ValType::I8)]),
 });
 
 unsafe impl Reflect for NlBool {

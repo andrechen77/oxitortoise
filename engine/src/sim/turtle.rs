@@ -70,7 +70,7 @@ impl TurtleId {
 
 static TURTLE_ID_TYPE_INFO: TypeInfo = TypeInfo::new_copy::<TurtleId>(TypeInfoOptions {
     is_zeroable: false,
-    mem_repr: Some(&[(0, lir::MemOpType::I64)]),
+    mem_repr: Some(&[(0, lir::ValType::I64)]),
 });
 
 unsafe impl Reflect for TurtleId {

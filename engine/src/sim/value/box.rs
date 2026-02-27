@@ -17,7 +17,7 @@ pub const fn generate_box_type_info<T: 'static + ConstTypeName>() -> TypeInfo {
     // possible type T
     TypeInfo::new_drop::<NlBox<T>>(TypeInfoOptions {
         is_zeroable: false,
-        mem_repr: Some(&[(0, lir::MemOpType::Ptr)]),
+        mem_repr: Some(&[(0, lir::ValType::Ptr)]),
     })
 }
 

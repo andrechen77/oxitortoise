@@ -32,7 +32,7 @@ impl NlFloat {
 
 static NL_FLOAT_TYPE_INFO: TypeInfo = TypeInfo::new_copy::<NlFloat>(TypeInfoOptions {
     is_zeroable: true,
-    mem_repr: Some(&[(0, lir::MemOpType::F64)]),
+    mem_repr: Some(&[(0, lir::ValType::F64)]),
 });
 
 unsafe impl Reflect for NlFloat {

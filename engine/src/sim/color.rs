@@ -71,7 +71,7 @@ impl AddAssign<NlFloat> for Color {
 
 static COLOR_TYPE_INFO: TypeInfo = TypeInfo::new_copy::<Color>(TypeInfoOptions {
     is_zeroable: true,
-    mem_repr: Some(&[(0, lir::MemOpType::F64)]),
+    mem_repr: Some(&[(0, lir::ValType::F64)]),
 });
 
 unsafe impl Reflect for Color {

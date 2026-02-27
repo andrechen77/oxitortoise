@@ -74,13 +74,13 @@ pub struct TypeInfo {
     /// Each value that maps as a separate register when this type is
     /// loaded from or stored into memory corresponds to a tuple of the offset
     /// and LIR type of the value.
-    pub mem_repr: Option<&'static [(usize, lir::MemOpType)]>,
+    pub mem_repr: Option<&'static [(usize, lir::ValType)]>,
 }
 
 /// A helper struct to pass as options to [`TypeInfo::new`]
 pub struct TypeInfoOptions {
     pub is_zeroable: bool,
-    pub mem_repr: Option<&'static [(usize, lir::MemOpType)]>,
+    pub mem_repr: Option<&'static [(usize, lir::ValType)]>,
 }
 
 unsafe fn drop_impl<T>(ptr: *mut u8) {

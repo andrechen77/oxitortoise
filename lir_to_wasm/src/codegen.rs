@@ -693,6 +693,7 @@ fn addr_of_function<A: FnTableSlotAllocator>(
 /// Translate a LIR value type to a Wasm value type.
 fn translate_val_type(r#type: lir::ValType) -> walrus::ValType {
     match r#type {
+        lir::ValType::I8 => walrus::ValType::I32, // there is no 8-bit register
         lir::ValType::I32 => walrus::ValType::I32,
         lir::ValType::I64 => walrus::ValType::I64,
         lir::ValType::F64 => walrus::ValType::F64,
@@ -723,38 +724,38 @@ fn translate_usize(x: usize) -> walrus::ir::Value {
     wir::Value::I32(x as i32)
 }
 
-fn infer_load_kind(r#type: lir::MemOpType) -> wir::LoadKind {
+fn infer_load_kind(r#type: lir::ValType) -> wir::LoadKind {
     use wir::ExtendedLoad as L;
     match r#type {
-        lir::MemOpType::I8 => wir::LoadKind::I32_8 { kind: L::ZeroExtend },
-        lir::MemOpType::I32 => wir::LoadKind::I32 { atomic: false },
-        lir::MemOpType::I64 => wir::LoadKind::I64 { atomic: false },
-        lir::MemOpType::F64 => wir::LoadKind::F64,
-        lir::MemOpType::Ptr => wir::LoadKind::I32 { atomic: false },
-        lir::MemOpType::FnPtr => wir::LoadKind::I32 { atomic: false },
+        lir::ValType::I8 => wir::LoadKind::I32_8 { kind: L::ZeroExtend },
+        lir::ValType::I32 => wir::LoadKind::I32 { atomic: false },
+        lir::ValType::I64 => wir::LoadKind::I64 { atomic: false },
+        lir::ValType::F64 => wir::LoadKind::F64,
+        lir::ValType::Ptr => wir::LoadKind::I32 { atomic: false },
+        lir::ValType::FnPtr => wir::LoadKind::I32 { atomic: false },
     }
 }
 
-fn infer_store_kind(r#type: lir::MemOpType) -> wir::StoreKind {
+fn infer_store_kind(r#type: lir::ValType) -> wir::StoreKind {
     match r#type {
-        lir::MemOpType::I8 => wir::StoreKind::I32_8 { atomic: false },
-        lir::MemOpType::I32 => wir::StoreKind::I32 { atomic: false },
-        lir::MemOpType::I64 => wir::StoreKind::I64 { atomic: false },
-        lir::MemOpType::F64 => wir::StoreKind::F64,
-        lir::MemOpType::Ptr => wir::StoreKind::I32 { atomic: false },
-        lir::MemOpType::FnPtr => wir::StoreKind::I32 { atomic: false },
+        lir::ValType::I8 => wir::StoreKind::I32_8 { atomic: false },
+        lir::ValType::I32 => wir::StoreKind::I32 { atomic: false },
+        lir::ValType::I64 => wir::StoreKind::I64 { atomic: false },
+        lir::ValType::F64 => wir::StoreKind::F64,
+        lir::ValType::Ptr => wir::StoreKind::I32 { atomic: false },
+        lir::ValType::FnPtr => wir::StoreKind::I32 { atomic: false },
     }
 }
 
-fn infer_mem_arg(r#type: lir::MemOpType, offset: usize) -> wir::MemArg {
+fn infer_mem_arg(r#type: lir::ValType, offset: usize) -> wir::MemArg {
     let offset: u32 = offset.try_into().unwrap();
     match r#type {
-        lir::MemOpType::I8 => wir::MemArg { align: 1, offset },
-        lir::MemOpType::I32 => wir::MemArg { align: 4, offset },
-        lir::MemOpType::I64 => wir::MemArg { align: 8, offset },
-        lir::MemOpType::F64 => wir::MemArg { align: 8, offset },
-        lir::MemOpType::Ptr => wir::MemArg { align: 4, offset },
-        lir::MemOpType::FnPtr => wir::MemArg { align: 4, offset },
+        lir::ValType::I8 => wir::MemArg { align: 1, offset },
+        lir::ValType::I32 => wir::MemArg { align: 4, offset },
+        lir::ValType::I64 => wir::MemArg { align: 8, offset },
+        lir::ValType::F64 => wir::MemArg { align: 8, offset },
+        lir::ValType::Ptr => wir::MemArg { align: 4, offset },
+        lir::ValType::FnPtr => wir::MemArg { align: 4, offset },
     }
 }
 

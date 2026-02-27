@@ -46,7 +46,7 @@ impl Default for PatchId {
 
 static PATCH_ID_TYPE_INFO: TypeInfo = TypeInfo::new_copy::<PatchId>(TypeInfoOptions {
     is_zeroable: false,
-    mem_repr: Some(&[(0, lir::MemOpType::I32)]),
+    mem_repr: Some(&[(0, lir::ValType::I32)]),
 });
 
 impl ConstTypeName for PatchId {

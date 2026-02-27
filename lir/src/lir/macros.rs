@@ -113,7 +113,7 @@ macro_rules! push_node {
     ($ctx:expr; [$val_ref:ident] = stack_load($ty:ident, $offset:expr)) => {
         let insn_idx = $ctx.0[$ctx.1].push_and_get_key(
             $crate::InsnKind::StackLoad {
-                r#type: $crate::MemOpType::$ty,
+                r#type: $crate::ValType::$ty,
                 offset: $offset,
             }
         );
@@ -129,7 +129,7 @@ macro_rules! push_node {
         $crate::push_node!($ctx; [value] = $value_ident $(($($value_param)*))*);
 
         $ctx.0[$ctx.1].push($crate::InsnKind::StackStore {
-            r#type: $crate::MemOpType::$ty,
+            r#type: $crate::ValType::$ty,
             offset: $offset,
             value,
         });
