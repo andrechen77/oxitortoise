@@ -13,34 +13,13 @@ use cranelift_frontend as clf;
 // prefixed so that we know what is part of the high level Cranelift module API
 // rather than the core Cranelift IR
 use cranelift_module as clm;
+use either::Either;
 use lir::smallvec::{SmallVec, smallvec};
 use target_lexicon::Triple;
 
 pub extern crate lir;
 
-pub struct ModuleBuilder<'a, M: clm::Module> {
-    module: M,
-    codegen_ctx: cranelift_codegen::Context,
-    clf_fn_builder_ctx: clf::FunctionBuilderContext,
-    triple: &'a Triple,
-    lir_to_clm_fn_id: &'a HashMap<lir::FunctionId, clm::FuncId>,
-}
-
 pub fn lir_to_cranelift(module: &mut impl clm::Module, lir: &lir::Program, triple: &Triple) {
-    // // The ISA and call conv code comes from the following links. In particular,
-    // // the forum post specifies that this is the correct way to get the calling
-    // // convention for the extern "C" ABI
-    // // https://users.rust-lang.org/t/calling-a-rust-function-from-cranelift/103948
-    // // https://github.com/bytecodealliance/cranelift-jit-demo/blob/main/src/jit.rs#L29-L39
-    // let isa = cranelift_native::builder()
-    //     .expect("the selected target should be supported")
-    //     .finish(settings::Flags::new(settings::builder()))
-    //     .expect("failed to finish ISA");
-    // let call_conv = isa.default_call_conv();
-
-    // let module =
-    //     JITModule::new(JITBuilder::with_isa(isa, cranelift_module::default_libcall_names()));
-
     let lir::Program { user_functions } = lir;
 
     // make an initial pass over the functions to declare them in the module
@@ -64,50 +43,79 @@ pub fn lir_to_cranelift(module: &mut impl clm::Module, lir: &lir::Program, tripl
         lir_to_clm_fn_id.insert(lir_fn_id, clm_fn_id);
     }
 
-    let codegen_ctx = module.make_context();
-    let mut builder = ModuleBuilder {
-        module,
-        codegen_ctx,
-        clf_fn_builder_ctx: clf::FunctionBuilderContext::new(),
-        triple,
-        lir_to_clm_fn_id: &lir_to_clm_fn_id,
-    };
+    let mut codegen_ctx = module.make_context();
+    let mut clf_fn_builder_ctx = clf::FunctionBuilderContext::new();
 
     // go through each function and translate the body
-    for (lir_fn_id, func) in user_functions.iter() {
-        translate_function(&mut builder, lir_fn_id, func);
+    for (lir_fn_id, lir_fn) in user_functions.iter() {
+        let mut use_host_fn = |lir_fn: Either<lir::HostFunction, lir::FunctionId>,
+                               cl_fn: &mut clir::Function| {
+            let clm_fn_id = match lir_fn {
+                Either::Left(host_fn) => {
+                    let host_fn_signature = translate_fn_signature(
+                        host_fn.parameter_types,
+                        host_fn.return_type,
+                        triple,
+                    );
+                    module
+                        .declare_function(host_fn.name, clm::Linkage::Import, &host_fn_signature)
+                        .expect("host functions should always succeed in being declared")
+                }
+                Either::Right(user_fn_id) => lir_to_clm_fn_id[&user_fn_id],
+            };
+            module.declare_func_in_func(clm_fn_id, cl_fn)
+        };
+        translate_function(
+            &mut codegen_ctx.func,
+            &mut clf_fn_builder_ctx,
+            lir_fn,
+            triple,
+            &mut use_host_fn,
+        );
+
+        module.define_function(lir_to_clm_fn_id[&lir_fn_id], &mut codegen_ctx).unwrap();
+        // cleanup for the next function to reuse the same context
+        module.clear_context(&mut codegen_ctx);
     }
 }
 
+/// Writes the provided LIR function into `out_function` using
+/// `clf_fn_builder_ctx`. `add_fn` is a callback that creates an internal
+/// `FuncRef` for previously unencountered host or user functions.
+///
+/// Note that this function intentionally does not deal with `cranelift-module`.
+/// Its only purpose is to write function bodies
 fn translate_function(
-    mod_builder: &mut ModuleBuilder<impl clm::Module>,
-    lir_fn_id: lir::FunctionId,
+    out_function: &mut clir::Function,
+    clf_fn_builder_ctx: &mut clf::FunctionBuilderContext,
     lir: &lir::Function,
+    triple: &Triple,
+    add_fn: &mut impl FnMut(
+        Either<lir::HostFunction, lir::FunctionId>,
+        &mut clir::Function,
+    ) -> clir::FuncRef,
 ) {
-    let mut builder = clf::FunctionBuilder::new(
-        &mut mod_builder.codegen_ctx.func,
-        &mut mod_builder.clf_fn_builder_ctx,
-    );
+    let mut clf_builder = clf::FunctionBuilder::new(out_function, clf_fn_builder_ctx);
 
     // The forum post specifies that this is the correct way to get the calling
     // convention for the extern "C" ABI
     // https://users.rust-lang.org/t/calling-a-rust-function-from-cranelift/103948
-    let call_conv = isa::CallConv::triple_default(mod_builder.triple);
+    let call_conv = isa::CallConv::triple_default(triple);
     let signature = clir::Signature {
         params: (0..lir.num_parameters)
-            .map(|i| translate_val_type(lir.local_vars[lir::VarId(i)], mod_builder.triple))
+            .map(|i| translate_val_type(lir.local_vars[lir::VarId(i)], triple))
             .map(|t| clir::AbiParam::new(t))
             .collect(),
         returns: lir
             .body
             .output_type
             .iter()
-            .map(|&t| translate_val_type(t, mod_builder.triple))
+            .map(|&t| translate_val_type(t, triple))
             .map(|t| clir::AbiParam::new(t))
             .collect(),
         call_conv,
     };
-    builder.func.signature = signature;
+    clf_builder.func.signature = signature;
 
     // TODO write function body
 
@@ -117,15 +125,14 @@ fn translate_function(
     let lir_types = lir::infer_output_types(lir);
 
     let mut builder = FunctionBuilder {
-        cl: &mut builder,
+        cl: &mut clf_builder,
         lir_function: lir,
         lir_types: &lir_types,
-        lir_to_cl_fn_id: &HashMap::new(), // TODO initialize this
-        host_fn_imports: &mut HashMap::new(),
-        user_fn_imports: &mut HashMap::new(),
-        value_map: &mut HashMap::new(),
-        var_map: &mut HashMap::new(),
-        break_targets: &mut HashMap::new(),
+        host_fn_imports: HashMap::new(),
+        user_fn_imports: HashMap::new(),
+        value_map: HashMap::new(),
+        var_map: HashMap::new(),
+        break_targets: HashMap::new(),
     };
 
     // write the instructions
@@ -137,44 +144,42 @@ fn translate_function(
         &mut builder,
         &lir.body.output_type,
         [lir.body.body],
-        mod_builder.triple,
+        triple,
         |builder| {
-            translate_insn_seq(builder, &mut mod_builder.module, lir.body.body, mod_builder.triple);
+            translate_insn_seq(builder, lir.body.body, triple, add_fn);
         },
     );
     builder.cl.ins().return_(&return_values);
 
-    mod_builder
-        .module
-        .define_function(mod_builder.lir_to_clm_fn_id[&lir_fn_id], &mut mod_builder.codegen_ctx)
-        .unwrap();
-    // cleanup for the next function to reuse the same context
-    mod_builder.module.clear_context(&mut mod_builder.codegen_ctx);
+    // we are done building the function
+    clf_builder.finalize();
 }
 
 struct FunctionBuilder<'a, 'b> {
     cl: &'a mut clf::FunctionBuilder<'b>,
     lir_function: &'a lir::Function,
     lir_types: &'a HashMap<lir::ValRef, lir::ValType>,
-    lir_to_cl_fn_id: &'a HashMap<lir::FunctionId, clm::FuncId>,
     /// Maps each LIR host fn reference to a Cranelift function reference
-    host_fn_imports: &'a mut HashMap<lir::HostFunction, clir::FuncRef>,
+    host_fn_imports: HashMap<lir::HostFunction, clir::FuncRef>,
     /// Maps each LIR user function reference to a Cranelift function reference
-    user_fn_imports: &'a mut HashMap<lir::FunctionId, clir::FuncRef>,
+    user_fn_imports: HashMap<lir::FunctionId, clir::FuncRef>,
     /// Maps each LIR value reference to a Cranelift value
-    value_map: &'a mut HashMap<lir::ValRef, clir::Value>,
+    value_map: HashMap<lir::ValRef, clir::Value>,
     /// Maps each LIR variable id to a Cranelift variable.
-    var_map: &'a mut HashMap<lir::VarId, clf::Variable>,
+    var_map: HashMap<lir::VarId, clf::Variable>,
     /// Maps each instruction sequence id to the block that control should jump
     /// to when an LIR break instruction targets that instruction sequence id
-    break_targets: &'a mut HashMap<lir::InsnSeqId, clir::Block>,
+    break_targets: HashMap<lir::InsnSeqId, clir::Block>,
 }
 
 fn translate_insn_seq(
     builder: &mut FunctionBuilder,
-    module: &mut impl clm::Module,
     insn_seq_id: lir::InsnSeqId,
     triple: &Triple,
+    add_fn: &mut impl FnMut(
+        Either<lir::HostFunction, lir::FunctionId>,
+        &mut clir::Function,
+    ) -> clir::FuncRef,
 ) {
     for (insn_idx, insn) in builder.lir_function.insn_seqs[insn_seq_id].iter_enumerated() {
         let lir_pc = lir::InsnPc(insn_seq_id, insn_idx);
@@ -198,7 +203,7 @@ fn translate_insn_seq(
                     [*body],
                     triple,
                     |builder| {
-                        translate_insn_seq(builder, module, *body, triple);
+                        translate_insn_seq(builder, *body, triple, add_fn);
                     },
                 )
             }
@@ -221,9 +226,9 @@ fn translate_insn_seq(
                     |builder| {
                         // add instructions to each branch
                         builder.cl.switch_to_block(then_bb);
-                        translate_insn_seq(builder, module, *then_body, triple);
+                        translate_insn_seq(builder, *then_body, triple, add_fn);
                         builder.cl.switch_to_block(else_bb);
-                        translate_insn_seq(builder, module, *else_body, triple);
+                        translate_insn_seq(builder, *else_body, triple, add_fn);
                     },
                 )
             }
@@ -234,23 +239,19 @@ fn translate_insn_seq(
                 unimplemented!("idt this instruction is currently used")
             }
             lir::InsnKind::CallHostFunction { function, output_type: _, args } => {
-                let func_ref = *builder.host_fn_imports.entry(*function).or_insert_with(|| {
-                    let host_fn_signature = translate_fn_signature(
-                        function.parameter_types,
-                        function.return_type,
-                        triple,
-                    );
-                    let cl_fn_id = module
-                        .declare_function(function.name, clm::Linkage::Import, &host_fn_signature)
-                        .expect("host functions should always succeed in being declared");
-                    module.declare_func_in_func(cl_fn_id, &mut builder.cl.func)
-                });
+                let func_ref = *builder
+                    .host_fn_imports
+                    .entry(*function)
+                    .or_insert_with(|| add_fn(Either::Left(*function), builder.cl.func));
                 let args: Vec<_> = args.iter().map(|arg| builder.value_map[arg]).collect();
                 let insn_ref = builder.cl.ins().call(func_ref, &args);
                 builder.cl.inst_results(insn_ref).iter().copied().collect()
             }
             lir::InsnKind::CallUserFunction { function, output_type: _, args } => {
-                let func_ref = user_function_to_clir_func_ref(builder, *function, module);
+                let func_ref = *builder
+                    .user_fn_imports
+                    .entry(*function)
+                    .or_insert_with(|| add_fn(Either::Right(*function), builder.cl.func));
                 let args: Vec<_> = args.iter().map(|arg| builder.value_map[arg]).collect();
                 let insn_ref = builder.cl.ins().call(func_ref, &args);
                 builder.cl.inst_results(insn_ref).iter().copied().collect()
@@ -265,7 +266,10 @@ fn translate_insn_seq(
                 builder.cl.inst_results(insn_ref).iter().copied().collect()
             }
             lir::InsnKind::UserFunctionPtr { function } => {
-                let func_ref = user_function_to_clir_func_ref(builder, *function, module);
+                let func_ref = *builder
+                    .user_fn_imports
+                    .entry(*function)
+                    .or_insert_with(|| add_fn(Either::Right(*function), builder.cl.func));
                 let val = builder
                     .cl
                     .ins()
@@ -429,17 +433,6 @@ fn translate_insn_seq_with_end_break<const N: usize>(
 
     // make the output of the LIR block available in builder.value_map
     builder.cl.block_params(break_bb).iter().copied().collect()
-}
-
-fn user_function_to_clir_func_ref(
-    builder: &mut FunctionBuilder,
-    function: lir::FunctionId,
-    module: &mut impl clm::Module,
-) -> clir::FuncRef {
-    *builder.user_fn_imports.entry(function).or_insert_with(|| {
-        let cl_fn_id = builder.lir_to_cl_fn_id[&function];
-        module.declare_func_in_func(cl_fn_id, &mut builder.cl.func)
-    })
 }
 
 fn translate_val_type(val_type: lir::ValType, triple: &Triple) -> clir::Type {
