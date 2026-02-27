@@ -19,11 +19,15 @@ use target_lexicon::Triple;
 
 pub extern crate lir;
 
-pub fn lir_to_cranelift(
-    module: &mut impl clm::Module,
+pub fn lir_to_cranelift<M: clm::Module, F>(
+    module: &mut M,
     lir: &lir::Program,
     triple: &Triple,
-) -> HashMap<lir::FunctionId, clm::FuncId> {
+    mut post_compilation_hook: F,
+) -> HashMap<lir::FunctionId, clm::FuncId>
+where
+    F: FnMut(&mut M, &cranelift_codegen::Context),
+{
     let lir::Program { user_functions } = lir;
 
     // make an initial pass over the functions to declare them in the module
@@ -78,6 +82,8 @@ pub fn lir_to_cranelift(
         );
 
         module.define_function(lir_to_clm_fn_id[&lir_fn_id], &mut codegen_ctx).unwrap();
+
+        post_compilation_hook(module, &codegen_ctx);
 
         println!("codegen_ctx: {}", codegen_ctx.func);
 
@@ -519,7 +525,7 @@ mod test {
         // https://github.com/bytecodealliance/cranelift-jit-demo/blob/main/src/jit.rs#L29-L39
         let isa = cranelift_native::builder()
             .expect("the selected target should be supported")
-            .finish(settings::Flags::new(settings::builder()))
+            .finish(settings::Flags::new(settings::builder())) // can change settings here to add optimizations e.g. leaf optimizations
             .expect("failed to finish ISA");
 
         let module = JITModule::new(JITBuilder::with_isa(
@@ -528,6 +534,14 @@ mod test {
         ));
 
         (isa, module)
+    }
+
+    fn dump_code_to_files(debug_name: &str, codegen_ctx: &cranelift_codegen::Context) {
+        let code = codegen_ctx.compiled_code().expect("code should be compiled").code_buffer();
+        let bin_name = format!("{}.bin", debug_name);
+        let clif_name = format!("{}.clif", debug_name);
+        std::fs::write(clif_name, codegen_ctx.func.to_string()).unwrap();
+        std::fs::write(bin_name, code).unwrap();
     }
 
     #[test]
@@ -546,7 +560,10 @@ mod test {
         program.user_functions.insert(key, return_const);
 
         let (isa, mut module) = create_isa_and_module();
-        let lir_to_clm_fn_id = lir_to_cranelift(&mut module, &program, isa.triple());
+        let lir_to_clm_fn_id =
+            lir_to_cranelift(&mut module, &program, isa.triple(), |_, codegen_ctx| {
+                dump_code_to_files("return_const", codegen_ctx);
+            });
 
         module.finalize_definitions().unwrap();
 
@@ -577,7 +594,10 @@ mod test {
         program.user_functions.insert(key, find_min);
 
         let (isa, mut module) = create_isa_and_module();
-        let lir_to_clm_fn_id = lir_to_cranelift(&mut module, &program, isa.triple());
+        let lir_to_clm_fn_id =
+            lir_to_cranelift(&mut module, &program, isa.triple(), |_, codegen_ctx| {
+                dump_code_to_files("branch_with_params", codegen_ctx);
+            });
 
         module.finalize_definitions().unwrap();
 
@@ -630,7 +650,10 @@ mod test {
         program.user_functions.insert(is_odd_id, is_odd);
 
         let (isa, mut module) = create_isa_and_module();
-        let lir_to_clm_fn_id = lir_to_cranelift(&mut module, &program, isa.triple());
+        let lir_to_clm_fn_id =
+            lir_to_cranelift(&mut module, &program, isa.triple(), |_, codegen_ctx| {
+                dump_code_to_files("mutual_recursion", codegen_ctx);
+            });
 
         module.finalize_definitions().unwrap();
 
