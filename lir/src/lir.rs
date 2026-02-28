@@ -580,7 +580,7 @@ fn infer_binary_op_output_type(op: BinaryOpcode, lhs: ValType, rhs: ValType) -> 
             _ => panic!("Invalid operand types for operation {:?}: {:?} and {:?}", op, lhs, rhs),
         },
         B::And | B::Or => match (lhs, rhs) {
-            (V::I32, V::I32) => V::I8,
+            (V::I8, V::I8) => V::I8,
             _ => panic!("Invalid operand types for operation {:?}: {:?} and {:?}", op, lhs, rhs),
         },
     }
