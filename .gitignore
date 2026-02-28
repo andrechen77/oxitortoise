@@ -9,4 +9,6 @@ output
 *.wat
 *.lir
 *.disass
+*.clif
+*.bin
 ast.json
