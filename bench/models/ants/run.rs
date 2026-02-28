@@ -233,6 +233,14 @@ fn main() {
 
     *COMPILE_RESULT.lock().unwrap() =
         Some(CompileResult { workspace, global_names, mir_to_lir_fns, installed_obj });
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let start = std::time::Instant::now();
+        perf_trials();
+        let duration = start.elapsed();
+        println!("perf_trials execution time: {:?}", duration);
+    }
 }
 
 #[unsafe(no_mangle)]
