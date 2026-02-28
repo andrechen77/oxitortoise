@@ -89,8 +89,6 @@ where
 
         post_compilation_hook(lir_fn_id, module, &codegen_ctx);
 
-        println!("codegen_ctx: {}", codegen_ctx.func);
-
         // cleanup for the next function to reuse the same context
         module.clear_context(&mut codegen_ctx);
     }
