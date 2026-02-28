@@ -21,14 +21,16 @@ pub extern crate cranelift_codegen;
 pub extern crate cranelift_module;
 pub extern crate lir;
 
-pub fn lir_to_cranelift<M: clm::Module, F>(
+pub fn lir_to_cranelift<M: clm::Module, F0, F1>(
     module: &mut M,
     lir: &lir::Program,
     triple: &Triple,
-    mut post_compilation_hook: F,
+    mut post_translation_hook: F0,
+    mut post_compilation_hook: F1,
 ) -> HashMap<lir::FunctionId, clm::FuncId>
 where
-    F: FnMut(lir::FunctionId, &mut M, &cranelift_codegen::Context),
+    F0: FnMut(lir::FunctionId, &mut M, &cranelift_codegen::Context),
+    F1: FnMut(lir::FunctionId, &mut M, &cranelift_codegen::Context),
 {
     let lir::Program { user_functions } = lir;
 
@@ -81,6 +83,7 @@ where
             triple,
             &mut use_host_fn,
         );
+        post_translation_hook(lir_fn_id, module, &codegen_ctx);
 
         module.define_function(lir_to_clm_fn_id[&lir_fn_id], &mut codegen_ctx).unwrap();
 
@@ -564,10 +567,15 @@ mod test {
         program.user_functions.insert(key, return_const);
 
         let (isa, mut module) = create_isa_and_module();
-        let lir_to_clm_fn_id =
-            lir_to_cranelift(&mut module, &program, isa.triple(), |_, _, codegen_ctx| {
+        let lir_to_clm_fn_id = lir_to_cranelift(
+            &mut module,
+            &program,
+            isa.triple(),
+            |_, _, _| {},
+            |_, _, codegen_ctx| {
                 dump_code_to_files("return_const", codegen_ctx);
-            });
+            },
+        );
 
         module.finalize_definitions().unwrap();
 
@@ -598,10 +606,15 @@ mod test {
         program.user_functions.insert(key, find_min);
 
         let (isa, mut module) = create_isa_and_module();
-        let lir_to_clm_fn_id =
-            lir_to_cranelift(&mut module, &program, isa.triple(), |_, _, codegen_ctx| {
+        let lir_to_clm_fn_id = lir_to_cranelift(
+            &mut module,
+            &program,
+            isa.triple(),
+            |_, _, _| {},
+            |_, _, codegen_ctx| {
                 dump_code_to_files("branch_with_params", codegen_ctx);
-            });
+            },
+        );
 
         module.finalize_definitions().unwrap();
 
@@ -654,10 +667,15 @@ mod test {
         program.user_functions.insert(is_odd_id, is_odd);
 
         let (isa, mut module) = create_isa_and_module();
-        let lir_to_clm_fn_id =
-            lir_to_cranelift(&mut module, &program, isa.triple(), |_, _, codegen_ctx| {
+        let lir_to_clm_fn_id = lir_to_cranelift(
+            &mut module,
+            &program,
+            isa.triple(),
+            |_, _, _| {},
+            |_, _, codegen_ctx| {
                 dump_code_to_files("mutual_recursion", codegen_ctx);
-            });
+            },
+        );
 
         module.finalize_definitions().unwrap();
 

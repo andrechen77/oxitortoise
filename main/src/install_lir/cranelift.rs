@@ -78,6 +78,10 @@ impl InstallLir for LirInstaller {
             lir,
             self.this_isa.triple(),
             |lir_fn_id, _, codegen_ctx| {
+                std::fs::write(format!("{:?}.clif", lir_fn_id), codegen_ctx.func.to_string())
+                    .unwrap();
+            },
+            |lir_fn_id, _, codegen_ctx| {
                 let code =
                     codegen_ctx.compiled_code().expect("code should be compiled").code_buffer();
                 std::fs::write(format!("{:?}.bin", lir_fn_id), code).unwrap();
