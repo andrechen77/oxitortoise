@@ -385,8 +385,11 @@ fn translate_insn_seq(
             lir::InsnKind::DeriveElement { element_size, ptr, index } => {
                 let ptr = builder.value_map[ptr];
                 let index = builder.value_map[index];
-                let offset =
-                    builder.cl.ins().imul_imm(index, i64::try_from(*element_size).unwrap());
+                let index_promoted = builder.cl.ins().sextend(clir::types::I64, index);
+                let offset = builder
+                    .cl
+                    .ins()
+                    .imul_imm(index_promoted, i64::try_from(*element_size).unwrap());
                 let val = builder.cl.ins().iadd(ptr, offset);
                 smallvec![val]
             }
