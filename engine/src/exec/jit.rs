@@ -146,3 +146,31 @@ pub struct HostFunctionTable {
     pub patch_right_and_ahead: Hf,
     pub diffuse_8_single_variable_buffer: Hf,
 }
+
+impl HostFunctionTable {
+    pub fn all_host_functions(&self) -> Vec<Hf> {
+        vec![
+            self.clear_all,
+            self.reset_ticks,
+            self.advance_tick,
+            self.get_tick,
+            self.create_turtles,
+            self.ask_all_turtles,
+            self.ask_all_patches,
+            self.euclidean_distance_no_wrap,
+            self.list_new,
+            self.list_push,
+            self.one_of_list,
+            self.scale_color,
+            self.rotate_turtle,
+            self.turtle_forward,
+            self.patch_at,
+            self.random_int,
+            self.any_binary_op,
+            self.any_bool_binary_op,
+            self.patch_ahead,
+            self.patch_right_and_ahead,
+            self.diffuse_8_single_variable_buffer,
+        ]
+    }
+}

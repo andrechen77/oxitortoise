@@ -36,10 +36,14 @@ impl Default for LirInstaller {
             .finish(settings::Flags::new(settings::builder())) // can change settings here to add optimizations e.g. leaf optimizations
             .expect("failed to finish ISA");
 
-        let module = JITModule::new(JITBuilder::with_isa(
-            this_isa.clone(),
-            cranelift_module::default_libcall_names(),
-        ));
+        let mut builder =
+            JITBuilder::with_isa(this_isa.clone(), cranelift_module::default_libcall_names());
+
+        builder.symbols(
+            Self::HOST_FUNCTION_TABLE.all_host_functions().iter().map(|&hf| (hf.name, hf.addr)),
+        );
+
+        let module = JITModule::new(builder);
 
         Self { this_isa, module }
     }
