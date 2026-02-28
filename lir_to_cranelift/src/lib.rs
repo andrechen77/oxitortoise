@@ -224,10 +224,26 @@ fn translate_insn_seq(
                     .map(|arg| clir::BlockArg::Value(builder.value_map[arg]))
                     .collect();
                 let insn_ref = builder.cl.ins().jump(dst_bb, &values);
-                builder.cl.inst_results(insn_ref).iter().copied().collect()
+                builder.cl.inst_results(insn_ref).iter().copied().collect() // should be empty tbh
             }
-            lir::InsnKind::ConditionalBreak { .. } => {
-                unimplemented!("idt this instruction is currently used")
+            lir::InsnKind::ConditionalBreak { target, condition, values } => {
+                let condition = builder.value_map[condition];
+                let break_bb = builder.break_targets[target];
+
+                // create a BB for the continuation without breaking
+                let cont_bb = builder.cl.create_block();
+
+                let values: Vec<_> = values
+                    .iter()
+                    .map(|arg| clir::BlockArg::Value(builder.value_map[arg]))
+                    .collect();
+                let insn_ref = builder.cl.ins().brif(condition, break_bb, &values, cont_bb, &[]);
+
+                // switch to the continuation BB to keep adding instructions
+                builder.cl.switch_to_block(cont_bb);
+                builder.cl.seal_block(cont_bb);
+
+                builder.cl.inst_results(insn_ref).iter().copied().collect() // should be empty tbh
             }
             lir::InsnKind::Block(lir::Block { output_type, body }) => {
                 translate_insn_seq_with_end_break(
