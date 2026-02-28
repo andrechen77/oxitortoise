@@ -17,6 +17,8 @@ use either::Either;
 use lir::smallvec::{SmallVec, smallvec};
 use target_lexicon::Triple;
 
+pub extern crate cranelift_codegen;
+pub extern crate cranelift_module;
 pub extern crate lir;
 
 pub fn lir_to_cranelift<M: clm::Module, F>(
@@ -26,7 +28,7 @@ pub fn lir_to_cranelift<M: clm::Module, F>(
     mut post_compilation_hook: F,
 ) -> HashMap<lir::FunctionId, clm::FuncId>
 where
-    F: FnMut(&mut M, &cranelift_codegen::Context),
+    F: FnMut(lir::FunctionId, &mut M, &cranelift_codegen::Context),
 {
     let lir::Program { user_functions } = lir;
 
@@ -47,7 +49,6 @@ where
                 &signature,
             )
             .expect("failed to declare function");
-        let is_entrypoint = lir_fn.is_entrypoint; // TODO do something with this
         lir_to_clm_fn_id.insert(lir_fn_id, clm_fn_id);
     }
 
@@ -83,7 +84,7 @@ where
 
         module.define_function(lir_to_clm_fn_id[&lir_fn_id], &mut codegen_ctx).unwrap();
 
-        post_compilation_hook(module, &codegen_ctx);
+        post_compilation_hook(lir_fn_id, module, &codegen_ctx);
 
         println!("codegen_ctx: {}", codegen_ctx.func);
 
@@ -312,8 +313,11 @@ fn translate_insn_seq(
                     lir::Value::I32(val) => builder.cl.ins().iconst(clir::types::I32, val as i64),
                     lir::Value::I64(val) => builder.cl.ins().iconst(clir::types::I64, val as i64),
                     lir::Value::F64(val) => builder.cl.ins().f64const(val),
-                    lir::Value::Ptr(val) => unimplemented!("cannot embed pointers into consts"),
-                    lir::Value::FnPtr(val) => {
+                    lir::Value::Ptr(val) => builder
+                        .cl
+                        .ins()
+                        .iconst(translate_val_type(lir::ValType::Ptr, triple), val.addr() as i64),
+                    lir::Value::FnPtr(_) => {
                         unimplemented!("cannot embed function pointers into consts")
                     }
                 };
@@ -561,7 +565,7 @@ mod test {
 
         let (isa, mut module) = create_isa_and_module();
         let lir_to_clm_fn_id =
-            lir_to_cranelift(&mut module, &program, isa.triple(), |_, codegen_ctx| {
+            lir_to_cranelift(&mut module, &program, isa.triple(), |_, _, codegen_ctx| {
                 dump_code_to_files("return_const", codegen_ctx);
             });
 
@@ -595,7 +599,7 @@ mod test {
 
         let (isa, mut module) = create_isa_and_module();
         let lir_to_clm_fn_id =
-            lir_to_cranelift(&mut module, &program, isa.triple(), |_, codegen_ctx| {
+            lir_to_cranelift(&mut module, &program, isa.triple(), |_, _, codegen_ctx| {
                 dump_code_to_files("branch_with_params", codegen_ctx);
             });
 
@@ -651,7 +655,7 @@ mod test {
 
         let (isa, mut module) = create_isa_and_module();
         let lir_to_clm_fn_id =
-            lir_to_cranelift(&mut module, &program, isa.triple(), |_, codegen_ctx| {
+            lir_to_cranelift(&mut module, &program, isa.triple(), |_, _, codegen_ctx| {
                 dump_code_to_files("mutual_recursion", codegen_ctx);
             });
 

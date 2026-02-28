@@ -201,8 +201,11 @@ fn main() {
 
     let mut lir_installer = LirInstaller::default();
     let result = unsafe { lir_installer.install_lir(&lir_program) };
-    let name = "model.wasm";
-    write_to_file(name, lir_installer.module_bytes);
+    #[cfg(target_arch = "wasm32")]
+    {
+        let name = "model.wasm";
+        write_to_file(name, lir_installer.module_bytes);
+    }
     let installed_obj = match result {
         Ok(obj) => obj,
         Err(_error) => {

@@ -578,8 +578,11 @@ dependencies = [
 name = "oxitortoise_main"
 version = "0.1.0"
 dependencies = [
+ "cranelift-jit",
+ "cranelift-native",
  "oxitortoise_ast_to_mir",
  "oxitortoise_engine",
+ "oxitortoise_lir_to_cranelift",
  "oxitortoise_lir_to_wasm",
  "tracing",
  "tracing-subscriber",
