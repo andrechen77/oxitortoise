@@ -5,12 +5,14 @@ use derive_more::derive::TryFrom;
 
 use crate::{
     hir::{Expr, ExprKind, NlAbstractTy, Program, build_mir::HirToMirFnBuilder},
-    mir,
+    mir::{
+        self,
+        reflection::{MemDesc, Reflect, Type, TypeInfo},
+    },
     sim::{
         patch::OptionPatchId,
         value::{BoxedAny, NlBool, NlFloat, PackedAny},
     },
-    util::reflection::{MemRepr, Reflect, TypeInfo},
 };
 
 #[derive(Debug, Clone, Copy, TryFrom, PartialEq, Eq)]
@@ -32,11 +34,11 @@ pub enum BinaryOpcode {
 }
 
 unsafe impl Reflect for BinaryOpcode {
-    const TYPE_INFO: TypeInfo = TypeInfo::new_copy::<BinaryOpcode>(
+    const TYPE: Type = Type::new(&TypeInfo::new_copy::<BinaryOpcode>(
         "BinaryOpcode",
         false,
-        MemRepr::Single(lir::ValType::I8),
-    );
+        &MemDesc::IsPrimitive(lir::ValType::I8),
+    ));
 }
 
 #[derive(Debug)]
@@ -89,7 +91,7 @@ impl Expr for BinaryOperation {
             // short circuit on nobody vs nobody comparison
             if lhs_ty == NlAbstractTy::Nobody && rhs_ty == NlAbstractTy::Nobody {
                 let result = if negate { NlBool(false) } else { NlBool(true) };
-                builder.lir.add_operation_with_dst(
+                builder.mir.add_operation_with_dst(
                     local_out.into(),
                     mir::Operation::Const { value: BoxedAny::new(result) },
                 );
@@ -102,7 +104,7 @@ impl Expr for BinaryOperation {
             } else {
                 (&self.lhs, lhs_ty.repr())
             };
-            if operand_ty == OptionPatchId::TYPE_INFO {
+            if operand_ty == OptionPatchId::TYPE {
                 let operand_pl = builder.translate_expr(operand);
                 OptionPatchId::write_check_nobody(builder, negate, local_out, operand_pl);
             } else {
@@ -124,8 +126,8 @@ impl Expr for BinaryOperation {
         // TODO(mvp) so far, these additional conditions on color only exist to
         // get ants to compile. we will want to make a full decision on how to
         // treat colors in the engine later
-        let final_operation = if (lhs_ty == NlFloat::TYPE_INFO || rhs_ty == NlFloat::TYPE_INFO)
-            && (rhs_ty == NlFloat::TYPE_INFO || rhs_ty == NlFloat::TYPE_INFO)
+        let final_operation = if (lhs_ty == NlFloat::TYPE || rhs_ty == NlFloat::TYPE)
+            && (rhs_ty == NlFloat::TYPE || rhs_ty == NlFloat::TYPE)
         {
             let opcode = match self.op {
                 Op::Add => lir::BinaryOpcode::FAdd,
@@ -144,7 +146,7 @@ impl Expr for BinaryOperation {
                 lhs: lhs_pl.place().move_out(),
                 rhs: rhs_pl.place().move_out(),
             }
-        } else if lhs_ty == NlBool::TYPE_INFO && rhs_ty == NlBool::TYPE_INFO {
+        } else if lhs_ty == NlBool::TYPE && rhs_ty == NlBool::TYPE {
             let opcode = match self.op {
                 Op::And => lir::BinaryOpcode::And,
                 Op::Or => lir::BinaryOpcode::Or,
@@ -155,9 +157,9 @@ impl Expr for BinaryOperation {
                 lhs: lhs_pl.place().move_out(),
                 rhs: rhs_pl.place().move_out(),
             }
-        } else if lhs_ty == PackedAny::TYPE_INFO && rhs_ty == PackedAny::TYPE_INFO {
-            let opcode_pl = builder.lir.add_operation(
-                mir::LocalDecl { debug_name: None, ty: BinaryOpcode::TYPE_INFO.concrete_ty() },
+        } else if lhs_ty == PackedAny::TYPE && rhs_ty == PackedAny::TYPE {
+            let opcode_pl = builder.mir.add_operation(
+                mir::LocalDecl { debug_name: None, ty: MemDesc::IsType(BinaryOpcode::TYPE) },
                 mir::Operation::Const { value: BoxedAny::new::<BinaryOpcode>(self.op) },
             );
             match self.op {
@@ -183,7 +185,7 @@ impl Expr for BinaryOperation {
         } else {
             todo!("TODO(mvp) handle other operand types: {:?} and {:?}", lhs_ty, rhs_ty);
         };
-        builder.lir.add_operation_with_dst(local_out.into(), final_operation);
+        builder.mir.add_operation_with_dst(local_out.into(), final_operation);
     }
 }
 
@@ -196,8 +198,8 @@ mod binary_op_any_bool {
 
     pub static FN_INFO: HostFunctionInfo = HostFunctionInfo {
         debug_name: "binary_op_any_bool",
-        parameter_types: &[&PackedAny::TYPE_INFO, &PackedAny::TYPE_INFO, &BinaryOpcode::TYPE_INFO],
-        return_type: &NlBool::TYPE_INFO,
+        parameter_types: &[PackedAny::TYPE, PackedAny::TYPE, BinaryOpcode::TYPE],
+        return_type: NlBool::TYPE,
     };
 }
 fn binary_op_any(_lhs: PackedAny, _rhs: PackedAny, _op: BinaryOpcode) -> PackedAny {
@@ -209,8 +211,8 @@ mod binary_op_any {
 
     pub static FN_INFO: HostFunctionInfo = HostFunctionInfo {
         debug_name: "binary_op_any",
-        parameter_types: &[&PackedAny::TYPE_INFO, &PackedAny::TYPE_INFO, &BinaryOpcode::TYPE_INFO],
-        return_type: &PackedAny::TYPE_INFO,
+        parameter_types: &[PackedAny::TYPE, PackedAny::TYPE, BinaryOpcode::TYPE],
+        return_type: PackedAny::TYPE,
     };
 }
 
@@ -246,6 +248,6 @@ impl Expr for UnaryOp {
         };
         let final_operation =
             mir::Operation::UnaryOp { opcode, operand: operand_pl.place().move_out() };
-        builder.lir.add_operation_with_dst(local_out.into(), final_operation);
+        builder.mir.add_operation_with_dst(local_out.into(), final_operation);
     }
 }

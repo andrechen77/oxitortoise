@@ -1,8 +1,8 @@
 use std::ops::{Index, IndexMut};
 
 use crate::{
+    mir::reflection::{Reflect, Type, TypeInfo},
     sim::value::{NlFloat, PackedAny},
-    util::reflection::{Reflect, TypeInfo},
 };
 
 #[derive(Default, Debug)]
@@ -15,7 +15,7 @@ impl NlList {
 }
 
 unsafe impl Reflect for NlList {
-    const TYPE_INFO: TypeInfo = TypeInfo::new_opaque::<NlList>("NlList");
+    const TYPE: Type = Type::new(&TypeInfo::new_opaque::<NlList>("NlList"));
 }
 
 impl NlList {

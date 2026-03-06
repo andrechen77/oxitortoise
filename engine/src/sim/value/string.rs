@@ -1,4 +1,4 @@
-use crate::util::reflection::{Reflect, TypeInfo};
+use crate::mir::reflection::{Reflect, Type, TypeInfo};
 
 #[derive(Default, Debug)]
 #[allow(dead_code)] // strings will be used eventually, just not at this stage of development
@@ -11,5 +11,5 @@ impl NlString {
 }
 
 unsafe impl Reflect for NlString {
-    const TYPE_INFO: TypeInfo = TypeInfo::new_opaque::<NlString>("NlString");
+    const TYPE: Type = Type::new(&TypeInfo::new_opaque::<NlString>("NlString"));
 }

@@ -1,6 +1,6 @@
 use derive_more::derive::{Deref, DerefMut};
 
-use crate::util::reflection::{MemRepr, Reflect, TypeInfo};
+use crate::mir::reflection::{MemDesc, Reflect, Type, TypeInfo};
 
 #[derive(Deref, DerefMut)]
 #[repr(transparent)]
@@ -13,6 +13,10 @@ impl<T> NlBox<T> {
 }
 
 unsafe impl<T: Reflect + 'static> Reflect for NlBox<T> {
-    const TYPE_INFO: TypeInfo =
-        TypeInfo::new_drop::<NlBox<T>>("NlBox<T>", MemRepr::Single(lir::ValType::Ptr));
+    const TYPE: Type = Type::new(&TypeInfo::new_drop::<NlBox<T>>(
+        "NlBox<T>",
+        // pointee should be `&T::TYPE.info().mem_desc` but the compiler isn't
+        // smart enough to const promote the whole thing
+        &MemDesc::StaticIsPointerTo { pointee: &MemDesc::None },
+    ));
 }

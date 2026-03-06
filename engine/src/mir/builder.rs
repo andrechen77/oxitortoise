@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
 use crate::mir::{
-    self, ElementaryStatement, Function, FunctionId, Label, LocalId, Operation, Statement,
+    self, ElementaryStatement, Function, FunctionId, Label, LocalId, Operation, Place, Statement,
+    reflection::PlaceWithMemDesc,
 };
 
 #[derive(Default)]
@@ -80,10 +81,22 @@ impl<'a> FunctionBuilder<'a> {
         assert!(old.is_none(), "return local cannot be set twice");
     }
 
-    pub fn create_local(&mut self, decl: mir::LocalDecl) -> LocalId {
+    pub fn create_local(&mut self, decl: mir::LocalDecl) -> (LocalId, &mut mir::LocalDecl) {
         let id = self.program_builder.next_local_id();
-        self.locals.insert(id, decl);
-        id
+        let local_decl = self.locals.entry(id).or_insert(decl);
+        (id, local_decl)
+    }
+
+    pub fn get_local_mut(&mut self, id: LocalId) -> &mut mir::LocalDecl {
+        self.locals.get_mut(&id).expect("local must be declared")
+    }
+
+    pub fn place_with_type(&mut self, place: Place) -> PlaceWithMemDesc<'_> {
+        let mut ty = &mut self.get_local_mut(place.local).ty;
+        for projection in &place.projections {
+            ty = ty.project_mut_with_modify(projection);
+        }
+        PlaceWithMemDesc::new(place, ty)
     }
 
     pub fn create_label(&mut self) -> Label {
@@ -95,8 +108,9 @@ impl<'a> FunctionBuilder<'a> {
     }
 
     pub fn add_operation(&mut self, local_decl: mir::LocalDecl, op: Operation) -> LocalId {
-        let dst = self.create_local(local_decl);
+        let (dst, _) = self.create_local(local_decl);
         self.add_operation_with_dst(dst.into(), op);
+        // TODO could do something with the type assertion here
         dst
     }
 

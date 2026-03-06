@@ -1,6 +1,6 @@
 use std::{fmt, mem::offset_of};
 
-use crate::util::reflection::{MemRepr, Reflect, TypeInfo};
+use crate::mir::reflection::{MemDesc, Reflect, Type, TypeInfo};
 
 use super::{patch::PatchId, value};
 
@@ -48,14 +48,16 @@ impl Point {
 }
 
 unsafe impl Reflect for Point {
-    const TYPE_INFO: TypeInfo = TypeInfo::new_copy::<Point>(
+    const TYPE: Type = Type::new(&TypeInfo::new_copy::<Point>(
         "Point",
         true,
-        MemRepr::Compound(&[
-            (offset_of!(Point, x), &f64::TYPE_INFO),
-            (offset_of!(Point, y), &f64::TYPE_INFO),
-        ]),
-    );
+        &MemDesc::StaticHasFields {
+            fields: &[
+                (offset_of!(Point, x), MemDesc::IsPrimitive(lir::ValType::F64)),
+                (offset_of!(Point, y), MemDesc::IsPrimitive(lir::ValType::F64)),
+            ],
+        },
+    ));
 }
 
 impl fmt::Display for Point {

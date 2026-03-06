@@ -1,7 +1,6 @@
 use std::{
     collections::HashMap,
     fmt::{self, Debug, Write},
-    mem::offset_of,
     sync::Arc,
 };
 
@@ -9,11 +8,9 @@ use either::Either;
 use pretty_print::PrettyPrinter;
 
 use crate::{
+    mir::reflection::{Reflect, Type},
     sim::value::{NlBool, NlFloat, NlList, NlString, PackedAny},
-    util::{
-        reflection::{ConcreteTy, MemRepr, Reflect, TypeInfo},
-        row_buffer::{RowBuffer, RowSchema},
-    },
+    util::row_buffer::{RowBuffer, RowSchema},
 };
 
 pub struct Globals {
@@ -73,7 +70,7 @@ impl fmt::Debug for Globals {
                         .enumerate()
                         .map(|(i, (name, ty))| (&**name, (i, ty))),
                     |p, name| write!(p, "{:?}", name),
-                    |p, (_, (i, ty))| {
+                    |p, (_, (i, &ty))| {
                         fn print_field<T: Reflect + Debug>(
                             p: &mut PrettyPrinter<impl Write>,
                             globals: &Globals,
@@ -84,13 +81,13 @@ impl fmt::Debug for Globals {
                                 Either::Right(field) => write!(p, "fallback {:?}", field),
                             }
                         }
-                        if *ty == NlFloat::TYPE_INFO {
+                        if ty == NlFloat::TYPE {
                             print_field::<NlFloat>(p, self, i)
-                        } else if *ty == NlBool::TYPE_INFO {
+                        } else if ty == NlBool::TYPE {
                             print_field::<NlBool>(p, self, i)
-                        } else if *ty == NlString::TYPE_INFO {
+                        } else if ty == NlString::TYPE {
                             print_field::<NlString>(p, self, i)
-                        } else if *ty == NlList::TYPE_INFO {
+                        } else if ty == NlList::TYPE {
                             print_field::<NlList>(p, self, i)
                         } else {
                             write!(p, "unknown type {:?}", ty)
@@ -104,16 +101,13 @@ impl fmt::Debug for Globals {
 
 #[derive(Debug, Clone)]
 pub struct GlobalsSchema {
-    custom_fields: Vec<(Arc<str>, ConcreteTy)>,
+    custom_fields: Vec<(Arc<str>, Type)>,
 }
 
 impl GlobalsSchema {
-    pub fn new(custom_fields: &[(&Arc<str>, &ConcreteTy)]) -> Self {
+    pub fn new(custom_fields: &[(&Arc<str>, Type)]) -> Self {
         Self {
-            custom_fields: custom_fields
-                .iter()
-                .map(|(name, ty)| (Arc::clone(name), (*ty).clone()))
-                .collect(),
+            custom_fields: custom_fields.iter().map(|(name, ty)| (Arc::clone(name), *ty)).collect(),
         }
     }
 
@@ -128,11 +122,4 @@ impl GlobalsSchema {
     pub fn offset_of_field(&self, field_index: usize) -> usize {
         self.make_row_schema().field(field_index).offset
     }
-}
-
-unsafe impl Reflect for Globals {
-    const TYPE_INFO: TypeInfo = TypeInfo::new_drop::<Globals>(
-        "Globals",
-        MemRepr::Compound(&[(offset_of!(Globals, data), &RowBuffer::TYPE_INFO)]),
-    );
 }

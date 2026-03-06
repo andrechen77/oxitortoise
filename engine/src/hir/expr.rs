@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 use crate::{
     hir::{Expr, ExprKind, HirToMirFnBuilder, Label, LocalDecl, LocalId, NlAbstractTy, Program},
-    mir,
+    mir::{self, reflection::MemDesc},
 };
 
 mod agent_var;
@@ -31,9 +31,11 @@ impl Expr for Scope {
 
     fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, local_out: mir::LocalId) {
         for (local_id, decl) in &self.locals {
-            let mir_local_decl =
-                mir::LocalDecl { debug_name: decl.debug_name.clone(), ty: decl.ty.repr() };
-            let mir_local_id = builder.lir.create_local(mir_local_decl);
+            let mir_local_decl = mir::LocalDecl {
+                debug_name: decl.debug_name.clone(),
+                ty: MemDesc::IsType(decl.ty.repr()),
+            };
+            let (mir_local_id, _) = builder.mir.create_local(mir_local_decl);
             builder.translator.locals.insert(*local_id, mir_local_id);
         }
         self.inner.write_mir_execution(builder, local_out);
@@ -75,7 +77,7 @@ impl Expr for Block {
     }
 
     fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, local_out: mir::LocalId) {
-        let label = builder.lir.create_label();
+        let label = builder.mir.create_label();
 
         // make this label visible to child expressions
         builder.translator.ctrl_flow_constructs.insert(self.label, (label, local_out));
@@ -92,7 +94,7 @@ impl Expr for Block {
             label: Some(label),
             statements,
         }));
-        builder.lir.add_statement(block);
+        builder.mir.add_statement(block);
     }
 }
 
@@ -132,7 +134,7 @@ impl Expr for IfElse {
             then: Box::new(then),
             r#else: Box::new(r#else),
         }));
-        builder.lir.add_statement(if_else);
+        builder.mir.add_statement(if_else);
     }
 }
 
@@ -163,7 +165,7 @@ impl Expr for Break {
         self.value.write_mir_execution(builder, target_local_out);
 
         // and add the break statement
-        builder.lir.add_statement(mir::Statement::Elementary(mir::ElementaryStatement::Break {
+        builder.mir.add_statement(mir::Statement::Elementary(mir::ElementaryStatement::Break {
             target: target_label,
         }));
     }

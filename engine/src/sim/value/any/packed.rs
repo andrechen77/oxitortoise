@@ -1,6 +1,6 @@
 use std::ptr::NonNull;
 
-use crate::util::reflection::{ConcreteTy, MemRepr, Reflect, TypeInfo};
+use crate::mir::reflection::{MemDesc, Reflect, Type, TypeInfo};
 
 use super::{BoxedAny, UnpackedAny};
 
@@ -75,7 +75,7 @@ impl PackedAny {
                 // SAFETY: this pointer can only have come from a call to
                 // `BoxedAny::as_raw` because there is no other assignment to
                 // this variant that doesn't use `BoxedAny::as_raw`
-                unsafe { BoxedAny::from_raw(NonNull::new_unchecked(value as *mut ConcreteTy)) },
+                unsafe { BoxedAny::from_raw(NonNull::new_unchecked(value as *mut Type)) },
             ),
             other => unimplemented!("{:b} is not a recognized tag for [`PackedAny`].", other),
         }
@@ -110,8 +110,10 @@ impl PackedAny {
 }
 
 unsafe impl Reflect for PackedAny {
-    const TYPE_INFO: TypeInfo =
-        TypeInfo::new_drop_zeroable::<PackedAny>("PackedAny", MemRepr::Single(lir::ValType::F64));
+    const TYPE: Type = Type::new(&TypeInfo::new_drop_zeroable::<PackedAny>(
+        "PackedAny",
+        &MemDesc::IsPrimitive(lir::ValType::F64),
+    ));
 }
 
 impl std::fmt::Debug for PackedAny {

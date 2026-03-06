@@ -1,14 +1,11 @@
 use pretty_print::PrettyPrinter;
 
-use std::{fmt::Write, mem::offset_of};
+use std::fmt::Write;
 
 use super::shapes::Shapes;
-use crate::{
-    sim::{
-        observer::Globals, patch::Patches, tick::Tick, topology::Topology, turtle::Turtles,
-        value::NlFloat,
-    },
-    util::reflection::{MemRepr, Reflect, TypeInfo},
+use crate::sim::{
+    observer::Globals, patch::Patches, tick::Tick, topology::Topology, turtle::Turtles,
+    value::NlFloat,
 };
 
 #[derive(Debug)]
@@ -129,17 +126,4 @@ impl World {
 
         s
     }
-}
-
-unsafe impl Reflect for World {
-    const TYPE_INFO: TypeInfo = TypeInfo::new_drop::<World>(
-        "World",
-        MemRepr::Compound(&[
-            (offset_of!(World, globals), &Globals::TYPE_INFO),
-            (offset_of!(World, turtles), &Turtles::TYPE_INFO),
-            // (offset_of!(World, patches), &Patches::TYPE_INFO),
-            // (offset_of!(World, topology), &Topology::TYPE_INFO),
-            // (offset_of!(World, tick_counter), &Tick::TYPE_INFO),
-        ]),
-    );
 }

@@ -4,30 +4,33 @@ use std::{
     ptr::NonNull,
 };
 
+use crate::mir::reflection::{Reflect, Type};
 use crate::sim::value::{NlBool, NlFloat, NlList, NlString};
-use crate::util::reflection::{ConcreteTy, Reflect};
 
 pub struct BoxedAny {
-    /// Always points to a valid [`ConcreteTy`] in memory, as if this field were
-    /// actually `Box<ConcreteTy>`. This `ConcreteTy` acts as a type tag for the
-    /// actual value being stored, which follows in memory after `ConcreteTy`,
-    /// where the offset is determined by [`std::alloc::Layout::extend`]. The
-    /// type itself is immutable, so the `ConcreteTy` can never change.
-    inner: NonNull<ConcreteTy>,
+    /// Always points to a valid [`Type`] in memory, as if this field were
+    /// actually `Box<Type>`. This `Type` acts as a type tag for the actual
+    /// value being stored, which follows in memory after `Type`, where the
+    /// offset is determined by [`std::alloc::Layout::extend`]. The type itself
+    /// is immutable, so the `Type` can never change.
+    inner: NonNull<Type>,
 }
 
-/// `BoxedAny` points to a pair of a `ConcreteTy` followed by the actual value
+/// `BoxedAny` points to a pair of a [`Type`] followed by the actual value
 /// of type `T`. This function returns the overall layout of the whole pair as
 /// well as the offset into the allocation where the value starts.
 fn layout_and_val_offset(val_layout: Layout) -> (Layout, usize) {
-    Layout::new::<ConcreteTy>().extend(val_layout).unwrap()
+    Layout::new::<Type>().extend(val_layout).unwrap()
 }
 
 impl BoxedAny {
     pub fn new<T: Reflect>(value: T) -> Self {
         // allocate memory for the value and its type tag
         let (layout, value_start) = layout_and_val_offset(
-            T::TYPE_INFO.layout.expect("type should have a known layout to be used in a BoxedAny"),
+            T::TYPE
+                .info()
+                .layout
+                .expect("type should have a known layout to be used in a BoxedAny"),
         );
         assert!(layout.size() > 0, "layout size must be greater than 0");
         // SAFETY: we checked that the size is greater than 0
@@ -37,7 +40,7 @@ impl BoxedAny {
         // move the type tag into the allocated memory
         // SAFETY: the ptr is valid for writes and the allocator should have
         // returned a properly aligned pointer
-        unsafe { std::ptr::write(all_ptr.cast::<ConcreteTy>().as_ptr(), (&T::TYPE_INFO).into()) };
+        unsafe { std::ptr::write(all_ptr.cast::<Type>().as_ptr(), T::TYPE) };
 
         // move the value into the allocated memory
         // SAFETY: we trust that the Layout::extend API correctly gave an offset
@@ -50,33 +53,33 @@ impl BoxedAny {
         Self { inner: all_ptr.cast() }
     }
 
-    /// Creates a new [`BoxedAny`] from a pointer to a [`ConcreteTy`] followed
-    /// by the actual value.
+    /// Creates a new [`BoxedAny`] from a pointer that points to a [`Type`]
+    /// followed by the actual value.
     ///
     /// # Safety
     ///
     /// The pointer must have come from a call to [`BoxedAny::as_raw`].
-    pub unsafe fn from_raw(ptr: NonNull<ConcreteTy>) -> Self {
+    pub unsafe fn from_raw(ptr: NonNull<Type>) -> Self {
         Self { inner: ptr }
     }
 
-    pub fn as_raw(&self) -> NonNull<ConcreteTy> {
+    pub fn as_raw(&self) -> NonNull<Type> {
         self.inner
     }
 
-    fn ty(&self) -> &ConcreteTy {
-        // SAFETY: this pointer is always valid when used to access `ConcreteTy`
+    fn ty(&self) -> Type {
+        // SAFETY: this pointer is always valid when used to access `Type`
         // per this type's invariants
-        unsafe { &*self.inner.as_ptr() }
+        unsafe { *self.inner.as_ptr() }
     }
 
     /// Obtains a pointer to the actual value stored in this [`BoxedAny`].
     /// Panics if the attempted access type does not match the type tag.
     fn ptr_to_val<T: Reflect>(&self) -> NonNull<T> {
-        let ty = T::TYPE_INFO;
-        assert!(*self.ty() == ty, "type mismatch");
+        let ty = T::TYPE;
+        assert!(self.ty() == ty, "type mismatch");
         let (_, offset) = layout_and_val_offset(
-            ty.layout.expect("type should have a known layout to be used in a BoxedAny"),
+            ty.info().layout.expect("type should have a known layout to be used in a BoxedAny"),
         );
         // SAFETY: since the type tag passed the assertion, we know that the
         // type must be correct and therefore the pointer derived from assuming
@@ -84,7 +87,7 @@ impl BoxedAny {
         unsafe { self.inner.byte_add(offset) }.cast()
     }
 
-    /// If the specified layout corresponds to the actul type of the value
+    /// If the specified layout corresponds to the actual type of the value
     /// stored in this [`BoxedAny`], then returns a pointer to that value.
     ///
     /// # Safety
@@ -137,13 +140,13 @@ impl Drop for BoxedAny {
 
 impl Debug for BoxedAny {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if *self.ty() == NlBool::TYPE_INFO {
+        if self.ty() == NlBool::TYPE {
             write!(f, "{:?}", self.deref_as::<NlBool>())?;
-        } else if *self.ty() == NlFloat::TYPE_INFO {
+        } else if self.ty() == NlFloat::TYPE {
             write!(f, "{:?}", self.deref_as::<NlFloat>())?;
-        } else if *self.ty() == NlList::TYPE_INFO {
+        } else if self.ty() == NlList::TYPE {
             write!(f, "{:?}", self.deref_as::<NlList>())?;
-        } else if *self.ty() == NlString::TYPE_INFO {
+        } else if self.ty() == NlString::TYPE {
             write!(f, "{:?}", self.deref_as::<NlString>())?;
         } else {
             write!(f, "BoxedAny(unknown type {:?})", self.ty())?;

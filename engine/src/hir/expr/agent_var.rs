@@ -1,19 +1,15 @@
 //! Nodes for getting and setting agent and global variables.
 
-use std::mem::offset_of;
-
 use crate::{
     exec::CanonExecutionContext,
     hir::{Expr, ExprKind, HirToMirFnBuilder, NlAbstractTy, Program},
     mir,
-    sim::{observer::Globals, patch::PatchVarDesc, turtle::TurtleVarDesc, world::World},
-    util::row_buffer::ROW_BUFFER_OFFSET_TO_DATA_PTR,
+    sim::{patch::PatchVarDesc, turtle::TurtleVarDesc},
     workspace::Workspace,
 };
 
 #[derive(Debug)]
 pub struct GetGlobalVar {
-    // NOTE: `context` inputs have been removed in the new HIR paradigm.
     pub index: usize,
 }
 
@@ -30,33 +26,81 @@ impl Expr for GetGlobalVar {
     }
 
     fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, local_out: mir::LocalId) {
-        let context = builder.context_param();
-        let var_pl = context_to_global_var_place(builder, context.into(), self.index);
-        builder.lir.add_operation_with_dst(
+        let context = builder.context_param().into_place();
+        let var_offset = builder.hir.globals_schema.as_ref().unwrap().offset_of_field(self.index);
+        let var_pl = project_global_var::write_mir(builder, var_offset, context).into_place();
+        builder.mir.add_operation_with_dst(
             local_out.into(),
             mir::Operation::Operand(mir::PlaceOperand::Move(var_pl)),
         );
     }
 }
 
-fn context_to_global_var_place(
-    builder: &mut HirToMirFnBuilder,
-    context: mir::Place,
-    var_index: usize,
-) -> mir::Place {
-    let field_offset = builder.hir.globals_schema.as_ref().unwrap().offset_of_field(var_index);
+mod project_global_var {
+    use super::*;
 
-    // calculate the place of the global variable starting from the context pointer
-    context // &mut Context
-        .proj_deref() // Context
-        .proj_field(offset_of!(CanonExecutionContext, workspace)) // &mut Workspace
-        .proj_deref() // Workspace
-        .proj_field(offset_of!(Workspace, world)) // World
-        .proj_field(offset_of!(World, globals)) // Globals
-        .proj_field(offset_of!(Globals, data)) // RowBuffer
-        .proj_field(ROW_BUFFER_OFFSET_TO_DATA_PTR) // *mut UntypedBytes
-        .proj_deref() // UntypedBytes
-        .proj_field(field_offset) // get the field of the global data
+    use std::mem::offset_of;
+
+    use crate::{
+        hir::HirToMirFnBuilder,
+        mir::{
+            Place, Projection,
+            reflection::{DynPtr, PlaceWithMemDesc, Reflect},
+        },
+        util::row_buffer::RowBuffer,
+    };
+
+    /*
+    fn project_global_var<T>(var_offset: usize)<'a>(context: &'a mut CanonExecutionContext) -> &'a mut T {
+        mir! {
+            return &mut context
+                .deref::<CanonExecutionContext>()
+                .workspace
+                .deref::<Workspace>()
+                .world
+                .globals
+                .data
+                .dyn_ptr::<RowBuffer>()
+                .dyn_field::<T>(var_offset);
+        }
+    }
+     */
+
+    pub fn write_mir<'a>(
+        builder: &'a mut HirToMirFnBuilder,
+        var_offset: usize,
+        context: Place,
+    ) -> PlaceWithMemDesc<'a> {
+        let context = builder.mir.place_with_type(context);
+        let place = {
+            let x1 = context.proj_deref();
+            let x2 = x1.proj_field(offset_of!(CanonExecutionContext, workspace));
+            let x3 = x2.proj_deref();
+            let x6 = x3.proj_field(offset_of!(Workspace, world.globals.data));
+            let x6_pl = x6.into_place();
+            let x7 = <RowBuffer as DynPtr>::write_mir_get_data_ptr(builder.mir, x6_pl);
+            let x8 = x7.proj_field(var_offset);
+            x8
+        };
+        place
+    }
+
+    pub fn interp<'a, T: Reflect>(
+        var_offset: usize,
+        context: &'a mut CanonExecutionContext,
+    ) -> &'a mut T {
+        let place = {
+            let x2 = &mut context.workspace;
+            let x4 = &mut x2.world;
+            let x5 = &mut x4.globals;
+            let x6 = &mut x5.data;
+            let (x7, x7_desc) = <RowBuffer as DynPtr>::data_ptr_mut(x6);
+            x7_desc.project(Projection::Field { byte_offset: var_offset }).assert_type(T::TYPE);
+            let x8 = unsafe { x7.map(|ptr| ptr.byte_add(var_offset)).cast::<T>() };
+            x8
+        };
+        place
+    }
 }
 
 // TODO(mvp) if this is a variable that may or may not exist depending on the

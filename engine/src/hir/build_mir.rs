@@ -1,15 +1,16 @@
 use std::collections::HashMap;
 
 use crate::{
-    exec::CanonExecutionContext,
     hir::{self, Expr},
-    mir,
-    util::reflection::Reflect as _,
+    mir::{
+        self,
+        reflection::{MemDesc, PlaceWithMemDesc},
+    },
 };
 
 pub struct HirToMirFnBuilder<'a, 'b> {
     pub hir: &'a hir::Program,
-    pub lir: &'a mut mir::builder::FunctionBuilder<'b>,
+    pub mir: &'a mut mir::builder::FunctionBuilder<'b>,
     pub translator: &'a mut HirToLirFnTranslator,
 }
 
@@ -49,8 +50,10 @@ impl<'a, 'b> HirToMirFnBuilder<'a, 'b> {
     pub fn translate_expr(&mut self, expr: &hir::ExprKind) -> mir::LocalId {
         let output_ty = expr.output_type(self.hir).repr();
         // the expression's output will be stored in this local variable
-        let output_local =
-            self.lir.create_local(mir::LocalDecl { debug_name: None, ty: output_ty });
+        let (output_local, _output_local_decl) = self
+            .mir
+            .create_local(mir::LocalDecl { debug_name: None, ty: MemDesc::IsType(output_ty) });
+        // TODO could do something with the type assertion here
         expr.write_mir_execution(self, output_local);
         output_local
     }
@@ -63,22 +66,32 @@ impl<'a, 'b> HirToMirFnBuilder<'a, 'b> {
         &mut self,
         f: impl FnOnce(&mut HirToMirFnBuilder<'_, '_>) -> T,
     ) -> (Vec<mir::Statement>, T) {
-        self.lir.with_inner_statement_seq(|lir| {
-            let mut builder = HirToMirFnBuilder { hir: self.hir, lir, translator: self.translator };
+        self.mir.with_inner_statement_seq(|lir| {
+            let mut builder =
+                HirToMirFnBuilder { hir: self.hir, mir: lir, translator: self.translator };
             f(&mut builder)
         })
     }
 
     /// Returns the local variable that contains the context parameter, creating
     /// it as a function parameter if it does not exist.
-    pub fn context_param(&mut self) -> mir::LocalId {
-        *self.translator.context_param.get_or_insert_with(|| {
-            self.lir.create_local(mir::LocalDecl {
+    pub fn context_param(&mut self) -> PlaceWithMemDesc<'_> {
+        // cannot use `map_or_else` because two closures would require borrows
+        // of self.mir at the same time
+        let (local_id, local_decl) = if let Some(context_param) = self.translator.context_param {
+            (context_param, self.mir.get_local_mut(context_param))
+        } else {
+            let (local_id, local_decl) = self.mir.create_local(mir::LocalDecl {
                 debug_name: None,
-                ty: (&<&mut CanonExecutionContext>::TYPE_INFO).into(),
-            })
+                // any MIR operations that use the parameter will add assertions
+                // as they need them
+                ty: MemDesc::None,
+            });
+            self.translator.context_param = Some(local_id);
             // TODO add as parameter to the function
-        })
+            (local_id, local_decl)
+        };
+        PlaceWithMemDesc::new(local_id.into(), &mut local_decl.ty)
     }
 }
 
@@ -92,7 +105,7 @@ pub fn hir_to_mir(hir: &hir::Program) -> mir::Program {
         let mut translator = HirToLirFnTranslator::default();
 
         let mut builder =
-            HirToMirFnBuilder { hir, lir: &mut lir_fn_builder, translator: &mut translator };
+            HirToMirFnBuilder { hir, mir: &mut lir_fn_builder, translator: &mut translator };
 
         // add all the nodes to the function body
         let return_place = builder.translate_expr(&hir_fn.body);

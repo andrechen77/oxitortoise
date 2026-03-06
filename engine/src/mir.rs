@@ -1,17 +1,18 @@
 use std::{collections::HashMap, sync::Arc};
 
 use crate::{
+    mir::reflection::{MemDesc, Type},
     sim::value::BoxedAny,
-    util::reflection::{ConcreteTy, TypeInfo},
 };
 
 pub mod builder;
+pub mod reflection;
 
 #[derive(Debug)]
 pub struct HostFunctionInfo {
     pub debug_name: &'static str,
-    pub parameter_types: &'static [&'static TypeInfo],
-    pub return_type: &'static TypeInfo,
+    pub parameter_types: &'static [Type],
+    pub return_type: Type,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
@@ -43,7 +44,7 @@ pub struct Function {
 #[derive(Debug)]
 pub struct LocalDecl {
     pub debug_name: Option<Arc<str>>,
-    pub ty: ConcreteTy,
+    pub ty: MemDesc,
 }
 
 #[derive(Debug)]
@@ -78,7 +79,7 @@ pub struct IfElse {
 #[derive(Debug)]
 pub struct Loop {
     pub num_repetitions: Place,
-    pub statements: Box<Statement>,
+    pub body: Box<Statement>,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
@@ -91,18 +92,8 @@ pub struct Place {
 }
 
 impl Place {
-    pub fn proj_deref(mut self) -> Self {
-        self.projections.push(Projection::Deref);
-        self
-    }
-
-    pub fn proj_field(mut self, byte_offset: usize) -> Self {
-        self.projections.push(Projection::Field { byte_offset });
-        self
-    }
-
-    pub fn proj_index(mut self, index: LocalId) -> Self {
-        self.projections.push(Projection::Index(index));
+    pub fn proj(mut self, projection: Projection) -> Self {
+        self.projections.push(projection);
         self
     }
 }

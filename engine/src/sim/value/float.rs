@@ -3,8 +3,8 @@ use derive_more::derive::{
 };
 
 use crate::{
+    mir::reflection::{MemDesc, Reflect, Type, TypeInfo},
     sim::{color::Color, topology::CoordInt, turtle::TurtleWho},
-    util::reflection::{MemRepr, Reflect, TypeInfo},
 };
 
 /// A double-precision floating-point number which is guaranteed to be finite
@@ -31,8 +31,11 @@ impl NlFloat {
 }
 
 unsafe impl Reflect for NlFloat {
-    const TYPE_INFO: TypeInfo =
-        TypeInfo::new_copy::<NlFloat>("NlFloat", true, MemRepr::Single(lir::ValType::F64));
+    const TYPE: Type = Type::new(&TypeInfo::new_copy::<NlFloat>(
+        "NlFloat",
+        true,
+        &MemDesc::IsPrimitive(lir::ValType::F64),
+    ));
 }
 
 impl From<CoordInt> for NlFloat {

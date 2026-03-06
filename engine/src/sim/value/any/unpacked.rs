@@ -1,10 +1,10 @@
 use crate::{
+    mir::reflection::{Reflect as _, Type},
     sim::{
         patch::PatchId,
         turtle::TurtleId,
         value::{NlBool, NlFloat},
     },
-    util::reflection::{ConcreteTy, Reflect as _},
 };
 use std::{
     cmp::Ordering,
@@ -25,13 +25,13 @@ pub enum UnpackedAny {
 }
 
 impl UnpackedAny {
-    pub fn ty(&self) -> ConcreteTy {
+    pub fn ty(&self) -> Type {
         match self {
-            UnpackedAny::Bool(_) => (&NlBool::TYPE_INFO).into(),
-            UnpackedAny::Float(_) => (&NlFloat::TYPE_INFO).into(),
-            UnpackedAny::Nobody => (&NlBool::TYPE_INFO).into(),
-            UnpackedAny::Turtle(_) => (&TurtleId::TYPE_INFO).into(),
-            UnpackedAny::Patch(_) => (&PatchId::TYPE_INFO).into(),
+            UnpackedAny::Bool(_) => NlBool::TYPE,
+            UnpackedAny::Float(_) => NlFloat::TYPE,
+            UnpackedAny::Nobody => NlBool::TYPE,
+            UnpackedAny::Turtle(_) => TurtleId::TYPE,
+            UnpackedAny::Patch(_) => PatchId::TYPE,
             UnpackedAny::Link(_) => todo!("add link id"),
             UnpackedAny::Other(_) => todo!("match on the inner type"),
         }

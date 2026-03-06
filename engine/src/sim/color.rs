@@ -4,11 +4,9 @@ use std::{
 };
 
 use crate::{
+    mir::reflection::{MemDesc, Reflect, Type, TypeInfo},
     sim::value::NlFloat,
-    util::{
-        reflection::{MemRepr, Reflect, TypeInfo},
-        rng::Rng,
-    },
+    util::rng::Rng,
 };
 
 /// A NetLogo color. This is a floating point value guaranteed to be in the
@@ -70,8 +68,11 @@ impl AddAssign<NlFloat> for Color {
 }
 
 unsafe impl Reflect for Color {
-    const TYPE_INFO: TypeInfo =
-        TypeInfo::new_copy::<Color>("Color", true, MemRepr::Single(lir::ValType::F64));
+    const TYPE: Type = Type::new(&TypeInfo::new_copy::<Color>(
+        "Color",
+        true,
+        &MemDesc::IsPrimitive(lir::ValType::F64),
+    ));
 }
 
 const COLOR_MAX: f64 = 140.0;

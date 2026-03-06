@@ -8,7 +8,10 @@ use slotmap::{SecondaryMap, SlotMap, new_key_type};
 
 use crate::{
     hir::expr::{Break, Scope},
-    mir,
+    mir::{
+        self,
+        reflection::{Reflect, Type},
+    },
     sim::{
         color::Color,
         observer::GlobalsSchema,
@@ -17,7 +20,6 @@ use crate::{
         turtle::{Breed, BreedId, TurtleId, TurtleSchema},
         value::{NlBool, NlBox, NlFloat, NlList, PackedAny},
     },
-    util::reflection::{ConcreteTy, Reflect},
 };
 
 mod build_mir;
@@ -199,21 +201,21 @@ impl NlAbstractTy {
         // TODO implement more granular least upper bound for other types
     }
 
-    pub fn repr(&self) -> ConcreteTy {
+    pub fn repr(&self) -> Type {
         // TODO(mvp) add machine types for all abstract types
         match self {
-            Self::Unit => (&<()>::TYPE_INFO).into(),
-            Self::Top => (&PackedAny::TYPE_INFO).into(),
+            Self::Unit => <()>::TYPE,
+            Self::Top => PackedAny::TYPE,
             Self::Bottom => unimplemented!("bottom type has no concrete representation"),
-            Self::Numeric => (&NlFloat::TYPE_INFO).into(),
-            Self::Color => (&Color::TYPE_INFO).into(),
-            Self::Float => (&NlFloat::TYPE_INFO).into(),
-            Self::Boolean => (&NlBool::TYPE_INFO).into(),
+            Self::Numeric => NlFloat::TYPE,
+            Self::Color => Color::TYPE,
+            Self::Float => NlFloat::TYPE,
+            Self::Boolean => NlBool::TYPE,
             Self::String => todo!(),
-            Self::Point => (&Point::TYPE_INFO).into(),
-            Self::Agent => (&PackedAny::TYPE_INFO).into(),
-            Self::Patch => (&OptionPatchId::TYPE_INFO).into(),
-            Self::Turtle => (&TurtleId::TYPE_INFO).into(),
+            Self::Point => Point::TYPE,
+            Self::Agent => PackedAny::TYPE,
+            Self::Patch => OptionPatchId::TYPE,
+            Self::Turtle => TurtleId::TYPE,
             Self::Link => todo!(""),
             Self::Agentset { agent_type: _ } => todo!(""),
             // If a type is just "nobody", then it is inhabited by only one
@@ -224,9 +226,7 @@ impl NlAbstractTy {
             // representation.
             Self::Nobody => unimplemented!("nobody type has no concrete representation"),
             Self::Closure(_) => todo!(),
-            Self::List { element_ty } if **element_ty == Self::Top => {
-                (&<NlBox<NlList>>::TYPE_INFO).into()
-            }
+            Self::List { element_ty } if **element_ty == Self::Top => <NlBox<NlList>>::TYPE,
             Self::List { element_ty: _ } => todo!(),
         }
     }
@@ -237,14 +237,4 @@ impl NlAbstractTy {
 pub struct ClosureType {
     pub arg_ty: Box<NlAbstractTy>,
     pub return_ty: Box<NlAbstractTy>,
-}
-
-impl ClosureType {
-    // TODO(wishlist) this should be linked somehow to the machine-level calling
-    // convention defined in jit.rs
-    #[allow(dead_code)] // remove when used
-    const PARAM_ENV_IDX: usize = 0;
-    #[allow(dead_code)] // remove when used
-    const PARAM_CONTEXT_IDX: usize = 1;
-    const PARAM_ARG_IDX: usize = 2;
 }
