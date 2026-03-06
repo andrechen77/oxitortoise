@@ -327,6 +327,7 @@ fn translate_insn_seq(
             }
             lir::InsnKind::Const(val) => {
                 let val = match *val {
+                    lir::Value::I8(val) => builder.cl.ins().iconst(clir::types::I8, val as i64),
                     lir::Value::I32(val) => builder.cl.ins().iconst(clir::types::I32, val as i64),
                     lir::Value::I64(val) => builder.cl.ins().iconst(clir::types::I64, val as i64),
                     lir::Value::F64(val) => builder.cl.ins().f64const(val),

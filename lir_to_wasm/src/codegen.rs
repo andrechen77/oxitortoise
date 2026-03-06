@@ -705,6 +705,7 @@ fn translate_val_type(r#type: lir::ValType) -> walrus::ValType {
 /// Translate a LIR value to a Wasm value.
 fn translate_val(value: lir::Value) -> walrus::ir::Value {
     match value {
+        lir::Value::I8(value) => wir::Value::I32(value as i32),
         lir::Value::I32(value) => wir::Value::I32(value as i32),
         lir::Value::I64(value) => wir::Value::I64(value as i64),
         lir::Value::F64(value) => wir::Value::F64(value),
@@ -793,8 +794,8 @@ fn translate_binary_op(
         (O::FEq, V::F64, V::F64) => Wo::F64Eq,
         (O::FDiv, V::F64, V::F64) => Wo::F64Div,
         (O::FGte, V::F64, V::F64) => Wo::F64Ge,
-        (O::And, V::I32, V::I32) => Wo::I32And, // TODO: fix this
-        (O::Or, V::I32, V::I32) => Wo::I32Or,   // TODO: fix this
+        (O::And, V::I8, V::I8) => Wo::I32And,
+        (O::Or, V::I8, V::I8) => Wo::I32Or,
         _ => unimplemented!(
             "unknown combination of op and val types: {:?}, {:?}, {:?}",
             op,

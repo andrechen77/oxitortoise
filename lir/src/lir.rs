@@ -289,6 +289,7 @@ pub enum InsnKind {
 
 #[derive(Debug, Clone, Copy)]
 pub enum Value {
+    I8(u8),
     I32(u32),
     I64(u64),
     F64(f64),
@@ -317,6 +318,7 @@ impl Value {
 
     fn ty(&self) -> ValType {
         match self {
+            Self::I8(_) => ValType::I8,
             Self::I32(_) => ValType::I32,
             Self::I64(_) => ValType::I64,
             Self::F64(_) => ValType::F64,
