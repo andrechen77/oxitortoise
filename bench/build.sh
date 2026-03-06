@@ -1,23 +1,22 @@
 #!/bin/bash
 
 if [ -z "$1" ]; then
-    echo "Usage: $0 <model_name> [release]"
+    echo "Usage: $0 <model_name> <dev|release>"
     exit 1
 fi
 MODEL_NAME=$1
-
-# Check the first argument for build mode (release or dev/empty)
-# If the argument is "release", build in release mode and set PROFILE=release
-# Otherwise, build in development mode and set PROFILE=debug
 
 if [[ "$2" == "release" ]]; then
     PROFILE=release
     BUILD_FLAGS="--release"
     echo "Building in release mode"
-else
+elif [[ "$2" == "dev" ]]; then
     PROFILE=debug
     BUILD_FLAGS=""
     echo "Building in development mode"
+else
+    echo "Usage: $0 <model_name> <dev|release>"
+    exit 1
 fi
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
