@@ -385,7 +385,9 @@ fn translate_insn_seq(
                 let operand = builder.value_map[operand];
                 let val = match op {
                     lir::UnaryOpcode::FNeg => builder.cl.ins().fneg(operand),
-                    lir::UnaryOpcode::Not => builder.cl.ins().bnot(operand),
+                    lir::UnaryOpcode::Not => {
+                        builder.cl.ins().icmp_imm(clir::condcodes::IntCC::Equal, operand, 0)
+                    }
                     lir::UnaryOpcode::I64ToI32 => {
                         builder.cl.ins().ireduce(clir::types::I32, operand)
                     }
