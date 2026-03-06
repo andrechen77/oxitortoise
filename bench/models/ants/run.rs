@@ -240,6 +240,8 @@ fn main() {
         perf_trials();
         let duration = start.elapsed();
         println!("perf_trials execution time: {:?}", duration);
+
+        // verification_trials();
     }
 }
 
@@ -318,6 +320,50 @@ extern "C" fn perf_trials() {
         // call go
         for _tick in 0..1000 {
             go.call(&mut ctx, vec![]);
+        }
+    }
+}
+
+fn verification_trials() {
+    let mut compile_result = COMPILE_RESULT.lock().unwrap();
+    let Some(compile_result) = compile_result.as_mut() else {
+        panic!("no compile result");
+    };
+    let CompileResult { workspace, global_names, mir_to_lir_fns, installed_obj } = compile_result;
+
+    // find the functions by name
+    let NameReferent::UserProc(fn_id) = global_names.lookup("SETUP").unwrap() else {
+        panic!("expected a user procedure");
+    };
+    let setup = installed_obj.entrypoint(mir_to_lir_fns[&fn_id]);
+    let NameReferent::UserProc(fn_id) = global_names.lookup("GO").unwrap() else {
+        panic!("expected a user procedure");
+    };
+    let go = installed_obj.entrypoint(mir_to_lir_fns[&fn_id]);
+
+    // set up the execution context
+    let next_int = workspace.rng.clone();
+    let mut ctx =
+        ExecutionContext { workspace, next_int, dirty_aggregator: DirtyAggregator::default() };
+
+    // run the simulation
+    for trial in 0..100 {
+        info!("running verification trial {}", trial);
+
+        // call setup
+        setup.call(&mut ctx, vec![]);
+
+        // call go
+        for tick in 0..1000 {
+            go.call(&mut ctx, vec![]);
+
+            if trial == 0 || trial == 99 {
+                let update = ctx.workspace.world.generate_js_update_full();
+                write_to_file(
+                    format!("verification_trial_{}_tick_{}.txt", trial, tick),
+                    update.as_bytes(),
+                );
+            }
         }
     }
 }
