@@ -1,5 +1,7 @@
 use std::marker::PhantomData;
 
+#[derive(Copy, Clone)]
+#[repr(transparent)]
 pub struct LifetimePtr<'a> {
     ptr: *const u8,
     _phantom: PhantomData<&'a ()>,
@@ -33,6 +35,8 @@ impl<'a> LifetimePtr<'a> {
     }
 }
 
+#[derive(Copy, Clone)]
+#[repr(transparent)]
 pub struct LifetimePtrMut<'a> {
     ptr: *mut u8,
     _phantom: PhantomData<&'a mut ()>,

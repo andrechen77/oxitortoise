@@ -12,10 +12,10 @@ use pretty_print::PrettyPrinter;
 
 use super::topology::Point;
 use crate::{
-    hir::{self, HirToMirFnBuilder},
+    hir::HirToMirFnBuilder,
     mir::{
         self,
-        reflection::{MemDesc, Reflect, Type, TypeInfo},
+        reflection::{MirReflect, MirType, MirTypeInfo},
     },
     sim::{
         agent_schema::{AgentFieldDescriptor, AgentSchemaField, AgentSchemaFieldGroup},
@@ -23,7 +23,10 @@ use crate::{
         topology::{CoordFloat, PointInt, TopologySpec},
         value::{BoxedAny, NlBool, NlFloat, NlList, NlString, PackedAny},
     },
-    util::row_buffer::{self, RowBuffer, RowSchema},
+    util::{
+        reflection::{Reflect, Type, TypeInfo},
+        row_buffer::{self, RowBuffer, RowSchema},
+    },
 };
 
 /// A reference to a patch.
@@ -46,11 +49,7 @@ impl Default for PatchId {
 }
 
 unsafe impl Reflect for PatchId {
-    const TYPE: Type = Type::new(&TypeInfo::new_copy::<PatchId>(
-        "PatchId",
-        false,
-        &MemDesc::IsPrimitive(lir::ValType::I32),
-    ));
+    const TYPE_INFO: TypeInfo = TypeInfo::new_copy::<PatchId>("PatchId", false);
 }
 
 /// Exactly the same as [`PatchId`], but it can represent "nobody" at the -1
@@ -59,13 +58,17 @@ unsafe impl Reflect for PatchId {
 #[repr(transparent)]
 pub struct OptionPatchId(pub u32);
 
-// make a copy with a different identity
 unsafe impl Reflect for OptionPatchId {
-    const TYPE: Type = Type::new(&TypeInfo::new_copy::<OptionPatchId>(
-        "OptionPatchId",
-        false,
-        &MemDesc::IsPrimitive(lir::ValType::I32),
-    ));
+    const TYPE_INFO: TypeInfo = TypeInfo::new_copy::<OptionPatchId>("OptionPatchId", false);
+}
+
+unsafe impl MirReflect for OptionPatchId {
+    fn mir_type() -> MirType {
+        Arc::new(MirTypeInfo {
+            static_ty: Some(&OptionPatchId::TYPE_INFO),
+            contents: Default::default(),
+        })
+    }
 }
 
 impl OptionPatchId {
@@ -80,7 +83,7 @@ impl OptionPatchId {
         operand: mir::LocalId,
     ) {
         let sentinel_pl = builder.mir.add_operation(
-            mir::LocalDecl { debug_name: None, ty: OptionPatchId::TYPE.info().mem_desc.clone() },
+            mir::LocalDecl { debug_name: None, ty: OptionPatchId::mir_type() },
             mir::Operation::Const { value: BoxedAny::new(OptionPatchId::NOBODY) },
         );
         let opcode = if negate { lir::BinaryOpcode::INeq } else { lir::BinaryOpcode::IEq };
@@ -141,7 +144,7 @@ impl Patches {
 
     /// Get a reference to a field of a patch. Returns `None` if the
     /// patch does not exist.
-    pub fn get_patch_field<T: Reflect>(
+    pub fn get_patch_field<T: Reflect + 'static>(
         &self,
         id: PatchId,
         field: AgentFieldDescriptor,
@@ -175,7 +178,7 @@ impl Patches {
 
     /// Get a mutable reference to a field of a patch. Returns `None` if the
     /// patch does not exist.
-    pub fn get_patch_field_mut<T: Reflect>(
+    pub fn get_patch_field_mut<T: Reflect + 'static>(
         &mut self,
         id: PatchId,
         field: AgentFieldDescriptor,
@@ -207,7 +210,7 @@ impl Patches {
             .map(|either| either.expect_left("pcolor should always exist in the row buffer"))
     }
 
-    pub fn set_patch_field<T: Reflect>(
+    pub fn set_patch_field<T: Reflect + 'static>(
         &mut self,
         id: PatchId,
         field: AgentFieldDescriptor,
@@ -241,7 +244,7 @@ impl Patches {
     /// Panics if the field cannot be reinterpreted as an array of the specified
     /// type or if it wasn't put into its own field group with no occupancy
     /// bitfield.
-    pub fn patch_field_as_mut_array<T: Copy + Reflect>(
+    pub fn patch_field_as_mut_array<T: Copy + Reflect + 'static>(
         &mut self,
         field: AgentFieldDescriptor,
     ) -> &mut [T] {
@@ -295,10 +298,10 @@ impl Patches {
 
                 // initialize custom fields
                 for &(_, field) in self.patch_schema.custom_fields() {
-                    let AgentSchemaField::Other(r#type) = &self.patch_schema[field] else {
+                    let AgentSchemaField::Other(r#type) = self.patch_schema[field] else {
                         panic!("field at index {:?} should be a custom field", field);
                     };
-                    if r#type.info().is_zeroable {
+                    if r#type.is_zeroable {
                         self.data[field.buffer_idx as usize]
                             .as_mut()
                             .unwrap()
@@ -359,7 +362,7 @@ fn pretty_print_patch(
                 panic!("field at index {:?} should be a custom field", field_desc);
             };
             p.add_field_with(field_name, |p| {
-                fn print_field<T: Reflect + fmt::Debug>(
+                fn print_field<T: Reflect + fmt::Debug + 'static>(
                     p: &mut PrettyPrinter<impl Write>,
                     patches: &Patches,
                     id: PatchId,
@@ -371,13 +374,13 @@ fn pretty_print_patch(
                         Some(Either::Right(field)) => write!(p, "fallback {:?}", field),
                     }
                 }
-                if ty == NlFloat::TYPE {
+                if ty.is::<NlFloat>() {
                     print_field::<NlFloat>(p, patches, id, *field_desc)
-                } else if ty == NlBool::TYPE {
+                } else if ty.is::<NlBool>() {
                     print_field::<NlBool>(p, patches, id, *field_desc)
-                } else if ty == NlString::TYPE {
+                } else if ty.is::<NlString>() {
                     print_field::<NlString>(p, patches, id, *field_desc)
-                } else if ty == NlList::TYPE {
+                } else if ty.is::<NlList>() {
                     print_field::<NlList>(p, patches, id, *field_desc)
                 } else {
                     write!(p, "unknown type {:?}", ty)
@@ -397,7 +400,7 @@ pub struct PatchBaseData {
 }
 
 unsafe impl Reflect for PatchBaseData {
-    const TYPE: Type = Type::new(&TypeInfo::new_opaque::<PatchBaseData>("PatchBaseData"));
+    const TYPE_INFO: TypeInfo = TypeInfo::new_opaque::<PatchBaseData>("PatchBaseData");
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -438,15 +441,15 @@ impl PatchSchema {
         }
 
         // add pcolor field
-        field_groups[pcolor_buffer_idx as usize].fields.push(AgentSchemaField::Other(Color::TYPE));
+        field_groups[pcolor_buffer_idx as usize]
+            .fields
+            .push(AgentSchemaField::Other(&Color::TYPE_INFO));
 
         // add custom fields and collect their descriptors
         let mut custom_field_descriptors = Vec::new();
         for (field_name, field_type, buffer_idx) in custom_fields {
             let field_idx = field_groups[*buffer_idx as usize].fields.len() as u8;
-            field_groups[*buffer_idx as usize]
-                .fields
-                .push(AgentSchemaField::Other(field_type.clone()));
+            field_groups[*buffer_idx as usize].fields.push(AgentSchemaField::Other(field_type));
             custom_field_descriptors.push((
                 Arc::clone(field_name),
                 AgentFieldDescriptor { buffer_idx: *buffer_idx, field_idx },
@@ -513,37 +516,10 @@ impl Index<AgentFieldDescriptor> for PatchSchema {
     }
 }
 
-/// See [`calc_turtle_var_offset`].
-pub fn calc_patch_var_offset(hir: &hir::Program, var: PatchVarDesc) -> (usize, usize, usize) {
-    fn stride_and_field_offset(
-        patch_schema: &PatchSchema,
-        field: AgentFieldDescriptor,
-    ) -> (usize, usize) {
-        // TODO(wishlist) it's inefficient to calculate the schemas every time. see
-        // if we can cache this calculation as well as use it for making
-        // the workspace
-        let schemas: [Option<RowSchema>; 4] = patch_schema.make_row_schemas();
-        let row_schema = schemas[usize::from(field.buffer_idx)].as_ref().unwrap();
-        let field_offset = row_schema.field(usize::from(field.field_idx)).offset;
-        let stride = row_schema.stride();
-        (stride, field_offset)
-    }
-
-    let patch_schema = hir.patch_schema.as_ref().unwrap();
-    let (buffer_idx, stride, field_offset) = {
-        let (field_desc, additional_offset) = patch_schema.field_desc_and_offset(var);
-        let (stride, field_offset) = stride_and_field_offset(patch_schema, field_desc);
-        (field_desc.buffer_idx, stride, field_offset + additional_offset)
-    };
-    let buffer_offset =
-        offset_of!(Patches, data) + (usize::from(buffer_idx) * size_of::<Option<RowBuffer>>());
-    (buffer_offset, stride, field_offset)
-}
-
 pub fn patch_var_type(schema: &PatchSchema, var: PatchVarDesc) -> Type {
     match var {
-        PatchVarDesc::Pcolor => Color::TYPE,
-        PatchVarDesc::Pos => Point::TYPE,
+        PatchVarDesc::Pcolor => &Color::TYPE_INFO,
+        PatchVarDesc::Pos => &Point::TYPE_INFO,
         PatchVarDesc::Custom(field) => {
             let AgentSchemaField::Other(ty) = schema[schema.custom_fields()[field].1] else {
                 unreachable!("this is a custom field, so it cannot be part of the base data");

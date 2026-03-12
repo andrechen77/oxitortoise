@@ -1,10 +1,13 @@
+use std::sync::Arc;
+
 use derive_more::derive::{
     Add, AddAssign, Display, Div, DivAssign, From, Mul, MulAssign, Neg, Sub, SubAssign,
 };
 
 use crate::{
-    mir::reflection::{MemDesc, Reflect, Type, TypeInfo},
+    mir::reflection::{MirReflect, MirType, MirTypeContents, MirTypeInfo},
     sim::{color::Color, topology::CoordInt, turtle::TurtleWho},
+    util::reflection::{Reflect, TypeInfo},
 };
 
 /// A double-precision floating-point number which is guaranteed to be finite
@@ -31,11 +34,16 @@ impl NlFloat {
 }
 
 unsafe impl Reflect for NlFloat {
-    const TYPE: Type = Type::new(&TypeInfo::new_copy::<NlFloat>(
-        "NlFloat",
-        true,
-        &MemDesc::IsPrimitive(lir::ValType::F64),
-    ));
+    const TYPE_INFO: TypeInfo = TypeInfo::new_copy::<NlFloat>("NlFloat", true);
+}
+
+unsafe impl MirReflect for NlFloat {
+    fn mir_type() -> MirType {
+        Arc::new(MirTypeInfo {
+            static_ty: Some(&NlFloat::TYPE_INFO),
+            contents: MirTypeContents::IsPrimitive(lir::ValType::F64),
+        })
+    }
 }
 
 impl From<CoordInt> for NlFloat {

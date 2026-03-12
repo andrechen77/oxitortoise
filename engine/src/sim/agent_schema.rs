@@ -1,6 +1,6 @@
-use crate::{
-    mir::reflection::{Reflect, Type},
-    util::row_buffer::RowSchema,
+use crate::util::{
+    reflection::{Reflect, Type},
+    row_buffer::RowSchema,
 };
 
 // TODO(mvp) make better, actual documentation for how the agents are laid out
@@ -73,12 +73,12 @@ pub(crate) fn make_row_schemas<A: Reflect, const N: usize>(
             let ty = match buffer_field {
                 AgentSchemaField::BaseData => {
                     if (buffer_idx, field_idx) == (0, 0) {
-                        A::TYPE
+                        &A::TYPE_INFO
                     } else {
                         panic!("Base data can only be the first field in the first buffer.");
                     }
                 }
-                AgentSchemaField::Other(r#type) => r#type.clone(),
+                AgentSchemaField::Other(r#type) => r#type,
             };
             field_types.push(ty);
         }

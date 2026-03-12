@@ -1,12 +1,15 @@
 use std::{
     ops::{Add, AddAssign},
-    sync::OnceLock,
+    sync::{Arc, OnceLock},
 };
 
 use crate::{
-    mir::reflection::{MemDesc, Reflect, Type, TypeInfo},
+    mir::reflection::{MirReflect, MirType, MirTypeContents, MirTypeInfo},
     sim::value::NlFloat,
-    util::rng::Rng,
+    util::{
+        reflection::{Reflect, TypeInfo},
+        rng::Rng,
+    },
 };
 
 /// A NetLogo color. This is a floating point value guaranteed to be in the
@@ -68,11 +71,15 @@ impl AddAssign<NlFloat> for Color {
 }
 
 unsafe impl Reflect for Color {
-    const TYPE: Type = Type::new(&TypeInfo::new_copy::<Color>(
-        "Color",
-        true,
-        &MemDesc::IsPrimitive(lir::ValType::F64),
-    ));
+    const TYPE_INFO: TypeInfo = TypeInfo::new_copy::<Color>("Color", true);
+}
+unsafe impl MirReflect for Color {
+    fn mir_type() -> MirType {
+        Arc::new(MirTypeInfo {
+            static_ty: Some(&Color::TYPE_INFO),
+            contents: MirTypeContents::IsPrimitive(lir::ValType::F64),
+        })
+    }
 }
 
 const COLOR_MAX: f64 = 140.0;

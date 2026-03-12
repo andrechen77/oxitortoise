@@ -1,8 +1,12 @@
-use std::ops::{Index, IndexMut};
+use std::{
+    ops::{Index, IndexMut},
+    sync::Arc,
+};
 
 use crate::{
-    mir::reflection::{Reflect, Type, TypeInfo},
+    mir::reflection::{MirReflect, MirType, MirTypeInfo},
     sim::value::{NlFloat, PackedAny},
+    util::reflection::{Reflect, TypeInfo},
 };
 
 #[derive(Default, Debug)]
@@ -15,9 +19,17 @@ impl NlList {
 }
 
 unsafe impl Reflect for NlList {
-    const TYPE: Type = Type::new(&TypeInfo::new_opaque::<NlList>("NlList"));
+    const TYPE_INFO: TypeInfo = TypeInfo::new_opaque::<NlList>("NlList");
 }
 
+unsafe impl MirReflect for NlList {
+    fn mir_type() -> MirType {
+        Arc::new(MirTypeInfo {
+            static_ty: Some(&<NlList>::TYPE_INFO),
+            contents: Default::default(),
+        })
+    }
+}
 impl NlList {
     pub fn push(&mut self, element: PackedAny) {
         self.0.push(element);

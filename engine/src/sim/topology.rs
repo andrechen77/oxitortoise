@@ -1,6 +1,9 @@
-use std::{fmt, mem::offset_of};
+use std::{alloc::Layout, fmt, mem::offset_of, sync::Arc};
 
-use crate::mir::reflection::{MemDesc, Reflect, Type, TypeInfo};
+use crate::{
+    mir::reflection::{MirReflect, MirType, MirTypeContents, MirTypeInfo},
+    util::reflection::{Reflect, TypeInfo},
+};
 
 use super::{patch::PatchId, value};
 
@@ -48,16 +51,22 @@ impl Point {
 }
 
 unsafe impl Reflect for Point {
-    const TYPE: Type = Type::new(&TypeInfo::new_copy::<Point>(
-        "Point",
-        true,
-        &MemDesc::StaticHasFields {
-            fields: &[
-                (offset_of!(Point, x), MemDesc::IsPrimitive(lir::ValType::F64)),
-                (offset_of!(Point, y), MemDesc::IsPrimitive(lir::ValType::F64)),
-            ],
-        },
-    ));
+    const TYPE_INFO: TypeInfo = TypeInfo::new_copy::<Point>("Point", true);
+}
+
+unsafe impl MirReflect for Point {
+    fn mir_type() -> MirType {
+        Arc::new(MirTypeInfo {
+            static_ty: Some(&Point::TYPE_INFO),
+            contents: MirTypeContents::HasFields {
+                fields: vec![
+                    (offset_of!(Point, x), f64::mir_type()),
+                    (offset_of!(Point, y), f64::mir_type()),
+                ],
+                overall: Layout::new::<Point>(),
+            },
+        })
+    }
 }
 
 impl fmt::Display for Point {

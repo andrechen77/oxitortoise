@@ -2,9 +2,11 @@ use std::ops::{Add, AddAssign};
 
 use super::CoordFloat;
 use crate::{
-    mir::reflection::{MemDesc, Reflect, Type, TypeInfo},
     sim::value::{self, NlFloat},
-    util::rng::Rng,
+    util::{
+        reflection::{Reflect, TypeInfo},
+        rng::Rng,
+    },
 };
 
 /// A heading. This is a floating point value representing some 2D angle in
@@ -67,9 +69,5 @@ impl From<NlFloat> for Heading {
 }
 
 unsafe impl Reflect for Heading {
-    const TYPE: Type = Type::new(&TypeInfo::new_copy::<Heading>(
-        "Heading",
-        true,
-        &MemDesc::IsPrimitive(lir::ValType::F64),
-    ));
+    const TYPE_INFO: TypeInfo = TypeInfo::new_copy::<Heading>("Heading", true);
 }

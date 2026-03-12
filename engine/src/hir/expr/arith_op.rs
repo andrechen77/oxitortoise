@@ -1,18 +1,21 @@
 //! Nodes to represent basic arithmetic operations that should not be host
 //! function calls.
 
+use std::sync::Arc;
+
 use derive_more::derive::TryFrom;
 
 use crate::{
     hir::{Expr, ExprKind, NlAbstractTy, Program, build_mir::HirToMirFnBuilder},
     mir::{
         self,
-        reflection::{MemDesc, Reflect, Type, TypeInfo},
+        reflection::{MirReflect, MirType, MirTypeContents, MirTypeInfo},
     },
     sim::{
         patch::OptionPatchId,
         value::{BoxedAny, NlBool, NlFloat, PackedAny},
     },
+    util::reflection::{Reflect, TypeInfo},
 };
 
 #[derive(Debug, Clone, Copy, TryFrom, PartialEq, Eq)]
@@ -34,11 +37,16 @@ pub enum BinaryOpcode {
 }
 
 unsafe impl Reflect for BinaryOpcode {
-    const TYPE: Type = Type::new(&TypeInfo::new_copy::<BinaryOpcode>(
-        "BinaryOpcode",
-        false,
-        &MemDesc::IsPrimitive(lir::ValType::I8),
-    ));
+    const TYPE_INFO: TypeInfo = TypeInfo::new_copy::<BinaryOpcode>("BinaryOpcode", false);
+}
+
+unsafe impl MirReflect for BinaryOpcode {
+    fn mir_type() -> MirType {
+        Arc::new(MirTypeInfo {
+            static_ty: Some(&<BinaryOpcode>::TYPE_INFO),
+            contents: MirTypeContents::IsPrimitive(lir::ValType::I8),
+        })
+    }
 }
 
 #[derive(Debug)]
@@ -104,7 +112,7 @@ impl Expr for BinaryOperation {
             } else {
                 (&self.lhs, lhs_ty.repr())
             };
-            if operand_ty == OptionPatchId::TYPE {
+            if operand_ty.is::<OptionPatchId>() {
                 let operand_pl = builder.translate_expr(operand);
                 OptionPatchId::write_check_nobody(builder, negate, local_out, operand_pl);
             } else {
@@ -126,8 +134,8 @@ impl Expr for BinaryOperation {
         // TODO(mvp) so far, these additional conditions on color only exist to
         // get ants to compile. we will want to make a full decision on how to
         // treat colors in the engine later
-        let final_operation = if (lhs_ty == NlFloat::TYPE || rhs_ty == NlFloat::TYPE)
-            && (rhs_ty == NlFloat::TYPE || rhs_ty == NlFloat::TYPE)
+        let final_operation = if (lhs_ty.is::<NlFloat>() || rhs_ty.is::<NlFloat>())
+            && (rhs_ty.is::<NlFloat>() || rhs_ty.is::<NlFloat>())
         {
             let opcode = match self.op {
                 Op::Add => lir::BinaryOpcode::FAdd,
@@ -146,7 +154,7 @@ impl Expr for BinaryOperation {
                 lhs: lhs_pl.place().move_out(),
                 rhs: rhs_pl.place().move_out(),
             }
-        } else if lhs_ty == NlBool::TYPE && rhs_ty == NlBool::TYPE {
+        } else if lhs_ty.is::<NlBool>() && rhs_ty.is::<NlBool>() {
             let opcode = match self.op {
                 Op::And => lir::BinaryOpcode::And,
                 Op::Or => lir::BinaryOpcode::Or,
@@ -157,9 +165,9 @@ impl Expr for BinaryOperation {
                 lhs: lhs_pl.place().move_out(),
                 rhs: rhs_pl.place().move_out(),
             }
-        } else if lhs_ty == PackedAny::TYPE && rhs_ty == PackedAny::TYPE {
+        } else if lhs_ty.is::<PackedAny>() && rhs_ty.is::<PackedAny>() {
             let opcode_pl = builder.mir.add_operation(
-                mir::LocalDecl { debug_name: None, ty: MemDesc::IsType(BinaryOpcode::TYPE) },
+                mir::LocalDecl { debug_name: None, ty: BinaryOpcode::mir_type() },
                 mir::Operation::Const { value: BoxedAny::new::<BinaryOpcode>(self.op) },
             );
             match self.op {
@@ -198,8 +206,8 @@ mod binary_op_any_bool {
 
     pub static FN_INFO: HostFunctionInfo = HostFunctionInfo {
         debug_name: "binary_op_any_bool",
-        parameter_types: &[PackedAny::TYPE, PackedAny::TYPE, BinaryOpcode::TYPE],
-        return_type: NlBool::TYPE,
+        parameter_types: &[&PackedAny::TYPE_INFO, &PackedAny::TYPE_INFO, &BinaryOpcode::TYPE_INFO],
+        return_type: &NlBool::TYPE_INFO,
     };
 }
 fn binary_op_any(_lhs: PackedAny, _rhs: PackedAny, _op: BinaryOpcode) -> PackedAny {
@@ -211,8 +219,8 @@ mod binary_op_any {
 
     pub static FN_INFO: HostFunctionInfo = HostFunctionInfo {
         debug_name: "binary_op_any",
-        parameter_types: &[PackedAny::TYPE, PackedAny::TYPE, BinaryOpcode::TYPE],
-        return_type: PackedAny::TYPE,
+        parameter_types: &[&PackedAny::TYPE_INFO, &PackedAny::TYPE_INFO, &BinaryOpcode::TYPE_INFO],
+        return_type: &PackedAny::TYPE_INFO,
     };
 }
 

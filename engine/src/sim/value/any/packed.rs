@@ -1,6 +1,9 @@
-use std::ptr::NonNull;
+use std::{ptr::NonNull, sync::Arc};
 
-use crate::mir::reflection::{MemDesc, Reflect, Type, TypeInfo};
+use crate::{
+    mir::reflection::{MirReflect, MirType, MirTypeContents, MirTypeInfo},
+    util::reflection::{Reflect, Type, TypeInfo},
+};
 
 use super::{BoxedAny, UnpackedAny};
 
@@ -110,10 +113,16 @@ impl PackedAny {
 }
 
 unsafe impl Reflect for PackedAny {
-    const TYPE: Type = Type::new(&TypeInfo::new_drop_zeroable::<PackedAny>(
-        "PackedAny",
-        &MemDesc::IsPrimitive(lir::ValType::F64),
-    ));
+    const TYPE_INFO: TypeInfo = TypeInfo::new_drop_zeroable::<PackedAny>("PackedAny");
+}
+
+unsafe impl MirReflect for PackedAny {
+    fn mir_type() -> MirType {
+        Arc::new(MirTypeInfo {
+            static_ty: Some(&PackedAny::TYPE_INFO),
+            contents: MirTypeContents::IsPrimitive(lir::ValType::F64),
+        })
+    }
 }
 
 impl std::fmt::Debug for PackedAny {

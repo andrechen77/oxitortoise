@@ -4,8 +4,10 @@ use std::{
     ptr::NonNull,
 };
 
-use crate::mir::reflection::{Reflect, Type};
-use crate::sim::value::{NlBool, NlFloat, NlList, NlString};
+use crate::{
+    sim::value::{NlBool, NlFloat, NlList, NlString},
+    util::reflection::{Reflect, Type},
+};
 
 pub struct BoxedAny {
     /// Always points to a valid [`Type`] in memory, as if this field were
@@ -25,12 +27,11 @@ fn layout_and_val_offset(val_layout: Layout) -> (Layout, usize) {
 
 impl BoxedAny {
     pub fn new<T: Reflect>(value: T) -> Self {
+        let ty = &T::TYPE_INFO;
+
         // allocate memory for the value and its type tag
         let (layout, value_start) = layout_and_val_offset(
-            T::TYPE
-                .info()
-                .layout
-                .expect("type should have a known layout to be used in a BoxedAny"),
+            ty.layout.expect("type should have a known layout to be used in a BoxedAny"),
         );
         assert!(layout.size() > 0, "layout size must be greater than 0");
         // SAFETY: we checked that the size is greater than 0
@@ -40,7 +41,7 @@ impl BoxedAny {
         // move the type tag into the allocated memory
         // SAFETY: the ptr is valid for writes and the allocator should have
         // returned a properly aligned pointer
-        unsafe { std::ptr::write(all_ptr.cast::<Type>().as_ptr(), T::TYPE) };
+        unsafe { std::ptr::write(all_ptr.cast::<Type>().as_ptr(), ty) };
 
         // move the value into the allocated memory
         // SAFETY: we trust that the Layout::extend API correctly gave an offset
@@ -67,19 +68,19 @@ impl BoxedAny {
         self.inner
     }
 
-    fn ty(&self) -> Type {
+    fn ty(&self) -> &Type {
         // SAFETY: this pointer is always valid when used to access `Type`
         // per this type's invariants
-        unsafe { *self.inner.as_ptr() }
+        unsafe { &*self.inner.as_ptr() }
     }
 
     /// Obtains a pointer to the actual value stored in this [`BoxedAny`].
     /// Panics if the attempted access type does not match the type tag.
     fn ptr_to_val<T: Reflect>(&self) -> NonNull<T> {
-        let ty = T::TYPE;
-        assert!(self.ty() == ty, "type mismatch");
+        let ty = &T::TYPE_INFO;
+        assert!(*self.ty() == ty, "type mismatch");
         let (_, offset) = layout_and_val_offset(
-            ty.info().layout.expect("type should have a known layout to be used in a BoxedAny"),
+            ty.layout.expect("type should have a known layout to be used in a BoxedAny"),
         );
         // SAFETY: since the type tag passed the assertion, we know that the
         // type must be correct and therefore the pointer derived from assuming
@@ -116,7 +117,7 @@ impl BoxedAny {
 
 impl Drop for BoxedAny {
     fn drop(&mut self) {
-        let type_info = self.ty().info();
+        let type_info = self.ty();
         // SAFETY: the layout is correct because it came from the actual type
         // tag
         let val_ptr = unsafe {
@@ -140,13 +141,13 @@ impl Drop for BoxedAny {
 
 impl Debug for BoxedAny {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.ty() == NlBool::TYPE {
+        if self.ty().is::<NlBool>() {
             write!(f, "{:?}", self.deref_as::<NlBool>())?;
-        } else if self.ty() == NlFloat::TYPE {
+        } else if self.ty().is::<NlFloat>() {
             write!(f, "{:?}", self.deref_as::<NlFloat>())?;
-        } else if self.ty() == NlList::TYPE {
+        } else if self.ty().is::<NlList>() {
             write!(f, "{:?}", self.deref_as::<NlList>())?;
-        } else if self.ty() == NlString::TYPE {
+        } else if self.ty().is::<NlString>() {
             write!(f, "{:?}", self.deref_as::<NlString>())?;
         } else {
             write!(f, "BoxedAny(unknown type {:?})", self.ty())?;

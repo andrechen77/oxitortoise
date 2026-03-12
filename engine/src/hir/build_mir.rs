@@ -2,14 +2,51 @@ use std::collections::HashMap;
 
 use crate::{
     hir::{self, Expr},
-    mir::{
-        self,
-        reflection::{MemDesc, PlaceWithMemDesc},
-    },
+    mir::{self, reflection::MirType},
+    sim::{observer::GlobalsSchema, patch::PatchSchema, turtle::TurtleSchema},
 };
+
+pub struct TypeMapping {
+    globals_schema: GlobalsSchema,
+    turtle_schema: TurtleSchema,
+    patch_schema: PatchSchema,
+    context_ty: MirType,
+}
+
+impl TypeMapping {
+    pub fn new(
+        globals_schema: GlobalsSchema,
+        turtle_schema: TurtleSchema,
+        patch_schema: PatchSchema,
+    ) -> Self {
+        Self {
+            globals_schema,
+            turtle_schema,
+            patch_schema,
+            context_ty: todo!("TODO calculate the context type based on the other fields"),
+        }
+    }
+
+    pub fn globals_schema(&self) -> &GlobalsSchema {
+        &self.globals_schema
+    }
+
+    pub fn turtle_schema(&self) -> &TurtleSchema {
+        &self.turtle_schema
+    }
+
+    pub fn patch_schema(&self) -> &PatchSchema {
+        &self.patch_schema
+    }
+
+    pub fn context_ty(&self) -> MirType {
+        self.context_ty.clone()
+    }
+}
 
 pub struct HirToMirFnBuilder<'a, 'b> {
     pub hir: &'a hir::Program,
+    pub type_mapping: &'a TypeMapping,
     pub mir: &'a mut mir::builder::FunctionBuilder<'b>,
     pub translator: &'a mut HirToLirFnTranslator,
 }
@@ -50,9 +87,8 @@ impl<'a, 'b> HirToMirFnBuilder<'a, 'b> {
     pub fn translate_expr(&mut self, expr: &hir::ExprKind) -> mir::LocalId {
         let output_ty = expr.output_type(self.hir).repr();
         // the expression's output will be stored in this local variable
-        let (output_local, _output_local_decl) = self
-            .mir
-            .create_local(mir::LocalDecl { debug_name: None, ty: MemDesc::IsType(output_ty) });
+        let (output_local, _output_local_decl) =
+            self.mir.create_local(mir::LocalDecl { debug_name: None, ty: output_ty });
         // TODO could do something with the type assertion here
         expr.write_mir_execution(self, output_local);
         output_local
@@ -67,35 +103,32 @@ impl<'a, 'b> HirToMirFnBuilder<'a, 'b> {
         f: impl FnOnce(&mut HirToMirFnBuilder<'_, '_>) -> T,
     ) -> (Vec<mir::Statement>, T) {
         self.mir.with_inner_statement_seq(|lir| {
-            let mut builder =
-                HirToMirFnBuilder { hir: self.hir, mir: lir, translator: self.translator };
+            let mut builder = HirToMirFnBuilder {
+                hir: self.hir,
+                type_mapping: self.type_mapping,
+                mir: lir,
+                translator: self.translator,
+            };
             f(&mut builder)
         })
     }
 
     /// Returns the local variable that contains the context parameter, creating
     /// it as a function parameter if it does not exist.
-    pub fn context_param(&mut self) -> PlaceWithMemDesc<'_> {
-        // cannot use `map_or_else` because two closures would require borrows
-        // of self.mir at the same time
-        let (local_id, local_decl) = if let Some(context_param) = self.translator.context_param {
-            (context_param, self.mir.get_local_mut(context_param))
-        } else {
-            let (local_id, local_decl) = self.mir.create_local(mir::LocalDecl {
-                debug_name: None,
-                // any MIR operations that use the parameter will add assertions
-                // as they need them
-                ty: MemDesc::None,
+    pub fn context_param(&mut self) -> mir::Place {
+        let local_id = *self.translator.context_param.get_or_insert_with(|| {
+            let (local_id, _local_decl) = self.mir.create_local(mir::LocalDecl {
+                debug_name: Some("context".into()),
+                ty: self.type_mapping.context_ty.clone(),
             });
-            self.translator.context_param = Some(local_id);
             // TODO add as parameter to the function
-            (local_id, local_decl)
-        };
-        PlaceWithMemDesc::new(local_id.into(), &mut local_decl.ty)
+            local_id
+        });
+        local_id.into()
     }
 }
 
-pub fn hir_to_mir(hir: &hir::Program) -> mir::Program {
+pub fn hir_to_mir(hir: &hir::Program, type_mapping: &TypeMapping) -> mir::Program {
     let mut builder = mir::builder::ProgramBuilder::new();
 
     // iterate through each function and convert it to an MIR function
@@ -104,8 +137,12 @@ pub fn hir_to_mir(hir: &hir::Program) -> mir::Program {
         let mut lir_fn_builder = builder.create_function();
         let mut translator = HirToLirFnTranslator::default();
 
-        let mut builder =
-            HirToMirFnBuilder { hir, mir: &mut lir_fn_builder, translator: &mut translator };
+        let mut builder = HirToMirFnBuilder {
+            hir,
+            type_mapping,
+            mir: &mut lir_fn_builder,
+            translator: &mut translator,
+        };
 
         // add all the nodes to the function body
         let return_place = builder.translate_expr(&hir_fn.body);

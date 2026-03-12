@@ -1,8 +1,7 @@
 use std::collections::HashMap;
 
 use crate::mir::{
-    self, ElementaryStatement, Function, FunctionId, Label, LocalId, Operation, Place, Statement,
-    reflection::PlaceWithMemDesc,
+    self, ElementaryStatement, Function, FunctionId, Label, LocalId, Operation, Statement,
 };
 
 #[derive(Default)]
@@ -89,14 +88,6 @@ impl<'a> FunctionBuilder<'a> {
 
     pub fn get_local_mut(&mut self, id: LocalId) -> &mut mir::LocalDecl {
         self.locals.get_mut(&id).expect("local must be declared")
-    }
-
-    pub fn place_with_type(&mut self, place: Place) -> PlaceWithMemDesc<'_> {
-        let mut ty = &mut self.get_local_mut(place.local).ty;
-        for projection in &place.projections {
-            ty = ty.project_mut_with_modify(projection);
-        }
-        PlaceWithMemDesc::new(place, ty)
     }
 
     pub fn create_label(&mut self) -> Label {

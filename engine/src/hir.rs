@@ -10,14 +10,13 @@ use crate::{
     hir::expr::{Break, Scope},
     mir::{
         self,
-        reflection::{Reflect, Type},
+        reflection::{MirReflect as _, MirType},
     },
     sim::{
         color::Color,
-        observer::GlobalsSchema,
-        patch::{OptionPatchId, PatchSchema},
+        patch::OptionPatchId,
         topology::Point,
-        turtle::{Breed, BreedId, TurtleId, TurtleSchema},
+        turtle::{Breed, BreedId, TurtleId},
         value::{NlBool, NlBox, NlFloat, NlList, PackedAny},
     },
 };
@@ -41,14 +40,12 @@ new_key_type! {
 #[derive(derive_more::Debug)]
 pub struct Program {
     pub globals: Box<[CustomVarDecl]>,
-    pub globals_schema: Option<GlobalsSchema>,
+    // TODO this version of Breed contains type information (active custom
+    // fields) that would not be available/ at the HIR stage of compilation;
+    // consider using a more abstract version of Breed instead
     pub turtle_breeds: SlotMap<BreedId, Breed>,
     pub custom_turtle_vars: Vec<CustomVarDecl>,
-    /// None if the turtle schema has not been calculated yet.
-    pub turtle_schema: Option<TurtleSchema>,
     pub custom_patch_vars: Vec<CustomVarDecl>,
-    /// None if the patch schema has not been calculated yet.
-    pub patch_schema: Option<PatchSchema>,
     pub functions: SecondaryMap<FunctionId, Function>,
 }
 
@@ -201,21 +198,21 @@ impl NlAbstractTy {
         // TODO implement more granular least upper bound for other types
     }
 
-    pub fn repr(&self) -> Type {
+    pub fn repr(&self) -> MirType {
         // TODO(mvp) add machine types for all abstract types
         match self {
-            Self::Unit => <()>::TYPE,
-            Self::Top => PackedAny::TYPE,
+            Self::Unit => <()>::mir_type(),
+            Self::Top => PackedAny::mir_type(),
             Self::Bottom => unimplemented!("bottom type has no concrete representation"),
-            Self::Numeric => NlFloat::TYPE,
-            Self::Color => Color::TYPE,
-            Self::Float => NlFloat::TYPE,
-            Self::Boolean => NlBool::TYPE,
+            Self::Numeric => NlFloat::mir_type(),
+            Self::Color => Color::mir_type(),
+            Self::Float => NlFloat::mir_type(),
+            Self::Boolean => NlBool::mir_type(),
             Self::String => todo!(),
-            Self::Point => Point::TYPE,
-            Self::Agent => PackedAny::TYPE,
-            Self::Patch => OptionPatchId::TYPE,
-            Self::Turtle => TurtleId::TYPE,
+            Self::Point => Point::mir_type(),
+            Self::Agent => PackedAny::mir_type(),
+            Self::Patch => OptionPatchId::mir_type(),
+            Self::Turtle => TurtleId::mir_type(),
             Self::Link => todo!(""),
             Self::Agentset { agent_type: _ } => todo!(""),
             // If a type is just "nobody", then it is inhabited by only one
@@ -226,7 +223,7 @@ impl NlAbstractTy {
             // representation.
             Self::Nobody => unimplemented!("nobody type has no concrete representation"),
             Self::Closure(_) => todo!(),
-            Self::List { element_ty } if **element_ty == Self::Top => <NlBox<NlList>>::TYPE,
+            Self::List { element_ty } if **element_ty == Self::Top => <NlBox<NlList>>::mir_type(),
             Self::List { element_ty: _ } => todo!(),
         }
     }

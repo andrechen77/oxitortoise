@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 use crate::{
     hir::{Expr, ExprKind, HirToMirFnBuilder, Label, LocalDecl, LocalId, NlAbstractTy, Program},
-    mir::{self, reflection::MemDesc},
+    mir,
 };
 
 mod agent_var;
@@ -31,10 +31,8 @@ impl Expr for Scope {
 
     fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, local_out: mir::LocalId) {
         for (local_id, decl) in &self.locals {
-            let mir_local_decl = mir::LocalDecl {
-                debug_name: decl.debug_name.clone(),
-                ty: MemDesc::IsType(decl.ty.repr()),
-            };
+            let mir_local_decl =
+                mir::LocalDecl { debug_name: decl.debug_name.clone(), ty: decl.ty.repr() };
             let (mir_local_id, _) = builder.mir.create_local(mir_local_decl);
             builder.translator.locals.insert(*local_id, mir_local_id);
         }

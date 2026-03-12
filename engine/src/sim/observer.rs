@@ -8,9 +8,11 @@ use either::Either;
 use pretty_print::PrettyPrinter;
 
 use crate::{
-    mir::reflection::{Reflect, Type},
     sim::value::{NlBool, NlFloat, NlList, NlString, PackedAny},
-    util::row_buffer::{RowBuffer, RowSchema},
+    util::{
+        reflection::{Reflect, Type},
+        row_buffer::{RowBuffer, RowSchema},
+    },
 };
 
 pub struct Globals {
@@ -26,7 +28,7 @@ impl Globals {
 
         // initialize variables to zero
         for (var_id, (_, ty)) in schema.custom_fields.iter().enumerate() {
-            if ty.info().is_zeroable {
+            if ty.is_zeroable {
                 data.row_mut(0).set_zero(var_id);
             } else {
                 fallback_fields.insert(var_id, PackedAny::ZERO);
@@ -36,7 +38,7 @@ impl Globals {
         Self { schema, data, fallback_fields }
     }
 
-    pub fn get<T: Reflect>(&self, var_index: usize) -> Either<&T, &PackedAny> {
+    pub fn get<T: Reflect + 'static>(&self, var_index: usize) -> Either<&T, &PackedAny> {
         if let Some(field) = self.data.row(0).get(var_index) {
             Either::Left(field)
         } else {
@@ -44,7 +46,10 @@ impl Globals {
         }
     }
 
-    pub fn get_mut<T: Reflect>(&mut self, var_index: usize) -> Either<&mut T, &mut PackedAny> {
+    pub fn get_mut<T: Reflect + 'static>(
+        &mut self,
+        var_index: usize,
+    ) -> Either<&mut T, &mut PackedAny> {
         if let Some(field) = self.data.row_mut(0).get_mut(var_index) {
             Either::Left(field)
         } else {
@@ -70,8 +75,8 @@ impl fmt::Debug for Globals {
                         .enumerate()
                         .map(|(i, (name, ty))| (&**name, (i, ty))),
                     |p, name| write!(p, "{:?}", name),
-                    |p, (_, (i, &ty))| {
-                        fn print_field<T: Reflect + Debug>(
+                    |p, (_, (i, ty))| {
+                        fn print_field<T: Reflect + Debug + 'static>(
                             p: &mut PrettyPrinter<impl Write>,
                             globals: &Globals,
                             var_index: usize,
@@ -81,13 +86,13 @@ impl fmt::Debug for Globals {
                                 Either::Right(field) => write!(p, "fallback {:?}", field),
                             }
                         }
-                        if ty == NlFloat::TYPE {
+                        if ty.is::<NlFloat>() {
                             print_field::<NlFloat>(p, self, i)
-                        } else if ty == NlBool::TYPE {
+                        } else if ty.is::<NlBool>() {
                             print_field::<NlBool>(p, self, i)
-                        } else if ty == NlString::TYPE {
+                        } else if ty.is::<NlString>() {
                             print_field::<NlString>(p, self, i)
-                        } else if ty == NlList::TYPE {
+                        } else if ty.is::<NlList>() {
                             print_field::<NlList>(p, self, i)
                         } else {
                             write!(p, "unknown type {:?}", ty)
@@ -112,10 +117,7 @@ impl GlobalsSchema {
     }
 
     pub fn make_row_schema(&self) -> RowSchema {
-        RowSchema::new(
-            &self.custom_fields.iter().map(|(_, ty)| (*ty).clone()).collect::<Vec<_>>(),
-            true,
-        )
+        RowSchema::new(&self.custom_fields.iter().map(|(_, ty)| *ty).collect::<Vec<_>>(), true)
     }
 
     /// Calculates the offset of a field from the start of the globals data

@@ -1,9 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use crate::{
-    mir::reflection::{MemDesc, Type},
-    sim::value::BoxedAny,
-};
+use crate::{mir::reflection::MirType, sim::value::BoxedAny, util::reflection::Type};
 
 pub mod builder;
 pub mod reflection;
@@ -44,7 +41,7 @@ pub struct Function {
 #[derive(Debug)]
 pub struct LocalDecl {
     pub debug_name: Option<Arc<str>>,
-    pub ty: MemDesc,
+    pub ty: MirType,
 }
 
 #[derive(Debug)]

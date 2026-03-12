@@ -14,17 +14,20 @@ use either::Either;
 use pretty_print::PrettyPrinter;
 use slotmap::SecondaryMap;
 
-use crate::hir;
-use crate::mir::reflection::{MemDesc, Reflect, Type, TypeInfo};
-use crate::sim::agent_schema::{AgentFieldDescriptor, AgentSchemaField, AgentSchemaFieldGroup};
-use crate::sim::topology::Heading;
-use crate::sim::value::agentset::TurtleSet;
-use crate::sim::value::{NlBool, NlFloat, NlList, NlString, PackedAny};
-use crate::util::gen_slot_tracker::{GenIndex, GenSlotTracker};
-use crate::util::row_buffer::{RowBuffer, RowSchema};
+use crate::mir::reflection::{MirReflect, MirType, MirTypeContents, MirTypeInfo};
 use crate::{
-    sim::{color::Color, topology::Point, value},
-    util::rng::Rng,
+    sim::{
+        agent_schema::{AgentFieldDescriptor, AgentSchemaField, AgentSchemaFieldGroup},
+        color::Color,
+        topology::{Heading, Point},
+        value::{self, NlBool, NlFloat, NlList, NlString, PackedAny, agentset::TurtleSet},
+    },
+    util::{
+        gen_slot_tracker::{GenIndex, GenSlotTracker},
+        reflection::{Reflect, Type, TypeInfo},
+        rng::Rng,
+        row_buffer::{RowBuffer, RowSchema},
+    },
 };
 
 pub const DEFAULT_BREED_NAME: &str = "TURTLES";
@@ -69,11 +72,16 @@ impl TurtleId {
 }
 
 unsafe impl Reflect for TurtleId {
-    const TYPE: Type = Type::new(&TypeInfo::new_copy::<TurtleId>(
-        "TurtleId",
-        false,
-        &MemDesc::IsPrimitive(lir::ValType::I64),
-    ));
+    const TYPE_INFO: TypeInfo = TypeInfo::new_copy::<TurtleId>("TurtleId", false);
+}
+
+unsafe impl MirReflect for TurtleId {
+    fn mir_type() -> MirType {
+        Arc::new(MirTypeInfo {
+            static_ty: Some(&<TurtleId>::TYPE_INFO),
+            contents: MirTypeContents::IsPrimitive(lir::ValType::I32),
+        })
+    }
 }
 
 pub struct Turtles {
@@ -181,10 +189,10 @@ impl Turtles {
             // put in the default value for custom fields
             let custom_fields = &self.breeds[breed].active_custom_fields;
             for &field in custom_fields {
-                let AgentSchemaField::Other(r#type) = &self.turtle_schema[field] else {
+                let AgentSchemaField::Other(r#type) = self.turtle_schema[field] else {
                     panic!("field at index {:?} should be a custom field", field);
                 };
-                if r#type.info().is_zeroable {
+                if r#type.is_zeroable {
                     self.data[field.buffer_idx as usize]
                         .as_mut()
                         .unwrap()
@@ -211,7 +219,7 @@ impl Turtles {
 
     /// Get a reference to a field of a turtle. Returns `None` if the
     /// turtle does not exist.
-    pub fn get_turtle_field<T: Reflect>(
+    pub fn get_turtle_field<T: Reflect + 'static>(
         &self,
         id: TurtleId,
         field: AgentFieldDescriptor,
@@ -249,7 +257,7 @@ impl Turtles {
 
     /// Get a mutable reference to a field of a turtle. Returns `None` if the
     /// turtle does not exist.
-    pub fn get_turtle_field_mut<T: Reflect>(
+    pub fn get_turtle_field_mut<T: Reflect + 'static>(
         &mut self,
         id: TurtleId,
         field: AgentFieldDescriptor,
@@ -343,11 +351,11 @@ fn pretty_print_turtle(
 
         // add custom fields
         for (field_name, field_desc) in turtles.schema().custom_fields() {
-            let AgentSchemaField::Other(ty) = turtles.schema()[*field_desc] else {
+            let AgentSchemaField::Other(ty) = &turtles.schema()[*field_desc] else {
                 panic!("field at index {:?} should not be base data", field_desc);
             };
             p.add_field_with(field_name, |p| {
-                fn print_field<T: Reflect + Debug>(
+                fn print_field<T: Reflect + Debug + 'static>(
                     p: &mut PrettyPrinter<impl Write>,
                     turtles: &Turtles,
                     id: TurtleId,
@@ -359,13 +367,13 @@ fn pretty_print_turtle(
                         Some(Either::Right(field)) => write!(p, "fallback {:?}", field),
                     }
                 }
-                if ty == NlFloat::TYPE {
+                if ty.is::<NlFloat>() {
                     print_field::<NlFloat>(p, turtles, id, *field_desc)
-                } else if ty == NlBool::TYPE {
+                } else if ty.is::<NlBool>() {
                     print_field::<NlBool>(p, turtles, id, *field_desc)
-                } else if ty == NlString::TYPE {
+                } else if ty.is::<NlString>() {
                     print_field::<NlString>(p, turtles, id, *field_desc)
-                } else if ty == NlList::TYPE {
+                } else if ty.is::<NlList>() {
                     print_field::<NlList>(p, turtles, id, *field_desc)
                 } else {
                     write!(p, "unknown type {:?}", ty)
@@ -392,7 +400,7 @@ pub struct TurtleBaseData {
 }
 
 unsafe impl Reflect for TurtleBaseData {
-    const TYPE: Type = Type::new(&TypeInfo::new_opaque::<TurtleBaseData>("TurtleBaseData"));
+    const TYPE_INFO: TypeInfo = TypeInfo::new_opaque::<TurtleBaseData>("TurtleBaseData");
 }
 
 slotmap::new_key_type! {
@@ -465,17 +473,17 @@ impl TurtleSchema {
         // add heading and position fields
         let heading_group = &mut field_groups[heading_buffer_idx as usize];
         let heading_field_idx = heading_group.fields.len() as u8;
-        heading_group.fields.push(AgentSchemaField::Other(Heading::TYPE));
+        heading_group.fields.push(AgentSchemaField::Other(&Heading::TYPE_INFO));
         let position_group = &mut field_groups[position_buffer_idx as usize];
         let position_field_idx = position_group.fields.len() as u8;
-        position_group.fields.push(AgentSchemaField::Other(Point::TYPE));
+        position_group.fields.push(AgentSchemaField::Other(&Point::TYPE_INFO));
 
         // add custom fields
         let mut custom_field_descriptors = Vec::new();
         for (name, field_type, buffer_idx) in custom_fields {
             let field_group = &mut field_groups[usize::from(*buffer_idx)];
             let idx_within_buffer = field_group.fields.len();
-            field_group.fields.push(AgentSchemaField::Other(field_type.clone()));
+            field_group.fields.push(AgentSchemaField::Other(field_type));
             custom_field_descriptors.push((
                 Arc::clone(name),
                 AgentFieldDescriptor {
@@ -560,59 +568,14 @@ impl Index<AgentFieldDescriptor> for TurtleSchema {
     }
 }
 
-unsafe impl Reflect for Turtles {
-    const TYPE: Type = Type::new(&TypeInfo::new_drop::<Turtles>("Turtles", &MemDesc::None));
-}
-
-/// Returns a tuple indicating how to access a given variable given a pointer
-/// to [`Turtles`]. The first element is the byte offset from the start of the
-/// [`Turtles`] struct to the pointer to row buffer containing the variable.
-/// The second element is the stride of the each row in that buffer; each agent
-/// gets one row. The third element is the byte offset from the start of the
-/// row to the required field.
-///
-/// ```ignore
-/// let hir: &hir::Program;
-/// let turtles: &Turtles;
-/// let var_desc: TurtleVarDesc;
-/// let (buffer_offset, stride, field_offset) = calc_turtle_var_offset(hir, var_desc);
-/// let ptr_turtles = turtles as *const u8;
-/// let field = *(*ptr_turtles.byte_add(buffer_offset).cast::<*const *const u8>()).byte_add(stride * agent_idx + field_offset);
-/// ```
-pub fn calc_turtle_var_offset(hir: &hir::Program, var: TurtleVarDesc) -> (usize, usize, usize) {
-    fn stride_and_field_offset(
-        turtle_schema: &TurtleSchema,
-        field: AgentFieldDescriptor,
-    ) -> (usize, usize) {
-        // TODO(wishlist) it's inefficient to calculate the schemas every time.
-        // see if we can cache this calculation as well as use it for making the
-        // workspace
-        let schemas: [Option<RowSchema>; 4] = turtle_schema.make_row_schemas();
-        let row_schema = schemas[usize::from(field.buffer_idx)].as_ref().unwrap();
-        let field_offset = row_schema.field(usize::from(field.field_idx)).offset;
-        let stride = row_schema.stride();
-        (stride, field_offset)
-    }
-
-    let turtle_schema = hir.turtle_schema.as_ref().unwrap();
-    let (buffer_idx, stride, field_offset) = {
-        let (field_desc, additional_offset) = turtle_schema.field_desc_and_offset(var);
-        let (stride, field_offset) = stride_and_field_offset(turtle_schema, field_desc);
-        (field_desc.buffer_idx, stride, field_offset + additional_offset)
-    };
-    let buffer_offset =
-        offset_of!(Turtles, data) + (usize::from(buffer_idx) * size_of::<Option<RowBuffer>>());
-    (buffer_offset, stride, field_offset)
-}
-
 pub fn turtle_var_type(schema: &TurtleSchema, var: TurtleVarDesc) -> Type {
     match var {
-        TurtleVarDesc::Who => NlFloat::TYPE,
-        TurtleVarDesc::Color => Color::TYPE,
-        TurtleVarDesc::Size => NlFloat::TYPE,
-        TurtleVarDesc::Pos => Point::TYPE,
-        TurtleVarDesc::Xcor => NlFloat::TYPE,
-        TurtleVarDesc::Ycor => NlFloat::TYPE,
+        TurtleVarDesc::Who => &NlFloat::TYPE_INFO,
+        TurtleVarDesc::Color => &Color::TYPE_INFO,
+        TurtleVarDesc::Size => &NlFloat::TYPE_INFO,
+        TurtleVarDesc::Pos => &Point::TYPE_INFO,
+        TurtleVarDesc::Xcor => &NlFloat::TYPE_INFO,
+        TurtleVarDesc::Ycor => &NlFloat::TYPE_INFO,
         TurtleVarDesc::Custom(field) => {
             let AgentSchemaField::Other(ty) = schema[schema.custom_fields()[field].1] else {
                 unreachable!("this is a custom field, so it cannot be part of the base data");

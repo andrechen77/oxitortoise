@@ -26,13 +26,9 @@ impl Expr for GetGlobalVar {
     }
 
     fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, local_out: mir::LocalId) {
-        let context = builder.context_param().into_place();
-        let var_offset = builder.hir.globals_schema.as_ref().unwrap().offset_of_field(self.index);
-        let var_pl = project_global_var::write_mir(builder, var_offset, context).into_place();
-        builder.mir.add_operation_with_dst(
-            local_out.into(),
-            mir::Operation::Operand(mir::PlaceOperand::Move(var_pl)),
-        );
+        let context = builder.context_param();
+        let var_offset = builder.type_mapping.globals_schema().offset_of_field(self.index);
+        todo!("TODO calculate the variable's place and load from it")
     }
 }
 
@@ -43,17 +39,14 @@ mod project_global_var {
 
     use crate::{
         hir::HirToMirFnBuilder,
-        mir::{
-            Place, Projection,
-            reflection::{DynPtr, PlaceWithMemDesc, Reflect},
-        },
-        util::row_buffer::RowBuffer,
+        mir::{Operation, Place, PlaceOperand, Projection, reflection::HasDynPtr},
+        util::{reflection::Reflect, row_buffer::RowBuffer},
     };
 
     /*
-    fn project_global_var<T>(var_offset: usize)<'a>(context: &'a mut CanonExecutionContext) -> &'a mut T {
+    fn project_global_var<T>(var_offset: usize)<'a>(context: &'a mut CanonExecutionContext) -> (out: &'a mut T) {
         mir! {
-            return &mut context
+            out = &mut context
                 .deref::<CanonExecutionContext>()
                 .workspace
                 .deref::<Workspace>()
@@ -66,40 +59,44 @@ mod project_global_var {
     }
      */
 
-    pub fn write_mir<'a>(
-        builder: &'a mut HirToMirFnBuilder,
+    pub fn write_mir(
+        builder: &mut HirToMirFnBuilder,
         var_offset: usize,
         context: Place,
-    ) -> PlaceWithMemDesc<'a> {
-        let context = builder.mir.place_with_type(context);
-        let place = {
-            let x1 = context.proj_deref();
-            let x2 = x1.proj_field(offset_of!(CanonExecutionContext, workspace));
-            let x3 = x2.proj_deref();
-            let x6 = x3.proj_field(offset_of!(Workspace, world.globals.data));
-            let x6_pl = x6.into_place();
-            let x7 = <RowBuffer as DynPtr>::write_mir_get_data_ptr(builder.mir, x6_pl);
-            let x8 = x7.proj_field(var_offset);
-            x8
-        };
-        place
+        out: Place,
+    ) {
+        {
+            let operation = Operation::Operand(PlaceOperand::Borrow({
+                let x1 = context.proj(Projection::Deref);
+                let x2 = x1.proj(Projection::Field {
+                    byte_offset: offset_of!(CanonExecutionContext, workspace),
+                });
+                let x3 = x2.proj(Projection::Deref);
+                let x6 = x3.proj(Projection::Field {
+                    byte_offset: offset_of!(Workspace, world.globals.data),
+                });
+                let x7 = <RowBuffer as HasDynPtr>::write_mir_get_data_ptr(builder.mir, x6);
+                let x8 = x7.proj(Projection::Field { byte_offset: var_offset });
+                x8
+            }));
+            builder.mir.add_operation_with_dst(out, operation);
+        }
     }
 
     pub fn interp<'a, T: Reflect>(
         var_offset: usize,
         context: &'a mut CanonExecutionContext,
     ) -> &'a mut T {
-        let place = {
-            let x2 = &mut context.workspace;
-            let x4 = &mut x2.world;
-            let x5 = &mut x4.globals;
-            let x6 = &mut x5.data;
-            let (x7, x7_desc) = <RowBuffer as DynPtr>::data_ptr_mut(x6);
-            x7_desc.project(Projection::Field { byte_offset: var_offset }).assert_type(T::TYPE);
-            let x8 = unsafe { x7.map(|ptr| ptr.byte_add(var_offset)).cast::<T>() };
+        let out = {
+            let x2 = &mut (*context).workspace;
+            let x4 = &mut (**x2).world;
+            let x5 = &mut (*x4).globals;
+            let x6 = &mut (*x5).data;
+            let x7 = <RowBuffer as HasDynPtr>::dyn_ptr_mut(x6);
+            let x8 = x7.proj_field(var_offset).cast::<T>();
             x8
         };
-        place
+        out
     }
 }
 
