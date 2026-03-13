@@ -16,7 +16,7 @@ fn builder_ident() -> syn::Ident {
     internal_ident("builder")
 }
 
-pub fn substitute(intrinsic: &MirIntrinsicSyntax) -> syn::Result<TokenStream> {
+pub fn substitute(intrinsic: &MirIntrinsicSyntax, keep_spans: bool) -> syn::Result<TokenStream> {
     let MirIntrinsicSignatureSyntax {
         attrs,
         vis,
@@ -39,8 +39,14 @@ pub fn substitute(intrinsic: &MirIntrinsicSyntax) -> syn::Result<TokenStream> {
     let runtime_args = ensure_trailing(runtime_args);
     let return_pat = return_value_decl.pat.clone();
 
-    let body =
-        substitute_internal(&intrinsic.content, sub_mir_block, sub_type_of, sub_place_ref, None)?;
+    let body = substitute_internal(
+        intrinsic.content.clone(),
+        sub_mir_block,
+        sub_type_of,
+        sub_place_ref,
+        None,
+        keep_spans,
+    )?;
 
     // build the write_mir function
     let builder_ident = builder_ident();

@@ -110,23 +110,23 @@ macro_mir_dsl::mir_intrinsic! {
                 mir! {
                     out = const { if negate { false } else { true } };
                 }
-                return;
-            };
-
-            // find the operand that is not known to be nobody
-            let (operand, operand_ty) = if lhs_is_nobody {
-                (place_ref!(rhs), rhs_ty)
             } else {
-                (place_ref!(lhs), lhs_ty)
-            };
-            if operand_ty.is::<OptionPatchId>() {
-                mir! {
-                    let negate_rt: bool = const { negate };
-                    out = const { check_patch_nobody }(negate_rt, &(place_use!(operand).cast::<OptionPatchId>()));
+                // find the operand that is not known to be nobody
+                let (operand, operand_ty) = if lhs_is_nobody {
+                    (place_ref!(rhs), rhs_ty)
+                } else {
+                    (place_ref!(lhs), lhs_ty)
+                };
+                if operand_ty.is::<OptionPatchId>() {
+                    mir! {
+                        let negate_rt: bool = const { negate };
+                        out = const { check_patch_nobody }(negate_rt, &(place_use!(operand).cast::<OptionPatchId>()));
+                    }
+                } else {
+                    unimplemented!("TODO(mvp) handle nobody check for other operand types: {:?}", operand_ty);
                 }
-            } else {
-                unimplemented!("TODO(mvp) handle nobody check for other operand types: {:?}", operand_ty);
             }
+
         } else if lhs_ty.is::<bool>() && rhs_ty.is::<bool>() {
             match op {
                 BinaryOpcode::And => mir! {

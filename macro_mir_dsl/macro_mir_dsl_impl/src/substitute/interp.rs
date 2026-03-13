@@ -11,7 +11,7 @@ use crate::{
     substitute::substitute_internal,
 };
 
-pub fn substitute(intrinsic: &MirIntrinsicSyntax) -> syn::Result<TokenStream> {
+pub fn substitute(intrinsic: &MirIntrinsicSyntax, keep_spans: bool) -> syn::Result<TokenStream> {
     let MirIntrinsicSignatureSyntax {
         attrs,
         vis,
@@ -41,11 +41,12 @@ pub fn substitute(intrinsic: &MirIntrinsicSyntax) -> syn::Result<TokenStream> {
     let return_ty = return_value_decl.ty.clone();
 
     let body = substitute_internal(
-        &intrinsic.content,
+        intrinsic.content.clone(),
         sub_mir_block,
         sub_type_of,
         sub_place_ref,
         Some(quote! { #return_pat }),
+        keep_spans,
     )?;
     let body_stmts = body.stmts;
 

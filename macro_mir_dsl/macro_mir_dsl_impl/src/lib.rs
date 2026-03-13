@@ -15,9 +15,9 @@ pub fn mir_intrinsic_impl(input: TokenStream) -> TokenStream {
 fn mir_intrinsic_or_err(input: TokenStream) -> syn::Result<TokenStream> {
     let intrinsic: MirIntrinsicSyntax = parse2(input)?;
 
-    let interp_fn =
-        substitute::interp::substitute(&intrinsic).unwrap_or_else(syn::Error::into_compile_error);
-    let write_mir_fn = substitute::write_mir::substitute(&intrinsic)
+    let interp_fn = substitute::interp::substitute(&intrinsic, true)
+        .unwrap_or_else(syn::Error::into_compile_error);
+    let write_mir_fn = substitute::write_mir::substitute(&intrinsic, false)
         .unwrap_or_else(syn::Error::into_compile_error);
     let intrinsic_ident = intrinsic.signature.ident;
 

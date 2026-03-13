@@ -1,8 +1,8 @@
-use proc_macro2::TokenStream;
+use proc_macro2::{Span, TokenStream};
 use syn::{
     Block, ExprMacro, Macro,
     spanned::Spanned as _,
-    visit_mut::{VisitMut, visit_expr_mut, visit_stmt_mut},
+    visit_mut::{VisitMut, visit_expr_mut, visit_span_mut, visit_stmt_mut},
 };
 
 pub mod interp;
@@ -11,11 +11,12 @@ pub mod write_mir;
 /// Substitutes inner instances of `mir!`, `type_of`, and `place_ref` in the given body,
 /// using the given substitution functions.
 fn substitute_internal<F, G, H>(
-    body: &Block,
+    mut body: Block,
     sub_mir_block: F,
     sub_type_of: G,
     sub_place_ref: H,
     return_expr: Option<TokenStream>,
+    keep_spans: bool,
 ) -> syn::Result<Block>
 where
     F: Fn(&Macro) -> syn::Result<(TokenStream, TokenStream)>,
@@ -28,6 +29,7 @@ where
         sub_place_ref: H,
         hoisted: TokenStream,
         return_expr: Option<TokenStream>,
+        keep_spans: bool,
     }
 
     impl<F, G, H> VisitMut for Visitor<F, G, H>
@@ -106,6 +108,14 @@ where
                 visit_expr_mut(self, e);
             }
         }
+
+        fn visit_span_mut(&mut self, s: &mut Span) {
+            if self.keep_spans {
+                *s = Span::call_site();
+            } else {
+                visit_span_mut(self, s);
+            }
+        }
     }
 
     let mut visitor = Visitor {
@@ -114,8 +124,8 @@ where
         sub_place_ref,
         return_expr,
         hoisted: TokenStream::new(),
+        keep_spans,
     };
-    let mut body = body.clone();
     visitor.visit_block_mut(&mut body);
 
     body.stmts.insert(0, syn::Stmt::Expr(syn::Expr::Verbatim(visitor.hoisted), None));

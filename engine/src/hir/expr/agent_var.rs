@@ -34,7 +34,12 @@ impl Expr for GetGlobalVar {
 }
 
 macro_mir_dsl::mir_intrinsic! {
-    fn project_global_var<T: Reflect>(type_mapping: TypeMapping, var_index: usize)<'a>(context: &'a mut CanonExecutionContext) -> (out: &'a mut T) {
+    fn project_global_var<T: Reflect>(
+        type_mapping: TypeMapping,
+        var_index: usize
+    )<'a>(
+        context: &'a mut CanonExecutionContext
+    ) -> (out: &'a mut T) {
         mir! {
             out = &mut context
                 .deref::<CanonExecutionContext>()
