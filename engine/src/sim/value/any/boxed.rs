@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    sim::value::{NlBool, NlFloat, NlList, NlString},
+    sim::value::{NlFloat, NlList, NlString},
     util::reflection::{Reflect, Type},
 };
 
@@ -68,17 +68,17 @@ impl BoxedAny {
         self.inner
     }
 
-    fn ty(&self) -> &Type {
+    pub fn ty(&self) -> Type {
         // SAFETY: this pointer is always valid when used to access `Type`
         // per this type's invariants
-        unsafe { &*self.inner.as_ptr() }
+        unsafe { *self.inner.as_ptr() }
     }
 
     /// Obtains a pointer to the actual value stored in this [`BoxedAny`].
     /// Panics if the attempted access type does not match the type tag.
     fn ptr_to_val<T: Reflect>(&self) -> NonNull<T> {
         let ty = &T::TYPE_INFO;
-        assert!(*self.ty() == ty, "type mismatch");
+        assert!(self.ty() == ty, "type mismatch");
         let (_, offset) = layout_and_val_offset(
             ty.layout.expect("type should have a known layout to be used in a BoxedAny"),
         );
@@ -102,13 +102,13 @@ impl BoxedAny {
         unsafe { self.inner.byte_add(offset) }.cast()
     }
 
-    pub fn deref_as<T: Reflect>(&self) -> &T {
+    pub fn cast_as<T: Reflect>(&self) -> &T {
         let ptr = self.ptr_to_val::<T>();
         // SAFETY: the pointer is valid and the type matches
         unsafe { &*ptr.as_ptr() }
     }
 
-    pub fn deref_as_mut<T: Reflect>(&mut self) -> &mut T {
+    pub fn cast_as_mut<T: Reflect>(&mut self) -> &mut T {
         let ptr = self.ptr_to_val::<T>();
         // SAFETY: the pointer is valid and the type matches
         unsafe { &mut *ptr.as_ptr() }
@@ -141,14 +141,14 @@ impl Drop for BoxedAny {
 
 impl Debug for BoxedAny {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.ty().is::<NlBool>() {
-            write!(f, "{:?}", self.deref_as::<NlBool>())?;
+        if self.ty().is::<bool>() {
+            write!(f, "{:?}", self.cast_as::<bool>())?;
         } else if self.ty().is::<NlFloat>() {
-            write!(f, "{:?}", self.deref_as::<NlFloat>())?;
+            write!(f, "{:?}", self.cast_as::<NlFloat>())?;
         } else if self.ty().is::<NlList>() {
-            write!(f, "{:?}", self.deref_as::<NlList>())?;
+            write!(f, "{:?}", self.cast_as::<NlList>())?;
         } else if self.ty().is::<NlString>() {
-            write!(f, "{:?}", self.deref_as::<NlString>())?;
+            write!(f, "{:?}", self.cast_as::<NlString>())?;
         } else {
             write!(f, "BoxedAny(unknown type {:?})", self.ty())?;
         }

@@ -8,8 +8,8 @@ members = [
     "lir_to_cranelift",
     "ast_to_hir",
     "pretty_print",
-    "ffi_translate/ffi_translate_impl",
-    "ffi_translate/ffi_translate_macro",
+    "macro_mir_dsl/macro_mir_dsl_impl",
+    "macro_mir_dsl/macro_mir_dsl",
 ]
 
 [workspace.dependencies]

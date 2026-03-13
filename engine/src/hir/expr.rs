@@ -33,7 +33,7 @@ impl Expr for Scope {
         for (local_id, decl) in &self.locals {
             let mir_local_decl =
                 mir::LocalDecl { debug_name: decl.debug_name.clone(), ty: decl.ty.repr() };
-            let (mir_local_id, _) = builder.mir.create_local(mir_local_decl);
+            let mir_local_id = builder.mir.create_local(mir_local_decl);
             builder.translator.locals.insert(*local_id, mir_local_id);
         }
         self.inner.write_mir_execution(builder, local_out);

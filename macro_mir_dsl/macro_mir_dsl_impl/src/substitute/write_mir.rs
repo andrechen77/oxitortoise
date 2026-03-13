@@ -5,7 +5,7 @@ use syn::spanned::Spanned;
 use crate::{
     ast::{
         Assign, Block, Break, Drop, IfElse, LocalDecl, MirBody, Operation, Place, PlaceOperand,
-        Stmt, parse_mir_body, parse_place_ref, parse_type_mapping, parse_type_of,
+        Stmt, parse_mir_body, parse_place_ref, parse_type_of,
     },
     combine_generics, ensure_trailing, internal_ident,
     parse::{MirIntrinsicSignatureSyntax, MirIntrinsicSyntax},
@@ -39,22 +39,18 @@ pub fn substitute(intrinsic: &MirIntrinsicSyntax) -> syn::Result<TokenStream> {
     let runtime_args = ensure_trailing(runtime_args);
     let return_pat = return_value_decl.pat.clone();
 
-    let body = substitute_internal(
-        &intrinsic.content,
-        sub_mir_block,
-        sub_type_of,
-        sub_place_ref,
-        sub_type_mapping,
-    )?;
+    let body =
+        substitute_internal(&intrinsic.content, sub_mir_block, sub_type_of, sub_place_ref, None)?;
 
     // build the write_mir function
     let builder_ident = builder_ident();
     let full_fn = quote! {
         #(#attrs)*
+        #[allow(unused_braces)]
         #vis
         fn write_mir
         #generics(
-            #builder_ident: &mut crate::engine::hir::HirToMirFnBuilder,
+            #builder_ident: &mut crate::mir::builder::FunctionBuilder<'_>,
             #compile_time_args
             #runtime_args
             #return_pat: crate::mir::Place
@@ -64,16 +60,10 @@ pub fn substitute(intrinsic: &MirIntrinsicSyntax) -> syn::Result<TokenStream> {
     Ok(full_fn)
 }
 
-fn sub_type_mapping(m: &syn::ExprMacro) -> syn::Result<TokenStream> {
-    let () = parse_type_mapping(m)?;
-    let builder_ident = builder_ident();
-    Ok(quote! { #builder_ident.type_mapping })
-}
-
 fn sub_type_of(m: &syn::ExprMacro) -> syn::Result<TokenStream> {
     let inner_expr = parse_type_of(m)?;
     let builder_ident = builder_ident();
-    Ok(quote! { #builder_ident.mir.type_of_place(#inner_expr) })
+    Ok(quote! { #builder_ident.type_of_place(&#inner_expr) })
 }
 
 fn sub_place_ref(m: &syn::ExprMacro) -> syn::Result<TokenStream> {
@@ -96,10 +86,10 @@ fn sub_mir_block(m: &syn::Macro) -> syn::Result<(TokenStream, TokenStream)> {
         .into_iter()
         .map(|LocalDecl { let_token: _, name, colon_token: _, ty }| {
             quote! {
-                let #name = #builder_ident.mir.add_local(crate::mir::LocalDecl {
+                let #name: crate::mir::Place = #builder_ident.create_local(crate::mir::LocalDecl {
                     debug_name: Some(stringify!(#name).into()),
                     ty: <#ty as crate::mir::reflection::MirReflect>::mir_type(),
-                });
+                }).into();
             }
         })
         .collect();
@@ -149,17 +139,17 @@ fn sub_assign(
         {
             let #dst_ident = #dst;
             let #operation_ident = #operation;
-            #builder_ident.mir.add_operation_with_dst(#dst_ident, #operation_ident);
+            #builder_ident.add_operation_with_dst(#dst_ident, #operation_ident);
         }
     })
 }
 
 fn sub_place(place: Place) -> syn::Result<TokenStream> {
     match place {
-        Place::Local(ident) => Ok(quote! { #ident }),
+        Place::Local(ident) => Ok(quote! { crate::mir::Place::clone(&#ident) }),
         Place::PlaceUse(ident) => {
             // in write_mir, a place_use simply names an existing Place.
-            Ok(quote! { #ident })
+            Ok(quote! { crate::mir::Place::clone(&#ident) })
         }
         Place::StaticField { .. } => match static_field_proj_suffix(place) {
             (base, Ok((ty, members))) => {
@@ -180,7 +170,7 @@ fn sub_place(place: Place) -> syn::Result<TokenStream> {
                 {
                     let #receiver_ident = #receiver;
                     <#dyn_ptr_type as crate::mir::reflection::HasDynPtr>::write_mir_get_data_ptr(
-                        #builder_ident.mir,
+                        #builder_ident,
                         #receiver_ident,
                     )
                 }
@@ -209,9 +199,10 @@ fn sub_place(place: Place) -> syn::Result<TokenStream> {
         }
         Place::Cast { receiver, expected_type, .. } => {
             let receiver = sub_place(*receiver).unwrap_or_else(syn::Error::into_compile_error);
+            let builder_ident = builder_ident();
             Ok(quote! {
                 {
-                    assert!(builder.mir.type_of_place(receiver).is::<#expected_type>());
+                    assert!(#builder_ident.type_of_place(&#receiver).is::<#expected_type>());
                     #receiver
                 }
             })
@@ -271,39 +262,24 @@ fn static_field_proj_suffix(place: Place) -> (Place, syn::Result<(syn::Type, Vec
 
 fn sub_operation(operation: Operation) -> syn::Result<TokenStream> {
     match operation {
-        Operation::Operand(operand) => sub_place_operand(operand),
-        Operation::Const { value } => Ok(quote! {
-            crate::mir::Operation::Const {
-                value: crate::sim::value::any::boxed::BoxedAny::new(#value),
-            }
-        }),
-        Operation::BinaryOp { op, lhs, rhs } => {
-            let lhs = sub_place_operand(lhs).unwrap_or_else(syn::Error::into_compile_error);
-            let rhs = sub_place_operand(rhs).unwrap_or_else(syn::Error::into_compile_error);
-            Ok(quote! {
-                crate::mir::Operation::ScalarBinaryOp {
-                    opcode: crate::engine::hir::expr::arith_op::lir_opcode_for(stringify!(#op)),
-                    lhs: #lhs,
-                    rhs: #rhs,
-                }
-            })
-        }
-        Operation::UnaryOp { op, operand } => {
+        Operation::Operand(operand) => {
             let operand = sub_place_operand(operand).unwrap_or_else(syn::Error::into_compile_error);
             Ok(quote! {
-                crate::mir::Operation::ScalarUnaryOp {
-                    opcode: crate::engine::hir::expr::arith_op::lir_unary_opcode_for(stringify!(#op)),
-                    operand: #operand,
-                }
+                crate::mir::Operation::Operand(#operand)
             })
         }
+        Operation::Const { value } => Ok(quote! {
+            crate::mir::Operation::Const {
+                value: crate::sim::value::BoxedAny::new(#value),
+            }
+        }),
         Operation::CallHostFunction { function, args } => {
             let args = args
                 .into_iter()
                 .map(|a| sub_place_operand(a).unwrap_or_else(syn::Error::into_compile_error));
             Ok(quote! {
                 crate::mir::Operation::CallHostFunction {
-                    function: #function,
+                    function: &#function::FN_INFO,
                     args: ::std::vec![#(#args),*],
                 }
             })

@@ -142,6 +142,15 @@ unsafe impl MirReflect for () {
     }
 }
 
+unsafe impl MirReflect for bool {
+    fn mir_type() -> MirType {
+        Arc::new(MirTypeInfo {
+            static_ty: Some(&<bool>::TYPE_INFO),
+            contents: MirTypeContents::IsPrimitive(lir::ValType::I8),
+        })
+    }
+}
+
 unsafe impl MirReflect for f64 {
     fn mir_type() -> MirType {
         Arc::new(MirTypeInfo {

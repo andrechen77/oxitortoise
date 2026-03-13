@@ -4,16 +4,12 @@ use quote::quote;
 use crate::{
     ast::{
         Assign, Block, Break, Drop, IfElse, LocalDecl, MirBody, Operation, Place, PlaceOperand,
-        Stmt, parse_mir_body, parse_place_ref, parse_type_mapping, parse_type_of,
+        Stmt, parse_mir_body, parse_place_ref, parse_type_of,
     },
-    combine_generics, ensure_trailing, internal_ident,
+    combine_generics, ensure_trailing,
     parse::{MirIntrinsicSignatureSyntax, MirIntrinsicSyntax},
     substitute::substitute_internal,
 };
-
-fn type_mapping_ident() -> syn::Ident {
-    internal_ident("type_mapping")
-}
 
 pub fn substitute(intrinsic: &MirIntrinsicSyntax) -> syn::Result<TokenStream> {
     let MirIntrinsicSignatureSyntax {
@@ -28,7 +24,19 @@ pub fn substitute(intrinsic: &MirIntrinsicSyntax) -> syn::Result<TokenStream> {
     } = &intrinsic.signature;
     let generics = combine_generics(compile_time_generics, runtime_generics);
     let compile_time_args = ensure_trailing(compile_time_args.clone());
-    let runtime_args = ensure_trailing(runtime_args.clone());
+    let mut runtime_args = runtime_args.clone();
+    for arg in runtime_args.iter_mut() {
+        let syn::FnArg::Typed(pat_type) = arg else {
+            panic!("expected typed argument");
+        };
+        if let syn::Type::Path(path) = pat_type.ty.as_ref()
+            && let Some(ident) = path.path.get_ident()
+            && ident == "any"
+        {
+            pat_type.ty = Box::new(syn::parse_quote! { crate::sim::value::BoxedAny });
+        }
+    }
+    let runtime_args = ensure_trailing(runtime_args);
     let return_pat = return_value_decl.pat.clone();
     let return_ty = return_value_decl.ty.clone();
 
@@ -37,16 +45,15 @@ pub fn substitute(intrinsic: &MirIntrinsicSyntax) -> syn::Result<TokenStream> {
         sub_mir_block,
         sub_type_of,
         sub_place_ref,
-        sub_type_mapping,
+        Some(quote! { #return_pat }),
     )?;
     let body_stmts = body.stmts;
 
     // build the interp function
-    let type_mapping_ident = type_mapping_ident();
     let full_fn = quote! {
         #(#attrs)*
+        #[allow(unused_braces)]
         #vis fn interp #generics(
-            #type_mapping_ident: &crate::hir::build_mir::TypeMapping,
             #compile_time_args
             #runtime_args
         ) -> #return_ty {
@@ -58,15 +65,9 @@ pub fn substitute(intrinsic: &MirIntrinsicSyntax) -> syn::Result<TokenStream> {
     Ok(full_fn)
 }
 
-fn sub_type_mapping(m: &syn::ExprMacro) -> syn::Result<TokenStream> {
-    let () = parse_type_mapping(m)?;
-    let type_mapping_ident = type_mapping_ident();
-    Ok(quote! { #type_mapping_ident })
-}
-
 fn sub_type_of(m: &syn::ExprMacro) -> syn::Result<TokenStream> {
     let inner_expr = parse_type_of(m)?;
-    Ok(quote! { crate::sim::value::any::boxed::BoxedAny::ty(#inner_expr) })
+    Ok(quote! { crate::sim::value::BoxedAny::ty(&#inner_expr) })
 }
 
 fn sub_place_ref(m: &syn::ExprMacro) -> syn::Result<TokenStream> {
@@ -182,7 +183,7 @@ fn sub_place(place: Place, can_mutate: bool) -> syn::Result<TokenStream> {
             // Use the runtime HasDynPtr API; the surrounding module is
             // expected to have `HasDynPtr` in scope.
             Ok(quote! {
-                <#dyn_ptr_type as crate::mir::reflection::HasDynPtr>::dyn_ptr_mut(#receiver)
+                <#dyn_ptr_type as crate::mir::reflection::HasDynPtr>::dyn_ptr_mut(&mut #receiver)
             })
         }
         Place::DynFieldMethod { receiver, expected_proj_type, arg, .. } => {
@@ -192,7 +193,7 @@ fn sub_place(place: Place, can_mutate: bool) -> syn::Result<TokenStream> {
             // Interpret `const { expr }` as the runtime expression `{ expr }`
             // and project/cast through the dynamic pointer.
             Ok(quote! {
-                crate::mir::reflection::DynPtrMut::cast::<#expected_proj_type>(
+                *crate::mir::reflection::DynPtrMut::cast::<#expected_proj_type>(
                     crate::mir::reflection::DynPtrMut::proj_field(#receiver, #arg)
                 )
             })
@@ -216,11 +217,11 @@ fn sub_place(place: Place, can_mutate: bool) -> syn::Result<TokenStream> {
                 sub_place(*receiver, can_mutate).unwrap_or_else(syn::Error::into_compile_error);
             if can_mutate {
                 Ok(quote! {
-                    (*crate::sim::value::any::boxed::BoxedAny::cast_as_mut::<#expected_type>(#receiver))
+                    (*crate::sim::value::BoxedAny::cast_as_mut::<#expected_type>(&mut #receiver))
                 })
             } else {
                 Ok(quote! {
-                    (*crate::sim::value::any::boxed::BoxedAny::cast_as::<#expected_type>(#receiver))
+                    (*crate::sim::value::BoxedAny::cast_as::<#expected_type>(&#receiver))
                 })
             }
         }
@@ -234,20 +235,11 @@ fn sub_operation(operation: Operation) -> syn::Result<TokenStream> {
             // `const { expr }` in the DSL becomes just `{ expr }` at runtime.
             Ok(quote! { #value })
         }
-        Operation::BinaryOp { op, lhs, rhs } => {
-            let lhs = sub_place_operand(lhs)?;
-            let rhs = sub_place_operand(rhs)?;
-            Ok(quote! { #lhs #op #rhs })
-        }
-        Operation::UnaryOp { op, operand } => {
-            let operand = sub_place_operand(operand)?;
-            Ok(quote! { (#op #operand) })
-        }
         Operation::CallHostFunction { function, args } => {
             let args: Vec<_> =
                 args.into_iter().map(sub_place_operand).collect::<syn::Result<_>>()?;
             Ok(quote! {
-                #function (#(#args),*)
+                #function::call (#(#args),*)
             })
         }
     }

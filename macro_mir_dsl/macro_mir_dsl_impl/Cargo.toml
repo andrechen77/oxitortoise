@@ -1,5 +1,5 @@
 [package]
-name = "oxitortoise_macro_mir_dsl"
+name = "oxitortoise_macro_mir_dsl_impl"
 version = "0.1.0"
 edition = "2024"
 

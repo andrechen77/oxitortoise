@@ -87,7 +87,7 @@ impl<'a, 'b> HirToMirFnBuilder<'a, 'b> {
     pub fn translate_expr(&mut self, expr: &hir::ExprKind) -> mir::LocalId {
         let output_ty = expr.output_type(self.hir).repr();
         // the expression's output will be stored in this local variable
-        let (output_local, _output_local_decl) =
+        let output_local =
             self.mir.create_local(mir::LocalDecl { debug_name: None, ty: output_ty });
         // TODO could do something with the type assertion here
         expr.write_mir_execution(self, output_local);
@@ -102,11 +102,11 @@ impl<'a, 'b> HirToMirFnBuilder<'a, 'b> {
         &mut self,
         f: impl FnOnce(&mut HirToMirFnBuilder<'_, '_>) -> T,
     ) -> (Vec<mir::Statement>, T) {
-        self.mir.with_inner_statement_seq(|lir| {
+        self.mir.with_inner_statement_seq(|mir| {
             let mut builder = HirToMirFnBuilder {
                 hir: self.hir,
                 type_mapping: self.type_mapping,
-                mir: lir,
+                mir,
                 translator: self.translator,
             };
             f(&mut builder)
@@ -117,7 +117,7 @@ impl<'a, 'b> HirToMirFnBuilder<'a, 'b> {
     /// it as a function parameter if it does not exist.
     pub fn context_param(&mut self) -> mir::Place {
         let local_id = *self.translator.context_param.get_or_insert_with(|| {
-            let (local_id, _local_decl) = self.mir.create_local(mir::LocalDecl {
+            let local_id = self.mir.create_local(mir::LocalDecl {
                 debug_name: Some("context".into()),
                 ty: self.type_mapping.context_ty.clone(),
             });

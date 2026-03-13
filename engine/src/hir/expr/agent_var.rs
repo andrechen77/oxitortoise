@@ -2,9 +2,10 @@
 
 use crate::{
     exec::CanonExecutionContext,
-    hir::{Expr, ExprKind, HirToMirFnBuilder, NlAbstractTy, Program},
+    hir::{Expr, ExprKind, HirToMirFnBuilder, NlAbstractTy, Program, build_mir::TypeMapping},
     mir,
     sim::{patch::PatchVarDesc, turtle::TurtleVarDesc},
+    util::{reflection::Reflect, row_buffer::RowBuffer},
     workspace::Workspace,
 };
 
@@ -32,19 +33,8 @@ impl Expr for GetGlobalVar {
     }
 }
 
-mod project_global_var {
-    use super::*;
-
-    use std::mem::offset_of;
-
-    use crate::{
-        hir::HirToMirFnBuilder,
-        mir::{Operation, Place, PlaceOperand, Projection, reflection::HasDynPtr},
-        util::{reflection::Reflect, row_buffer::RowBuffer},
-    };
-
-    /*
-    fn project_global_var<T>(var_offset: usize)<'a>(context: &'a mut CanonExecutionContext) -> (out: &'a mut T) {
+macro_mir_dsl::mir_intrinsic! {
+    fn project_global_var<T: Reflect>(type_mapping: TypeMapping, var_index: usize)<'a>(context: &'a mut CanonExecutionContext) -> (out: &'a mut T) {
         mir! {
             out = &mut context
                 .deref::<CanonExecutionContext>()
@@ -54,49 +44,8 @@ mod project_global_var {
                 .globals
                 .data
                 .dyn_ptr::<RowBuffer>()
-                .dyn_field::<T>(var_offset);
+                .dyn_field::<T>(const { type_mapping.globals_schema().offset_of_field(var_index) });
         }
-    }
-     */
-
-    pub fn write_mir(
-        builder: &mut HirToMirFnBuilder,
-        var_offset: usize,
-        context: Place,
-        out: Place,
-    ) {
-        {
-            let operation = Operation::Operand(PlaceOperand::Borrow({
-                let x1 = context.proj(Projection::Deref);
-                let x2 = x1.proj(Projection::Field {
-                    byte_offset: offset_of!(CanonExecutionContext, workspace),
-                });
-                let x3 = x2.proj(Projection::Deref);
-                let x6 = x3.proj(Projection::Field {
-                    byte_offset: offset_of!(Workspace, world.globals.data),
-                });
-                let x7 = <RowBuffer as HasDynPtr>::write_mir_get_data_ptr(builder.mir, x6);
-                let x8 = x7.proj(Projection::Field { byte_offset: var_offset });
-                x8
-            }));
-            builder.mir.add_operation_with_dst(out, operation);
-        }
-    }
-
-    pub fn interp<'a, T: Reflect>(
-        var_offset: usize,
-        context: &'a mut CanonExecutionContext,
-    ) -> &'a mut T {
-        let out = {
-            let x2 = &mut (*context).workspace;
-            let x4 = &mut (**x2).world;
-            let x5 = &mut (*x4).globals;
-            let x6 = &mut (*x5).data;
-            let x7 = <RowBuffer as HasDynPtr>::dyn_ptr_mut(x6);
-            let x8 = x7.proj_field(var_offset).cast::<T>();
-            x8
-        };
-        out
     }
 }
 

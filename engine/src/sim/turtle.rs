@@ -20,7 +20,7 @@ use crate::{
         agent_schema::{AgentFieldDescriptor, AgentSchemaField, AgentSchemaFieldGroup},
         color::Color,
         topology::{Heading, Point},
-        value::{self, NlBool, NlFloat, NlList, NlString, PackedAny, agentset::TurtleSet},
+        value::{self, NlFloat, NlList, NlString, PackedAny, agentset::TurtleSet},
     },
     util::{
         gen_slot_tracker::{GenIndex, GenSlotTracker},
@@ -369,8 +369,8 @@ fn pretty_print_turtle(
                 }
                 if ty.is::<NlFloat>() {
                     print_field::<NlFloat>(p, turtles, id, *field_desc)
-                } else if ty.is::<NlBool>() {
-                    print_field::<NlBool>(p, turtles, id, *field_desc)
+                } else if ty.is::<bool>() {
+                    print_field::<bool>(p, turtles, id, *field_desc)
                 } else if ty.is::<NlString>() {
                     print_field::<NlString>(p, turtles, id, *field_desc)
                 } else if ty.is::<NlList>() {

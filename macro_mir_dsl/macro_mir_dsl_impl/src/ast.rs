@@ -1,11 +1,9 @@
 //! An abstract syntax-focused parallel of the MIR defined in `engine/src/mir.rs`.
 
-use quote::ToTokens;
 use syn::{
-    AngleBracketedGenericArguments, BinOp, Expr, ExprAssign, ExprBinary, ExprCall, ExprConst,
-    ExprField, ExprMacro, ExprMethodCall, ExprParen, ExprPath, ExprReference, ExprUnary,
-    GenericArgument, Ident, Label, Local, LocalInit, Member, Pat, PatIdent, Path, Token, Type,
-    UnOp,
+    AngleBracketedGenericArguments, Expr, ExprAssign, ExprCall, ExprConst, ExprField, ExprMacro,
+    ExprMethodCall, ExprParen, ExprPath, ExprReference, GenericArgument, Ident, Label, Local,
+    LocalInit, Member, Pat, PatIdent, Path, Token, Type,
     parse::{Parse, ParseStream},
     parse2,
     spanned::Spanned,
@@ -118,8 +116,6 @@ pub enum Place {
 pub enum Operation {
     Operand(PlaceOperand),
     Const { value: syn::Block },
-    BinaryOp { op: BinOp, lhs: PlaceOperand, rhs: PlaceOperand },
-    UnaryOp { op: UnOp, operand: PlaceOperand },
     CallHostFunction { function: Path, args: Vec<PlaceOperand> },
 }
 
@@ -155,7 +151,6 @@ pub fn parse_mir_body(m: &syn::Macro) -> syn::Result<MirBody> {
     let mut local_decls = Vec::new();
     let mut mir_stmts = Vec::new();
     for stmt in stmts {
-        println!("parsing mir stmt: {}", stmt.to_token_stream().to_string());
         let (mir_stmt, local_decl) = parse_mir_stmt(stmt)?;
         local_decls.extend(local_decl);
         mir_stmts.extend(mir_stmt);
@@ -482,17 +477,6 @@ fn expr_path_to_ident(expr: Expr) -> syn::Result<Ident> {
 
 fn expr_to_operation(expr: Expr) -> syn::Result<Operation> {
     match expr {
-        Expr::Binary(ExprBinary { attrs, left, op, right }) => {
-            no_attrs!(attrs);
-            let lhs = expr_to_place_operand(*left)?;
-            let rhs = expr_to_place_operand(*right)?;
-            Ok(Operation::BinaryOp { op, lhs, rhs })
-        }
-        Expr::Unary(ExprUnary { attrs, op, expr }) => {
-            no_attrs!(attrs);
-            let operand = expr_to_place_operand(*expr)?;
-            Ok(Operation::UnaryOp { op, operand })
-        }
         Expr::Call(ExprCall { attrs, func, args, .. }) => {
             no_attrs!(attrs);
 
@@ -542,21 +526,6 @@ fn expr_to_operation(expr: Expr) -> syn::Result<Operation> {
             Ok(Operation::Operand(operand))
         }
     }
-}
-
-pub fn parse_type_mapping(m: &syn::ExprMacro) -> syn::Result<()> {
-    // enforce path is "type_mapping"
-    assert!(m.mac.path.get_ident().unwrap() == "type_mapping");
-
-    // enforce no attributes
-    no_attrs!(m.attrs);
-
-    // enforce no arguments
-    if !m.mac.tokens.is_empty() {
-        return Err(syn::Error::new(m.mac.tokens.span(), "Expected no arguments"));
-    }
-
-    Ok(())
 }
 
 pub fn parse_type_of(m: &syn::ExprMacro) -> syn::Result<Expr> {

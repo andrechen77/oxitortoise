@@ -17,7 +17,7 @@ use crate::{
         patch::OptionPatchId,
         topology::Point,
         turtle::{Breed, BreedId, TurtleId},
-        value::{NlBool, NlBox, NlFloat, NlList, PackedAny},
+        value::{NlBox, NlFloat, NlList, PackedAny},
     },
 };
 
@@ -80,8 +80,6 @@ pub struct LocalId(u32);
 /// different function calls).
 #[delegatable_trait]
 pub trait Expr {
-    /// For certain low level nodes it doesn't make sense to have an abstract
-    /// output type; those should return `None`.
     fn output_type(&self, program: &Program) -> NlAbstractTy;
 
     fn visit_children(&self, visitor: impl FnMut(&ExprKind));
@@ -207,7 +205,7 @@ impl NlAbstractTy {
             Self::Numeric => NlFloat::mir_type(),
             Self::Color => Color::mir_type(),
             Self::Float => NlFloat::mir_type(),
-            Self::Boolean => NlBool::mir_type(),
+            Self::Boolean => bool::mir_type(),
             Self::String => todo!(),
             Self::Point => Point::mir_type(),
             Self::Agent => PackedAny::mir_type(),

@@ -12,7 +12,7 @@ lir = { path = "../lir", package = "oxitortoise_lir" }
 tracing = { workspace = true }
 ambassador = "0.4.2"
 pretty_print = { path = "../pretty_print" }
-ffi_translate = { path = "../ffi_translate/ffi_translate" }
+macro_mir_dsl = { path = "../macro_mir_dsl/macro_mir_dsl", package = "oxitortoise_macro_mir_dsl" }
 
 [features]
 runtime-unsafety = []

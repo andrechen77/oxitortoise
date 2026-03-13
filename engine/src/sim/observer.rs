@@ -8,7 +8,7 @@ use either::Either;
 use pretty_print::PrettyPrinter;
 
 use crate::{
-    sim::value::{NlBool, NlFloat, NlList, NlString, PackedAny},
+    sim::value::{NlFloat, NlList, NlString, PackedAny},
     util::{
         reflection::{Reflect, Type},
         row_buffer::{RowBuffer, RowSchema},
@@ -88,8 +88,8 @@ impl fmt::Debug for Globals {
                         }
                         if ty.is::<NlFloat>() {
                             print_field::<NlFloat>(p, self, i)
-                        } else if ty.is::<NlBool>() {
-                            print_field::<NlBool>(p, self, i)
+                        } else if ty.is::<bool>() {
+                            print_field::<bool>(p, self, i)
                         } else if ty.is::<NlString>() {
                             print_field::<NlString>(p, self, i)
                         } else if ty.is::<NlList>() {

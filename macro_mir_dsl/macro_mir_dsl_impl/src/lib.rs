@@ -8,7 +8,11 @@ mod ast;
 mod parse;
 mod substitute;
 
-pub fn mir_intrinsic_impl(input: TokenStream) -> syn::Result<TokenStream> {
+pub fn mir_intrinsic_impl(input: TokenStream) -> TokenStream {
+    mir_intrinsic_or_err(input).unwrap_or_else(syn::Error::into_compile_error)
+}
+
+fn mir_intrinsic_or_err(input: TokenStream) -> syn::Result<TokenStream> {
     let intrinsic: MirIntrinsicSyntax = parse2(input)?;
 
     let interp_fn =
@@ -19,6 +23,8 @@ pub fn mir_intrinsic_impl(input: TokenStream) -> syn::Result<TokenStream> {
 
     Ok(quote! {
         mod #intrinsic_ident {
+            use super::*;
+
             #interp_fn
             #write_mir_fn
         }
@@ -101,7 +107,7 @@ mod tests {
             }
         };
 
-        let expanded = mir_intrinsic_impl(input);
+        let expanded = mir_intrinsic_or_err(input);
 
         match expanded {
             Ok(expanded) => {
@@ -172,7 +178,7 @@ mod tests {
             }
         };
 
-        let expanded = mir_intrinsic_impl(input);
+        let expanded = mir_intrinsic_or_err(input);
 
         match expanded {
             Ok(expanded) => {

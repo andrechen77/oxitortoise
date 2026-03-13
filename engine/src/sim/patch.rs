@@ -21,7 +21,7 @@ use crate::{
         agent_schema::{AgentFieldDescriptor, AgentSchemaField, AgentSchemaFieldGroup},
         color::Color,
         topology::{CoordFloat, PointInt, TopologySpec},
-        value::{BoxedAny, NlBool, NlFloat, NlList, NlString, PackedAny},
+        value::{BoxedAny, NlFloat, NlList, NlString, PackedAny},
     },
     util::{
         reflection::{Reflect, Type, TypeInfo},
@@ -89,11 +89,12 @@ impl OptionPatchId {
         let opcode = if negate { lir::BinaryOpcode::INeq } else { lir::BinaryOpcode::IEq };
         builder.mir.add_operation_with_dst(
             local_out.into(),
-            mir::Operation::BinaryOp {
-                opcode,
-                lhs: operand.place().move_out(),
-                rhs: sentinel_pl.place().move_out(),
-            },
+            // mir::Operation::ScalarBinaryOp {
+            //     opcode,
+            //     lhs: operand.place().move_out(),
+            //     rhs: sentinel_pl.place().move_out(),
+            // },
+            todo!(),
         );
     }
 }
@@ -102,6 +103,21 @@ impl From<PatchId> for OptionPatchId {
     fn from(value: PatchId) -> Self {
         OptionPatchId(value.0)
     }
+}
+
+pub mod check_patch_nobody {
+    use super::*;
+    use crate::mir::HostFunctionInfo;
+
+    pub fn call(negate: bool, operand: &OptionPatchId) -> bool {
+        todo!()
+    }
+
+    pub const FN_INFO: HostFunctionInfo = HostFunctionInfo {
+        debug_name: "check_patch_nobody",
+        return_type: &bool::TYPE_INFO,
+        parameter_types: &[&OptionPatchId::TYPE_INFO, &bool::TYPE_INFO],
+    };
 }
 
 pub struct Patches {
@@ -376,8 +392,8 @@ fn pretty_print_patch(
                 }
                 if ty.is::<NlFloat>() {
                     print_field::<NlFloat>(p, patches, id, *field_desc)
-                } else if ty.is::<NlBool>() {
-                    print_field::<NlBool>(p, patches, id, *field_desc)
+                } else if ty.is::<bool>() {
+                    print_field::<bool>(p, patches, id, *field_desc)
                 } else if ty.is::<NlString>() {
                     print_field::<NlString>(p, patches, id, *field_desc)
                 } else if ty.is::<NlList>() {

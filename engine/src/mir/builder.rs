@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
 use crate::mir::{
-    self, ElementaryStatement, Function, FunctionId, Label, LocalId, Operation, Statement,
+    self, ElementaryStatement, Function, FunctionId, Label, LocalDecl, LocalId, Operation, Place,
+    Statement, reflection::MirType,
 };
 
 #[derive(Default)]
@@ -33,8 +34,8 @@ impl ProgramBuilder {
         id
     }
 
-    fn next_label(&mut self) -> mir::Label {
-        let id = mir::Label(self.next_label);
+    fn next_label(&mut self) -> Label {
+        let id = Label(self.next_label);
         self.next_label += 1;
         id
     }
@@ -43,7 +44,7 @@ impl ProgramBuilder {
 pub struct FunctionBuilder<'a> {
     program_builder: &'a mut ProgramBuilder,
     fn_id: FunctionId,
-    locals: HashMap<LocalId, mir::LocalDecl>,
+    locals: HashMap<LocalId, LocalDecl>,
     return_local: Option<LocalId>,
     statements_out: Vec<Statement>,
 }
@@ -80,10 +81,14 @@ impl<'a> FunctionBuilder<'a> {
         assert!(old.is_none(), "return local cannot be set twice");
     }
 
-    pub fn create_local(&mut self, decl: mir::LocalDecl) -> (LocalId, &mut mir::LocalDecl) {
+    pub fn create_local(&mut self, decl: LocalDecl) -> LocalId {
         let id = self.program_builder.next_local_id();
-        let local_decl = self.locals.entry(id).or_insert(decl);
-        (id, local_decl)
+        self.locals.insert(id, decl);
+        id
+    }
+
+    pub fn type_of_place(&self, _place: &Place) -> MirType {
+        todo!()
     }
 
     pub fn get_local_mut(&mut self, id: LocalId) -> &mut mir::LocalDecl {
@@ -99,7 +104,7 @@ impl<'a> FunctionBuilder<'a> {
     }
 
     pub fn add_operation(&mut self, local_decl: mir::LocalDecl, op: Operation) -> LocalId {
-        let (dst, _) = self.create_local(local_decl);
+        let dst = self.create_local(local_decl);
         self.add_operation_with_dst(dst.into(), op);
         // TODO could do something with the type assertion here
         dst

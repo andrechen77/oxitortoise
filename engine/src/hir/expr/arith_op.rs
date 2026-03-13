@@ -12,8 +12,8 @@ use crate::{
         reflection::{MirReflect, MirType, MirTypeContents, MirTypeInfo},
     },
     sim::{
-        patch::OptionPatchId,
-        value::{BoxedAny, NlBool, NlFloat, PackedAny},
+        patch::{OptionPatchId, check_patch_nobody},
+        value::{Nobody, PackedAny},
     },
     util::reflection::{Reflect, TypeInfo},
 };
@@ -82,119 +82,96 @@ impl Expr for BinaryOperation {
     }
 
     fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, local_out: mir::LocalId) {
-        let lhs_ty = self.lhs.output_type(builder.hir);
-        let rhs_ty = self.rhs.output_type(builder.hir);
+        todo!()
+    }
+}
 
-        // special case comparisons against nobody (both as the sole
-        // inhabitant of the nobody type and as the inhabitant of agent id types).
-        if (lhs_ty == NlAbstractTy::Nobody || rhs_ty == NlAbstractTy::Nobody)
-            && (self.op == BinaryOpcode::Eq || self.op == BinaryOpcode::Neq)
+macro_mir_dsl::mir_intrinsic! {
+    fn binary_op(op: BinaryOpcode)(lhs: any, rhs: any) -> (out: bool) {
+        let lhs_ty = type_of!(lhs);
+        let rhs_ty = type_of!(rhs);
+
+        let lhs_is_nobody = lhs_ty.is::<Nobody>();
+        let rhs_is_nobody = rhs_ty.is::<Nobody>();
+
+        // special case comparisons againt nobody
+        if (lhs_is_nobody || rhs_is_nobody)
+            && (op == BinaryOpcode::Eq || op == BinaryOpcode::Neq)
         {
-            let negate = match self.op {
+            let negate = match op {
                 BinaryOpcode::Eq => false,
                 BinaryOpcode::Neq => true,
                 _ => unreachable!(),
             };
 
             // short circuit on nobody vs nobody comparison
-            if lhs_ty == NlAbstractTy::Nobody && rhs_ty == NlAbstractTy::Nobody {
-                let result = if negate { NlBool(false) } else { NlBool(true) };
-                builder.mir.add_operation_with_dst(
-                    local_out.into(),
-                    mir::Operation::Const { value: BoxedAny::new(result) },
-                );
+            if lhs_is_nobody && rhs_is_nobody {
+                // TODO assign the out type to bool
+                mir! {
+                    out = const { if negate { false } else { true } };
+                }
                 return;
-            }
+            };
 
-            // find the operand that is not statically known to be nobody
-            let (operand, operand_ty) = if lhs_ty == NlAbstractTy::Nobody {
-                (&self.rhs, rhs_ty.repr())
+            // find the operand that is not known to be nobody
+            let (operand, operand_ty) = if lhs_is_nobody {
+                (place_ref!(rhs), rhs_ty)
             } else {
-                (&self.lhs, lhs_ty.repr())
+                (place_ref!(lhs), lhs_ty)
             };
             if operand_ty.is::<OptionPatchId>() {
-                let operand_pl = builder.translate_expr(operand);
-                OptionPatchId::write_check_nobody(builder, negate, local_out, operand_pl);
-            } else {
-                todo!("TODO(mvp) handle nobody check for other operand types: {:?}", operand_ty);
-            }
-
-            return;
-        }
-
-        let lhs_ty = lhs_ty.repr();
-        let rhs_ty = rhs_ty.repr();
-
-        let lhs_pl = builder.translate_expr(&self.lhs);
-        let rhs_pl = builder.translate_expr(&self.rhs);
-
-        use BinaryOpcode as Op;
-
-        // match on known combinations of input types and opcodes
-        // TODO(mvp) so far, these additional conditions on color only exist to
-        // get ants to compile. we will want to make a full decision on how to
-        // treat colors in the engine later
-        let final_operation = if (lhs_ty.is::<NlFloat>() || rhs_ty.is::<NlFloat>())
-            && (rhs_ty.is::<NlFloat>() || rhs_ty.is::<NlFloat>())
-        {
-            let opcode = match self.op {
-                Op::Add => lir::BinaryOpcode::FAdd,
-                Op::Sub => lir::BinaryOpcode::FSub,
-                Op::Mul => lir::BinaryOpcode::FMul,
-                Op::Div => lir::BinaryOpcode::FDiv,
-                Op::Lt => lir::BinaryOpcode::FLt,
-                Op::Lte => lir::BinaryOpcode::FLte,
-                Op::Gt => lir::BinaryOpcode::FGt,
-                Op::Gte => lir::BinaryOpcode::FGte,
-                Op::Eq => lir::BinaryOpcode::FEq,
-                _ => unimplemented!("unsupported operation"),
-            };
-            mir::Operation::BinaryOp {
-                opcode,
-                lhs: lhs_pl.place().move_out(),
-                rhs: rhs_pl.place().move_out(),
-            }
-        } else if lhs_ty.is::<NlBool>() && rhs_ty.is::<NlBool>() {
-            let opcode = match self.op {
-                Op::And => lir::BinaryOpcode::And,
-                Op::Or => lir::BinaryOpcode::Or,
-                _ => unimplemented!("unsupported operation"),
-            };
-            mir::Operation::BinaryOp {
-                opcode,
-                lhs: lhs_pl.place().move_out(),
-                rhs: rhs_pl.place().move_out(),
-            }
-        } else if lhs_ty.is::<PackedAny>() && rhs_ty.is::<PackedAny>() {
-            let opcode_pl = builder.mir.add_operation(
-                mir::LocalDecl { debug_name: None, ty: BinaryOpcode::mir_type() },
-                mir::Operation::Const { value: BoxedAny::new::<BinaryOpcode>(self.op) },
-            );
-            match self.op {
-                Op::And | Op::Or | Op::Eq | Op::Neq | Op::Lt | Op::Lte | Op::Gt | Op::Gte => {
-                    mir::Operation::CallHostFunction {
-                        function: &binary_op_any_bool::FN_INFO,
-                        args: vec![
-                            lhs_pl.place().move_out(),
-                            rhs_pl.place().move_out(),
-                            opcode_pl.place().move_out(),
-                        ],
-                    }
+                mir! {
+                    let negate_rt: bool = const { negate };
+                    out = const { check_patch_nobody }(negate_rt, &(place_use!(operand).cast::<OptionPatchId>()));
                 }
-                Op::Add | Op::Sub | Op::Mul | Op::Div => mir::Operation::CallHostFunction {
-                    function: &binary_op_any::FN_INFO,
-                    args: vec![
-                        lhs_pl.place().move_out(),
-                        rhs_pl.place().move_out(),
-                        opcode_pl.place().move_out(),
-                    ],
+            } else {
+                unimplemented!("TODO(mvp) handle nobody check for other operand types: {:?}", operand_ty);
+            }
+        } else if lhs_ty.is::<bool>() && rhs_ty.is::<bool>() {
+            match op {
+                BinaryOpcode::And => mir! {
+                    out = const { logical_and }(lhs.cast::<bool>(), rhs.cast::<bool>());
                 },
+                BinaryOpcode::Or => mir! {
+                    out = const { logical_or }(lhs.cast::<bool>(), rhs.cast::<bool>());
+                },
+                _ => unimplemented!("unsupported operation"),
             }
         } else {
+            // TODO
             todo!("TODO(mvp) handle other operand types: {:?} and {:?}", lhs_ty, rhs_ty);
         };
-        builder.mir.add_operation_with_dst(local_out.into(), final_operation);
     }
+}
+
+mod logical_and {
+    use super::*;
+    use crate::mir::HostFunctionInfo;
+
+    pub fn call(lhs: bool, rhs: bool) -> bool {
+        todo!()
+    }
+
+    pub const FN_INFO: HostFunctionInfo = HostFunctionInfo {
+        debug_name: "logical_and",
+        parameter_types: &[&bool::TYPE_INFO, &bool::TYPE_INFO],
+        return_type: &bool::TYPE_INFO,
+    };
+}
+
+mod logical_or {
+    use super::*;
+    use crate::mir::HostFunctionInfo;
+
+    pub fn call(lhs: bool, rhs: bool) -> bool {
+        todo!()
+    }
+
+    pub const FN_INFO: HostFunctionInfo = HostFunctionInfo {
+        debug_name: "logical_or",
+        parameter_types: &[&bool::TYPE_INFO, &bool::TYPE_INFO],
+        return_type: &bool::TYPE_INFO,
+    };
 }
 
 fn binary_op_any_bool(_lhs: PackedAny, _rhs: PackedAny, _op: BinaryOpcode) -> bool {
@@ -207,7 +184,7 @@ mod binary_op_any_bool {
     pub static FN_INFO: HostFunctionInfo = HostFunctionInfo {
         debug_name: "binary_op_any_bool",
         parameter_types: &[&PackedAny::TYPE_INFO, &PackedAny::TYPE_INFO, &BinaryOpcode::TYPE_INFO],
-        return_type: &NlBool::TYPE_INFO,
+        return_type: &bool::TYPE_INFO,
     };
 }
 fn binary_op_any(_lhs: PackedAny, _rhs: PackedAny, _op: BinaryOpcode) -> PackedAny {
@@ -254,8 +231,11 @@ impl Expr for UnaryOp {
             UnaryOpcode::Neg => lir::UnaryOpcode::FNeg,
             UnaryOpcode::Not => lir::UnaryOpcode::Not,
         };
-        let final_operation =
-            mir::Operation::UnaryOp { opcode, operand: operand_pl.place().move_out() };
-        builder.mir.add_operation_with_dst(local_out.into(), final_operation);
+        todo!(
+            "
+            let final_operation = mir::Operation::ScalarUnaryOp {{ opcode, operand: operand_pl.place().move_out() }};
+            builder.mir.add_operation_with_dst(local_out.into(), final_operation);
+            "
+        );
     }
 }

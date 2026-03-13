@@ -1,6 +1,7 @@
 use proc_macro2::TokenStream;
 use syn::{
     Block, ExprMacro, Macro,
+    spanned::Spanned as _,
     visit_mut::{VisitMut, visit_expr_mut, visit_stmt_mut},
 };
 
@@ -9,34 +10,50 @@ pub mod write_mir;
 
 /// Substitutes inner instances of `mir!`, `type_of`, and `place_ref` in the given body,
 /// using the given substitution functions.
-fn substitute_internal<F, G, H, I>(
+fn substitute_internal<F, G, H>(
     body: &Block,
     sub_mir_block: F,
     sub_type_of: G,
     sub_place_ref: H,
-    sub_type_mapping: I,
+    return_expr: Option<TokenStream>,
 ) -> syn::Result<Block>
 where
     F: Fn(&Macro) -> syn::Result<(TokenStream, TokenStream)>,
     G: Fn(&ExprMacro) -> syn::Result<TokenStream>,
     H: Fn(&ExprMacro) -> syn::Result<TokenStream>,
-    I: Fn(&ExprMacro) -> syn::Result<TokenStream>,
 {
-    struct Visitor<F, G, H, I> {
+    struct Visitor<F, G, H> {
         sub_mir_block: F,
         sub_type_of: G,
         sub_place_ref: H,
-        sub_type_mapping: I,
         hoisted: TokenStream,
+        return_expr: Option<TokenStream>,
     }
 
-    impl<F, G, H, I> VisitMut for Visitor<F, G, H, I>
+    impl<F, G, H> VisitMut for Visitor<F, G, H>
     where
         F: Fn(&Macro) -> syn::Result<(TokenStream, TokenStream)>,
         G: Fn(&ExprMacro) -> syn::Result<TokenStream>,
         H: Fn(&ExprMacro) -> syn::Result<TokenStream>,
-        I: Fn(&ExprMacro) -> syn::Result<TokenStream>,
     {
+        fn visit_expr_return_mut(&mut self, r: &mut syn::ExprReturn) {
+            // ensure that the return expression does not exist
+            if let Some(expr) = &mut r.expr {
+                *expr = Box::new(syn::Expr::Verbatim(
+                    syn::Error::new(
+                        expr.span(),
+                        "do not return expressions; assign to the out local instead",
+                    )
+                    .into_compile_error(),
+                ));
+                return;
+            }
+
+            if let Some(return_expr) = &self.return_expr {
+                r.expr = Some(Box::new(syn::Expr::Verbatim(return_expr.clone())));
+            }
+        }
+
         fn visit_stmt_mut(&mut self, s: &mut syn::Stmt) {
             if let syn::Stmt::Macro(m) = s
                 && let Some(ident) = m.mac.path.get_ident()
@@ -71,10 +88,6 @@ where
                     let substitution =
                         (self.sub_place_ref)(m).unwrap_or_else(syn::Error::into_compile_error);
                     *e = syn::Expr::Verbatim(substitution);
-                } else if ident == "type_mapping" {
-                    let substitution =
-                        (self.sub_type_mapping)(m).unwrap_or_else(syn::Error::into_compile_error);
-                    *e = syn::Expr::Verbatim(substitution);
                 } else if ident == "mir" {
                     let (hoisted, inline) = match (self.sub_mir_block)(&m.mac) {
                         Ok(interp_sub) => interp_sub,
@@ -99,7 +112,7 @@ where
         sub_mir_block,
         sub_type_of,
         sub_place_ref,
-        sub_type_mapping,
+        return_expr,
         hoisted: TokenStream::new(),
     };
     let mut body = body.clone();

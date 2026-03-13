@@ -135,16 +135,6 @@ pub enum Operation {
     Operand(PlaceOperand),
     /// Produces a new instance of the specified value.
     Const { value: BoxedAny }, // use BoxedAny because it can represent non-NetLogo types too
-    /// A binary arithmetic between two scalars.
-    ///
-    /// Since the operands are scalars, we can directly use the LIR opcode
-    /// representation without having to define yet another opcode enum.
-    BinaryOp { opcode: lir::BinaryOpcode, lhs: PlaceOperand, rhs: PlaceOperand },
-    /// A unary arithmetic operation on a scalar.
-    ///
-    /// Since the operand is a scalar, we can directly use the LIR opcode
-    /// representation without having to define yet another opcode enum.
-    UnaryOp { opcode: lir::UnaryOpcode, operand: PlaceOperand },
     /// Calls a user function, taking the function's arguments from the given
     /// places and producing the return value.
     CallUserFunction { function: FunctionId, args: Vec<PlaceOperand> },
