@@ -696,9 +696,6 @@ mod tests {
     unsafe impl Reflect for String {
         const TYPE_INFO: TypeInfo = TypeInfo::new_opaque::<String>("String");
     }
-    unsafe impl Reflect for bool {
-        const TYPE_INFO: TypeInfo = TypeInfo::new_copy::<bool>("bool", true);
-    }
 
     #[test]
     fn test_basic_insert_retrieve() {

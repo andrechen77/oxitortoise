@@ -1,9 +1,5 @@
 use crate::{
-    sim::{
-        patch::PatchId,
-        turtle::TurtleId,
-        value::{NlBool, NlFloat},
-    },
+    sim::{patch::PatchId, turtle::TurtleId, value::NlFloat},
     util::reflection::{Reflect as _, Type},
 };
 use std::{
@@ -27,9 +23,9 @@ pub enum UnpackedAny {
 impl UnpackedAny {
     pub fn ty(&self) -> Type {
         match self {
-            UnpackedAny::Bool(_) => &NlBool::TYPE_INFO,
+            UnpackedAny::Bool(_) => &bool::TYPE_INFO,
             UnpackedAny::Float(_) => &NlFloat::TYPE_INFO,
-            UnpackedAny::Nobody => &NlBool::TYPE_INFO,
+            UnpackedAny::Nobody => &bool::TYPE_INFO,
             UnpackedAny::Turtle(_) => &TurtleId::TYPE_INFO,
             UnpackedAny::Patch(_) => &PatchId::TYPE_INFO,
             UnpackedAny::Link(_) => todo!("add link id"),

@@ -17,7 +17,7 @@ use crate::{
         patch::OptionPatchId,
         topology::Point,
         turtle::{Breed, BreedId, TurtleId},
-        value::{NlBool, NlBox, NlFloat, NlList, PackedAny},
+        value::{NlBox, NlFloat, NlList, PackedAny},
     },
 };
 
@@ -207,7 +207,7 @@ impl NlAbstractTy {
             Self::Numeric => NlFloat::mir_type(),
             Self::Color => Color::mir_type(),
             Self::Float => NlFloat::mir_type(),
-            Self::Boolean => NlBool::mir_type(),
+            Self::Boolean => bool::mir_type(),
             Self::String => todo!(),
             Self::Point => Point::mir_type(),
             Self::Agent => PackedAny::mir_type(),

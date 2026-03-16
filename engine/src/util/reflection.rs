@@ -157,6 +157,10 @@ unsafe impl Reflect for () {
     const TYPE_INFO: TypeInfo = TypeInfo::new_copy::<()>("()", true);
 }
 
+unsafe impl Reflect for bool {
+    const TYPE_INFO: TypeInfo = TypeInfo::new_copy::<bool>("bool", true);
+}
+
 unsafe impl Reflect for u32 {
     const TYPE_INFO: TypeInfo = TypeInfo::new_copy::<u32>("u32", true);
 }

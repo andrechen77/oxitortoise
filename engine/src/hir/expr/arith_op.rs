@@ -13,7 +13,7 @@ use crate::{
     },
     sim::{
         patch::OptionPatchId,
-        value::{BoxedAny, NlBool, NlFloat, PackedAny},
+        value::{BoxedAny, NlFloat, PackedAny},
     },
     util::reflection::{Reflect, TypeInfo},
 };
@@ -98,7 +98,7 @@ impl Expr for BinaryOperation {
 
             // short circuit on nobody vs nobody comparison
             if lhs_ty == NlAbstractTy::Nobody && rhs_ty == NlAbstractTy::Nobody {
-                let result = if negate { NlBool(false) } else { NlBool(true) };
+                let result = !negate;
                 builder.mir.add_operation_with_dst(
                     local_out.into(),
                     mir::Operation::Const { value: BoxedAny::new(result) },
@@ -154,7 +154,7 @@ impl Expr for BinaryOperation {
                 lhs: lhs_pl.place().move_out(),
                 rhs: rhs_pl.place().move_out(),
             }
-        } else if lhs_ty.is::<NlBool>() && rhs_ty.is::<NlBool>() {
+        } else if lhs_ty.is::<bool>() && rhs_ty.is::<bool>() {
             let opcode = match self.op {
                 Op::And => lir::BinaryOpcode::And,
                 Op::Or => lir::BinaryOpcode::Or,
@@ -207,7 +207,7 @@ mod binary_op_any_bool {
     pub static FN_INFO: HostFunctionInfo = HostFunctionInfo {
         debug_name: "binary_op_any_bool",
         parameter_types: &[&PackedAny::TYPE_INFO, &PackedAny::TYPE_INFO, &BinaryOpcode::TYPE_INFO],
-        return_type: &NlBool::TYPE_INFO,
+        return_type: &bool::TYPE_INFO,
     };
 }
 fn binary_op_any(_lhs: PackedAny, _rhs: PackedAny, _op: BinaryOpcode) -> PackedAny {

@@ -21,7 +21,7 @@ use crate::{
         agent_schema::{AgentFieldDescriptor, AgentSchemaField, AgentSchemaFieldGroup},
         color::Color,
         topology::{CoordFloat, PointInt, TopologySpec},
-        value::{BoxedAny, NlBool, NlFloat, NlList, NlString, PackedAny},
+        value::{BoxedAny, NlFloat, NlList, NlString, PackedAny},
     },
     util::{
         reflection::{Reflect, Type, TypeInfo},
@@ -376,8 +376,8 @@ fn pretty_print_patch(
                 }
                 if ty.is::<NlFloat>() {
                     print_field::<NlFloat>(p, patches, id, *field_desc)
-                } else if ty.is::<NlBool>() {
-                    print_field::<NlBool>(p, patches, id, *field_desc)
+                } else if ty.is::<bool>() {
+                    print_field::<bool>(p, patches, id, *field_desc)
                 } else if ty.is::<NlString>() {
                     print_field::<NlString>(p, patches, id, *field_desc)
                 } else if ty.is::<NlList>() {
@@ -391,7 +391,7 @@ fn pretty_print_patch(
     })
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PatchBaseData {
     pub position: Point,
     pub plabel: String, // FIXME consider using the netlogo version of string for this

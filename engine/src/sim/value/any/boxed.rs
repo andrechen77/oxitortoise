@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    sim::value::{NlBool, NlFloat, NlList, NlString},
+    sim::value::{NlFloat, NlList, NlString},
     util::reflection::{Reflect, Type},
 };
 
@@ -141,8 +141,8 @@ impl Drop for BoxedAny {
 
 impl Debug for BoxedAny {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.ty().is::<NlBool>() {
-            write!(f, "{:?}", self.deref_as::<NlBool>())?;
+        if self.ty().is::<bool>() {
+            write!(f, "{:?}", self.deref_as::<bool>())?;
         } else if self.ty().is::<NlFloat>() {
             write!(f, "{:?}", self.deref_as::<NlFloat>())?;
         } else if self.ty().is::<NlList>() {
