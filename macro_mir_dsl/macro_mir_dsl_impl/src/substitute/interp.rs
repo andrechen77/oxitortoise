@@ -14,7 +14,6 @@ use crate::{
 pub fn substitute(intrinsic: &MirIntrinsicSyntax, keep_spans: bool) -> syn::Result<TokenStream> {
     let MirIntrinsicSignatureSyntax {
         attrs,
-        vis,
         compile_time_generics,
         compile_time_args,
         runtime_generics,
@@ -54,7 +53,7 @@ pub fn substitute(intrinsic: &MirIntrinsicSyntax, keep_spans: bool) -> syn::Resu
     let full_fn = quote! {
         #(#attrs)*
         #[allow(unused_braces)]
-        #vis fn interp #generics(
+        pub fn interp #generics(
             #compile_time_args
             #runtime_args
         ) -> #return_ty {

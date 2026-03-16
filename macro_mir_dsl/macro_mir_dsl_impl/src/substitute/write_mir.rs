@@ -19,7 +19,6 @@ fn builder_ident() -> syn::Ident {
 pub fn substitute(intrinsic: &MirIntrinsicSyntax, keep_spans: bool) -> syn::Result<TokenStream> {
     let MirIntrinsicSignatureSyntax {
         attrs,
-        vis,
         compile_time_generics,
         compile_time_args,
         runtime_generics,
@@ -27,7 +26,7 @@ pub fn substitute(intrinsic: &MirIntrinsicSyntax, keep_spans: bool) -> syn::Resu
         return_value_decl,
         ..
     } = &intrinsic.signature;
-    let generics = combine_generics(compile_time_generics, runtime_generics);
+    // let generics = combine_generics(compile_time_generics, runtime_generics);
     let compile_time_args = ensure_trailing(compile_time_args.clone());
     let mut runtime_args = runtime_args.clone();
     for arg in runtime_args.iter_mut() {
@@ -53,9 +52,8 @@ pub fn substitute(intrinsic: &MirIntrinsicSyntax, keep_spans: bool) -> syn::Resu
     let full_fn = quote! {
         #(#attrs)*
         #[allow(unused_braces)]
-        #vis
-        fn write_mir
-        #generics(
+        pub fn write_mir
+        #compile_time_generics(
             #builder_ident: &mut crate::mir::builder::FunctionBuilder<'_>,
             #compile_time_args
             #runtime_args
