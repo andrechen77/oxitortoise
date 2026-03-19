@@ -1,18 +1,13 @@
-use std::sync::Arc;
-
 use derive_more::derive::{
     Add, AddAssign, Display, Div, DivAssign, From, Mul, MulAssign, Neg, Sub, SubAssign,
 };
+use macro_reflect::{ReflectComponents, reflect};
 
-use crate::{
-    mir::reflection::{MirReflect, MirType, MirTypeContents, MirTypeInfo},
-    sim::{color::Color, topology::CoordInt, turtle::TurtleWho},
-    util::reflection::{Reflect, TypeInfo},
-};
+use crate::sim::{color::Color, topology::CoordInt, turtle::TurtleWho};
 
 /// A double-precision floating-point number which is guaranteed to be finite
 /// (not Infinity or NaN).
-#[derive(Debug, Display, Default, Clone, Copy, From, PartialEq, PartialOrd)]
+#[derive(Debug, Display, Default, Clone, Copy, From, PartialEq, PartialOrd, ReflectComponents)]
 // TODO(mvp) implement Ord and Eq
 // FIXME these impls don't guarantee that the result is finite. add similar
 // changes to the compilation of arithmetic operations in the HIR
@@ -22,6 +17,9 @@ use crate::{
 #[repr(transparent)]
 pub struct NlFloat(f64);
 
+#[reflect(unsafe(is_zeroable), clone(copy))]
+impl Reflect for NlFloat {}
+
 impl NlFloat {
     pub const fn new(value: f64) -> Self {
         debug_assert!(value.is_finite());
@@ -30,19 +28,6 @@ impl NlFloat {
 
     pub const fn get(self) -> f64 {
         self.0
-    }
-}
-
-unsafe impl Reflect for NlFloat {
-    const TYPE_INFO: TypeInfo = TypeInfo::new_copy::<NlFloat>("NlFloat", true);
-}
-
-unsafe impl MirReflect for NlFloat {
-    fn mir_type() -> MirType {
-        Arc::new(MirTypeInfo {
-            static_ty: Some(&NlFloat::TYPE_INFO),
-            contents: MirTypeContents::IsPrimitive(lir::ValType::F64),
-        })
     }
 }
 

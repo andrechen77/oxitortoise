@@ -1,8 +1,15 @@
 use std::alloc::Layout;
 
-use either::Either;
+use macro_reflect::reflect;
+
+use crate::mir::{HostFunctionInfo, MirType, MirTypeContents};
 
 // TODO what to do about lifetimes? could cause unsafety and sadness
+
+/// A trait to indicate how accesses into values of this type can be generated.
+pub unsafe trait ReflectComponents {
+    fn mir_type() -> MirType;
+}
 
 /// A trait to indicate that the compiler can generate code to manipulate values
 /// of this type.
@@ -12,159 +19,83 @@ use either::Either;
 /// Implementors must guarantee that the associated `Type` is correct, as
 /// the information will be used to generate and run unsafe code.
 pub unsafe trait Reflect {
-    const TYPE_INFO: TypeInfo;
+    const TYPE: Type;
 }
-
-// pub fn arc_type_info<T: Reflect + 'static>() -> Arc<TypeInfo> {
-//     use std::{
-//         collections::HashMap,
-//         sync::{LazyLock, RwLock},
-//     };
-//     // we have to use a single static variable to cover all types because Rust
-//     // does not support generic static
-//     static TYPE_INFO: LazyLock<RwLock<HashMap<std::any::TypeId, Arc<TypeInfo>>>> =
-//         LazyLock::new(|| RwLock::new(HashMap::new()));
-
-//     let key = std::any::TypeId::of::<T>();
-//     if let Some(type_info) = TYPE_INFO.read().unwrap().get(&key) {
-//         type_info.clone()
-//     } else {
-//         let type_info = Arc::new(T::TYPE_INFO);
-//         TYPE_INFO.write().unwrap().insert(key, type_info.clone());
-//         type_info
-//     }
-// }
 
 /// Information about a type that is used by the engine to generate code that
 /// manipulates values of the corresponding type.
 #[derive(Debug, Clone)]
 pub struct TypeInfo {
-    /// An identifier that is always different for types that differ by more
-    /// than just lifetimes. This is the only fields used to check for type
-    /// identity.
-    ///
-    /// Between two types that differ only in lifetimes, this will be the same.
-    /// For example, `&mut T<'_>` (for type `T` known at compile time) will use
-    /// the type id of `&'static mut T<'static>`, even though they are not the
-    /// same type.
-    ///
-    /// Types known at compile time are given a [`std::any::TypeId`], while
-    /// types registered at runtime are given a unique integer.
-    ///
-    /// If the type description is not given a unique id, it cannot be
-    /// considered equal to any other type description unless the description is
-    /// being compared to itself (in terms of object identity).
-    pub unique_id: Option<Either<std::any::TypeId, u32>>,
     pub debug_name: &'static str,
     pub layout: Option<Layout>,
     /// Whether this type is valid at the all-zero bit pattern *and* represents
     /// the numeric value 0.0.
     pub is_zeroable: bool,
+    pub clone: CloneKind,
     /// The drop function for this type. As is standard for drop functions, this
     /// should deallocate any memory that the value itself owns, but does not
     /// deallocate the memory that the value itself inhabits (that is the
     /// responsibility of whoever owns the value, i.e. the caller of this
-    /// function). None indicates that the type is `Copy`.
+    /// function). None indicates that the type does not need to be dropped.
     ///
     /// # Safety
     ///
     /// The caller must guarantee that the passed pointer is a valid pointer to
     /// T that can be dropped, and that that value will never be used again.
     pub drop_fn: Option<unsafe fn(*mut u8)>,
-    // /// Information about the contents of the type.
-    // pub contents: MemDesc,
+    pub make_mir_type: fn() -> MirType,
 }
 
 impl PartialEq for TypeInfo {
     fn eq(&self, other: &Self) -> bool {
-        if let (Some(left_id), Some(right_id)) = (self.unique_id, other.unique_id) {
-            left_id == right_id
-        } else {
-            std::ptr::eq(self, other)
-        }
+        std::ptr::eq(self, other)
     }
 }
 
-unsafe fn drop_impl<T>(ptr: *mut u8) {
-    unsafe {
-        std::ptr::drop_in_place(ptr as *mut T);
-    }
-}
+impl Eq for TypeInfo {}
 
 impl TypeInfo {
-    pub fn is<T: 'static>(&self) -> bool {
-        self.unique_id == Some(Either::Left(std::any::TypeId::of::<T>()))
-    }
-}
-
-impl TypeInfo {
-    pub const fn new_drop<T: 'static>(debug_name: &'static str) -> Self {
-        Self {
-            unique_id: Some(Either::Left(std::any::TypeId::of::<T>())),
-            debug_name,
-            layout: Some(Layout::new::<T>()),
-            is_zeroable: false,
-            drop_fn: Some(drop_impl::<T>),
-        }
-    }
-
-    pub const fn new_drop_zeroable<T: 'static>(debug_name: &'static str) -> Self {
-        Self {
-            unique_id: Some(Either::Left(std::any::TypeId::of::<T>())),
-            debug_name,
-            layout: Some(Layout::new::<T>()),
-            is_zeroable: true,
-            drop_fn: Some(drop_impl::<T>),
-        }
-    }
-
-    pub const fn new_copy<T: Copy + 'static>(debug_name: &'static str, is_zeroable: bool) -> Self {
-        Self {
-            unique_id: Some(Either::Left(std::any::TypeId::of::<T>())),
-            debug_name,
-            layout: Some(Layout::new::<T>()),
-            is_zeroable,
-            drop_fn: None,
-        }
-    }
-
-    // pub const fn new_mut_ref_to<T: Reflect + 'static>(debug_name: &'static str) -> Self {
-    //     Self {
-    //         unique_id: Either::Left(std::any::TypeId::of::<&'static mut T>()),
-    //         debug_name,
-    //         layout: Some(Layout::new::<&mut T>()),
-    //         is_zeroable: false,
-    //         drop_fn: None, // mut refs have no destructor, so this is correct
-    //         mem_desc: MemDesc::IsPointerTo(Box::new(T::TYPE.info().mem_desc)),
-    //     }
-    // }
-
-    // types that can only be referenced through pointer
-    pub const fn new_opaque<T: 'static>(debug_name: &'static str) -> Self {
-        Self {
-            unique_id: Some(Either::Left(std::any::TypeId::of::<T>())),
-            debug_name,
-            layout: Some(Layout::new::<T>()),
-            is_zeroable: false,
-            drop_fn: Some(drop_impl::<T>),
-        }
+    pub fn is<T: Reflect>(&self) -> bool {
+        // self.unique_id == Some(Either::Left(std::any::TypeId::of::<T>()))
+        self == T::TYPE
     }
 }
 
 pub type Type = &'static TypeInfo;
 
-unsafe impl Reflect for () {
-    const TYPE_INFO: TypeInfo = TypeInfo::new_copy::<()>("()", true);
+#[derive(Debug, Clone)]
+pub enum CloneKind {
+    /// The type can be bitwise copied like Rust's `Copy` types.
+    ///
+    /// This also mutable references which can be bitwise copied but are not
+    /// `Copy`.
+    Copy,
+    /// The type can be cloned using the specified function.
+    Dynamic { clone_fn_info: &'static HostFunctionInfo },
+    /// The type cannot be cloned, only moved.
+    None,
 }
 
-unsafe impl Reflect for bool {
-    const TYPE_INFO: TypeInfo = TypeInfo::new_copy::<bool>("bool", true);
+macro_rules! impl_reflect_for_primitive {
+    ($ty:ty; unsafe(is_zeroable), unsafe(prim_contents($contents:expr))) => {
+        unsafe impl ReflectComponents for $ty
+        where
+            Self: Copy,
+        {
+            fn mir_type() -> MirType {
+                ::std::sync::Arc::new(crate::mir::MirTypeInfo {
+                    static_ty: Some(<$ty as Reflect>::TYPE),
+                    contents: $contents,
+                })
+            }
+        }
+
+        #[reflect(unsafe(is_zeroable))]
+        impl Reflect for $ty {}
+    };
 }
 
-unsafe impl Reflect for u32 {
-    const TYPE_INFO: TypeInfo = TypeInfo::new_copy::<u32>("u32", true);
-}
-
-unsafe impl Reflect for f64 {
-    const TYPE_INFO: TypeInfo = TypeInfo::new_copy::<f64>("f64", true);
-}
+impl_reflect_for_primitive!((); unsafe(is_zeroable), unsafe(prim_contents(MirTypeContents::None)));
+impl_reflect_for_primitive!(bool; unsafe(is_zeroable), unsafe(prim_contents(MirTypeContents::IsPrimitive(lir::ValType::I8))));
+impl_reflect_for_primitive!(u32; unsafe(is_zeroable), unsafe(prim_contents(MirTypeContents::IsPrimitive(lir::ValType::I32))));
+impl_reflect_for_primitive!(f64; unsafe(is_zeroable), unsafe(prim_contents(MirTypeContents::IsPrimitive(lir::ValType::F64))));

@@ -1,7 +1,8 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use crate::mir::{
-    self, ElementaryStatement, Function, FunctionId, Label, LocalId, Operation, Statement,
+    self, ElementaryStatement, Function, FunctionId, Label, LocalId, MirType, MirTypeContents,
+    MirTypeInfo, Operation, Place, PlaceOperand, Statement, TypedPlace,
 };
 
 #[derive(Default)]
@@ -15,6 +16,10 @@ pub struct ProgramBuilder {
 impl ProgramBuilder {
     pub fn new() -> Self {
         Default::default()
+    }
+
+    pub fn function(&self, id: FunctionId) -> &Function {
+        &self.functions[&id]
     }
 
     pub fn create_function(&mut self) -> FunctionBuilder<'_> {
@@ -90,19 +95,80 @@ impl<'a> FunctionBuilder<'a> {
         self.locals.get_mut(&id).expect("local must be declared")
     }
 
+    pub fn type_of_place(&self, place: &Place) -> mir::MirType {
+        let local_ty = &self.locals[&place.local].ty;
+        place
+            .projections
+            .iter()
+            .fold(local_ty, |ty, &projection| ty.contents.project(projection))
+            .clone()
+    }
+
+    pub fn typed_place(&self, place: Place) -> TypedPlace {
+        let ty = self.type_of_place(&place);
+        TypedPlace { place, ty }
+    }
+
+    pub fn type_of_op(&self, op: &Operation) -> MirType {
+        match op {
+            Operation::Operand(operand) => match operand {
+                PlaceOperand::Move(place) => self.type_of_place(place),
+                PlaceOperand::Borrow(place) => {
+                    let place_ty = self.type_of_place(place);
+                    Arc::new(MirTypeInfo {
+                        static_ty: None,
+                        contents: MirTypeContents::IsPointerTo(place_ty),
+                    })
+                }
+            },
+            Operation::Const { value } => (value.ty().make_mir_type)(),
+            Operation::CallHostFunction { function, .. } => (function.return_type.make_mir_type)(),
+            Operation::CallUserFunction { function, .. } => {
+                self.program_builder.function(*function).return_ty().clone()
+            }
+            Operation::BinaryOp { .. } => {
+                unimplemented!("hardcoded binary ops will be sunsetted in favor of host fn calls")
+            }
+            Operation::UnaryOp { .. } => {
+                unimplemented!("hardcoded unary ops will be sunsetted in favor of host fn calls")
+            }
+        }
+    }
+
     pub fn create_label(&mut self) -> Label {
         self.program_builder.next_label()
     }
 
     pub fn add_operation_with_dst(&mut self, dst: mir::Place, op: Operation) {
+        // make sure that the types match
+        let ty = self.type_of_op(&op);
+        assert_eq!(
+            ty,
+            self.type_of_place(&dst),
+            "type of operation must match type of destination place"
+        );
+
         self.statements_out.push(Statement::Elementary(ElementaryStatement::Assign { dst, op }));
     }
 
-    pub fn add_operation(&mut self, local_decl: mir::LocalDecl, op: Operation) -> LocalId {
+    pub fn add_operation_with_decl(
+        &mut self,
+        local_decl: mir::LocalDecl,
+        op: Operation,
+    ) -> LocalId {
+        // make sure that the types match
+        let ty = self.type_of_op(&op);
+        assert_eq!(ty, local_decl.ty, "type of operation must match type of local declaration");
+
         let (dst, _) = self.create_local(local_decl);
         self.add_operation_with_dst(dst.into(), op);
         // TODO could do something with the type assertion here
         dst
+    }
+
+    pub fn add_operation(&mut self, name: Option<Arc<str>>, op: Operation) -> LocalId {
+        let local_decl = mir::LocalDecl { debug_name: name, ty: self.type_of_op(&op) };
+        self.add_operation_with_decl(local_decl, op)
     }
 
     /// If the statement is an assignment from an operation, consider using

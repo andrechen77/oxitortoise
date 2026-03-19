@@ -8,15 +8,13 @@ use std::{
 
 use derive_more::derive::From;
 use either::Either;
+use macro_reflect::{ReflectComponents, reflect};
 use pretty_print::PrettyPrinter;
 
 use super::topology::Point;
 use crate::{
     hir::HirToMirFnBuilder,
-    mir::{
-        self,
-        reflection::{MirReflect, MirType, MirTypeInfo},
-    },
+    mir::{self, prelude::*},
     sim::{
         agent_schema::{AgentFieldDescriptor, AgentSchemaField, AgentSchemaFieldGroup},
         color::Color,
@@ -24,7 +22,7 @@ use crate::{
         value::{BoxedAny, NlFloat, NlList, NlString, PackedAny},
     },
     util::{
-        reflection::{Reflect, Type, TypeInfo},
+        reflection::{Reflect, Type},
         row_buffer::{self, RowBuffer, RowSchema},
     },
 };
@@ -38,9 +36,13 @@ use crate::{
 /// Unlike turtles or links, which only have the fields corresponding to their
 /// current breed, patches do not have the concept of breeds so all fields are
 /// always active.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, From)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, From, ReflectComponents)]
+// TODO reflection contents
 #[repr(transparent)]
 pub struct PatchId(pub u32);
+
+#[reflect(unsafe(is_zeroable), clone(copy))]
+impl Reflect for PatchId {}
 
 impl Default for PatchId {
     fn default() -> Self {
@@ -48,28 +50,15 @@ impl Default for PatchId {
     }
 }
 
-unsafe impl Reflect for PatchId {
-    const TYPE_INFO: TypeInfo = TypeInfo::new_copy::<PatchId>("PatchId", false);
-}
-
 /// Exactly the same as [`PatchId`], but it can represent "nobody" at the -1
 /// value.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, From)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, From, ReflectComponents)]
+// TODO reflection contents
 #[repr(transparent)]
 pub struct OptionPatchId(pub u32);
 
-unsafe impl Reflect for OptionPatchId {
-    const TYPE_INFO: TypeInfo = TypeInfo::new_copy::<OptionPatchId>("OptionPatchId", false);
-}
-
-unsafe impl MirReflect for OptionPatchId {
-    fn mir_type() -> MirType {
-        Arc::new(MirTypeInfo {
-            static_ty: Some(&OptionPatchId::TYPE_INFO),
-            contents: Default::default(),
-        })
-    }
-}
+#[reflect(clone(copy))]
+impl Reflect for OptionPatchId {}
 
 impl OptionPatchId {
     pub const NOBODY: Self = Self(u32::MAX);
@@ -83,7 +72,7 @@ impl OptionPatchId {
         operand: mir::LocalId,
     ) {
         let sentinel_pl = builder.mir.add_operation(
-            mir::LocalDecl { debug_name: None, ty: OptionPatchId::mir_type() },
+            None,
             mir::Operation::Const { value: BoxedAny::new(OptionPatchId::NOBODY) },
         );
         let opcode = if negate { lir::BinaryOpcode::INeq } else { lir::BinaryOpcode::IEq };
@@ -91,8 +80,8 @@ impl OptionPatchId {
             local_out.into(),
             mir::Operation::BinaryOp {
                 opcode,
-                lhs: operand.place().move_out(),
-                rhs: sentinel_pl.place().move_out(),
+                lhs: PlaceOperand::Move(operand.place()),
+                rhs: PlaceOperand::Move(sentinel_pl.place()),
             },
         );
     }
@@ -391,7 +380,7 @@ fn pretty_print_patch(
     })
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, ReflectComponents)]
 pub struct PatchBaseData {
     pub position: Point,
     pub plabel: String, // FIXME consider using the netlogo version of string for this
@@ -399,9 +388,8 @@ pub struct PatchBaseData {
     // TODO add some way of tracking what turtles are on this patch.
 }
 
-unsafe impl Reflect for PatchBaseData {
-    const TYPE_INFO: TypeInfo = TypeInfo::new_opaque::<PatchBaseData>("PatchBaseData");
-}
+#[reflect]
+impl Reflect for PatchBaseData {}
 
 #[derive(Debug, Clone, Copy)]
 pub enum PatchVarDesc {
@@ -441,9 +429,7 @@ impl PatchSchema {
         }
 
         // add pcolor field
-        field_groups[pcolor_buffer_idx as usize]
-            .fields
-            .push(AgentSchemaField::Other(&Color::TYPE_INFO));
+        field_groups[pcolor_buffer_idx as usize].fields.push(AgentSchemaField::Other(Color::TYPE));
 
         // add custom fields and collect their descriptors
         let mut custom_field_descriptors = Vec::new();
@@ -518,8 +504,8 @@ impl Index<AgentFieldDescriptor> for PatchSchema {
 
 pub fn patch_var_type(schema: &PatchSchema, var: PatchVarDesc) -> Type {
     match var {
-        PatchVarDesc::Pcolor => &Color::TYPE_INFO,
-        PatchVarDesc::Pos => &Point::TYPE_INFO,
+        PatchVarDesc::Pcolor => Color::TYPE,
+        PatchVarDesc::Pos => Point::TYPE,
         PatchVarDesc::Custom(field) => {
             let AgentSchemaField::Other(ty) = schema[schema.custom_fields()[field].1] else {
                 unreachable!("this is a custom field, so it cannot be part of the base data");

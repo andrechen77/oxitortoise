@@ -1,9 +1,4 @@
-use std::{alloc::Layout, fmt, mem::offset_of, sync::Arc};
-
-use crate::{
-    mir::reflection::{MirReflect, MirType, MirTypeContents, MirTypeInfo},
-    util::reflection::{Reflect, TypeInfo},
-};
+use std::fmt;
 
 use super::{patch::PatchId, value};
 
@@ -11,6 +6,7 @@ pub mod diffuse;
 mod heading;
 
 pub use heading::Heading;
+use macro_reflect::{ReflectComponents, reflect};
 
 /// The type used to refer to integer patch coordinates.
 pub type CoordInt = i32;
@@ -35,37 +31,22 @@ impl fmt::Display for PointInt {
 // exist. (i.e. None). Consider if the codebase would benefit from non-nullable
 // points and if so, make Points non-nullable and use a different type
 // OptionPoint which allows NaN to be used for None.
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Default, ReflectComponents)]
+// TODO reflection contents
 #[repr(C)]
 pub struct Point {
     pub x: CoordFloat,
     pub y: CoordFloat,
 }
 
+#[reflect(unsafe(is_zeroable), clone(copy))]
+impl Reflect for Point {}
+
 impl Point {
     pub const ORIGIN: Point = Point { x: 0.0, y: 0.0 };
 
     pub fn round_to_int(self) -> PointInt {
         PointInt { x: self.x.round() as CoordInt, y: self.y.round() as CoordInt }
-    }
-}
-
-unsafe impl Reflect for Point {
-    const TYPE_INFO: TypeInfo = TypeInfo::new_copy::<Point>("Point", true);
-}
-
-unsafe impl MirReflect for Point {
-    fn mir_type() -> MirType {
-        Arc::new(MirTypeInfo {
-            static_ty: Some(&Point::TYPE_INFO),
-            contents: MirTypeContents::HasFields {
-                fields: vec![
-                    (offset_of!(Point, x), f64::mir_type()),
-                    (offset_of!(Point, y), f64::mir_type()),
-                ],
-                overall: Layout::new::<Point>(),
-            },
-        })
     }
 }
 

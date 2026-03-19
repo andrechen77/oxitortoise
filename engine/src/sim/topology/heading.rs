@@ -1,12 +1,11 @@
 use std::ops::{Add, AddAssign};
 
+use macro_reflect::{ReflectComponents, reflect};
+
 use super::CoordFloat;
 use crate::{
     sim::value::{self, NlFloat},
-    util::{
-        reflection::{Reflect, TypeInfo},
-        rng::Rng,
-    },
+    util::rng::Rng,
 };
 
 /// A heading. This is a floating point value representing some 2D angle in
@@ -14,9 +13,13 @@ use crate::{
 /// a heading of north, and the heading increases clockwise. This is different
 /// from the more popular convention of 0 meaning east, and angles increasing
 /// counterclockwise.
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Default, ReflectComponents)]
+// TODO reflection contents
 #[repr(transparent)]
 pub struct Heading(f64);
+
+#[reflect(unsafe(is_zeroable), clone(copy))]
+impl Reflect for Heading {}
 
 impl Eq for Heading {}
 
@@ -66,8 +69,4 @@ impl From<NlFloat> for Heading {
     fn from(value: NlFloat) -> Self {
         Heading(value.get() % HEADING_MAX)
     }
-}
-
-unsafe impl Reflect for Heading {
-    const TYPE_INFO: TypeInfo = TypeInfo::new_copy::<Heading>("Heading", true);
 }

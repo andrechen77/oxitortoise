@@ -1,6 +1,9 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    mem::offset_of,
+    sync::{Arc, Mutex},
+};
 
-use crate::{updater::DirtyAggregator, util::rng::CanonRng, workspace::Workspace};
+use crate::{mir::prelude::*, updater::DirtyAggregator, util::rng::CanonRng, workspace::Workspace};
 
 pub mod helpers;
 pub mod jit;
@@ -15,3 +18,12 @@ pub struct ExecutionContext<'w> {
 }
 
 pub type CanonExecutionContext<'w> = ExecutionContext<'w>;
+
+impl CanonExecutionContext<'_> {
+    /// Derives a `Workspace` from a `CanonExecutionContext`.
+    pub fn mir_project_workspace(context: TypedPlace) -> TypedPlace {
+        context
+            .proj(Projection::Field { byte_offset: offset_of!(ExecutionContext, workspace) })
+            .proj(Projection::Deref)
+    }
+}

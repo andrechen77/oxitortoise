@@ -1,9 +1,8 @@
-use std::{ptr::NonNull, sync::Arc};
+use std::ptr::NonNull;
 
-use crate::{
-    mir::reflection::{MirReflect, MirType, MirTypeContents, MirTypeInfo},
-    util::reflection::{Reflect, Type, TypeInfo},
-};
+use macro_reflect::{ReflectComponents, reflect};
+
+use crate::util::reflection::Type;
 
 use super::{BoxedAny, UnpackedAny};
 
@@ -31,9 +30,13 @@ use super::{BoxedAny, UnpackedAny};
 /// | --- | --- |
 /// | 0 | false |
 /// | 1 | true |
-#[derive(Clone)]
+#[derive(Clone, ReflectComponents)]
+// TODO specify that the contents are a f64 to the reflect macro
 #[repr(transparent)]
 pub struct PackedAny(f64);
+
+#[reflect(unsafe(is_zeroable))]
+impl Reflect for PackedAny {}
 
 // TODO is there a way we can preseve pointer provenance even though the pointers
 // are stored as floats?
@@ -109,19 +112,6 @@ impl PackedAny {
 
     pub fn or(self, rhs: Self) -> bool {
         self.unpack().or(rhs.unpack())
-    }
-}
-
-unsafe impl Reflect for PackedAny {
-    const TYPE_INFO: TypeInfo = TypeInfo::new_drop_zeroable::<PackedAny>("PackedAny");
-}
-
-unsafe impl MirReflect for PackedAny {
-    fn mir_type() -> MirType {
-        Arc::new(MirTypeInfo {
-            static_ty: Some(&PackedAny::TYPE_INFO),
-            contents: MirTypeContents::IsPrimitive(lir::ValType::F64),
-        })
     }
 }
 

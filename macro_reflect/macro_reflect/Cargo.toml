@@ -1,0 +1,10 @@
+[package]
+name = "macro_reflect"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+macro_reflect_impl = { path = "../macro_reflect_impl" }

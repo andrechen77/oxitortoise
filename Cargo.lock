@@ -487,6 +487,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "macro_reflect"
+version = "0.1.0"
+dependencies = [
+ "macro_reflect_impl",
+]
+
+[[package]]
+name = "macro_reflect_impl"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.106",
+]
+
+[[package]]
 name = "memchr"
 version = "2.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -528,6 +544,7 @@ dependencies = [
  "either",
  "ffi_translate",
  "flagset",
+ "macro_reflect",
  "oxitortoise_lir",
  "pretty_print",
  "slotmap",

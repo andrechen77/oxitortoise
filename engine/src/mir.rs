@@ -1,9 +1,21 @@
 use std::{collections::HashMap, sync::Arc};
 
-use crate::{mir::reflection::MirType, sim::value::BoxedAny, util::reflection::Type};
+use crate::{sim::value::BoxedAny, util::reflection::Type};
 
-pub mod builder;
-pub mod reflection;
+mod builder;
+mod reflection;
+
+pub mod prelude {
+    pub use super::{
+        DynPtr, DynPtrMut, FunctionBuilder, HasDynPtr, LocalId, MirType, MirTypeContents,
+        MirTypeInfo, Operation, Place, PlaceOperand, Projection, TypedPlace,
+    };
+}
+
+pub use builder::{FunctionBuilder, ProgramBuilder};
+pub use reflection::{
+    DynPtr, DynPtrMut, HasDynPtr, MirType, MirTypeContents, MirTypeInfo, TypedPlace,
+};
 
 #[derive(Debug)]
 pub struct HostFunctionInfo {
@@ -95,7 +107,7 @@ impl Place {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum Projection {
     /// With the place having a pointer value, dereferences the pointer and
     /// produces the place of the dereferenced value.
@@ -165,13 +177,9 @@ impl From<LocalId> for Place {
     }
 }
 
-impl Place {
-    pub fn move_out(self) -> PlaceOperand {
-        PlaceOperand::Move(self)
-    }
-
-    pub fn borrow(self) -> PlaceOperand {
-        PlaceOperand::Borrow(self)
+impl Function {
+    fn return_ty(&self) -> &MirType {
+        &self.local_decls[&self.return_local].ty
     }
 }
 

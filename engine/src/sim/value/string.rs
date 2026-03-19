@@ -1,6 +1,6 @@
-use crate::util::reflection::{Reflect, TypeInfo};
+use macro_reflect::{ReflectComponents, reflect};
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone, ReflectComponents)]
 #[allow(dead_code)] // strings will be used eventually, just not at this stage of development
 pub struct NlString(String);
 
@@ -10,6 +10,5 @@ impl NlString {
     }
 }
 
-unsafe impl Reflect for NlString {
-    const TYPE_INFO: TypeInfo = TypeInfo::new_opaque::<NlString>("NlString");
-}
+#[reflect(clone(dynamic))]
+impl Reflect for NlString {}

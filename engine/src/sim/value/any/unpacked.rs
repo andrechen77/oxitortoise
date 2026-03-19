@@ -23,11 +23,11 @@ pub enum UnpackedAny {
 impl UnpackedAny {
     pub fn ty(&self) -> Type {
         match self {
-            UnpackedAny::Bool(_) => &bool::TYPE_INFO,
-            UnpackedAny::Float(_) => &NlFloat::TYPE_INFO,
-            UnpackedAny::Nobody => &bool::TYPE_INFO,
-            UnpackedAny::Turtle(_) => &TurtleId::TYPE_INFO,
-            UnpackedAny::Patch(_) => &PatchId::TYPE_INFO,
+            UnpackedAny::Bool(_) => bool::TYPE,
+            UnpackedAny::Float(_) => NlFloat::TYPE,
+            UnpackedAny::Nobody => bool::TYPE,
+            UnpackedAny::Turtle(_) => TurtleId::TYPE,
+            UnpackedAny::Patch(_) => PatchId::TYPE,
             UnpackedAny::Link(_) => todo!("add link id"),
             UnpackedAny::Other(_) => todo!("match on the inner type"),
         }

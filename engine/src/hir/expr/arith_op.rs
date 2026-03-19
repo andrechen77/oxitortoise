@@ -1,21 +1,18 @@
 //! Nodes to represent basic arithmetic operations that should not be host
 //! function calls.
 
-use std::sync::Arc;
+use std::{alloc::Layout, sync::Arc};
 
 use derive_more::derive::TryFrom;
 
 use crate::{
     hir::{Expr, ExprKind, NlAbstractTy, Program, build_mir::HirToMirFnBuilder},
-    mir::{
-        self,
-        reflection::{MirReflect, MirType, MirTypeContents, MirTypeInfo},
-    },
+    mir::{self, prelude::*},
     sim::{
         patch::OptionPatchId,
         value::{BoxedAny, NlFloat, PackedAny},
     },
-    util::reflection::{Reflect, TypeInfo},
+    util::reflection::{CloneKind, Reflect, Type, TypeInfo},
 };
 
 #[derive(Debug, Clone, Copy, TryFrom, PartialEq, Eq)]
@@ -36,17 +33,22 @@ pub enum BinaryOpcode {
     Or,
 }
 
-unsafe impl Reflect for BinaryOpcode {
-    const TYPE_INFO: TypeInfo = TypeInfo::new_copy::<BinaryOpcode>("BinaryOpcode", false);
-}
-
-unsafe impl MirReflect for BinaryOpcode {
-    fn mir_type() -> MirType {
+static BINARY_OPCODE_TYPE_INFO: TypeInfo = TypeInfo {
+    debug_name: "BinaryOpcode",
+    layout: Some(Layout::new::<BinaryOpcode>()),
+    is_zeroable: false,
+    clone: CloneKind::Copy,
+    drop_fn: None,
+    make_mir_type: || {
         Arc::new(MirTypeInfo {
-            static_ty: Some(&<BinaryOpcode>::TYPE_INFO),
+            static_ty: Some(&BINARY_OPCODE_TYPE_INFO),
             contents: MirTypeContents::IsPrimitive(lir::ValType::I8),
         })
-    }
+    },
+};
+
+unsafe impl Reflect for BinaryOpcode {
+    const TYPE: Type = &BINARY_OPCODE_TYPE_INFO;
 }
 
 #[derive(Debug)]
@@ -81,7 +83,7 @@ impl Expr for BinaryOperation {
         visitor(&self.rhs);
     }
 
-    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, local_out: mir::LocalId) {
+    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, local_out: LocalId) {
         let lhs_ty = self.lhs.output_type(builder.hir);
         let rhs_ty = self.rhs.output_type(builder.hir);
 
@@ -101,7 +103,7 @@ impl Expr for BinaryOperation {
                 let result = !negate;
                 builder.mir.add_operation_with_dst(
                     local_out.into(),
-                    mir::Operation::Const { value: BoxedAny::new(result) },
+                    Operation::Const { value: BoxedAny::new(result) },
                 );
                 return;
             }
@@ -149,10 +151,10 @@ impl Expr for BinaryOperation {
                 Op::Eq => lir::BinaryOpcode::FEq,
                 _ => unimplemented!("unsupported operation"),
             };
-            mir::Operation::BinaryOp {
+            Operation::BinaryOp {
                 opcode,
-                lhs: lhs_pl.place().move_out(),
-                rhs: rhs_pl.place().move_out(),
+                lhs: PlaceOperand::Move(lhs_pl.place()),
+                rhs: PlaceOperand::Move(rhs_pl.place()),
             }
         } else if lhs_ty.is::<bool>() && rhs_ty.is::<bool>() {
             let opcode = match self.op {
@@ -160,33 +162,33 @@ impl Expr for BinaryOperation {
                 Op::Or => lir::BinaryOpcode::Or,
                 _ => unimplemented!("unsupported operation"),
             };
-            mir::Operation::BinaryOp {
+            Operation::BinaryOp {
                 opcode,
-                lhs: lhs_pl.place().move_out(),
-                rhs: rhs_pl.place().move_out(),
+                lhs: PlaceOperand::Move(lhs_pl.place()),
+                rhs: PlaceOperand::Move(rhs_pl.place()),
             }
         } else if lhs_ty.is::<PackedAny>() && rhs_ty.is::<PackedAny>() {
             let opcode_pl = builder.mir.add_operation(
-                mir::LocalDecl { debug_name: None, ty: BinaryOpcode::mir_type() },
-                mir::Operation::Const { value: BoxedAny::new::<BinaryOpcode>(self.op) },
+                None,
+                Operation::Const { value: BoxedAny::new::<BinaryOpcode>(self.op) },
             );
             match self.op {
                 Op::And | Op::Or | Op::Eq | Op::Neq | Op::Lt | Op::Lte | Op::Gt | Op::Gte => {
-                    mir::Operation::CallHostFunction {
+                    Operation::CallHostFunction {
                         function: &binary_op_any_bool::FN_INFO,
                         args: vec![
-                            lhs_pl.place().move_out(),
-                            rhs_pl.place().move_out(),
-                            opcode_pl.place().move_out(),
+                            PlaceOperand::Move(lhs_pl.place()),
+                            PlaceOperand::Move(rhs_pl.place()),
+                            PlaceOperand::Move(opcode_pl.place()),
                         ],
                     }
                 }
                 Op::Add | Op::Sub | Op::Mul | Op::Div => mir::Operation::CallHostFunction {
                     function: &binary_op_any::FN_INFO,
                     args: vec![
-                        lhs_pl.place().move_out(),
-                        rhs_pl.place().move_out(),
-                        opcode_pl.place().move_out(),
+                        PlaceOperand::Move(lhs_pl.place()),
+                        PlaceOperand::Move(rhs_pl.place()),
+                        PlaceOperand::Move(opcode_pl.place()),
                     ],
                 },
             }
@@ -206,8 +208,8 @@ mod binary_op_any_bool {
 
     pub static FN_INFO: HostFunctionInfo = HostFunctionInfo {
         debug_name: "binary_op_any_bool",
-        parameter_types: &[&PackedAny::TYPE_INFO, &PackedAny::TYPE_INFO, &BinaryOpcode::TYPE_INFO],
-        return_type: &bool::TYPE_INFO,
+        parameter_types: &[PackedAny::TYPE, PackedAny::TYPE, BinaryOpcode::TYPE],
+        return_type: bool::TYPE,
     };
 }
 fn binary_op_any(_lhs: PackedAny, _rhs: PackedAny, _op: BinaryOpcode) -> PackedAny {
@@ -219,8 +221,8 @@ mod binary_op_any {
 
     pub static FN_INFO: HostFunctionInfo = HostFunctionInfo {
         debug_name: "binary_op_any",
-        parameter_types: &[&PackedAny::TYPE_INFO, &PackedAny::TYPE_INFO, &BinaryOpcode::TYPE_INFO],
-        return_type: &PackedAny::TYPE_INFO,
+        parameter_types: &[PackedAny::TYPE, PackedAny::TYPE, BinaryOpcode::TYPE],
+        return_type: PackedAny::TYPE,
     };
 }
 
@@ -255,7 +257,7 @@ impl Expr for UnaryOp {
             UnaryOpcode::Not => lir::UnaryOpcode::Not,
         };
         let final_operation =
-            mir::Operation::UnaryOp { opcode, operand: operand_pl.place().move_out() };
+            mir::Operation::UnaryOp { opcode, operand: PlaceOperand::Move(operand_pl.place()) };
         builder.mir.add_operation_with_dst(local_out.into(), final_operation);
     }
 }

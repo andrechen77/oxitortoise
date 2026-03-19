@@ -10,6 +10,8 @@ members = [
     "pretty_print",
     "ffi_translate/ffi_translate_impl",
     "ffi_translate/ffi_translate_macro",
+    "macro_reflect/macro_reflect",
+    "macro_reflect/macro_reflect_impl",
 ]
 
 [workspace.dependencies]

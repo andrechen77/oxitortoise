@@ -1,11 +1,14 @@
 use pretty_print::PrettyPrinter;
 
-use std::fmt::Write;
+use std::{fmt::Write, mem::offset_of};
 
 use super::shapes::Shapes;
-use crate::sim::{
-    observer::Globals, patch::Patches, tick::Tick, topology::Topology, turtle::Turtles,
-    value::NlFloat,
+use crate::{
+    mir::prelude::*,
+    sim::{
+        observer::Globals, patch::Patches, tick::Tick, topology::Topology, turtle::Turtles,
+        value::NlFloat,
+    },
 };
 
 #[derive(Debug)]
@@ -40,6 +43,11 @@ impl World {
         return
          */
         // TODO(mvp) finish clear_all implementation
+    }
+
+    /// Derives a `Globals` from a `World`.
+    pub fn mir_project_globals(world: TypedPlace) -> TypedPlace {
+        world.proj(Projection::Field { byte_offset: offset_of!(World, globals) })
     }
 }
 

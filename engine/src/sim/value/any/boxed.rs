@@ -4,9 +4,10 @@ use std::{
     ptr::NonNull,
 };
 
+use crate::util::reflection::Reflect;
 use crate::{
     sim::value::{NlFloat, NlList, NlString},
-    util::reflection::{Reflect, Type},
+    util::reflection::Type,
 };
 
 pub struct BoxedAny {
@@ -27,7 +28,7 @@ fn layout_and_val_offset(val_layout: Layout) -> (Layout, usize) {
 
 impl BoxedAny {
     pub fn new<T: Reflect>(value: T) -> Self {
-        let ty = &T::TYPE_INFO;
+        let ty = T::TYPE;
 
         // allocate memory for the value and its type tag
         let (layout, value_start) = layout_and_val_offset(
@@ -68,17 +69,17 @@ impl BoxedAny {
         self.inner
     }
 
-    fn ty(&self) -> &Type {
+    pub fn ty(&self) -> Type {
         // SAFETY: this pointer is always valid when used to access `Type`
         // per this type's invariants
-        unsafe { &*self.inner.as_ptr() }
+        unsafe { *self.inner.as_ptr() }
     }
 
     /// Obtains a pointer to the actual value stored in this [`BoxedAny`].
     /// Panics if the attempted access type does not match the type tag.
     fn ptr_to_val<T: Reflect>(&self) -> NonNull<T> {
-        let ty = &T::TYPE_INFO;
-        assert!(*self.ty() == ty, "type mismatch");
+        let ty = T::TYPE;
+        assert!(self.ty() == ty, "type mismatch");
         let (_, offset) = layout_and_val_offset(
             ty.layout.expect("type should have a known layout to be used in a BoxedAny"),
         );

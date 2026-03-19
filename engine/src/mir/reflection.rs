@@ -8,19 +8,9 @@ use crate::{
     },
 };
 
-/// # Safety
-///
-/// Implementors must guarantee that the associated `Type` is correct, as
-/// the information will be used to generate and run unsafe code.
-pub unsafe trait MirReflect: Reflect {
-    fn mir_type() -> MirType {
-        Arc::new(MirTypeInfo { static_ty: Some(&<Self>::TYPE_INFO), contents: Default::default() })
-    }
-}
-
 pub type MirType = Arc<MirTypeInfo>;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct MirTypeInfo {
     /// If it exists, the static type that this MirType represents.
     pub static_ty: Option<Type>,
@@ -31,7 +21,7 @@ pub struct MirTypeInfo {
 
 /// Represents a description of how a type is stored in memory and how it can
 /// be accessed.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum MirTypeContents {
     /// Asserts that the value is a pointer to a type that satisfies the given assertion.
     IsPointerTo(MirType),
@@ -70,13 +60,13 @@ impl MirTypeInfo {
 
     /// Checks if the type is a specific concrete type.
     pub fn is<T: Reflect>(&self) -> bool {
-        if let Some(static_ty) = self.static_ty { static_ty == &T::TYPE_INFO } else { false }
+        if let Some(static_ty) = self.static_ty { static_ty.is::<T>() } else { false }
     }
 
     /// Asserts that the value is a specific concrete type, and panics if it is
     /// not.
     pub fn assert_is<T: Reflect>(&self) {
-        assert!(self.is::<T>(), "Expected type {:?} but got {:?}", T::TYPE_INFO, self);
+        assert!(self.is::<T>(), "Expected type {:?} but got {:?}", T::TYPE, self);
     }
 }
 
@@ -135,78 +125,6 @@ impl MirTypeContents {
         }
     }
 }
-
-unsafe impl MirReflect for () {
-    fn mir_type() -> MirType {
-        Arc::new(MirTypeInfo { static_ty: Some(&<()>::TYPE_INFO), contents: Default::default() })
-    }
-}
-
-unsafe impl MirReflect for bool {
-    fn mir_type() -> MirType {
-        Arc::new(MirTypeInfo {
-            static_ty: Some(&bool::TYPE_INFO),
-            contents: MirTypeContents::IsPrimitive(lir::ValType::I8),
-        })
-    }
-}
-
-unsafe impl MirReflect for f64 {
-    fn mir_type() -> MirType {
-        Arc::new(MirTypeInfo {
-            static_ty: Some(&<f64>::TYPE_INFO),
-            contents: MirTypeContents::IsPrimitive(lir::ValType::F64),
-        })
-    }
-}
-
-// // TODO move elsewhere
-// pub struct PlaceWithMemDesc<'a> {
-//     place: Place,
-//     mem_desc: &'a MemDesc,
-// }
-
-// impl<'a> PlaceWithMemDesc<'a> {
-//     pub fn new(place: Place, mem_desc: &'a mut MemDesc) -> Self {
-//         Self { place, mem_desc }
-//     }
-
-//     pub fn place(&self) -> &Place {
-//         &self.place
-//     }
-
-//     pub fn ty(&self) -> &MemDesc {
-//         self.mem_desc
-//     }
-
-//     pub fn into_place(self) -> Place {
-//         self.place
-//     }
-
-//     pub fn proj_deref(self) -> Self {
-//         let projection = Projection::Deref;
-//         Self {
-//             mem_desc: self.mem_desc.project_mut_with_modify(&projection),
-//             place: self.place.proj(projection),
-//         }
-//     }
-
-//     pub fn proj_field(self, byte_offset: usize) -> Self {
-//         let projection = Projection::Field { byte_offset };
-//         Self {
-//             mem_desc: self.mem_desc.project_mut_with_modify(&projection),
-//             place: self.place.proj(projection),
-//         }
-//     }
-
-//     pub fn proj_index(self, index: LocalId) -> Self {
-//         let projection = Projection::Index(index);
-//         Self {
-//             mem_desc: self.mem_desc.project_mut_with_modify(&projection),
-//             place: self.place.proj(projection),
-//         }
-//     }
-// }
 
 pub struct DynPtr<'a> {
     ptr: LifetimePtr<'a>,
@@ -334,11 +252,25 @@ impl<'a> DynPtrMut<'a> {
 pub unsafe trait HasDynPtr {
     /// Builds the MIR code to get the data pointer of the dynamically typed
     /// data, where `self_place` contains a value of `Self`.
-    fn write_mir_get_data_ptr(builder: &mut FunctionBuilder, self_place: Place) -> Place;
+    fn write_mir_get_data_ptr(builder: &mut FunctionBuilder, self_place: TypedPlace) -> TypedPlace;
 
     /// Returns a pointer to the dynamically typed data.
     fn dyn_ptr(&self) -> DynPtr<'_>;
 
     /// Returns a mutable pointer to the dynamically typed data.
     fn dyn_ptr_mut(&mut self) -> DynPtrMut<'_>;
+}
+
+pub struct TypedPlace {
+    pub place: Place,
+    pub ty: MirType,
+}
+
+impl TypedPlace {
+    pub fn proj(self, projection: Projection) -> Self {
+        Self {
+            place: self.place.proj(projection),
+            ty: self.ty.contents.project(projection).clone(),
+        }
+    }
 }

@@ -11,10 +11,11 @@ use std::sync::Arc;
 
 use derive_more::derive::{From, Into};
 use either::Either;
+use macro_reflect::{ReflectComponents, reflect};
 use pretty_print::PrettyPrinter;
 use slotmap::SecondaryMap;
 
-use crate::mir::reflection::{MirReflect, MirType, MirTypeContents, MirTypeInfo};
+use crate::util::reflection::Reflect;
 use crate::{
     sim::{
         agent_schema::{AgentFieldDescriptor, AgentSchemaField, AgentSchemaFieldGroup},
@@ -24,7 +25,7 @@ use crate::{
     },
     util::{
         gen_slot_tracker::{GenIndex, GenSlotTracker},
-        reflection::{Reflect, Type, TypeInfo},
+        reflection::Type,
         rng::Rng,
         row_buffer::{RowBuffer, RowSchema},
     },
@@ -53,9 +54,13 @@ impl fmt::Display for TurtleWho {
 
 /// An ID for a turtle. When passing through FFI, this should be converted to a
 /// `u64` first to prevent it from being represented as a pointer.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, From, Into, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, From, Into, Default, ReflectComponents)]
+// TODO specify to reflect that its contents are a u32
 #[repr(transparent)]
 pub struct TurtleId(pub GenIndex);
+
+#[reflect(unsafe(is_zeroable), clone(copy))]
+impl Reflect for TurtleId {}
 
 impl TurtleId {
     pub const fn to_ffi(&self) -> u64 {
@@ -68,19 +73,6 @@ impl TurtleId {
 
     pub const fn index(&self) -> usize {
         self.0.index as usize
-    }
-}
-
-unsafe impl Reflect for TurtleId {
-    const TYPE_INFO: TypeInfo = TypeInfo::new_copy::<TurtleId>("TurtleId", false);
-}
-
-unsafe impl MirReflect for TurtleId {
-    fn mir_type() -> MirType {
-        Arc::new(MirTypeInfo {
-            static_ty: Some(&<TurtleId>::TYPE_INFO),
-            contents: MirTypeContents::IsPrimitive(lir::ValType::I32),
-        })
     }
 }
 
@@ -384,7 +376,7 @@ fn pretty_print_turtle(
     })
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, ReflectComponents)]
 #[repr(C)]
 pub struct TurtleBaseData {
     pub who: TurtleWho,
@@ -399,9 +391,8 @@ pub struct TurtleBaseData {
     pub size: value::NlFloat,
 }
 
-unsafe impl Reflect for TurtleBaseData {
-    const TYPE_INFO: TypeInfo = TypeInfo::new_opaque::<TurtleBaseData>("TurtleBaseData");
-}
+#[reflect]
+impl Reflect for TurtleBaseData {}
 
 slotmap::new_key_type! {
     /// An ID for a breed.
@@ -473,10 +464,10 @@ impl TurtleSchema {
         // add heading and position fields
         let heading_group = &mut field_groups[heading_buffer_idx as usize];
         let heading_field_idx = heading_group.fields.len() as u8;
-        heading_group.fields.push(AgentSchemaField::Other(&Heading::TYPE_INFO));
+        heading_group.fields.push(AgentSchemaField::Other(Heading::TYPE));
         let position_group = &mut field_groups[position_buffer_idx as usize];
         let position_field_idx = position_group.fields.len() as u8;
-        position_group.fields.push(AgentSchemaField::Other(&Point::TYPE_INFO));
+        position_group.fields.push(AgentSchemaField::Other(Point::TYPE));
 
         // add custom fields
         let mut custom_field_descriptors = Vec::new();
@@ -570,12 +561,12 @@ impl Index<AgentFieldDescriptor> for TurtleSchema {
 
 pub fn turtle_var_type(schema: &TurtleSchema, var: TurtleVarDesc) -> Type {
     match var {
-        TurtleVarDesc::Who => &NlFloat::TYPE_INFO,
-        TurtleVarDesc::Color => &Color::TYPE_INFO,
-        TurtleVarDesc::Size => &NlFloat::TYPE_INFO,
-        TurtleVarDesc::Pos => &Point::TYPE_INFO,
-        TurtleVarDesc::Xcor => &NlFloat::TYPE_INFO,
-        TurtleVarDesc::Ycor => &NlFloat::TYPE_INFO,
+        TurtleVarDesc::Who => NlFloat::TYPE,
+        TurtleVarDesc::Color => Color::TYPE,
+        TurtleVarDesc::Size => NlFloat::TYPE,
+        TurtleVarDesc::Pos => Point::TYPE,
+        TurtleVarDesc::Xcor => NlFloat::TYPE,
+        TurtleVarDesc::Ycor => NlFloat::TYPE,
         TurtleVarDesc::Custom(field) => {
             let AgentSchemaField::Other(ty) = schema[schema.custom_fields()[field].1] else {
                 unreachable!("this is a custom field, so it cannot be part of the base data");

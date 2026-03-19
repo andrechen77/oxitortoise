@@ -3,8 +3,9 @@
 use crate::{
     exec::CanonExecutionContext,
     hir::{Expr, ExprKind, HirToMirFnBuilder, NlAbstractTy, Program},
-    mir,
-    sim::{patch::PatchVarDesc, turtle::TurtleVarDesc},
+    mir::prelude::*,
+    sim::{observer::Globals, patch::PatchVarDesc, turtle::TurtleVarDesc, world::World},
+    util::reflection::CloneKind,
     workspace::Workspace,
 };
 
@@ -25,78 +26,35 @@ impl Expr for GetGlobalVar {
         let _ = &mut visitor;
     }
 
-    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, local_out: mir::LocalId) {
-        let context = builder.context_param();
-        let var_offset = builder.type_mapping.globals_schema().offset_of_field(self.index);
-        todo!("TODO calculate the variable's place and load from it")
-    }
-}
+    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, local_out: LocalId) {
+        let ptr_to_context = builder.context_param();
+        let context = ptr_to_context.proj(Projection::Deref);
+        let workspace = CanonExecutionContext::mir_project_workspace(context);
+        let world = Workspace::mir_project_world(workspace);
+        let globals = World::mir_project_globals(world);
+        let var =
+            Globals::mir_project_global_var(builder.mir, builder.type_mapping, self.index, globals);
 
-mod project_global_var {
-    use super::*;
+        let var_type = builder.type_mapping.globals_schema().field_type(self.index);
 
-    use std::mem::offset_of;
-
-    use crate::{
-        hir::HirToMirFnBuilder,
-        mir::{Operation, Place, PlaceOperand, Projection, reflection::HasDynPtr},
-        util::{reflection::Reflect, row_buffer::RowBuffer},
-    };
-
-    /*
-    fn project_global_var<T>(var_offset: usize)<'a>(context: &'a mut CanonExecutionContext) -> (out: &'a mut T) {
-        mir! {
-            out = &mut context
-                .deref::<CanonExecutionContext>()
-                .workspace
-                .deref::<Workspace>()
-                .world
-                .globals
-                .data
-                .dyn_ptr::<RowBuffer>()
-                .dyn_field::<T>(var_offset);
+        match var_type.clone {
+            CloneKind::Copy => {
+                builder.mir.add_operation_with_dst(
+                    local_out.into(),
+                    Operation::Operand(PlaceOperand::Move(var.place)),
+                );
+            }
+            CloneKind::Dynamic { clone_fn_info, .. } => builder.mir.add_operation_with_dst(
+                local_out.into(),
+                Operation::CallHostFunction {
+                    function: clone_fn_info,
+                    args: vec![PlaceOperand::Borrow(var.place)],
+                },
+            ),
+            CloneKind::None => {
+                panic!("Cannot load a variable of type {:?} as a copy", var_type);
+            }
         }
-    }
-     */
-
-    pub fn write_mir(
-        builder: &mut HirToMirFnBuilder,
-        var_offset: usize,
-        context: Place,
-        out: Place,
-    ) {
-        {
-            let operation = Operation::Operand(PlaceOperand::Borrow({
-                let x1 = context.proj(Projection::Deref);
-                let x2 = x1.proj(Projection::Field {
-                    byte_offset: offset_of!(CanonExecutionContext, workspace),
-                });
-                let x3 = x2.proj(Projection::Deref);
-                let x6 = x3.proj(Projection::Field {
-                    byte_offset: offset_of!(Workspace, world.globals.data),
-                });
-                let x7 = <RowBuffer as HasDynPtr>::write_mir_get_data_ptr(builder.mir, x6);
-                let x8 = x7.proj(Projection::Field { byte_offset: var_offset });
-                x8
-            }));
-            builder.mir.add_operation_with_dst(out, operation);
-        }
-    }
-
-    pub fn interp<'a, T: Reflect>(
-        var_offset: usize,
-        context: &'a mut CanonExecutionContext,
-    ) -> &'a mut T {
-        let out = {
-            let x2 = &mut (*context).workspace;
-            let x4 = &mut (**x2).world;
-            let x5 = &mut (*x4).globals;
-            let x6 = &mut (*x5).data;
-            let x7 = <RowBuffer as HasDynPtr>::dyn_ptr_mut(x6);
-            let x8 = x7.proj_field(var_offset).cast::<T>();
-            x8
-        };
-        out
     }
 }
 
@@ -171,7 +129,7 @@ impl Expr for GetTurtleVar {
         visitor(&self.turtle);
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {
+    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: LocalId) {
         todo!("write_mir_execution for GetTurtleVar");
     }
 }
@@ -234,7 +192,7 @@ impl Expr for SetTurtleVar {
         visitor(&self.value);
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {
+    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: LocalId) {
         todo!("write_mir_execution for SetTurtleVar");
     }
 }
@@ -294,7 +252,7 @@ impl Expr for TurtleIdToIndex {
         visitor(&self.turtle_id);
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {
+    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: LocalId) {
         todo!("write_mir_execution for TurtleIdToIndex");
     }
 }
@@ -357,7 +315,7 @@ impl Expr for GetPatchVar {
         visitor(&self.patch);
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {
+    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: LocalId) {
         todo!("write_mir_execution for GetPatchVar");
     }
 }
@@ -415,7 +373,7 @@ impl Expr for SetPatchVar {
         visitor(&self.value);
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {
+    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: LocalId) {
         todo!("write_mir_execution for SetPatchVar");
     }
 }
@@ -493,7 +451,7 @@ impl Expr for GetPatchVarAsTurtleOrPatch {
         visitor(&self.agent);
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {
+    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: LocalId) {
         todo!("write_mir_execution for GetPatchVarAsTurtleOrPatch");
     }
 }
@@ -552,7 +510,7 @@ impl Expr for SetPatchVarAsTurtleOrPatch {
         visitor(&self.value);
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {
+    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: LocalId) {
         todo!("write_mir_execution for SetPatchVarAsTurtleOrPatch");
     }
 }

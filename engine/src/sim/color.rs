@@ -1,23 +1,22 @@
 use std::{
     ops::{Add, AddAssign},
-    sync::{Arc, OnceLock},
+    sync::OnceLock,
 };
 
-use crate::{
-    mir::reflection::{MirReflect, MirType, MirTypeContents, MirTypeInfo},
-    sim::value::NlFloat,
-    util::{
-        reflection::{Reflect, TypeInfo},
-        rng::Rng,
-    },
-};
+use macro_reflect::{ReflectComponents, reflect};
+
+use crate::{sim::value::NlFloat, util::rng::Rng};
 
 /// A NetLogo color. This is a floating point value guaranteed to be in the
 /// range 0.0..140.0. Values with more than one decimal place of precision are
 /// remembered with that much precision, even though it doesn't matter for
 /// rendering.
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Default, ReflectComponents)]
+// TODO reflection contents
 pub struct Color(f64);
+
+#[reflect(unsafe(is_zeroable), clone(copy))]
+impl Reflect for Color {}
 
 impl Color {
     pub const BLACK: Color = Color(0.0);
@@ -67,18 +66,6 @@ impl Add<NlFloat> for Color {
 impl AddAssign<NlFloat> for Color {
     fn add_assign(&mut self, rhs: NlFloat) {
         *self = *self + rhs;
-    }
-}
-
-unsafe impl Reflect for Color {
-    const TYPE_INFO: TypeInfo = TypeInfo::new_copy::<Color>("Color", true);
-}
-unsafe impl MirReflect for Color {
-    fn mir_type() -> MirType {
-        Arc::new(MirTypeInfo {
-            static_ty: Some(&Color::TYPE_INFO),
-            contents: MirTypeContents::IsPrimitive(lir::ValType::F64),
-        })
     }
 }
 

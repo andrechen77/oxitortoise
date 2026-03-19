@@ -1,6 +1,7 @@
 use std::{
     collections::HashMap,
     fmt::{self, Debug, Write},
+    mem::offset_of,
     sync::Arc,
 };
 
@@ -8,7 +9,9 @@ use either::Either;
 use pretty_print::PrettyPrinter;
 
 use crate::{
-    sim::value::{NlBool, NlFloat, NlList, NlString, PackedAny},
+    hir::TypeMapping,
+    mir::prelude::*,
+    sim::value::{NlFloat, NlList, NlString, PackedAny},
     util::{
         reflection::{Reflect, Type},
         row_buffer::{RowBuffer, RowSchema},
@@ -60,6 +63,22 @@ impl Globals {
             )
         }
     }
+
+    pub fn mir_project_global_var(
+        builder: &mut FunctionBuilder,
+        type_mapping: &TypeMapping,
+        var_index: usize,
+        globals: TypedPlace,
+    ) -> TypedPlace {
+        let byte_offset = type_mapping.globals_schema().offset_of_field(var_index);
+
+        // globals.data
+        let data = globals.proj(Projection::Field { byte_offset: offset_of!(Globals, data) });
+        // globals.data.ptr
+        let ptr = <RowBuffer as HasDynPtr>::write_mir_get_data_ptr(builder, data);
+        // globals.data.ptr.var
+        ptr.proj(Projection::Field { byte_offset })
+    }
 }
 
 impl fmt::Debug for Globals {
@@ -88,8 +107,8 @@ impl fmt::Debug for Globals {
                         }
                         if ty.is::<NlFloat>() {
                             print_field::<NlFloat>(p, self, i)
-                        } else if ty.is::<NlBool>() {
-                            print_field::<NlBool>(p, self, i)
+                        } else if ty.is::<bool>() {
+                            print_field::<bool>(p, self, i)
                         } else if ty.is::<NlString>() {
                             print_field::<NlString>(p, self, i)
                         } else if ty.is::<NlList>() {
@@ -123,5 +142,9 @@ impl GlobalsSchema {
     /// Calculates the offset of a field from the start of the globals data
     pub fn offset_of_field(&self, field_index: usize) -> usize {
         self.make_row_schema().field(field_index).offset
+    }
+
+    pub fn field_type(&self, field_index: usize) -> Type {
+        &self.custom_fields[field_index].1
     }
 }

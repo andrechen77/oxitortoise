@@ -13,6 +13,7 @@ tracing = { workspace = true }
 ambassador = "0.4.2"
 pretty_print = { path = "../pretty_print" }
 ffi_translate = { path = "../ffi_translate/ffi_translate" }
+macro_reflect = { path = "../macro_reflect/macro_reflect" }
 
 [features]
 runtime-unsafety = []

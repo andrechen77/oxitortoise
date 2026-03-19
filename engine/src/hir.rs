@@ -8,10 +8,7 @@ use slotmap::{SecondaryMap, SlotMap, new_key_type};
 
 use crate::{
     hir::expr::{Break, Scope},
-    mir::{
-        self,
-        reflection::{MirReflect as _, MirType},
-    },
+    mir::{self, prelude::*},
     sim::{
         color::Color,
         patch::OptionPatchId,
@@ -19,6 +16,7 @@ use crate::{
         turtle::{Breed, BreedId, TurtleId},
         value::{NlBox, NlFloat, NlList, PackedAny},
     },
+    util::reflection::ReflectComponents,
 };
 
 mod build_mir;
@@ -29,7 +27,7 @@ pub mod expr;
 // pub mod transforms;
 // pub mod type_inference;
 
-pub use build_mir::HirToMirFnBuilder;
+pub use build_mir::{HirToMirFnBuilder, TypeMapping};
 
 new_key_type! {
     #[derive(Display)]

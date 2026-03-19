@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     hir::{self, Expr},
-    mir::{self, reflection::MirType},
+    mir::{self, MirType},
     sim::{observer::GlobalsSchema, patch::PatchSchema, turtle::TurtleSchema},
 };
 
@@ -19,12 +19,11 @@ impl TypeMapping {
         turtle_schema: TurtleSchema,
         patch_schema: PatchSchema,
     ) -> Self {
-        Self {
-            globals_schema,
-            turtle_schema,
-            patch_schema,
-            context_ty: todo!("TODO calculate the context type based on the other fields"),
+        fn context_ty(_: &GlobalsSchema, _: &TurtleSchema, _: &PatchSchema) -> MirType {
+            todo!("TODO calculate the context type based on the other fields")
         }
+        let context_ty = context_ty(&globals_schema, &turtle_schema, &patch_schema);
+        Self { globals_schema, turtle_schema, patch_schema, context_ty }
     }
 
     pub fn globals_schema(&self) -> &GlobalsSchema {
@@ -47,7 +46,7 @@ impl TypeMapping {
 pub struct HirToMirFnBuilder<'a, 'b> {
     pub hir: &'a hir::Program,
     pub type_mapping: &'a TypeMapping,
-    pub mir: &'a mut mir::builder::FunctionBuilder<'b>,
+    pub mir: &'a mut mir::FunctionBuilder<'b>,
     pub translator: &'a mut HirToLirFnTranslator,
 }
 
@@ -115,7 +114,7 @@ impl<'a, 'b> HirToMirFnBuilder<'a, 'b> {
 
     /// Returns the local variable that contains the context parameter, creating
     /// it as a function parameter if it does not exist.
-    pub fn context_param(&mut self) -> mir::Place {
+    pub fn context_param(&mut self) -> mir::TypedPlace {
         let local_id = *self.translator.context_param.get_or_insert_with(|| {
             let (local_id, _local_decl) = self.mir.create_local(mir::LocalDecl {
                 debug_name: Some("context".into()),
@@ -124,12 +123,12 @@ impl<'a, 'b> HirToMirFnBuilder<'a, 'b> {
             // TODO add as parameter to the function
             local_id
         });
-        local_id.into()
+        self.mir.typed_place(local_id.into())
     }
 }
 
 pub fn hir_to_mir(hir: &hir::Program, type_mapping: &TypeMapping) -> mir::Program {
-    let mut builder = mir::builder::ProgramBuilder::new();
+    let mut builder = mir::ProgramBuilder::new();
 
     // iterate through each function and convert it to an MIR function
     for (hir_fn_id, hir_fn) in &hir.functions {
