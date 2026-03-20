@@ -396,9 +396,6 @@ pub struct RowBuffer {
     schema: RowSchema,
 }
 
-pub const ROW_BUFFER_OFFSET_TO_DATA_PTR: usize =
-    offset_of!(RowBuffer, bytes) + offset_of!(AlignedBytes, data);
-
 impl RowBuffer {
     fn make_byte_buffer(schema: &RowSchema, num_rows: usize) -> AlignedBytes {
         //  the layout of all the rows at once
@@ -644,9 +641,7 @@ unsafe impl HasDynPtr for RowBuffer {
             offset_of!(Self, bytes),
             MirTypeInfo::ptr_to(MirTypeInfo::array_of(
                 MirTypeInfo::with_fields(schema.layout, fields),
-                // let the length be 0 because it's not actually used in our
-                // compiler's type checking.
-                0,
+                None,
             )),
         )
     }

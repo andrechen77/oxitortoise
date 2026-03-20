@@ -54,6 +54,16 @@ impl World {
         world.proj(Projection::Field { byte_offset: offset_of!(World, globals) })
     }
 
+    /// Derives a `Turtles` from a `World`.
+    pub fn mir_project_turtles(world: TypedPlace) -> TypedPlace {
+        world.proj(Projection::Field { byte_offset: offset_of!(World, turtles) })
+    }
+
+    /// Derives a `Patches` from a `World`.
+    pub fn mir_project_patches(world: TypedPlace) -> TypedPlace {
+        world.proj(Projection::Field { byte_offset: offset_of!(World, patches) })
+    }
+
     pub fn mir_type_from_schemas(
         globals_schema: &GlobalsSchema,
         turtle_schema: &TurtleSchema,

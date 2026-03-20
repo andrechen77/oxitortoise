@@ -126,7 +126,7 @@ impl<'a, 'b> HirToMirFnBuilder<'a, 'b> {
             // TODO add as parameter to the function
             local_id
         });
-        self.mir.typed_place(local_id.into())
+        self.mir.typed_place(local_id)
     }
 }
 

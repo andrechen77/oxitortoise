@@ -118,7 +118,10 @@ pub enum Projection {
     /// With the place having an array value, produces the place of the element
     /// at the index of the given local variable. This never moves from the
     /// source place since a value used for indexing is always Copy.
-    Index(LocalId),
+    DynamicIndex(LocalId),
+    /// With the place having an array value, produces the place of the element
+    /// at the given index.
+    StaticIndex(usize),
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]

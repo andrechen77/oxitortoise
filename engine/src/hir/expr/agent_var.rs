@@ -4,7 +4,12 @@ use crate::{
     exec::CanonExecutionContext,
     hir::{Expr, ExprKind, HirToMirFnBuilder, NlAbstractTy, Program},
     mir::prelude::*,
-    sim::{observer::Globals, patch::PatchVarDesc, turtle::TurtleVarDesc, world::World},
+    sim::{
+        observer::Globals,
+        patch::PatchVarDesc,
+        turtle::{TurtleVarDesc, Turtles},
+        world::World,
+    },
     util::reflection::CloneKind,
     workspace::Workspace,
 };
@@ -34,27 +39,12 @@ impl Expr for GetGlobalVar {
         let globals = World::mir_project_globals(world);
         let var =
             Globals::mir_project_global_var(builder.mir, builder.type_mapping, self.index, globals);
-
-        let var_type = builder.type_mapping.globals_schema().field_type(self.index);
-
-        match var_type.clone {
-            CloneKind::Copy => {
-                builder.mir.add_operation_with_dst(
-                    local_out.into(),
-                    Operation::Operand(PlaceOperand::Move(var.place)),
-                );
-            }
-            CloneKind::Dynamic { clone_fn_info, .. } => builder.mir.add_operation_with_dst(
-                local_out.into(),
-                Operation::CallHostFunction {
-                    function: clone_fn_info,
-                    args: vec![PlaceOperand::Borrow(var.place)],
-                },
-            ),
-            CloneKind::None => {
-                panic!("Cannot load a variable of type {:?} as a copy", var_type);
-            }
-        }
+        load_var_from_place(
+            builder.mir,
+            local_out.place(),
+            var.place,
+            &var.ty.static_ty.as_ref().unwrap().clone,
+        );
     }
 }
 
@@ -68,49 +58,6 @@ pub struct GetTurtleVar {
     /// The variable to get.
     pub var: TurtleVarDesc,
 }
-
-// impl Expr for GetTurtleVar {
-//     // Not pure!  Its value depends on `set` calls within the same block.  --Jason B. (11/12/25)
-//     fn is_pure(&self) -> bool {
-//         false
-//     }
-//
-//     fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
-//         vec![("context", self.context), ("turtle", self.turtle)]
-//     }
-//
-//     fn output_type(&self, program: &Program) -> HirTy {
-//         // TODO(wishlist) this should probably be refactored into a function
-//         match self.var {
-//             TurtleVarDesc::Who => NlAbstractTy::Float.into(),
-//             TurtleVarDesc::Color => NlAbstractTy::Color.into(),
-//             TurtleVarDesc::Size => NlAbstractTy::Float.into(),
-//             TurtleVarDesc::Pos => NlAbstractTy::Point.into(),
-//             TurtleVarDesc::Xcor => NlAbstractTy::Float.into(),
-//             TurtleVarDesc::Ycor => NlAbstractTy::Float.into(),
-//             TurtleVarDesc::Custom(field) => program.custom_turtle_vars[field].ty.clone(),
-//         }
-//     }
-//
-//     fn lowering_expand(
-//         &self,
-//         _program: &Program,
-//         _fn_id: FunctionId,
-//         _my_node_id: NodeId,
-//     ) -> Option<NodeTransform> {
-//         todo!()
-//     }
-//
-//     fn pretty_print(&self, program: &Program, mut out: impl fmt::Write) -> fmt::Result {
-//         PrettyPrinter::new(&mut out).add_struct("GetTurtleVar", |p| {
-//             p.add_field_with("var", |p| write!(p, "{:?}", self.var))?;
-//             if let TurtleVarDesc::Custom(field) = self.var {
-//                 p.add_comment(&program.custom_turtle_vars[field].name)?;
-//             }
-//             Ok(())
-//         })
-//     }
-// }
 
 impl Expr for GetTurtleVar {
     fn output_type(&self, program: &Program) -> NlAbstractTy {
@@ -129,8 +76,33 @@ impl Expr for GetTurtleVar {
         visitor(&self.turtle);
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: LocalId) {
-        todo!("write_mir_execution for GetTurtleVar");
+    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, local_out: LocalId) {
+        // project context.workspace.world.turtles
+        let ptr_to_context = builder.context_param();
+        let context = ptr_to_context.proj(Projection::Deref);
+        let workspace = CanonExecutionContext::mir_project_workspace(context);
+        let world = Workspace::mir_project_world(workspace);
+        let turtles = World::mir_project_turtles(world);
+
+        // calculate the turtle id
+        let turtle_id = builder.translate_expr(&self.turtle);
+        let turtle_id = builder.mir.typed_place(turtle_id);
+
+        // project the turtle variable itself
+        let var = Turtles::mir_project_turtle_variable(
+            builder.mir,
+            builder.type_mapping,
+            turtles,
+            turtle_id,
+            self.var,
+        );
+
+        load_var_from_place(
+            builder.mir,
+            local_out.place(),
+            var.place,
+            &var.ty.static_ty.as_ref().unwrap().clone,
+        );
     }
 }
 
@@ -512,5 +484,28 @@ impl Expr for SetPatchVarAsTurtleOrPatch {
 
     fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: LocalId) {
         todo!("write_mir_execution for SetPatchVarAsTurtleOrPatch");
+    }
+}
+
+fn load_var_from_place(
+    builder: &mut FunctionBuilder,
+    dst: Place,
+    src: Place,
+    clone_kind: &CloneKind,
+) {
+    match clone_kind {
+        CloneKind::Copy => {
+            builder.add_operation_with_dst(dst, Operation::Operand(PlaceOperand::Move(src)));
+        }
+        CloneKind::Dynamic { clone_fn_info, .. } => builder.add_operation_with_dst(
+            dst,
+            Operation::CallHostFunction {
+                function: clone_fn_info,
+                args: vec![PlaceOperand::Borrow(src)],
+            },
+        ),
+        CloneKind::None => {
+            panic!("Cannot load a variable from memory that is neither Copy nor Clone");
+        }
     }
 }

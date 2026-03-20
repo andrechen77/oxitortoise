@@ -16,7 +16,8 @@ use macro_reflect::{ReflectComponents, reflect};
 use pretty_print::PrettyPrinter;
 use slotmap::SecondaryMap;
 
-use crate::mir::{HasDynPtr, MirType, MirTypeInfo};
+use crate::hir::TypeMapping;
+use crate::mir::{self, prelude::*};
 use crate::util::reflection::Reflect;
 use crate::{
     sim::{
@@ -296,6 +297,38 @@ impl Turtles {
         }
     }
 
+    pub fn mir_project_turtle_variable(
+        builder: &mut mir::FunctionBuilder,
+        type_mapping: &TypeMapping,
+        turtles: TypedPlace,
+        turtle_id: TypedPlace,
+        var: TurtleVarDesc,
+    ) -> TypedPlace {
+        const { assert!(size_of::<RowBuffer>() == size_of::<Option<RowBuffer>>()) };
+
+        let (field_desc, offset) = type_mapping.turtle_schema().field_desc_and_offset(var);
+
+        // turtles.data[field_desc.buffer_idx]
+        let offset_of_buffer = offset_of!(Self, data)
+            + usize::from(field_desc.buffer_idx) * size_of::<Option<RowBuffer>>();
+        let buffer_pl = turtles.proj(Projection::Field { byte_offset: offset_of_buffer });
+        // turtles.data[field_desc.buffer_idx].ptr
+        let ptr_to_buffer = RowBuffer::write_mir_get_data_ptr(builder, buffer_pl);
+        // turtles.data[field_desc.buffer_idx].ptr[turtle_id.index]
+        let turtle_idx = builder.add_operation(
+            Some("turtle_idx".into()),
+            Operation::UnaryOp {
+                opcode: lir::UnaryOpcode::I64ToI32,
+                operand: PlaceOperand::Move(turtle_id.place),
+            },
+        );
+        let ptr_to_row = ptr_to_buffer.proj_dynamic_index(turtle_idx);
+        // turtles.data[field_desc.buffer_idx].ptr[turtle_id.index].var
+        let var_pl = ptr_to_row.proj_field(field_desc.field_idx as usize);
+        let subvar_pl = if let Some(offset) = offset { var_pl.proj_field(offset) } else { var_pl };
+        subvar_pl
+    }
+
     pub fn mir_type_from_schema(schema: &TurtleSchema) -> MirType {
         // this code relies on the fact that the RowBuffer struct is niche
         // optimized so that an Option<RowBuffer> which is known to be Some can
@@ -560,15 +593,18 @@ impl TurtleSchema {
         &self.custom_fields
     }
 
-    pub fn field_desc_and_offset(&self, var: TurtleVarDesc) -> (AgentFieldDescriptor, usize) {
+    pub fn field_desc_and_offset(
+        &self,
+        var: TurtleVarDesc,
+    ) -> (AgentFieldDescriptor, Option<usize>) {
         match var {
-            TurtleVarDesc::Custom(field_id) => (self.custom_fields()[field_id].1, 0),
-            TurtleVarDesc::Who => (self.base_data(), offset_of!(TurtleBaseData, who)),
-            TurtleVarDesc::Size => (self.base_data(), offset_of!(TurtleBaseData, size)),
-            TurtleVarDesc::Color => (self.base_data(), offset_of!(TurtleBaseData, color)),
-            TurtleVarDesc::Pos => (self.position(), 0),
-            TurtleVarDesc::Xcor => (self.position(), offset_of!(Point, x)),
-            TurtleVarDesc::Ycor => (self.position(), offset_of!(Point, y)),
+            TurtleVarDesc::Custom(field_id) => (self.custom_fields()[field_id].1, None),
+            TurtleVarDesc::Who => (self.base_data(), Some(offset_of!(TurtleBaseData, who))),
+            TurtleVarDesc::Size => (self.base_data(), Some(offset_of!(TurtleBaseData, size))),
+            TurtleVarDesc::Color => (self.base_data(), Some(offset_of!(TurtleBaseData, color))),
+            TurtleVarDesc::Pos => (self.position(), None),
+            TurtleVarDesc::Xcor => (self.position(), Some(offset_of!(Point, x))),
+            TurtleVarDesc::Ycor => (self.position(), Some(offset_of!(Point, y))),
         }
     }
 }

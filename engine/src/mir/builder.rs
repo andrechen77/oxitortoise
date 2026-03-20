@@ -104,7 +104,8 @@ impl<'a> FunctionBuilder<'a> {
             .clone()
     }
 
-    pub fn typed_place(&self, place: Place) -> TypedPlace {
+    pub fn typed_place(&self, place: impl Into<Place>) -> TypedPlace {
+        let place = place.into();
         let ty = self.type_of_place(&place);
         TypedPlace { place, ty }
     }

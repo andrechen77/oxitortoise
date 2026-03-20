@@ -1,7 +1,7 @@
 use std::{alloc::Layout, sync::Arc};
 
 use crate::{
-    mir::{Place, Projection, builder::FunctionBuilder},
+    mir::{LocalId, Place, Projection, builder::FunctionBuilder},
     util::{
         lifetime_ptr::{LifetimePtr, LifetimePtrMut},
         reflection::{Reflect, Type},
@@ -29,8 +29,9 @@ pub enum MirTypeContents {
     /// each satisfy their respective assertions.
     HasFields { fields: Vec<(usize, MirType)>, overall: Layout },
     /// Asserts that the value is a array having an element type that satisfies
-    /// the given assertion.
-    IsArrayOf { element: MirType, length: usize },
+    /// the given assertion. If the length is specified, then the array has
+    /// exactly that many elements, otherwise it has a statically unknown length.
+    IsArrayOf { element: MirType, length: Option<usize> },
     /// Asserts that the value is a primitive type.
     IsPrimitive(lir::ValType),
     /// No assertion.
@@ -82,7 +83,7 @@ impl MirTypeContents {
                 };
                 field
             }
-            (M::IsArrayOf { element, length: _ }, Projection::Index(_index)) => element,
+            (M::IsArrayOf { element, length: _ }, Projection::DynamicIndex(_index)) => element,
             (desc, projection) => {
                 panic!(
                     "Cannot project memory descriptor {:?} with projection: {:?}",
@@ -114,14 +115,24 @@ impl MirTypeContents {
         }
     }
 
-    pub fn proj_index(&self, index: usize) -> &MirType {
+    pub fn proj_static_index(&self, index: usize) -> &MirType {
         if let MirTypeContents::IsArrayOf { element, length } = self {
-            if index >= *length {
+            if let Some(length) = length
+                && index >= *length
+            {
                 panic!("Index {} is out of bounds for array of length {}", index, length);
             }
             element
         } else {
             panic!("Cannot project type {:?} with an index projection", self);
+        }
+    }
+
+    pub fn proj_dynamic_index(&self) -> &MirType {
+        if let MirTypeContents::IsArrayOf { element, length: _ } = self {
+            element
+        } else {
+            panic!("Cannot project type {:?} with a dynamic index projection", self);
         }
     }
 }
@@ -131,7 +142,7 @@ impl MirTypeInfo {
         Arc::new(MirTypeInfo { static_ty: None, contents: MirTypeContents::IsPointerTo(pointee) })
     }
 
-    pub fn array_of(element: MirType, length: usize) -> MirType {
+    pub fn array_of(element: MirType, length: Option<usize>) -> MirType {
         Arc::new(MirTypeInfo {
             static_ty: None,
             contents: MirTypeContents::IsArrayOf { element, length },
@@ -199,7 +210,7 @@ impl<'a> DynPtr<'a> {
     pub fn proj_index(self, index: usize) -> Self {
         // this checks that the pointee is an array and that the index is within
         // bounds
-        let pointee_ty = self.pointee_ty.contents.proj_index(index).clone();
+        let pointee_ty = self.pointee_ty.contents.proj_static_index(index).clone();
 
         // SAFETY: the pointer is valid for the lifetime `'a` and we checked
         // that the index is within bounds.
@@ -257,7 +268,7 @@ impl<'a> DynPtrMut<'a> {
     pub fn proj_index(self, index: usize) -> Self {
         // this checks that the pointee is an array and that the index is within
         // bounds
-        let pointee_ty = self.pointee_ty.contents.proj_index(index).clone();
+        let pointee_ty = self.pointee_ty.contents.proj_static_index(index).clone();
 
         // SAFETY: the pointer is valid for the lifetime `'a` and we checked
         // that the index is within bounds.
@@ -308,6 +319,34 @@ impl TypedPlace {
         Self {
             place: self.place.proj(projection),
             ty: self.ty.contents.project(projection).clone(),
+        }
+    }
+
+    pub fn proj_deref(self) -> Self {
+        Self {
+            place: self.place.proj(Projection::Deref),
+            ty: self.ty.contents.proj_deref().clone(),
+        }
+    }
+
+    pub fn proj_field(self, byte_offset: usize) -> Self {
+        Self {
+            place: self.place.proj(Projection::Field { byte_offset }),
+            ty: self.ty.contents.proj_field(byte_offset).clone(),
+        }
+    }
+
+    pub fn proj_static_index(self, index: usize) -> Self {
+        Self {
+            place: self.place.proj(Projection::StaticIndex(index)),
+            ty: self.ty.contents.proj_static_index(index).clone(),
+        }
+    }
+
+    pub fn proj_dynamic_index(self, index: LocalId) -> Self {
+        Self {
+            place: self.place.proj(Projection::DynamicIndex(index)),
+            ty: self.ty.contents.proj_dynamic_index().clone(),
         }
     }
 }
