@@ -14,7 +14,7 @@ use pretty_print::PrettyPrinter;
 
 use super::topology::Point;
 use crate::{
-    hir::HirToMirFnBuilder,
+    hir::{HirToMirFnBuilder, TypeMapping},
     mir::{self, prelude::*},
     sim::{
         agent_schema::{AgentFieldDescriptor, AgentSchemaField, AgentSchemaFieldGroup},
@@ -312,6 +312,31 @@ impl Patches {
         (0..self.num_patches).map(PatchId)
     }
 
+    pub fn mir_project_patch_variable(
+        builder: &mut mir::FunctionBuilder,
+        type_mapping: &TypeMapping,
+        patches: TypedPlace,
+        patch_id: TypedPlace,
+        var: PatchVarDesc,
+    ) -> TypedPlace {
+        const { assert!(size_of::<RowBuffer>() == size_of::<Option<RowBuffer>>()) };
+
+        let (field_desc, offset) = type_mapping.patch_schema().field_desc_and_offset(var);
+
+        // patches.data[field_desc.buffer_idx]
+        let offset_of_buffer = offset_of!(Self, data)
+            + usize::from(field_desc.buffer_idx) * size_of::<Option<RowBuffer>>();
+        let buffer_pl = patches.proj(Projection::Field { byte_offset: offset_of_buffer });
+        // patches.data[field_desc.buffer_idx].ptr
+        let ptr_to_buffer = RowBuffer::write_mir_get_data_ptr(builder, buffer_pl);
+        // patches.data[field_desc.buffer_idx].ptr[patch_id.index]
+        let ptr_to_row = ptr_to_buffer.proj_dynamic_index(patch_id.place.unwrap_local());
+        // turtles.data[field_desc.buffer_idx].ptr[patch_id.index].var
+        let var_pl = ptr_to_row.proj_field(field_desc.field_idx as usize);
+        let subvar_pl = if let Some(offset) = offset { var_pl.proj_field(offset) } else { var_pl };
+        subvar_pl
+    }
+
     pub fn mir_type_from_schema(schema: &PatchSchema) -> MirType {
         // this code relies on the fact that the RowBuffer struct is niche
         // optimized so that an Option<RowBuffer> which is known to be Some can
@@ -506,11 +531,14 @@ impl PatchSchema {
         &self.custom_fields
     }
 
-    pub fn field_desc_and_offset(&self, var: PatchVarDesc) -> (AgentFieldDescriptor, usize) {
+    pub fn field_desc_and_offset(
+        &self,
+        var: PatchVarDesc,
+    ) -> (AgentFieldDescriptor, Option<usize>) {
         match var {
-            PatchVarDesc::Pos => (self.base_data(), offset_of!(PatchBaseData, position)),
-            PatchVarDesc::Pcolor => (self.pcolor(), 0),
-            PatchVarDesc::Custom(field_id) => (self.custom_fields()[field_id].1, 0),
+            PatchVarDesc::Pos => (self.base_data(), Some(offset_of!(PatchBaseData, position))),
+            PatchVarDesc::Pcolor => (self.pcolor(), None),
+            PatchVarDesc::Custom(field_id) => (self.custom_fields()[field_id].1, None),
         }
     }
 }

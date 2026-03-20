@@ -180,6 +180,13 @@ impl From<LocalId> for Place {
     }
 }
 
+impl Place {
+    pub fn unwrap_local(self) -> LocalId {
+        assert!(self.projections.is_empty(), "place must not have projections");
+        self.local
+    }
+}
+
 impl Function {
     fn return_ty(&self) -> &MirType {
         &self.local_decls[&self.return_local].ty

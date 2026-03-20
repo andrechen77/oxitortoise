@@ -6,7 +6,7 @@ use crate::{
     mir::{self, prelude::*},
     sim::{
         observer::Globals,
-        patch::PatchVarDesc,
+        patch::{PatchVarDesc, Patches},
         turtle::{TurtleVarDesc, Turtles},
         world::World,
     },
@@ -88,7 +88,7 @@ impl Expr for GetTurtleVar {
             builder.mir,
             local_out.place(),
             var.place,
-            &var.ty.static_ty.as_ref().unwrap().clone,
+            &var.ty.static_ty.unwrap().clone,
         );
     }
 }
@@ -149,43 +149,6 @@ pub struct GetPatchVar {
     pub var: PatchVarDesc,
 }
 
-// impl Expr for GetPatchVar {
-//     fn is_pure(&self) -> bool {
-//         false
-//     }
-//
-//     fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
-//         vec![("context", self.context), ("patch", self.patch)]
-//     }
-//
-//     fn output_type(&self, program: &Program) -> HirTy {
-//         match self.var {
-//             PatchVarDesc::Pcolor => NlAbstractTy::Color.into(),
-//             PatchVarDesc::Pos => NlAbstractTy::Point.into(),
-//             PatchVarDesc::Custom(field) => program.custom_patch_vars[field].ty.clone(),
-//         }
-//     }
-//
-//     fn lowering_expand(
-//         &self,
-//         _program: &Program,
-//         _fn_id: FunctionId,
-//         _my_node_id: NodeId,
-//     ) -> Option<NodeTransform> {
-//         todo!()
-//     }
-//
-//     fn pretty_print(&self, program: &Program, mut out: impl fmt::Write) -> fmt::Result {
-//         PrettyPrinter::new(&mut out).add_struct("GetPatchVar", |p| {
-//             p.add_field_with("var", |p| write!(p, "{:?}", self.var))?;
-//             if let PatchVarDesc::Custom(field) = self.var {
-//                 p.add_comment(&program.custom_patch_vars[field].name)?;
-//             }
-//             Ok(())
-//         })
-//     }
-// }
-
 impl Expr for GetPatchVar {
     fn output_type(&self, program: &Program) -> NlAbstractTy {
         match self.var {
@@ -199,8 +162,20 @@ impl Expr for GetPatchVar {
         visitor(&self.patch);
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: LocalId) {
-        todo!("write_mir_execution for GetPatchVar");
+    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, local_out: LocalId) {
+        // calculate the patch id
+        let patch_id = builder.translate_expr(&self.patch);
+
+        // project the patch variable
+        let var = patch_var_place(builder, patch_id, self.var);
+
+        // perform load
+        clone_to_uninit(
+            builder.mir,
+            local_out.place(),
+            var.place,
+            &var.ty.static_ty.unwrap().clone,
+        );
     }
 }
 
@@ -214,39 +189,6 @@ pub struct SetPatchVar {
     pub value: Box<ExprKind>,
 }
 
-// impl Expr for SetPatchVar {
-//     fn is_pure(&self) -> bool {
-//         false
-//     }
-//
-//     fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
-//         vec![("context", self.context), ("patch", self.patch), ("value", self.value)]
-//     }
-//
-//     fn output_type(&self, _program: &Program) -> HirTy {
-//         NlAbstractTy::Unit.into()
-//     }
-//
-//     fn lowering_expand(
-//         &self,
-//         _program: &Program,
-//         _fn_id: FunctionId,
-//         _my_node_id: NodeId,
-//     ) -> Option<NodeTransform> {
-//         todo!()
-//     }
-//
-//     fn pretty_print(&self, program: &Program, mut out: impl fmt::Write) -> fmt::Result {
-//         PrettyPrinter::new(&mut out).add_struct("SetPatchVar", |p| {
-//             p.add_field_with("var", |p| write!(p, "{:?}", self.var))?;
-//             if let PatchVarDesc::Custom(field) = self.var {
-//                 p.add_comment(&program.custom_patch_vars[field].name)?;
-//             }
-//             Ok(())
-//         })
-//     }
-// }
-
 impl Expr for SetPatchVar {
     fn output_type(&self, _program: &Program) -> NlAbstractTy {
         NlAbstractTy::Unit
@@ -257,22 +199,33 @@ impl Expr for SetPatchVar {
         visitor(&self.value);
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: LocalId) {
-        todo!("write_mir_execution for SetPatchVar");
+    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, _local_out: LocalId) {
+        // calculate the value to store
+        let value = builder.translate_expr(&self.value);
+
+        // calculate the patch id
+        let patch_id = builder.translate_expr(&self.patch);
+
+        // project the patch variable
+        let var = patch_var_place(builder, patch_id, self.var);
+
+        // perform store
+        move_to_init(builder.mir, var, value.place);
     }
 }
 
-// /// Helper function to derive a pointer to the data row of a patch's variable. Returns the
-// /// the NodeId of the node that outputs the pointer to data row, as well as the byte
-// /// offset of the field within the data row. This is used by both loads and stores.
-// fn context_to_patch_data(
-//     program: &mut Program,
-//     context: NodeId,
-//     patch_id: NodeId,
-//     var: PatchVarDesc,
-// ) -> (NodeId, usize) {
-//     todo!()
-// }
+fn patch_var_place(
+    builder: &mut HirToMirFnBuilder,
+    patch_id: TypedPlace,
+    var: PatchVarDesc,
+) -> TypedPlace {
+    let ptr_to_context = builder.context_param();
+    let context = ptr_to_context.proj(Projection::Deref);
+    let workspace = CanonExecutionContext::mir_project_workspace(context);
+    let world = Workspace::mir_project_world(workspace);
+    let patches = World::mir_project_patches(world);
+    Patches::mir_project_patch_variable(builder.mir, builder.type_mapping, patches, patch_id, var)
+}
 
 /// A node for getting an patch variable when the type of the agent is unknown.
 #[derive(Debug)]
