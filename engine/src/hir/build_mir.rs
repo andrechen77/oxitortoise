@@ -86,14 +86,14 @@ impl<'a, 'b> HirToMirFnBuilder<'a, 'b> {
     ///
     /// There is currently no checking if dependencies have already been
     /// evaluated.
-    pub fn translate_expr(&mut self, expr: &hir::ExprKind) -> mir::LocalId {
+    pub fn translate_expr(&mut self, expr: &hir::ExprKind) -> mir::TypedPlace {
         let output_ty = expr.output_type(self.hir).repr();
         // the expression's output will be stored in this local variable
         let (output_local, _output_local_decl) =
             self.mir.create_local(mir::LocalDecl { debug_name: None, ty: output_ty });
         // TODO could do something with the type assertion here
         expr.write_mir_execution(self, output_local);
-        output_local
+        self.mir.typed_place(output_local)
     }
 
     // a bunch of boilerplate code to recreate the state of the builder. This is
@@ -136,21 +136,25 @@ pub fn hir_to_mir(hir: &hir::Program, type_mapping: &TypeMapping) -> mir::Progra
     // iterate through each function and convert it to an MIR function
     for (hir_fn_id, hir_fn) in &hir.functions {
         // create a builder to track state while translating
-        let mut lir_fn_builder = builder.create_function();
+        let mut mir_fn_builder = builder.create_function();
         let mut translator = HirToLirFnTranslator::default();
 
         let mut builder = HirToMirFnBuilder {
             hir,
             type_mapping,
-            mir: &mut lir_fn_builder,
+            mir: &mut mir_fn_builder,
             translator: &mut translator,
         };
 
         // add all the nodes to the function body
-        let return_place = builder.translate_expr(&hir_fn.body);
+        let (return_local, _) = builder.mir.create_local(mir::LocalDecl {
+            debug_name: Some("return".into()),
+            ty: hir_fn.body.output_type(hir).repr(),
+        });
+        hir_fn.body.write_mir_execution(&mut builder, return_local);
 
-        lir_fn_builder.set_return(return_place);
-        lir_fn_builder.finish();
+        mir_fn_builder.set_return(return_local);
+        mir_fn_builder.finish();
     }
 
     todo!()

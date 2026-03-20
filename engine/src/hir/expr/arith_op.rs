@@ -153,8 +153,8 @@ impl Expr for BinaryOperation {
             };
             Operation::BinaryOp {
                 opcode,
-                lhs: PlaceOperand::Move(lhs_pl.place()),
-                rhs: PlaceOperand::Move(rhs_pl.place()),
+                lhs: PlaceOperand::Move(lhs_pl.place),
+                rhs: PlaceOperand::Move(rhs_pl.place),
             }
         } else if lhs_ty.is::<bool>() && rhs_ty.is::<bool>() {
             let opcode = match self.op {
@@ -164,8 +164,8 @@ impl Expr for BinaryOperation {
             };
             Operation::BinaryOp {
                 opcode,
-                lhs: PlaceOperand::Move(lhs_pl.place()),
-                rhs: PlaceOperand::Move(rhs_pl.place()),
+                lhs: PlaceOperand::Move(lhs_pl.place),
+                rhs: PlaceOperand::Move(rhs_pl.place),
             }
         } else if lhs_ty.is::<PackedAny>() && rhs_ty.is::<PackedAny>() {
             let opcode_pl = builder.mir.add_operation(
@@ -177,8 +177,8 @@ impl Expr for BinaryOperation {
                     Operation::CallHostFunction {
                         function: &binary_op_any_bool::FN_INFO,
                         args: vec![
-                            PlaceOperand::Move(lhs_pl.place()),
-                            PlaceOperand::Move(rhs_pl.place()),
+                            PlaceOperand::Move(lhs_pl.place),
+                            PlaceOperand::Move(rhs_pl.place),
                             PlaceOperand::Move(opcode_pl.place()),
                         ],
                     }
@@ -186,8 +186,8 @@ impl Expr for BinaryOperation {
                 Op::Add | Op::Sub | Op::Mul | Op::Div => mir::Operation::CallHostFunction {
                     function: &binary_op_any::FN_INFO,
                     args: vec![
-                        PlaceOperand::Move(lhs_pl.place()),
-                        PlaceOperand::Move(rhs_pl.place()),
+                        PlaceOperand::Move(lhs_pl.place),
+                        PlaceOperand::Move(rhs_pl.place),
                         PlaceOperand::Move(opcode_pl.place()),
                     ],
                 },
@@ -257,7 +257,7 @@ impl Expr for UnaryOp {
             UnaryOpcode::Not => lir::UnaryOpcode::Not,
         };
         let final_operation =
-            mir::Operation::UnaryOp { opcode, operand: PlaceOperand::Move(operand_pl.place()) };
+            mir::Operation::UnaryOp { opcode, operand: PlaceOperand::Move(operand_pl.place) };
         builder.mir.add_operation_with_dst(local_out.into(), final_operation);
     }
 }

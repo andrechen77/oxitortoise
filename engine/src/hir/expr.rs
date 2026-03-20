@@ -128,7 +128,7 @@ impl Expr for IfElse {
         let r#else = mir::consolidate_statements(else_stmts);
 
         let if_else = mir::Statement::CtrlFlow(mir::CtrlFlowConstruct::IfElse(mir::IfElse {
-            condition: condition.into(),
+            condition: condition.place,
             then: Box::new(then),
             r#else: Box::new(r#else),
         }));

@@ -3,7 +3,7 @@
 use crate::{
     exec::CanonExecutionContext,
     hir::{Expr, ExprKind, HirToMirFnBuilder, NlAbstractTy, Program},
-    mir::prelude::*,
+    mir::{self, prelude::*},
     sim::{
         observer::Globals,
         patch::PatchVarDesc,
@@ -39,7 +39,7 @@ impl Expr for GetGlobalVar {
         let globals = World::mir_project_globals(world);
         let var =
             Globals::mir_project_global_var(builder.mir, builder.type_mapping, self.index, globals);
-        load_var_from_place(
+        clone_to_uninit(
             builder.mir,
             local_out.place(),
             var.place,
@@ -77,27 +77,14 @@ impl Expr for GetTurtleVar {
     }
 
     fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, local_out: LocalId) {
-        // project context.workspace.world.turtles
-        let ptr_to_context = builder.context_param();
-        let context = ptr_to_context.proj(Projection::Deref);
-        let workspace = CanonExecutionContext::mir_project_workspace(context);
-        let world = Workspace::mir_project_world(workspace);
-        let turtles = World::mir_project_turtles(world);
-
         // calculate the turtle id
         let turtle_id = builder.translate_expr(&self.turtle);
-        let turtle_id = builder.mir.typed_place(turtle_id);
 
-        // project the turtle variable itself
-        let var = Turtles::mir_project_turtle_variable(
-            builder.mir,
-            builder.type_mapping,
-            turtles,
-            turtle_id,
-            self.var,
-        );
+        // project the turtle variable
+        let var = turtle_var_place(builder, turtle_id, self.var);
 
-        load_var_from_place(
+        // perform load
+        clone_to_uninit(
             builder.mir,
             local_out.place(),
             var.place,
@@ -116,44 +103,6 @@ pub struct SetTurtleVar {
     pub value: Box<ExprKind>,
 }
 
-// impl Expr for SetTurtleVar {
-//     fn is_pure(&self) -> bool {
-//         false
-//     }
-//
-//     fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
-//         vec![("context", self.context), ("turtle", self.turtle), ("value", self.value)]
-//     }
-//     fn output_type(&self, _program: &Program) -> HirTy {
-//         NlAbstractTy::Unit.into()
-//     }
-//
-//     fn lowering_expand(
-//         &self,
-//         _program: &Program,
-//         _fn_id: FunctionId,
-//         _my_node_id: NodeId,
-//     ) -> Option<NodeTransform> {
-//         todo!()
-//     }
-//
-//     fn pretty_print(&self, program: &Program, mut out: impl fmt::Write) -> fmt::Result {
-//         let var_name = match self.var {
-//             TurtleVarDesc::Who => "who",
-//             TurtleVarDesc::Color => "color",
-//             TurtleVarDesc::Size => "size",
-//             TurtleVarDesc::Pos => "pos",
-//             TurtleVarDesc::Xcor => "xcor",
-//             TurtleVarDesc::Ycor => "ycor",
-//             TurtleVarDesc::Custom(field) => program.custom_turtle_vars[field].name.as_ref(),
-//         };
-//         PrettyPrinter::new(&mut out).add_struct("SetTurtleVar", |p| {
-//             p.add_field_with("var", |p| write!(p, "{:?}", self.var))?;
-//             p.add_comment(var_name)
-//         })
-//     }
-// }
-
 impl Expr for SetTurtleVar {
     fn output_type(&self, _program: &Program) -> NlAbstractTy {
         NlAbstractTy::Unit
@@ -164,69 +113,32 @@ impl Expr for SetTurtleVar {
         visitor(&self.value);
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: LocalId) {
-        todo!("write_mir_execution for SetTurtleVar");
+    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, _local_out: LocalId) {
+        // calculate the value to store
+        let value = builder.translate_expr(&self.value);
+
+        // calculate the turtle id
+        let turtle_id = builder.translate_expr(&self.turtle);
+
+        // project the turtle variable
+        let var = turtle_var_place(builder, turtle_id, self.var);
+
+        // perform store
+        move_to_init(builder.mir, var, value.place);
     }
 }
 
-// /// Helper function to derive a pointer to the data row of a turtle's variable.
-// /// Returns the NodeId of the node that outputs the pointer to data row, as well
-// /// as the byte offset of the field within the data row. This is used by both
-// /// loads and stores.
-// fn context_to_turtle_data(
-//     program: &mut Program,
-//     context: NodeId,
-//     turtle_id: NodeId,
-//     var: TurtleVarDesc,
-// ) -> (NodeId, usize) {
-//     todo!()
-// }
-
-#[derive(Debug)]
-pub struct TurtleIdToIndex {
-    /// The turtle id to convert.
-    pub turtle_id: Box<ExprKind>,
-}
-
-// impl Expr for TurtleIdToIndex {
-//     fn is_pure(&self) -> bool {
-//         true
-//     }
-//
-//     fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
-//         vec![("turtle_id", self.turtle_id)]
-//     }
-//
-//     fn output_type(&self, _program: &Program) -> HirTy {
-//         U32_CONCRETE_TY.into()
-//     }
-//
-//     fn write_lir_execution<I: InstallLir>(
-//         &self,
-//         program: &Program,
-//         my_node_id: NodeId,
-//         lir_builder: &mut LirInsnBuilder,
-//     ) -> Result<(), WriteLirError> {
-//         todo!()
-//     }
-//
-//     fn pretty_print(&self, _program: &Program, mut out: impl fmt::Write) -> fmt::Result {
-//         PrettyPrinter::new(&mut out).add_struct("TurtleIdToIndex", |_| Ok(()))
-//     }
-// }
-
-impl Expr for TurtleIdToIndex {
-    fn output_type(&self, _program: &Program) -> NlAbstractTy {
-        NlAbstractTy::Numeric
-    }
-
-    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
-        visitor(&self.turtle_id);
-    }
-
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: LocalId) {
-        todo!("write_mir_execution for TurtleIdToIndex");
-    }
+fn turtle_var_place(
+    builder: &mut HirToMirFnBuilder,
+    turtle_id: TypedPlace,
+    var: TurtleVarDesc,
+) -> TypedPlace {
+    let ptr_to_context = builder.context_param();
+    let context = ptr_to_context.proj(Projection::Deref);
+    let workspace = CanonExecutionContext::mir_project_workspace(context);
+    let world = Workspace::mir_project_world(workspace);
+    let turtles = World::mir_project_turtles(world);
+    Turtles::mir_project_turtle_variable(builder.mir, builder.type_mapping, turtles, turtle_id, var)
 }
 
 #[derive(Debug)]
@@ -487,18 +399,21 @@ impl Expr for SetPatchVarAsTurtleOrPatch {
     }
 }
 
-fn load_var_from_place(
+/// Moves a value from one place to another. The source place is not
+/// deinitialized. The destination place will not be deinitialized (i.e. it is
+/// assumed to be uninitialized). Useful for loading variables from memory.
+fn clone_to_uninit(
     builder: &mut FunctionBuilder,
-    dst: Place,
+    dst_uninit: Place,
     src: Place,
     clone_kind: &CloneKind,
 ) {
     match clone_kind {
         CloneKind::Copy => {
-            builder.add_operation_with_dst(dst, Operation::Operand(PlaceOperand::Move(src)));
+            builder.add_operation_with_dst(dst_uninit, Operation::Operand(PlaceOperand::Move(src)));
         }
         CloneKind::Dynamic { clone_fn_info, .. } => builder.add_operation_with_dst(
-            dst,
+            dst_uninit,
             Operation::CallHostFunction {
                 function: clone_fn_info,
                 args: vec![PlaceOperand::Borrow(src)],
@@ -508,4 +423,17 @@ fn load_var_from_place(
             panic!("Cannot load a variable from memory that is neither Copy nor Clone");
         }
     }
+}
+
+/// Moves a value from one place to another. This may potentially destroy the
+/// source place if it is not Copy. The destination place is considered
+/// initialized and will be deinitialized before the value is moved in.
+fn move_to_init(builder: &mut FunctionBuilder, dst_init: TypedPlace, src: Place) {
+    // deinitialize the destination place
+    builder.add_statement(mir::Statement::Elementary(mir::ElementaryStatement::Drop {
+        src: dst_init.place.clone(),
+    }));
+
+    // move the value into the place
+    builder.add_operation_with_dst(dst_init.place, Operation::Operand(PlaceOperand::Move(src)));
 }

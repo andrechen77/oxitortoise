@@ -70,7 +70,7 @@ impl OptionPatchId {
         builder: &mut HirToMirFnBuilder,
         negate: bool,
         local_out: mir::LocalId,
-        operand: mir::LocalId,
+        operand: mir::TypedPlace,
     ) {
         let sentinel_pl = builder.mir.add_operation(
             None,
@@ -81,7 +81,7 @@ impl OptionPatchId {
             local_out.into(),
             mir::Operation::BinaryOp {
                 opcode,
-                lhs: PlaceOperand::Move(operand.place()),
+                lhs: PlaceOperand::Move(operand.place),
                 rhs: PlaceOperand::Move(sentinel_pl.place()),
             },
         );
