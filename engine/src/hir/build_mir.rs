@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 
 use crate::{
+    exec::CanonExecutionContext,
     hir::{self, Expr},
-    mir::{self, MirType},
+    mir::{self, MirType, MirTypeInfo},
     sim::{observer::GlobalsSchema, patch::PatchSchema, turtle::TurtleSchema},
 };
 
@@ -19,11 +20,13 @@ impl TypeMapping {
         turtle_schema: TurtleSchema,
         patch_schema: PatchSchema,
     ) -> Self {
-        fn context_ty(_: &GlobalsSchema, _: &TurtleSchema, _: &PatchSchema) -> MirType {
-            todo!("TODO calculate the context type based on the other fields")
-        }
-        let context_ty = context_ty(&globals_schema, &turtle_schema, &patch_schema);
-        Self { globals_schema, turtle_schema, patch_schema, context_ty }
+        let context_pointee_ty = CanonExecutionContext::mir_type_from_schemas(
+            &globals_schema,
+            &turtle_schema,
+            &patch_schema,
+        );
+        let context_ptr_ty = MirTypeInfo::ptr_to(context_pointee_ty);
+        Self { globals_schema, turtle_schema, patch_schema, context_ty: context_ptr_ty }
     }
 
     pub fn globals_schema(&self) -> &GlobalsSchema {

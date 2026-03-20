@@ -126,6 +126,36 @@ impl MirTypeContents {
     }
 }
 
+impl MirTypeInfo {
+    pub fn ptr_to(pointee: MirType) -> MirType {
+        Arc::new(MirTypeInfo { static_ty: None, contents: MirTypeContents::IsPointerTo(pointee) })
+    }
+
+    pub fn array_of(element: MirType, length: usize) -> MirType {
+        Arc::new(MirTypeInfo {
+            static_ty: None,
+            contents: MirTypeContents::IsArrayOf { element, length },
+        })
+    }
+
+    pub fn with_field(layout: Layout, byte_offset: usize, field: MirType) -> MirType {
+        Arc::new(MirTypeInfo {
+            static_ty: None,
+            contents: MirTypeContents::HasFields {
+                fields: vec![(byte_offset, field)],
+                overall: layout,
+            },
+        })
+    }
+
+    pub fn with_fields(layout: Layout, fields: Vec<(usize, MirType)>) -> MirType {
+        Arc::new(MirTypeInfo {
+            static_ty: None,
+            contents: MirTypeContents::HasFields { fields, overall: layout },
+        })
+    }
+}
+
 pub struct DynPtr<'a> {
     ptr: LifetimePtr<'a>,
     pointee_ty: MirType,
@@ -250,9 +280,16 @@ impl<'a> DynPtrMut<'a> {
 /// Implementors must guarantee that the associated `Type` is correct, as
 /// the information will be used to generate and run unsafe code.
 pub unsafe trait HasDynPtr {
+    /// A value of this type is sufficient to describe the type of the data
+    /// pointed to by the corresponding dyn pointer
+    type MetaData;
+
     /// Builds the MIR code to get the data pointer of the dynamically typed
     /// data, where `self_place` contains a value of `Self`.
     fn write_mir_get_data_ptr(builder: &mut FunctionBuilder, self_place: TypedPlace) -> TypedPlace;
+
+    /// Calculates a MIR type of self from the metadata.
+    fn self_mir_type_from_metadata(metadata: &Self::MetaData) -> MirType;
 
     /// Returns a pointer to the dynamically typed data.
     fn dyn_ptr(&self) -> DynPtr<'_>;

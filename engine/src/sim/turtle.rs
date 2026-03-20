@@ -3,6 +3,7 @@
 //! From the perspective of this code, all turtles belong to a breed. Unbreeded
 //! turtles belong to a special breed that acts like the `turtles` agentset.
 
+use std::alloc::Layout;
 use std::collections::HashMap;
 use std::fmt::{self, Debug, Write};
 use std::mem::offset_of;
@@ -15,6 +16,7 @@ use macro_reflect::{ReflectComponents, reflect};
 use pretty_print::PrettyPrinter;
 use slotmap::SecondaryMap;
 
+use crate::mir::{HasDynPtr, MirType, MirTypeInfo};
 use crate::util::reflection::Reflect;
 use crate::{
     sim::{
@@ -292,6 +294,32 @@ impl Turtles {
         for buffer in self.data.iter_mut().filter_map(|b| b.as_mut()) {
             buffer.clear();
         }
+    }
+
+    pub fn mir_type_from_schema(schema: &TurtleSchema) -> MirType {
+        // this code relies on the fact that the RowBuffer struct is niche
+        // optimized so that an Option<RowBuffer> which is known to be Some can
+        // be treated as a RowBuffer. A better solution would be to use the
+        // offset_of! macro with the Some variant contents, but that is not yet
+        // stable. This assertion serves as the closest approximation to
+        // make sure that we can perform what is effectively transmutation
+        const { assert!(size_of::<RowBuffer>() == size_of::<Option<RowBuffer>>()) };
+
+        // we get 4 to match the number of buffers in the Turtles struct
+        let buffer_types: [Option<MirType>; 4] = schema
+            .make_row_schemas()
+            .map(|schema| schema.map(|s| RowBuffer::self_mir_type_from_metadata(&s)));
+        let fields = buffer_types
+            .into_iter()
+            .enumerate()
+            .filter_map(|(buffer_idx, ty)| {
+                let ty = ty?;
+                let offset = offset_of!(Self, data) + buffer_idx * size_of::<Option<RowBuffer>>();
+                Some((offset, ty))
+            })
+            .collect();
+
+        MirTypeInfo::with_fields(Layout::new::<Self>(), fields)
     }
 }
 

@@ -13,7 +13,7 @@ use std::{
 };
 
 use crate::{
-    mir::{self, DynPtr, DynPtrMut, HasDynPtr, MirType},
+    mir::{self, DynPtr, DynPtrMut, HasDynPtr, MirType, MirTypeInfo},
     util::{
         lifetime_ptr::{LifetimePtr, LifetimePtrMut},
         reflection::{Reflect, Type},
@@ -595,6 +595,8 @@ impl Drop for RowBuffer {
 }
 
 unsafe impl HasDynPtr for RowBuffer {
+    type MetaData = RowSchema;
+
     fn dyn_ptr_mut(&mut self) -> DynPtrMut<'_> {
         // SAFETY: we choose the lifetime of the pointer to be the same as the
         // lifetime of &mut self where it came from, so it is valid.
@@ -628,6 +630,25 @@ unsafe impl HasDynPtr for RowBuffer {
         self_pl: mir::TypedPlace,
     ) -> mir::TypedPlace {
         self_pl.proj(mir::Projection::Field { byte_offset: offset_of!(Self, bytes) })
+    }
+
+    fn self_mir_type_from_metadata(schema: &RowSchema) -> MirType {
+        let fields = schema
+            .fields
+            .iter()
+            .map(|field| (field.offset, (field.r#type.make_mir_type)()))
+            .collect();
+
+        MirTypeInfo::with_field(
+            Layout::new::<Self>(),
+            offset_of!(Self, bytes),
+            MirTypeInfo::ptr_to(MirTypeInfo::array_of(
+                MirTypeInfo::with_fields(schema.layout, fields),
+                // let the length be 0 because it's not actually used in our
+                // compiler's type checking.
+                0,
+            )),
+        )
     }
 }
 

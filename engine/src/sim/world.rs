@@ -1,12 +1,16 @@
 use pretty_print::PrettyPrinter;
 
-use std::{fmt::Write, mem::offset_of};
+use std::{alloc::Layout, fmt::Write, mem::offset_of};
 
 use super::shapes::Shapes;
 use crate::{
     mir::prelude::*,
     sim::{
-        observer::Globals, patch::Patches, tick::Tick, topology::Topology, turtle::Turtles,
+        observer::{Globals, GlobalsSchema},
+        patch::{PatchSchema, Patches},
+        tick::Tick,
+        topology::Topology,
+        turtle::{TurtleSchema, Turtles},
         value::NlFloat,
     },
 };
@@ -48,6 +52,25 @@ impl World {
     /// Derives a `Globals` from a `World`.
     pub fn mir_project_globals(world: TypedPlace) -> TypedPlace {
         world.proj(Projection::Field { byte_offset: offset_of!(World, globals) })
+    }
+
+    pub fn mir_type_from_schemas(
+        globals_schema: &GlobalsSchema,
+        turtle_schema: &TurtleSchema,
+        patch_schema: &PatchSchema,
+    ) -> MirType {
+        let globals_ty = Globals::mir_type_from_schema(globals_schema);
+        let turtles_ty = Turtles::mir_type_from_schema(turtle_schema);
+        let patches_ty = Patches::mir_type_from_schema(patch_schema);
+
+        MirTypeInfo::with_fields(
+            Layout::new::<Self>(),
+            vec![
+                (offset_of!(Self, globals), globals_ty),
+                (offset_of!(Self, turtles), turtles_ty),
+                (offset_of!(Self, patches), patches_ty),
+            ],
+        )
     }
 }
 

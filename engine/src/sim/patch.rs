@@ -1,4 +1,5 @@
 use std::{
+    alloc::Layout,
     collections::HashMap,
     fmt::{self, Write},
     mem::offset_of,
@@ -309,6 +310,32 @@ impl Patches {
 
     pub fn patch_ids(&self) -> impl Iterator<Item = PatchId> + '_ {
         (0..self.num_patches).map(PatchId)
+    }
+
+    pub fn mir_type_from_schema(schema: &PatchSchema) -> MirType {
+        // this code relies on the fact that the RowBuffer struct is niche
+        // optimized so that an Option<RowBuffer> which is known to be Some can
+        // be treated as a RowBuffer. A better solution would be to use the
+        // offset_of! macro with the Some variant contents, but that is not yet
+        // stable. This assertion serves as the closest approximation to
+        // make sure that we can perform what is effectively transmutation
+        const { assert!(size_of::<RowBuffer>() == size_of::<Option<RowBuffer>>()) };
+
+        // we get 4 to match the number of buffers in the Patches struct
+        let buffer_types: [Option<MirType>; 4] = schema
+            .make_row_schemas()
+            .map(|schema| schema.map(|s| RowBuffer::self_mir_type_from_metadata(&s)));
+        let fields = buffer_types
+            .into_iter()
+            .enumerate()
+            .filter_map(|(buffer_idx, ty)| {
+                let ty = ty?;
+                let offset = offset_of!(Self, data) + buffer_idx * size_of::<Option<RowBuffer>>();
+                Some((offset, ty))
+            })
+            .collect();
+
+        MirTypeInfo::with_fields(Layout::new::<Self>(), fields)
     }
 }
 
