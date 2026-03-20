@@ -237,44 +237,6 @@ pub struct GetPatchVarAsTurtleOrPatch {
     pub var: PatchVarDesc,
 }
 
-// impl Expr for GetPatchVarAsTurtleOrPatch {
-//     fn is_pure(&self) -> bool {
-//         false
-//     }
-//
-//     fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
-//         vec![("context", self.context), ("agent", self.agent)]
-//     }
-//
-//     fn output_type(&self, program: &Program) -> HirTy {
-//         // TODO(wishlist) refactor to deduplicate with GetPatchVar
-//         match self.var {
-//             PatchVarDesc::Pcolor => NlAbstractTy::Color.into(),
-//             PatchVarDesc::Pos => NlAbstractTy::Point.into(),
-//             PatchVarDesc::Custom(field) => program.custom_patch_vars[field].ty.clone(),
-//         }
-//     }
-//
-//     fn peephole_transform(
-//         &self,
-//         _program: &Program,
-//         _fn_id: FunctionId,
-//         _my_node_id: NodeId,
-//     ) -> Option<NodeTransform> {
-//         todo!()
-//     }
-//
-//     fn pretty_print(&self, program: &Program, mut out: impl fmt::Write) -> fmt::Result {
-//         PrettyPrinter::new(&mut out).add_struct("GetPatchVarAsTurtleOrPatch", |p| {
-//             p.add_field_with("var", |p| write!(p, "{:?}", self.var))?;
-//             if let PatchVarDesc::Custom(field) = self.var {
-//                 p.add_comment(&program.custom_patch_vars[field].name)?;
-//             }
-//             Ok(())
-//         })
-//     }
-// }
-
 impl Expr for GetPatchVarAsTurtleOrPatch {
     fn output_type(&self, program: &Program) -> NlAbstractTy {
         match self.var {
@@ -303,39 +265,6 @@ pub struct SetPatchVarAsTurtleOrPatch {
     /// The value to set the variable to.
     pub value: Box<ExprKind>,
 }
-
-// impl Expr for SetPatchVarAsTurtleOrPatch {
-//     fn is_pure(&self) -> bool {
-//         false
-//     }
-//
-//     fn dependencies(&self) -> Vec<(&'static str, NodeId)> {
-//         vec![("context", self.context), ("agent", self.agent), ("value", self.value)]
-//     }
-//
-//     fn output_type(&self, _program: &Program) -> HirTy {
-//         NlAbstractTy::Unit.into()
-//     }
-//
-//     fn peephole_transform(
-//         &self,
-//         _program: &Program,
-//         _fn_id: FunctionId,
-//         _my_node_id: NodeId,
-//     ) -> Option<NodeTransform> {
-//         todo!()
-//     }
-//
-//     fn pretty_print(&self, program: &Program, mut out: impl fmt::Write) -> fmt::Result {
-//         PrettyPrinter::new(&mut out).add_struct("SetPatchVarAsTurtleOrPatch", |p| {
-//             p.add_field_with("var", |p| write!(p, "{:?}", self.var))?;
-//             if let PatchVarDesc::Custom(field) = self.var {
-//                 p.add_comment(&program.custom_patch_vars[field].name)?;
-//             }
-//             Ok(())
-//         })
-//     }
-// }
 
 impl Expr for SetPatchVarAsTurtleOrPatch {
     fn output_type(&self, _program: &Program) -> NlAbstractTy {

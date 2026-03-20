@@ -11,6 +11,42 @@ use crate::{
 mod agent_var;
 mod agentset;
 mod arith_op;
+mod ask;
+mod clear;
+mod closure;
+mod color;
+mod constant;
+mod create_agent;
+mod diffuse;
+mod distancexy;
+mod list_set_ops;
+mod local_var;
+mod rand;
+mod set_default_shape;
+mod ticks;
+mod topology;
+mod turtle_movement;
+mod user_fn;
+
+pub use agent_var::*;
+pub use agentset::*;
+pub use arith_op::*;
+pub use ask::*;
+pub use clear::*;
+pub use closure::*;
+pub use color::*;
+pub use constant::*;
+pub use create_agent::*;
+pub use diffuse::*;
+pub use distancexy::*;
+pub use list_set_ops::*;
+pub use local_var::*;
+pub use rand::*;
+pub use set_default_shape::*;
+pub use ticks::*;
+pub use topology::*;
+pub use turtle_movement::*;
+pub use user_fn::*;
 
 /// An expression that defines a set of mutable local variables that can be
 /// written and read in the evaluation of an inner expression.

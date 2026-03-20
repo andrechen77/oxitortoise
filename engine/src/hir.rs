@@ -7,7 +7,6 @@ use derive_more::derive::{Display, From, TryInto};
 use slotmap::{SecondaryMap, SlotMap, new_key_type};
 
 use crate::{
-    hir::expr::{Break, Scope},
     mir::{self, prelude::*},
     sim::{
         color::Color,
@@ -57,6 +56,10 @@ pub struct CustomVarDecl {
 pub struct Function {
     pub debug_name: Option<Arc<str>>,
     pub is_entrypoint: bool,
+    /// The list of parameters for the function. Evaluation of the function
+    /// requires that the body be wrapped in a Scope expression that provides
+    /// values for these parameters.
+    pub parameters: Vec<(LocalId, LocalDecl)>,
     pub body: ExprKind,
 }
 
@@ -78,8 +81,6 @@ pub struct LocalId(u32);
 /// different function calls).
 #[delegatable_trait]
 pub trait Expr {
-    /// For certain low level nodes it doesn't make sense to have an abstract
-    /// output type; those should return `None`.
     fn output_type(&self, program: &Program) -> NlAbstractTy;
 
     fn visit_children(&self, visitor: impl FnMut(&ExprKind));
@@ -99,57 +100,50 @@ pub trait Expr {
 #[try_into(owned, ref, ref_mut)]
 #[delegate(Expr)]
 pub enum ExprKind {
-    Scope(Scope),
-    Break(Break),
-    // Agentset(Agentset),
-    // AdvanceTick(AdvanceTick),
-    // Ask(Ask),
-    // BinaryOperation(BinaryOperation),
-    // Block(Block),
-    // Break(Break),
-    // CallUserFn(CallUserFn),
-    // CanMove(CanMove),
-    // CheckNobody(CheckNobody),
-    // ClearAll(ClearAll),
-    // Closure(Closure),
-    // Constant(Constant),
-    // CreateTurtles(CreateTurtles),
-    // DeriveElement(DeriveElement),
-    // DeriveField(DeriveField),
-    // Diffuse(Diffuse),
-    // Distancexy(Distancexy),
-    // EuclideanDistanceNoWrap(EuclideanDistanceNoWrap),
-    // GetGlobalVar(GetGlobalVar),
-    // GetLocalVar(GetLocalVar),
-    // GetPatchVar(GetPatchVar),
-    // GetPatchVarAsTurtleOrPatch(GetPatchVarAsTurtleOrPatch),
-    // GetTick(GetTick),
-    // GetTurtleVar(GetTurtleVar),
-    // IfElse(IfElse),
-    // ListLiteral(ListLiteral),
-    // MaxPxcor(MaxPxcor),
-    // MaxPycor(MaxPycor),
-    // MemLoad(MemLoad),
-    // MemStore(MemStore),
-    // Of(Of),
-    // OffsetDistanceByHeading(OffsetDistanceByHeading),
-    // OneOf(OneOf),
-    // PatchAt(PatchAt),
-    // PatchRelative(PatchRelative),
-    // PointConstructor(PointConstructor),
-    // RandomInt(RandomInt),
-    // ResetTicks(ResetTicks),
-    // Repeat(Repeat),
-    // ScaleColor(ScaleColor),
-    // SetDefaultShape(SetDefaultShape),
-    // SetLocalVar(SetLocalVar),
-    // SetPatchVar(SetPatchVar),
-    // SetPatchVarAsTurtleOrPatch(SetPatchVarAsTurtleOrPatch),
-    // SetTurtleVar(SetTurtleVar),
-    // TurtleForward(TurtleForward),
-    // TurtleIdToIndex(TurtleIdToIndex),
-    // TurtleRotate(TurtleRotate),
-    // UnaryOp(UnaryOp),
+    Agentset(expr::Agentset),
+    AdvanceTick(expr::AdvanceTick),
+    Ask(expr::Ask),
+    BinaryOperation(expr::BinaryOperation),
+    Block(expr::Block),
+    Break(expr::Break),
+    CallUserFn(expr::CallUserFn),
+    CanMove(expr::CanMove),
+    ClearAll(expr::ClearAll),
+    Closure(expr::Closure),
+    Constant(expr::Constant),
+    CreateTurtles(expr::CreateTurtles),
+    Diffuse(expr::Diffuse),
+    Distancexy(expr::Distancexy),
+    EuclideanDistanceNoWrap(expr::EuclideanDistanceNoWrap),
+    GetGlobalVar(expr::GetGlobalVar),
+    GetLocalVar(expr::GetLocalVar),
+    GetPatchVar(expr::GetPatchVar),
+    GetPatchVarAsTurtleOrPatch(expr::GetPatchVarAsTurtleOrPatch),
+    GetTick(expr::GetTick),
+    GetTurtleVar(expr::GetTurtleVar),
+    IfElse(expr::IfElse),
+    ListLiteral(expr::ListLiteral),
+    MaxPxcor(expr::MaxPxcor),
+    MaxPycor(expr::MaxPycor),
+    Of(expr::Of),
+    OffsetDistanceByHeading(expr::OffsetDistanceByHeading),
+    OneOf(expr::OneOf),
+    PatchAt(expr::PatchAt),
+    PatchRelative(expr::PatchRelative),
+    PointConstructor(expr::PointConstructor),
+    RandomInt(expr::RandomInt),
+    ResetTicks(expr::ResetTicks),
+    // Repeat(expr::Repeat),
+    ScaleColor(expr::ScaleColor),
+    Scope(expr::Scope),
+    SetDefaultShape(expr::SetDefaultShape),
+    SetLocalVar(expr::SetLocalVar),
+    SetPatchVar(expr::SetPatchVar),
+    SetPatchVarAsTurtleOrPatch(expr::SetPatchVarAsTurtleOrPatch),
+    SetTurtleVar(expr::SetTurtleVar),
+    TurtleForward(expr::TurtleForward),
+    TurtleRotate(expr::TurtleRotate),
+    UnaryOp(expr::UnaryOp),
 }
 
 /// A representation of an element of the lattice making up all NetLogo types.
@@ -228,8 +222,8 @@ impl NlAbstractTy {
 }
 
 #[derive(Debug, PartialEq, Clone, Eq, Hash, Display)]
-#[display("{} -> {}", arg_ty, return_ty)]
+#[display("({}) -> {}", arg_tys.iter().map(|ty| ty.to_string()).collect::<Vec<String>>().join(", "), return_ty)]
 pub struct ClosureType {
-    pub arg_ty: Box<NlAbstractTy>,
+    pub arg_tys: Vec<NlAbstractTy>,
     pub return_ty: Box<NlAbstractTy>,
 }
