@@ -8,12 +8,15 @@ use crate::{
 
 #[derive(Debug)]
 pub struct Constant {
-    pub value: UnpackedAny,
+    pub value: Option<UnpackedAny>,
 }
 
 impl Expr for Constant {
     fn output_type(&self, _program: &Program) -> NlAbstractTy {
-        match self.value {
+        let Some(value) = &self.value else {
+            return NlAbstractTy::Unit;
+        };
+        match value {
             UnpackedAny::Float(_) => NlAbstractTy::Float,
             UnpackedAny::Bool(_) => NlAbstractTy::Boolean,
             UnpackedAny::Nobody => NlAbstractTy::Nobody,
@@ -51,4 +54,3 @@ impl Expr for ListLiteral {
         todo!("TODO(mvp) write MIR execution for ListLiteral")
     }
 }
-
