@@ -1,10 +1,9 @@
 // TODO(doc) all of HIR
 
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use ambassador::{Delegate, delegatable_trait};
 use derive_more::derive::{Display, From, TryInto};
-use slotmap::{SecondaryMap, SlotMap, new_key_type};
 
 use crate::{
     mir::{self, prelude::*},
@@ -28,11 +27,9 @@ pub mod expr;
 
 pub use build_mir::{HirToMirFnBuilder, TypeMapping};
 
-new_key_type! {
-    #[derive(Display)]
-    #[display("{_0:?}")]
-    pub struct FunctionId;
-}
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Display)]
+#[display("{_0}")]
+pub struct FunctionId(pub u32);
 
 #[derive(derive_more::Debug)]
 pub struct Program {
@@ -40,10 +37,10 @@ pub struct Program {
     // TODO this version of Breed contains type information (active custom
     // fields) that would not be available/ at the HIR stage of compilation;
     // consider using a more abstract version of Breed instead
-    pub turtle_breeds: SlotMap<BreedId, Breed>,
+    pub turtle_breeds: HashMap<BreedId, Breed>,
     pub custom_turtle_vars: Vec<CustomVarDecl>,
     pub custom_patch_vars: Vec<CustomVarDecl>,
-    pub functions: SecondaryMap<FunctionId, Function>,
+    pub functions: HashMap<FunctionId, Function>,
 }
 
 #[derive(Debug)]
@@ -55,7 +52,6 @@ pub struct CustomVarDecl {
 #[derive(derive_more::Debug)]
 pub struct Function {
     pub debug_name: Option<Arc<str>>,
-    pub is_entrypoint: bool,
     /// The list of parameters for the function. Evaluation of the function
     /// requires that the body be wrapped in a Scope expression that provides
     /// values for these parameters.
@@ -70,10 +66,10 @@ pub struct LocalDecl {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Label(u32);
+pub struct Label(pub u32);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct LocalId(u32);
+pub struct LocalId(pub u32);
 
 /// Some kind of computation that takes inputs and produces outputs. The output
 /// of an expression is immutable, though may change between instances if the
@@ -226,4 +222,10 @@ impl NlAbstractTy {
 pub struct ClosureType {
     pub arg_tys: Vec<NlAbstractTy>,
     pub return_ty: Box<NlAbstractTy>,
+}
+
+pub struct TurtleBreed {
+    pub name: Arc<str>,
+    pub singular_name: Arc<str>,
+    pub custom_variables: Vec<CustomVarDecl>,
 }

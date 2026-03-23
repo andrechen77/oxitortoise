@@ -18,7 +18,7 @@ impl Expr for CallUserFn {
         // The current HIR doesn't expose function signatures directly at this
         // expression layer, but the return type can be inferred from the
         // function body's output type.
-        program.functions[self.target].body.output_type(program)
+        program.functions[&self.target].body.output_type(program)
     }
 
     fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
@@ -31,4 +31,3 @@ impl Expr for CallUserFn {
         todo!("TODO(mvp) write MIR execution for CallUserFn")
     }
 }
-
