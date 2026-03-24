@@ -1,7 +1,6 @@
 //! Nodes for getting and setting agent and global variables.
 
 use crate::{
-    exec::CanonExecutionContext,
     hir::{Expr, ExprKind, HirToMirFnBuilder, NlAbstractTy, Program},
     mir::{self, prelude::*},
     sim::{
@@ -16,6 +15,7 @@ use crate::{
 
 #[derive(Debug)]
 pub struct GetGlobalVar {
+    pub workspace: Box<ExprKind>,
     pub index: usize,
 }
 
@@ -28,13 +28,12 @@ impl Expr for GetGlobalVar {
     }
 
     fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
-        let _ = &mut visitor;
+        visitor(&self.workspace);
     }
 
     fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, local_out: LocalId) {
-        let ptr_to_context = builder.context_param();
-        let context = ptr_to_context.proj(Projection::Deref);
-        let workspace = CanonExecutionContext::mir_project_workspace(context);
+        let ptr_to_workspace = builder.workspace_param();
+        let workspace = ptr_to_workspace.proj_deref();
         let world = Workspace::mir_project_world(workspace);
         let globals = World::mir_project_globals(world);
         let var =
@@ -53,6 +52,7 @@ impl Expr for GetGlobalVar {
 
 #[derive(Debug)]
 pub struct GetTurtleVar {
+    pub workspace: Box<ExprKind>,
     /// The turtle whose variable is being gotten.
     pub turtle: Box<ExprKind>,
     /// The variable to get.
@@ -73,15 +73,18 @@ impl Expr for GetTurtleVar {
     }
 
     fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
+        visitor(&self.workspace);
         visitor(&self.turtle);
     }
 
     fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, local_out: LocalId) {
+        let ptr_to_workspace = builder.workspace_param();
+
         // calculate the turtle id
         let turtle_id = builder.translate_expr(&self.turtle);
 
         // project the turtle variable
-        let var = turtle_var_place(builder, turtle_id, self.var);
+        let var = turtle_var_place(builder, ptr_to_workspace, turtle_id, self.var);
 
         // perform load
         clone_to_uninit(
@@ -95,6 +98,7 @@ impl Expr for GetTurtleVar {
 
 #[derive(Debug)]
 pub struct SetTurtleVar {
+    pub workspace: Box<ExprKind>,
     /// The turtle whose variable is being set.
     pub turtle: Box<ExprKind>,
     /// The variable to set.
@@ -109,11 +113,14 @@ impl Expr for SetTurtleVar {
     }
 
     fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
+        visitor(&self.workspace);
         visitor(&self.turtle);
         visitor(&self.value);
     }
 
     fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, _local_out: LocalId) {
+        let ptr_to_workspace = builder.workspace_param();
+
         // calculate the value to store
         let value = builder.translate_expr(&self.value);
 
@@ -121,7 +128,7 @@ impl Expr for SetTurtleVar {
         let turtle_id = builder.translate_expr(&self.turtle);
 
         // project the turtle variable
-        let var = turtle_var_place(builder, turtle_id, self.var);
+        let var = turtle_var_place(builder, ptr_to_workspace, turtle_id, self.var);
 
         // perform store
         move_to_init(builder.mir, var, value.place);
@@ -130,12 +137,11 @@ impl Expr for SetTurtleVar {
 
 fn turtle_var_place(
     builder: &mut HirToMirFnBuilder,
+    ptr_to_workspace: TypedPlace,
     turtle_id: TypedPlace,
     var: TurtleVarDesc,
 ) -> TypedPlace {
-    let ptr_to_context = builder.context_param();
-    let context = ptr_to_context.proj(Projection::Deref);
-    let workspace = CanonExecutionContext::mir_project_workspace(context);
+    let workspace = ptr_to_workspace.proj_deref();
     let world = Workspace::mir_project_world(workspace);
     let turtles = World::mir_project_turtles(world);
     Turtles::mir_project_turtle_variable(builder.mir, builder.type_mapping, turtles, turtle_id, var)
@@ -143,6 +149,7 @@ fn turtle_var_place(
 
 #[derive(Debug)]
 pub struct GetPatchVar {
+    pub workspace: Box<ExprKind>,
     /// The patch whose variable is being gotten.
     pub patch: Box<ExprKind>,
     /// The variable to get.
@@ -159,15 +166,18 @@ impl Expr for GetPatchVar {
     }
 
     fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
+        visitor(&self.workspace);
         visitor(&self.patch);
     }
 
     fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, local_out: LocalId) {
+        let ptr_to_workspace = builder.workspace_param();
+
         // calculate the patch id
         let patch_id = builder.translate_expr(&self.patch);
 
         // project the patch variable
-        let var = patch_var_place(builder, patch_id, self.var);
+        let var = patch_var_place(builder, ptr_to_workspace, patch_id, self.var);
 
         // perform load
         clone_to_uninit(
@@ -181,6 +191,7 @@ impl Expr for GetPatchVar {
 
 #[derive(Debug)]
 pub struct SetPatchVar {
+    pub workspace: Box<ExprKind>,
     /// The patch whose variable is being set.
     pub patch: Box<ExprKind>,
     /// The variable to set.
@@ -195,11 +206,14 @@ impl Expr for SetPatchVar {
     }
 
     fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
+        visitor(&self.workspace);
         visitor(&self.patch);
         visitor(&self.value);
     }
 
     fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, _local_out: LocalId) {
+        let ptr_to_workspace = builder.workspace_param();
+
         // calculate the value to store
         let value = builder.translate_expr(&self.value);
 
@@ -207,7 +221,7 @@ impl Expr for SetPatchVar {
         let patch_id = builder.translate_expr(&self.patch);
 
         // project the patch variable
-        let var = patch_var_place(builder, patch_id, self.var);
+        let var = patch_var_place(builder, ptr_to_workspace, patch_id, self.var);
 
         // perform store
         move_to_init(builder.mir, var, value.place);
@@ -216,12 +230,11 @@ impl Expr for SetPatchVar {
 
 fn patch_var_place(
     builder: &mut HirToMirFnBuilder,
+    ptr_to_workspace: TypedPlace,
     patch_id: TypedPlace,
     var: PatchVarDesc,
 ) -> TypedPlace {
-    let ptr_to_context = builder.context_param();
-    let context = ptr_to_context.proj(Projection::Deref);
-    let workspace = CanonExecutionContext::mir_project_workspace(context);
+    let workspace = ptr_to_workspace.proj_deref();
     let world = Workspace::mir_project_world(workspace);
     let patches = World::mir_project_patches(world);
     Patches::mir_project_patch_variable(builder.mir, builder.type_mapping, patches, patch_id, var)

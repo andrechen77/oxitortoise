@@ -1,10 +1,9 @@
 use engine::{
-    exec::{
-        ExecutionContext,
-        jit::{InstalledObj, JitEntrypoint},
-    },
+    exec::jit::{InstalledObj, JitEntrypoint},
     lir,
     sim::value::PackedAny,
+    util::rng::CanonRng,
+    workspace::Workspace,
 };
 
 use std::collections::HashMap;
@@ -20,8 +19,10 @@ mod cranelift;
 pub use cranelift::LirInstaller;
 
 pub struct Obj {
-    entrypoints:
-        HashMap<lir::FunctionId, unsafe extern "C" fn(&mut ExecutionContext, *mut PackedAny, u32)>,
+    entrypoints: HashMap<
+        lir::FunctionId,
+        unsafe extern "C" fn(&mut Workspace, &mut CanonRng, *mut PackedAny, u32),
+    >,
 }
 
 impl InstalledObj for Obj {

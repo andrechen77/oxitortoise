@@ -1,10 +1,9 @@
 use engine::{
-    exec::{CanonExecutionContext, helpers, jit::JitCallback},
+    exec::{helpers, jit::JitCallback},
     lir::{
         HostFunctionInfo,
         ValType::{F64, FnPtr, I32, I64, Ptr},
     },
-    hir::node::BinaryOpcode,
     sim::{
         agent_schema::AgentFieldDescriptor,
         patch::{OptionPatchId, PatchId},
@@ -13,7 +12,8 @@ use engine::{
         value::{NlBox, NlFloat, NlList, PackedAny},
     },
     slotmap::KeyData,
-    util::rng::Rng as _,
+    util::rng::{CanonRng, Rng as _},
+    workspace::Workspace,
 };
 
 // TODO(mvp) the HostFunctionInfo should be automatically generated from the
@@ -27,8 +27,8 @@ pub static CLEAR_ALL_INFO: HostFunctionInfo = HostFunctionInfo {
     addr: oxitortoise_clear_all as *const u8,
 };
 #[unsafe(no_mangle)]
-pub extern "C" fn oxitortoise_clear_all(context: &mut CanonExecutionContext) {
-    context.workspace.world.clear_all();
+pub extern "C" fn oxitortoise_clear_all(workspace: &mut Workspace) {
+    workspace.world.clear_all();
 }
 
 pub static RESET_TICKS_INFO: HostFunctionInfo = HostFunctionInfo {
@@ -38,8 +38,8 @@ pub static RESET_TICKS_INFO: HostFunctionInfo = HostFunctionInfo {
     addr: oxitortoise_reset_ticks as *const u8,
 };
 #[unsafe(no_mangle)]
-pub extern "C" fn oxitortoise_reset_ticks(context: &mut CanonExecutionContext) {
-    context.workspace.world.tick_counter.reset();
+pub extern "C" fn oxitortoise_reset_ticks(workspace: &mut Workspace) {
+    workspace.world.tick_counter.reset();
 }
 
 pub static GET_TICK_INFO: HostFunctionInfo = HostFunctionInfo {
@@ -49,8 +49,8 @@ pub static GET_TICK_INFO: HostFunctionInfo = HostFunctionInfo {
     addr: oxitortoise_get_tick as *const u8,
 };
 #[unsafe(no_mangle)]
-pub extern "C" fn oxitortoise_get_tick(context: &mut CanonExecutionContext) -> NlFloat {
-    context.workspace.world.tick_counter.get().unwrap() // TODO(mvp) handle error
+pub extern "C" fn oxitortoise_get_tick(workspace: &mut Workspace) -> NlFloat {
+    workspace.world.tick_counter.get().unwrap() // TODO(mvp) handle error
 }
 
 pub static ADVANCE_TICK_INFO: HostFunctionInfo = HostFunctionInfo {
@@ -60,15 +60,15 @@ pub static ADVANCE_TICK_INFO: HostFunctionInfo = HostFunctionInfo {
     addr: oxitortoise_advance_tick as *const u8,
 };
 #[unsafe(no_mangle)]
-pub extern "C" fn oxitortoise_advance_tick(context: &mut CanonExecutionContext) {
-    context.workspace.world.tick_counter.advance().unwrap(); // TODO(mvp) handle error
+pub extern "C" fn oxitortoise_advance_tick(workspace: &mut Workspace) {
+    workspace.world.tick_counter.advance().unwrap(); // TODO(mvp) handle error
 }
 
 // NOTE: HostFunctionInfo had wrong name "reset_ticks", should be "create_turtles"
 // NOTE: Signature mismatch - function takes breed, count, position, and callback, but HostFunctionInfo only has Ptr
 pub static CREATE_TURTLES_INFO: HostFunctionInfo = HostFunctionInfo {
     name: "oxitortoise_create_turtles",
-    parameter_types: &[Ptr, I64, F64, Ptr, FnPtr],
+    parameter_types: &[Ptr, Ptr, I64, F64, Ptr, FnPtr],
     return_type: &[],
     addr: oxitortoise_create_turtles as *const u8,
 };
@@ -79,13 +79,15 @@ pub static CREATE_TURTLES_INFO: HostFunctionInfo = HostFunctionInfo {
 /// [`JitCallback`] that needs to be live for the duration of this function
 /// call. See [`JitCallback::new`] for the safety requirements on the caller.
 pub unsafe extern "C" fn oxitortoise_create_turtles(
-    context: &mut CanonExecutionContext,
+    workspace: &mut Workspace,
+    rng: &mut CanonRng,
     breed: u64,
     count: NlFloat,
     birth_command_env: *mut u8,
     birth_command_fn_ptr: extern "C" fn(
         *mut u8,
-        &mut CanonExecutionContext,
+        &mut Workspace,
+        &mut CanonRng,
         u64, /* TurtleId */
     ) -> (),
 ) {
@@ -93,14 +95,14 @@ pub unsafe extern "C" fn oxitortoise_create_turtles(
     let position = Point { x: 0.0, y: 0.0 };
     // SAFETY: precondition
     let mut birth_command = unsafe { JitCallback::new(birth_command_env, birth_command_fn_ptr) };
-    helpers::create_turtles(context, breed, count, position, |context, turtle_id| {
-        birth_command.call_mut(context, turtle_id.to_ffi())
+    helpers::create_turtles(workspace, rng, breed, count, position, |workspace, rng, turtle_id| {
+        birth_command.call_mut(workspace, rng, turtle_id.to_ffi())
     });
 }
 
 pub static ASK_ALL_TURTLES_INFO: HostFunctionInfo = HostFunctionInfo {
     name: "oxitortoise_for_all_turtles",
-    parameter_types: &[Ptr, Ptr, FnPtr],
+    parameter_types: &[Ptr, Ptr, Ptr, FnPtr],
     return_type: &[],
     addr: oxitortoise_for_all_turtles as *const u8,
 };
@@ -111,20 +113,26 @@ pub static ASK_ALL_TURTLES_INFO: HostFunctionInfo = HostFunctionInfo {
 /// call. See [`JitCallback::new`] for the safety requirements on the caller.
 #[unsafe(no_mangle)]
 pub extern "C" fn oxitortoise_for_all_turtles(
-    context: &mut CanonExecutionContext,
+    workspace: &mut Workspace,
+    rng: &mut CanonRng,
     block_env: *mut u8,
-    block_fn_ptr: extern "C" fn(*mut u8, &mut CanonExecutionContext, u64 /* TurtleId */) -> (),
+    block_fn_ptr: extern "C" fn(
+        *mut u8,
+        &mut Workspace,
+        &mut CanonRng,
+        u64, /* TurtleId */
+    ) -> (),
 ) {
     // SAFETY: precondition
     let mut block = unsafe { JitCallback::new(block_env, block_fn_ptr) };
-    helpers::for_all_turtles(context, |context, turtle_id| {
-        block.call_mut(context, turtle_id.to_ffi())
+    helpers::for_all_turtles(workspace, rng, |workspace, rng, turtle_id| {
+        block.call_mut(workspace, rng, turtle_id.to_ffi())
     });
 }
 
 pub static ASK_ALL_PATCHES_INFO: HostFunctionInfo = HostFunctionInfo {
     name: "oxitortoise_for_all_patches",
-    parameter_types: &[Ptr, Ptr, FnPtr],
+    parameter_types: &[Ptr, Ptr, Ptr, FnPtr],
     return_type: &[],
     addr: oxitortoise_for_all_patches as *const u8,
 };
@@ -135,13 +143,16 @@ pub static ASK_ALL_PATCHES_INFO: HostFunctionInfo = HostFunctionInfo {
 /// call. See [`JitCallback::new`] for the safety requirements on the caller.
 #[unsafe(no_mangle)]
 pub extern "C" fn oxitortoise_for_all_patches(
-    context: &mut CanonExecutionContext,
+    workspace: &mut Workspace,
+    rng: &mut CanonRng,
     block_env: *mut u8,
-    block_fn_ptr: extern "C" fn(*mut u8, &mut CanonExecutionContext, PatchId) -> (),
+    block_fn_ptr: extern "C" fn(*mut u8, &mut Workspace, &mut CanonRng, PatchId) -> (),
 ) {
     // SAFETY: precondition
     let mut block = unsafe { JitCallback::new(block_env, block_fn_ptr) };
-    helpers::for_all_patches(context, |context, patch_id| block.call_mut(context, patch_id));
+    helpers::for_all_patches(workspace, rng, |workspace, rng, patch_id| {
+        block.call_mut(workspace, rng, patch_id)
+    });
 }
 
 pub static EUCLIDEAN_DISTANCE_NO_WRAP_INFO: HostFunctionInfo = HostFunctionInfo {
@@ -170,13 +181,13 @@ pub static PATCH_AT_INFO: HostFunctionInfo = HostFunctionInfo {
 };
 #[unsafe(no_mangle)]
 pub extern "C" fn oxitortoise_patch_at(
-    context: &mut CanonExecutionContext,
+    workspace: &mut Workspace,
     point_x: f64,
     point_y: f64,
 ) -> PatchId {
     let point = Point { x: point_x, y: point_y };
     let point_int = point.round_to_int();
-    context.workspace.world.topology.patch_at(point_int)
+    workspace.world.topology.patch_at(point_int)
 }
 
 pub static ROTATE_TURTLE_INFO: HostFunctionInfo = HostFunctionInfo {
@@ -187,12 +198,12 @@ pub static ROTATE_TURTLE_INFO: HostFunctionInfo = HostFunctionInfo {
 };
 #[unsafe(no_mangle)]
 pub extern "C" fn oxitortoise_rotate_turtle(
-    context: &mut CanonExecutionContext,
+    workspace: &mut Workspace,
     turtle_id: u64,
     angle: NlFloat,
 ) {
     let turtle_id = TurtleId::from_ffi(turtle_id);
-    if let Some(heading) = context.workspace.world.turtles.get_turtle_heading_mut(turtle_id) {
+    if let Some(heading) = workspace.world.turtles.get_turtle_heading_mut(turtle_id) {
         *heading += angle;
     }
 }
@@ -205,13 +216,13 @@ pub static DIFFUSE_8_SINGLE_VARIABLE_BUFFER_INFO: HostFunctionInfo = HostFunctio
 };
 #[unsafe(no_mangle)]
 pub extern "C" fn oxitortoise_diffuse_8(
-    context: &mut CanonExecutionContext,
+    workspace: &mut Workspace,
     field: u32, /* AgentFieldDescriptor */
     diffusion_rate: NlFloat,
 ) {
     let field = AgentFieldDescriptor::from_u16(field as u16);
     engine::sim::topology::diffuse::diffuse_8_single_variable_buffer(
-        &mut context.workspace.world,
+        &mut workspace.world,
         field,
         diffusion_rate,
     );
@@ -240,9 +251,9 @@ pub static RANDOM_INT_INFO: HostFunctionInfo = HostFunctionInfo {
     addr: oxitortoise_random_int as *const u8,
 };
 #[unsafe(no_mangle)]
-pub extern "C" fn oxitortoise_random_int(context: &mut CanonExecutionContext, max: f64) -> f64 {
+pub extern "C" fn oxitortoise_random_int(rng: &mut CanonRng, max: f64) -> f64 {
     // TODO move the casting logic to the engine, not in this shim
-    context.next_int.next_int(max as i64) as f64
+    rng.next_int(max as i64) as f64
 }
 
 pub static TURTLE_FORWARD_INFO: HostFunctionInfo = HostFunctionInfo {
@@ -253,12 +264,12 @@ pub static TURTLE_FORWARD_INFO: HostFunctionInfo = HostFunctionInfo {
 };
 #[unsafe(no_mangle)]
 pub extern "C" fn oxitortoise_turtle_forward(
-    context: &mut CanonExecutionContext,
+    workspace: &mut Workspace,
     turtle_id: u64,
     distance: NlFloat,
 ) {
     // TODO: this is a lot of logic. it should be in the engine
-    let world = &mut context.workspace.world;
+    let world = &mut workspace.world;
     let turtle_id = TurtleId::from_ffi(turtle_id);
     let heading = world.turtles.get_turtle_heading(turtle_id).unwrap();
     let position = world.turtles.get_turtle_position(turtle_id).unwrap();
@@ -303,10 +314,10 @@ pub static ONE_OF_LIST_INFO: HostFunctionInfo = HostFunctionInfo {
 };
 #[unsafe(no_mangle)]
 pub extern "C" fn oxitortoise_one_of_list(
-    context: &mut CanonExecutionContext,
+    rng: &mut CanonRng,
     mut list: NlBox<NlList>,
 ) -> PackedAny {
-    let index = context.next_int.next_int(list.len() as i64) as usize; // TODO casts okay?
+    let index = rng.next_int(list.len() as i64) as usize; // TODO casts okay?
     list.swap_remove(index)
 }
 
@@ -319,12 +330,12 @@ pub static PATCH_AHEAD_INFO: HostFunctionInfo = HostFunctionInfo {
 };
 #[unsafe(no_mangle)]
 pub extern "C" fn oxitortoise_patch_ahead(
-    context: &mut CanonExecutionContext,
+    workspace: &mut Workspace,
     turtle_id: u64,
     distance: NlFloat,
 ) -> OptionPatchId {
     // TODO: this is a lot of logic. it should be in the engine
-    let world = &mut context.workspace.world;
+    let world = &mut workspace.world;
     let turtle_id = TurtleId::from_ffi(turtle_id);
     let heading = world.turtles.get_turtle_heading(turtle_id).unwrap();
     let position = world.turtles.get_turtle_position(turtle_id).unwrap();
@@ -344,13 +355,13 @@ pub static PATCH_RIGHT_AND_AHEAD_INFO: HostFunctionInfo = HostFunctionInfo {
 };
 #[unsafe(no_mangle)]
 pub extern "C" fn oxitortoise_patch_right_and_ahead(
-    context: &mut CanonExecutionContext,
+    workspace: &mut Workspace,
     turtle_id: u64,
     angle: NlFloat,
     distance: NlFloat,
 ) -> OptionPatchId {
     // TODO: this is a lot of logic. it should be in the engine
-    let world = &mut context.workspace.world;
+    let world = &mut workspace.world;
     let turtle_id = TurtleId::from_ffi(turtle_id);
     let heading = world.turtles.get_turtle_heading(turtle_id).unwrap();
     let heading_right = *heading + angle;
@@ -371,15 +382,20 @@ pub static ANY_BINARY_OP_INFO: HostFunctionInfo = HostFunctionInfo {
     addr: oxitortoise_any_binary_op as *const u8,
 };
 #[unsafe(no_mangle)]
-pub extern "C" fn oxitortoise_any_binary_op(lhs: PackedAny, rhs: PackedAny, op: u32) -> PackedAny {
-    let op = BinaryOpcode::try_from(op as u8).unwrap();
-    match op {
-        BinaryOpcode::Add => lhs + rhs,
-        BinaryOpcode::Sub => lhs - rhs,
-        BinaryOpcode::Mul => lhs * rhs,
-        BinaryOpcode::Div => lhs / rhs,
-        _ => unimplemented!("unsupported binary operation: {:?}", op),
-    }
+pub extern "C" fn oxitortoise_any_binary_op(
+    _lhs: PackedAny,
+    _rhs: PackedAny,
+    _op: u32,
+) -> PackedAny {
+    todo!()
+    // let op = BinaryOpcode::try_from(op as u8).unwrap();
+    // match op {
+    //     BinaryOpcode::Add => lhs + rhs,
+    //     BinaryOpcode::Sub => lhs - rhs,
+    //     BinaryOpcode::Mul => lhs * rhs,
+    //     BinaryOpcode::Div => lhs / rhs,
+    //     _ => unimplemented!("unsupported binary operation: {:?}", op),
+    // }
 }
 
 pub static ANY_BOOL_BINARY_OP_INFO: HostFunctionInfo = HostFunctionInfo {
@@ -390,17 +406,22 @@ pub static ANY_BOOL_BINARY_OP_INFO: HostFunctionInfo = HostFunctionInfo {
 };
 
 #[unsafe(no_mangle)]
-pub extern "C" fn oxitortoise_any_bool_binary_op(lhs: PackedAny, rhs: PackedAny, op: u32) -> bool {
-    let op = BinaryOpcode::try_from(op as u8).unwrap();
-    match op {
-        BinaryOpcode::Eq => lhs == rhs,
-        BinaryOpcode::Neq => lhs != rhs,
-        BinaryOpcode::Lt => lhs < rhs,
-        BinaryOpcode::Lte => lhs <= rhs,
-        BinaryOpcode::Gt => lhs > rhs,
-        BinaryOpcode::Gte => lhs >= rhs,
-        BinaryOpcode::And => lhs.and(rhs),
-        BinaryOpcode::Or => lhs.or(rhs),
-        _ => unimplemented!("unsupported binary operation: {:?}", op),
-    }
+pub extern "C" fn oxitortoise_any_bool_binary_op(
+    _lhs: PackedAny,
+    _rhs: PackedAny,
+    _op: u32,
+) -> bool {
+    todo!()
+    // let op = BinaryOpcode::try_from(op as u8).unwrap();
+    // match op {
+    //     BinaryOpcode::Eq => lhs == rhs,
+    //     BinaryOpcode::Neq => lhs != rhs,
+    //     BinaryOpcode::Lt => lhs < rhs,
+    //     BinaryOpcode::Lte => lhs <= rhs,
+    //     BinaryOpcode::Gt => lhs > rhs,
+    //     BinaryOpcode::Gte => lhs >= rhs,
+    //     BinaryOpcode::And => lhs.and(rhs),
+    //     BinaryOpcode::Or => lhs.or(rhs),
+    //     _ => unimplemented!("unsupported binary operation: {:?}", op),
+    // }
 }

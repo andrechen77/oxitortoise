@@ -4,12 +4,11 @@ use crate::{export_interface::*, install_lir::Obj};
 
 use cranelift_jit::{JITBuilder, JITModule};
 use engine::{
-    exec::{
-        ExecutionContext,
-        jit::{HostFunctionTable, InstallLir, InstallLirError},
-    },
+    exec::jit::{HostFunctionTable, InstallLir, InstallLirError},
     lir,
     sim::value::PackedAny,
+    util::rng::CanonRng,
+    workspace::Workspace,
 };
 use lir::HostFunction as Hf;
 use lir_to_cranelift::{
@@ -115,7 +114,12 @@ impl InstallLir for LirInstaller {
                     let fn_ptr = unsafe {
                         std::mem::transmute::<
                             *const u8,
-                            unsafe extern "C" fn(&mut ExecutionContext, *mut PackedAny, u32),
+                            unsafe extern "C" fn(
+                                &mut Workspace,
+                                &mut CanonRng,
+                                *mut PackedAny,
+                                u32,
+                            ),
                         >(fn_ptr)
                     };
                     (lir_fn_id, fn_ptr)

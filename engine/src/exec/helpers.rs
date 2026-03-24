@@ -1,57 +1,54 @@
 //! Helper functions for operations that involve the execution context.
 
 use crate::{
-    exec::ExecutionContext,
     sim::{
         patch::PatchId,
         topology::Point,
         turtle::{BreedId, TurtleId},
         value::{
             NlFloat,
-            agentset::{AllPatches, AllTurtles},
+            agentset::{shuffled_patches, shuffled_turtles},
         },
     },
+    util::rng::Rng,
+    workspace::Workspace,
 };
 
-pub fn create_turtles(
-    context: &mut ExecutionContext,
+pub fn create_turtles<R: Rng>(
+    workspace: &mut Workspace,
+    rng: &mut R,
     breed: BreedId,
     count: NlFloat,
     position: Point,
-    mut birth_command: impl FnMut(&mut ExecutionContext, TurtleId),
+    mut birth_command: impl FnMut(&mut Workspace, &mut R, TurtleId),
 ) {
-    let new_turtles = context.workspace.world.turtles.create_turtles(
-        breed,
-        count.to_u64_round_to_zero(),
-        position,
-        &mut context.next_int,
-    );
+    let new_turtles =
+        workspace.world.turtles.create_turtles(breed, count.to_u64_round_to_zero(), position, rng);
 
-    // foreign code may rely on the fact that the dirty aggregator has enough
-    // space for all turtles.
-    context
-        .dirty_aggregator
-        .reserve_turtles(context.workspace.world.turtles.num_turtles() as usize);
-
-    for turtle in new_turtles.into_iter(context.next_int.clone()) {
-        birth_command(context, turtle);
+    let mut iter = new_turtles.into_shuffler();
+    while let Some(turtle) = iter.next(rng) {
+        birth_command(workspace, rng, turtle);
     }
 }
 
-pub fn for_all_turtles(
-    context: &mut ExecutionContext,
-    mut block: impl FnMut(&mut ExecutionContext, TurtleId),
+pub fn for_all_turtles<R: Rng>(
+    workspace: &mut Workspace,
+    rng: &mut R,
+    mut block: impl FnMut(&mut Workspace, &mut R, TurtleId),
 ) {
-    for turtle in AllTurtles.into_iter(&context.workspace.world, context.next_int.clone()) {
-        block(context, turtle);
+    let mut iter = shuffled_turtles(&workspace.world);
+    while let Some(turtle) = iter.next(rng) {
+        block(workspace, rng, turtle);
     }
 }
 
-pub fn for_all_patches(
-    context: &mut ExecutionContext,
-    mut block: impl FnMut(&mut ExecutionContext, PatchId),
+pub fn for_all_patches<R: Rng>(
+    workspace: &mut Workspace,
+    rng: &mut R,
+    mut block: impl FnMut(&mut Workspace, &mut R, PatchId),
 ) {
-    for patch in AllPatches.into_iter(&context.workspace.world, context.next_int.clone()) {
-        block(context, patch);
+    let mut iter = shuffled_patches(&workspace.world);
+    while let Some(patch) = iter.next(rng) {
+        block(workspace, rng, patch);
     }
 }

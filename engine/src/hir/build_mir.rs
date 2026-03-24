@@ -1,17 +1,23 @@
 use std::collections::HashMap;
 
 use crate::{
-    exec::CanonExecutionContext,
     hir::{self, Expr},
     mir::{self, MirType, MirTypeInfo},
-    sim::{observer::GlobalsSchema, patch::PatchSchema, turtle::TurtleSchema},
+    sim::{
+        observer::GlobalsSchema,
+        patch::{PatchId, PatchSchema},
+        turtle::{TurtleId, TurtleSchema},
+        value::PackedAny,
+    },
+    util::reflection::Reflect,
+    workspace::Workspace,
 };
 
 pub struct TypeMapping {
     globals_schema: GlobalsSchema,
     turtle_schema: TurtleSchema,
     patch_schema: PatchSchema,
-    context_ty: MirType,
+    workspace_ptr_ty: MirType,
 }
 
 impl TypeMapping {
@@ -20,13 +26,10 @@ impl TypeMapping {
         turtle_schema: TurtleSchema,
         patch_schema: PatchSchema,
     ) -> Self {
-        let context_pointee_ty = CanonExecutionContext::mir_type_from_schemas(
-            &globals_schema,
-            &turtle_schema,
-            &patch_schema,
-        );
-        let context_ptr_ty = MirTypeInfo::ptr_to(context_pointee_ty);
-        Self { globals_schema, turtle_schema, patch_schema, context_ty: context_ptr_ty }
+        let workspace_pointee_ty =
+            Workspace::mir_type_from_schemas(&globals_schema, &turtle_schema, &patch_schema);
+        let workspace_ptr_ty = MirTypeInfo::ptr_to(workspace_pointee_ty);
+        Self { globals_schema, turtle_schema, patch_schema, workspace_ptr_ty }
     }
 
     pub fn globals_schema(&self) -> &GlobalsSchema {
@@ -41,8 +44,8 @@ impl TypeMapping {
         &self.patch_schema
     }
 
-    pub fn context_ty(&self) -> MirType {
-        self.context_ty.clone()
+    pub fn workspace_ptr_ty(&self) -> MirType {
+        self.workspace_ptr_ty.clone()
     }
 }
 
@@ -59,22 +62,12 @@ pub struct HirToLirFnTranslator {
     /// Maps each HIR label to an MIR label, as well as the output local that
     /// breaks from that label should use.
     pub ctrl_flow_constructs: HashMap<hir::Label, (mir::Label, mir::LocalId)>,
-    /// The local variable that contains the context parameter, if it exists.
-    /// This should be automatically added if any expression in the function
-    /// body needs a context parameter.
-    pub context_param: Option<mir::LocalId>,
-    /// The local variable that contains the self parameter, if it exists. This
-    /// should automatically be added if any expression in the function body
-    /// needs a self parameter.
-    pub self_param: Option<SelfParam>,
-}
-
-#[derive(Debug)]
-pub enum SelfParam {
-    Turtle(mir::LocalId),
-    Patch(mir::LocalId),
-    Link(mir::LocalId),
-    Any(mir::LocalId),
+    /// The local variable that contains the workspace parameter, if it exists.
+    pub workspace_param: Option<mir::LocalId>,
+    /// The local variable that contains the RNG parameter, if it exists.
+    pub rng_param: Option<mir::LocalId>,
+    /// The local variable that contains the self parameter, if it exists.
+    pub self_param: Option<mir::LocalId>,
 }
 
 impl<'a, 'b> HirToMirFnBuilder<'a, 'b> {
@@ -115,18 +108,60 @@ impl<'a, 'b> HirToMirFnBuilder<'a, 'b> {
         })
     }
 
-    /// Returns the local variable that contains the context parameter, creating
-    /// it as a function parameter if it does not exist.
-    pub fn context_param(&mut self) -> mir::TypedPlace {
-        let local_id = *self.translator.context_param.get_or_insert_with(|| {
+    pub fn workspace_param(&mut self) -> mir::TypedPlace {
+        let local_id = *self.translator.workspace_param.get_or_insert_with(|| {
             let (local_id, _local_decl) = self.mir.create_local(mir::LocalDecl {
-                debug_name: Some("context".into()),
-                ty: self.type_mapping.context_ty.clone(),
+                debug_name: Some("workspace".into()),
+                ty: self.type_mapping.workspace_ptr_ty.clone(),
             });
             // TODO add as parameter to the function
             local_id
         });
         self.mir.typed_place(local_id)
+    }
+
+    // Returns the local variable that contains the self parameter, creating
+    // it if it does not exist.
+    pub fn self_param(&mut self) -> mir::TypedPlace {
+        let local_id = *self.translator.self_param.get_or_insert_with(|| {
+            let (local_id, _local_decl) = self.mir.create_local(mir::LocalDecl {
+                debug_name: Some("self".into()),
+                ty: (PackedAny::TYPE.make_mir_type)(),
+            });
+            // TODO add as parameter to the function
+            local_id
+        });
+        self.mir.typed_place(local_id)
+    }
+
+    /// Returns the local variable that contains self as a turtle id. If
+    /// self is not statically known to be a turtle, this will generate runtime
+    /// code to downcast to a turtle
+    pub fn self_turtle(&mut self) -> mir::TypedPlace {
+        let self_param = self.self_param();
+        let Some(ty) = self_param.ty.static_ty else {
+            panic!("self parameter type is unknown");
+        };
+        if ty.is::<TurtleId>() {
+            self_param
+        } else {
+            panic!("self parameter is not a turtle");
+        }
+        // TODO add a branch that attemps to downcast to a turtle
+    }
+
+    // Returns the local variable that contains self as a patch id.
+    pub fn self_patch(&mut self) -> mir::TypedPlace {
+        let self_param = self.self_param();
+        let Some(ty) = self_param.ty.static_ty else {
+            panic!("self parameter type is unknown");
+        };
+        if ty.is::<PatchId>() {
+            self_param
+        } else {
+            panic!("self parameter is not a patch");
+        }
+        // TODO add a branch that attemps to downcast to a patch
     }
 }
 

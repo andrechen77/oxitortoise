@@ -81,6 +81,8 @@ impl Expr for Scope {
 }
 
 /// An expression that represents multiple expressions evaluated in order.
+/// The only way to exit a block is to break out of it; "falling through" the
+/// end of the statement sequence is not allowed.
 #[derive(Debug)]
 pub struct Block {
     pub label: Label,

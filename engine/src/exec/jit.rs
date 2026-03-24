@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use crate::{exec::CanonExecutionContext, sim::value::PackedAny};
+use crate::{sim::value::PackedAny, util::rng::CanonRng, workspace::Workspace};
 use lir::HostFunction as Hf;
 
 pub enum InstallLirError {
@@ -42,6 +42,7 @@ pub trait InstalledObj {
 // constants.
 
 #[derive(Clone, Copy)]
+#[repr(transparent)]
 pub struct JitEntrypoint<'a> {
     /// A pointer to a shim that can take dynamic arguments. The second
     /// parameter is a pointer to a dynamically-sized owned array of arguments,
@@ -54,7 +55,7 @@ pub struct JitEntrypoint<'a> {
     ///
     /// See [`JitEntrypoint::new`] method for the safety requirements on the
     /// caller of this function.
-    fn_ptr: unsafe extern "C" fn(&mut CanonExecutionContext, *mut PackedAny, u32),
+    fn_ptr: unsafe extern "C" fn(&mut Workspace, &mut CanonRng, *mut PackedAny, u32),
     _lifetime: PhantomData<&'a mut ()>,
 }
 
@@ -68,12 +69,12 @@ impl<'a> JitEntrypoint<'a> {
     /// addition, the lifetime of `'a` is live for the duration of the call.
     /// There are no other safety requirements to call this function
     pub unsafe fn new(
-        fn_ptr: unsafe extern "C" fn(&mut CanonExecutionContext, *mut PackedAny, u32),
+        fn_ptr: unsafe extern "C" fn(&mut Workspace, &mut CanonRng, *mut PackedAny, u32),
     ) -> Self {
         Self { fn_ptr, _lifetime: PhantomData }
     }
 
-    pub fn call(&self, context: &mut CanonExecutionContext, mut args: Vec<PackedAny>) {
+    pub fn call(&self, workspace: &mut Workspace, rng: &mut CanonRng, mut args: Vec<PackedAny>) {
         let args_len = u32::try_from(args.len()).unwrap();
         let args_ptr = args.as_mut_ptr();
         // SAFETY: the arguments pointer and length come from a Vec<PackedAny>
@@ -84,7 +85,7 @@ impl<'a> JitEntrypoint<'a> {
         // know that the lifetime of 'a is live for the duration of the call.
         unsafe {
             args.set_len(0);
-            (self.fn_ptr)(context, args_ptr, args_len);
+            (self.fn_ptr)(workspace, rng, args_ptr, args_len);
         }
     }
 }
@@ -93,7 +94,7 @@ impl<'a> JitEntrypoint<'a> {
 #[repr(C)]
 pub struct JitCallback<'env, Arg, Ret> {
     env: *mut u8,
-    fn_ptr: unsafe extern "C" fn(*mut u8, &mut CanonExecutionContext, Arg) -> Ret,
+    fn_ptr: unsafe extern "C" fn(*mut u8, &mut Workspace, &mut CanonRng, Arg) -> Ret,
     _phantom: PhantomData<&'env mut ()>,
 }
 
@@ -106,18 +107,18 @@ impl<'env, Arg, Ret> JitCallback<'env, Arg, Ret> {
     /// this function. The function pointer may be called multiple times.
     pub unsafe fn new(
         env: *mut u8,
-        fn_ptr: extern "C" fn(*mut u8, &mut CanonExecutionContext, Arg) -> Ret,
+        fn_ptr: extern "C" fn(*mut u8, &mut Workspace, &mut CanonRng, Arg) -> Ret,
     ) -> Self {
         Self { env, fn_ptr, _phantom: PhantomData }
     }
 
-    pub fn call_mut(&mut self, context: &mut CanonExecutionContext, arg: Arg) -> Ret {
+    pub fn call_mut(&mut self, workspace: &mut Workspace, rng: &mut CanonRng, arg: Arg) -> Ret {
         // SAFETY: we are passing the same env pointer to the function call as
         // the one passed during the construction of the JitCallback. In
         // addition, because we take &mut Self where Self has lifetime 'env, we
         // also know that the lifetime of 'env is live for the duration of the
         // call.
-        unsafe { (self.fn_ptr)(self.env, context, arg) }
+        unsafe { (self.fn_ptr)(self.env, workspace, rng, arg) }
     }
 }
 
