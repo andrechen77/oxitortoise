@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::BTreeMap, sync::Arc};
 
 use crate::{sim::value::BoxedAny, util::reflection::Type};
 
@@ -24,18 +24,18 @@ pub struct HostFunctionInfo {
     pub return_type: Type,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
 pub struct FunctionId(u32);
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
 pub struct LocalId(u32);
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
 pub struct Label(u32);
 
 #[derive(Debug, Default)]
 pub struct Program {
-    pub functions: HashMap<FunctionId, Function>,
+    pub functions: BTreeMap<FunctionId, Function>,
 }
 
 #[derive(Debug)]
@@ -43,7 +43,7 @@ pub struct Function {
     // TODO specify the parameters
     /// Holds every local variable used in the function body, including
     /// parameters, temporaries, and return values.
-    pub local_decls: HashMap<LocalId, LocalDecl>,
+    pub local_decls: BTreeMap<LocalId, LocalDecl>,
     /// The local variable where the function's return value is stored.
     pub return_local: LocalId,
     /// The body of the function.

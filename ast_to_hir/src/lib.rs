@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::BTreeMap, sync::Arc};
 
 use engine::{
     hir::{
@@ -107,7 +107,7 @@ pub fn ast_to_hir(ast: Ast) -> anyhow::Result<HirResult> {
     }
 
     // create turtle breeds
-    let mut turtle_breeds = HashMap::new();
+    let mut turtle_breeds = BTreeMap::new();
     let default_turtle_breed = TurtleBreed {
         name: DEFAULT_TURTLE_BREED_NAME.into(),
         singular_name: DEFAULT_TURTLE_BREED_SINGULAR_NAME.into(),
@@ -142,7 +142,7 @@ pub fn ast_to_hir(ast: Ast) -> anyhow::Result<HirResult> {
     }
 
     // translate each function body
-    let mut functions = HashMap::new();
+    let mut functions = BTreeMap::new();
     for (function_id, function) in functions_to_build {
         let function = translate_function_body(&mut hir_builder, function);
         functions.insert(function_id, function);
@@ -162,11 +162,11 @@ pub fn ast_to_hir(ast: Ast) -> anyhow::Result<HirResult> {
 struct FnBodyBuilderCtx<'a> {
     hir: &'a mut HirBuilder,
     fn_body_label: Option<Label>,
-    local_vars: &'a mut HashMap<LocalId, LocalDecl>,
+    local_vars: &'a mut BTreeMap<LocalId, LocalDecl>,
     workspace_param: LocalId,
     rng_param: LocalId,
     self_param: LocalId,
-    local_names: HashMap<Arc<str>, LocalId>,
+    local_names: BTreeMap<Arc<str>, LocalId>,
 }
 
 impl<'a> FnBodyBuilderCtx<'a> {
@@ -186,9 +186,9 @@ impl<'a> FnBodyBuilderCtx<'a> {
 fn translate_function_body(hir: &mut HirBuilder, function_ast: ast::Procedure) -> Function {
     let ast::Procedure { name, arg_names, return_type: _, agent_class: _, body } = function_ast;
 
-    let mut non_param_locals = HashMap::new(); // local variables that are not parametrs
+    let mut non_param_locals = BTreeMap::new(); // local variables that are not parametrs
     let mut parameters = Vec::new(); // local variables that are parameters
-    let mut local_names = HashMap::new(); // all local variables
+    let mut local_names = BTreeMap::new(); // all local variables
 
     // all procedures take workspace, rng, and self parameters by default
     let workspace_param = hir.next_local_id();

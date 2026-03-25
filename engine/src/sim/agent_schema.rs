@@ -36,7 +36,7 @@ pub enum AgentSchemaField {
     Other(Type),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(C)]
 pub struct AgentFieldDescriptor {
     /// The index of the buffer that stores the data for this field.

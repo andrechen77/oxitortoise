@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use crate::{
     hir::{self, Expr},
@@ -58,10 +58,10 @@ pub struct HirToMirFnBuilder<'a, 'b> {
 
 #[derive(Debug, Default)]
 pub struct HirToLirFnTranslator {
-    pub locals: HashMap<hir::LocalId, mir::LocalId>,
+    pub locals: BTreeMap<hir::LocalId, mir::LocalId>,
     /// Maps each HIR label to an MIR label, as well as the output local that
     /// breaks from that label should use.
-    pub ctrl_flow_constructs: HashMap<hir::Label, (mir::Label, mir::LocalId)>,
+    pub ctrl_flow_constructs: BTreeMap<hir::Label, (mir::Label, mir::LocalId)>,
     /// The local variable that contains the workspace parameter, if it exists.
     pub workspace_param: Option<mir::LocalId>,
     /// The local variable that contains the RNG parameter, if it exists.

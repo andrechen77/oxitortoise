@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::BTreeMap, sync::Arc};
 
 use engine::{
     hir::{ExprKind, FunctionId, expr},
@@ -14,12 +14,12 @@ pub const DEFAULT_TURTLE_BREED_SINGULAR_NAME: &str = "TURTLE";
 
 #[derive(Default)]
 pub struct GlobalScope {
-    pub constants: HashMap<&'static str, ExprKind>,
-    pub global_vars: HashMap<Arc<str>, usize>,
-    pub patch_vars: HashMap<Arc<str>, PatchVarDesc>,
-    pub turtle_vars: HashMap<Arc<str>, TurtleVarDesc>,
-    pub turtle_breeds: HashMap<Arc<str>, TurtleBreedId>,
-    pub functions: HashMap<Arc<str>, FunctionId>,
+    pub constants: BTreeMap<&'static str, ExprKind>,
+    pub global_vars: BTreeMap<Arc<str>, usize>,
+    pub patch_vars: BTreeMap<Arc<str>, PatchVarDesc>,
+    pub turtle_vars: BTreeMap<Arc<str>, TurtleVarDesc>,
+    pub turtle_breeds: BTreeMap<Arc<str>, TurtleBreedId>,
+    pub functions: BTreeMap<Arc<str>, FunctionId>,
 }
 
 impl GlobalScope {

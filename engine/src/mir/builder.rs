@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::BTreeMap, sync::Arc};
 
 use crate::mir::{
     self, ElementaryStatement, Function, FunctionId, Label, LocalId, MirType, MirTypeContents,
@@ -7,7 +7,7 @@ use crate::mir::{
 
 #[derive(Default)]
 pub struct ProgramBuilder {
-    functions: HashMap<FunctionId, Function>,
+    functions: BTreeMap<FunctionId, Function>,
     next_function_id: u32,
     next_local_id: u32,
     next_label: u32,
@@ -48,7 +48,7 @@ impl ProgramBuilder {
 pub struct FunctionBuilder<'a> {
     program_builder: &'a mut ProgramBuilder,
     fn_id: FunctionId,
-    locals: HashMap<LocalId, mir::LocalDecl>,
+    locals: BTreeMap<LocalId, mir::LocalDecl>,
     return_local: Option<LocalId>,
     statements_out: Vec<Statement>,
 }
@@ -59,7 +59,7 @@ impl<'a> FunctionBuilder<'a> {
         Self {
             program_builder,
             fn_id,
-            locals: HashMap::new(),
+            locals: BTreeMap::new(),
             return_local: None,
             statements_out: Vec::new(),
         }

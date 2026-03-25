@@ -4,7 +4,7 @@
 //! turtles belong to a special breed that acts like the `turtles` agentset.
 
 use std::alloc::Layout;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::fmt::{self, Debug, Write};
 use std::mem::offset_of;
 use std::ops::Index;
@@ -57,7 +57,9 @@ impl fmt::Display for TurtleWho {
 
 /// An ID for a turtle. When passing through FFI, this should be converted to a
 /// `u64` first to prevent it from being represented as a pointer.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, From, Into, Default, ReflectComponents)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, From, Into, Default, ReflectComponents,
+)]
 // TODO specify to reflect that its contents are a u32
 #[repr(transparent)]
 pub struct TurtleId(pub GenIndex);
@@ -91,17 +93,17 @@ pub struct Turtles {
     pub data: [Option<RowBuffer>; 4],
     /// Fallback storage for custom fields whose type doesn't match the
     /// compile-time type.
-    fallback_custom_fields: HashMap<(TurtleId, AgentFieldDescriptor), PackedAny>,
+    fallback_custom_fields: BTreeMap<(TurtleId, AgentFieldDescriptor), PackedAny>,
     /// The fields of a turtle.
     turtle_schema: TurtleSchema,
     /// The number of turtles in the world.
     num_turtles: u64,
     /// The breeds of turtles.
-    breeds: HashMap<TurtleBreedId, TurtleBreed>,
+    breeds: BTreeMap<TurtleBreedId, TurtleBreed>,
 }
 
 impl Turtles {
-    pub fn new(turtle_schema: TurtleSchema, breeds: HashMap<TurtleBreedId, TurtleBreed>) -> Self {
+    pub fn new(turtle_schema: TurtleSchema, breeds: BTreeMap<TurtleBreedId, TurtleBreed>) -> Self {
         Self {
             next_who: TurtleWho::default(),
             slot_tracker: GenSlotTracker::new(),
@@ -109,7 +111,7 @@ impl Turtles {
             // if we can; we should reuse the ones from the compilation process
             // instead.
             data: turtle_schema.make_row_schemas().map(|s| s.map(RowBuffer::new)),
-            fallback_custom_fields: HashMap::new(),
+            fallback_custom_fields: BTreeMap::new(),
             turtle_schema,
             num_turtles: 0,
             breeds,
@@ -120,7 +122,7 @@ impl Turtles {
         &self.turtle_schema
     }
 
-    pub fn breeds(&self) -> &HashMap<TurtleBreedId, TurtleBreed> {
+    pub fn breeds(&self) -> &BTreeMap<TurtleBreedId, TurtleBreed> {
         &self.breeds
     }
 
@@ -451,7 +453,7 @@ pub struct TurtleBaseData {
 #[reflect]
 impl Reflect for TurtleBaseData {}
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Display)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Display, PartialOrd, Ord)]
 #[display("{_0}")]
 pub struct TurtleBreedId(pub u32);
 

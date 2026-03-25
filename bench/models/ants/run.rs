@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::BTreeMap,
     io,
     sync::{Arc, Mutex},
 };
@@ -85,7 +85,7 @@ fn print_offsets(workspace: &Workspace) {
 fn create_workspace(
     globals_schema: GlobalsSchema,
     turtle_schema: TurtleSchema,
-    turtle_breeds: HashMap<TurtleBreedId, TurtleBreed>,
+    turtle_breeds: BTreeMap<TurtleBreedId, TurtleBreed>,
     patch_schema: PatchSchema,
 ) -> Workspace {
     let topology_spec = TopologySpec {
@@ -112,7 +112,7 @@ fn create_workspace(
 // struct CompileResult {
 //     workspace: Workspace,
 //     global_names: GlobalScope,
-//     hir_to_lir_fns: HashMap<hir::FunctionId, lir::FunctionId>,
+//     hir_to_lir_fns: BTreeMap<hir::FunctionId, lir::FunctionId>,
 //     installed_obj: <LirInstaller as InstallLir>::Obj,
 // }
 

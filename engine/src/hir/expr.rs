@@ -2,7 +2,7 @@
 // More specialized expression kinds are defined in their respective submodules.
 
 use std::{
-    collections::HashMap,
+    collections::BTreeMap,
     fmt::{self, Write},
 };
 
@@ -56,7 +56,7 @@ pub use user_fn::*;
 /// written and read in the evaluation of an inner expression.
 #[derive(Debug, Clone)]
 pub struct Scope {
-    pub locals: HashMap<LocalId, LocalDecl>,
+    pub locals: BTreeMap<LocalId, LocalDecl>,
     pub inner: Box<ExprKind>,
 }
 

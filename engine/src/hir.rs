@@ -1,6 +1,6 @@
 // TODO(doc) all of HIR
 
-use std::{collections::HashMap, fmt, sync::Arc};
+use std::{collections::BTreeMap, fmt, sync::Arc};
 
 use ambassador::{Delegate, delegatable_trait};
 use derive_more::derive::{Display, From, TryInto};
@@ -21,7 +21,7 @@ mod format;
 
 pub use build_mir::{HirToMirFnBuilder, TypeMapping};
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Display)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Display, PartialOrd, Ord)]
 #[display("{_0}")]
 pub struct FunctionId(pub u32);
 
@@ -31,10 +31,10 @@ pub struct Program {
     // TODO this version of Breed contains type information (active custom
     // fields) that would not be available/ at the HIR stage of compilation;
     // consider using a more abstract version of Breed instead
-    pub turtle_breeds: HashMap<TurtleBreedId, TurtleBreed>,
+    pub turtle_breeds: BTreeMap<TurtleBreedId, TurtleBreed>,
     pub custom_turtle_vars: Vec<CustomVarDecl>,
     pub custom_patch_vars: Vec<CustomVarDecl>,
-    pub functions: HashMap<FunctionId, Function>,
+    pub functions: BTreeMap<FunctionId, Function>,
 }
 
 #[derive(Debug)]
@@ -59,11 +59,11 @@ pub struct LocalDecl {
     pub ty: NlAbstractTy,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Display)]
 #[display("L{_0}")]
 pub struct Label(pub u32);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct LocalId(pub u32);
 
 /// Some kind of computation that takes inputs and produces outputs. The output

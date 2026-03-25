@@ -4,7 +4,7 @@ use std::{collections::VecDeque, marker::PhantomData};
 // this naturally allows gen 0 index 0 to be a natural null value
 
 #[repr(C)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct GenIndex {
     pub index: u32,
     pub r#gen: u16,
