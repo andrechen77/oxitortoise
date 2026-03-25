@@ -5,9 +5,7 @@ use std::fmt::{self, Write};
 use pretty_print::PrettyPrinter;
 
 use crate::{
-    hir::{
-        Expr, ExprKind, FunctionId, HirToMirFnBuilder, NlAbstractTy, Program, format::NameContext,
-    },
+    hir::{Expr, ExprKind, FunctionId, HirToMirFnBuilder, NameContext, NlAbstractTy},
     mir,
 };
 
@@ -20,11 +18,11 @@ pub struct CallUserFn {
 }
 
 impl Expr for CallUserFn {
-    fn output_type(&self, program: &Program) -> NlAbstractTy {
+    fn output_type(&self, names: NameContext) -> NlAbstractTy {
         // The current HIR doesn't expose function signatures directly at this
         // expression layer, but the return type can be inferred from the
         // function body's output type.
-        program.functions[&self.target].body.output_type(program)
+        names.functions()[&self.target].return_ty.clone()
     }
 
     fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
@@ -46,8 +44,7 @@ impl Expr for CallUserFn {
         p.add_fn_call("call_user_fn", |p| {
             p.add_fn_arg_with(|p| {
                 let label = names
-                    .program()
-                    .functions
+                    .functions()
                     .get(target)
                     .and_then(|f| f.debug_name.as_deref())
                     .unwrap_or("?");

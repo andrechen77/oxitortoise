@@ -36,6 +36,7 @@ pub struct Program {
     pub custom_turtle_vars: Vec<CustomVarDecl>,
     pub custom_patch_vars: Vec<CustomVarDecl>,
     pub functions: BTreeMap<FunctionId, Function>,
+    pub function_bodies: BTreeMap<FunctionId, ExprKind>,
 }
 
 #[derive(Debug)]
@@ -51,7 +52,9 @@ pub struct Function {
     /// requires that the body be wrapped in a Scope expression that provides
     /// values for these parameters.
     pub parameters: BTreeMap<LocalId, LocalDecl>,
-    pub body: ExprKind,
+    /// This is stored separately from the function body, so both must be updated
+    /// when the function body is updated.
+    pub return_ty: NlAbstractTy,
 }
 
 #[derive(Clone, Debug)]
@@ -73,7 +76,7 @@ pub struct LocalId(pub u32);
 /// different function calls).
 #[delegatable_trait]
 pub trait Expr {
-    fn output_type(&self, program: &Program) -> NlAbstractTy;
+    fn output_type(&self, names: NameContext) -> NlAbstractTy;
 
     fn visit_children(&self, visitor: impl FnMut(&ExprKind));
 
@@ -232,4 +235,94 @@ impl NlAbstractTy {
 pub struct ClosureType {
     pub arg_tys: Vec<NlAbstractTy>,
     pub return_ty: Box<NlAbstractTy>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum NameContext<'a> {
+    Global {
+        global_vars: &'a [CustomVarDecl],
+        turtle_breeds: &'a BTreeMap<TurtleBreedId, TurtleBreed>,
+        custom_turtle_vars: &'a Vec<CustomVarDecl>,
+        custom_patch_vars: &'a Vec<CustomVarDecl>,
+        functions: &'a BTreeMap<FunctionId, Function>,
+    },
+    Local {
+        local_vars: &'a BTreeMap<LocalId, LocalDecl>,
+        parent: &'a NameContext<'a>,
+    },
+}
+
+impl<'a> NameContext<'a> {
+    pub fn from_program(program: &'a Program) -> Self {
+        NameContext::Global {
+            global_vars: &program.global_vars,
+            turtle_breeds: &program.turtle_breeds,
+            custom_turtle_vars: &program.custom_turtle_vars,
+            custom_patch_vars: &program.custom_patch_vars,
+            functions: &program.functions,
+        }
+    }
+
+    pub fn from_program_mut(
+        program: &'a mut Program,
+    ) -> (Self, &'a mut BTreeMap<FunctionId, ExprKind>) {
+        (
+            NameContext::Global {
+                global_vars: &program.global_vars,
+                turtle_breeds: &program.turtle_breeds,
+                custom_turtle_vars: &program.custom_turtle_vars,
+                custom_patch_vars: &program.custom_patch_vars,
+                functions: &program.functions,
+            },
+            &mut program.function_bodies,
+        )
+    }
+
+    pub fn with_locals(&'a self, local_vars: &'a BTreeMap<LocalId, LocalDecl>) -> Self {
+        NameContext::Local { local_vars, parent: self }
+    }
+
+    pub fn global_vars(&self) -> &'a [CustomVarDecl] {
+        match self {
+            NameContext::Global { global_vars, .. } => global_vars,
+            NameContext::Local { parent, .. } => parent.global_vars(),
+        }
+    }
+
+    pub fn turtle_breeds(&self) -> &'a BTreeMap<TurtleBreedId, TurtleBreed> {
+        match self {
+            NameContext::Global { turtle_breeds, .. } => turtle_breeds,
+            NameContext::Local { parent, .. } => parent.turtle_breeds(),
+        }
+    }
+
+    pub fn custom_turtle_vars(&self) -> &'a Vec<CustomVarDecl> {
+        match self {
+            NameContext::Global { custom_turtle_vars, .. } => custom_turtle_vars,
+            NameContext::Local { parent, .. } => parent.custom_turtle_vars(),
+        }
+    }
+
+    pub fn custom_patch_vars(&self) -> &'a Vec<CustomVarDecl> {
+        match self {
+            NameContext::Global { custom_patch_vars, .. } => custom_patch_vars,
+            NameContext::Local { parent, .. } => parent.custom_patch_vars(),
+        }
+    }
+
+    pub fn functions(&self) -> &'a BTreeMap<FunctionId, Function> {
+        match self {
+            NameContext::Global { functions, .. } => functions,
+            NameContext::Local { parent, .. } => parent.functions(),
+        }
+    }
+
+    pub fn lookup_local_var(&self, local_id: LocalId) -> Option<&'a LocalDecl> {
+        match self {
+            NameContext::Global { .. } => None,
+            NameContext::Local { local_vars, parent } => {
+                local_vars.get(&local_id).or_else(|| parent.lookup_local_var(local_id))
+            }
+        }
+    }
 }

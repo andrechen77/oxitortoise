@@ -5,7 +5,7 @@ use std::fmt::{self, Write};
 use pretty_print::PrettyPrinter;
 
 use crate::{
-    hir::{Expr, ExprKind, HirToMirFnBuilder, NlAbstractTy, Program, format::NameContext},
+    hir::{Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy},
     mir,
 };
 
@@ -44,7 +44,7 @@ pub struct TurtleRotate {
 }
 
 impl Expr for TurtleRotate {
-    fn output_type(&self, _program: &Program) -> NlAbstractTy {
+    fn output_type(&self, _names: NameContext) -> NlAbstractTy {
         NlAbstractTy::Unit
     }
 
@@ -81,7 +81,7 @@ pub struct TurtleForward {
 }
 
 impl Expr for TurtleForward {
-    fn output_type(&self, _program: &Program) -> NlAbstractTy {
+    fn output_type(&self, _names: NameContext) -> NlAbstractTy {
         NlAbstractTy::Unit
     }
 
@@ -118,7 +118,7 @@ pub struct CanMove {
 }
 
 impl Expr for CanMove {
-    fn output_type(&self, _program: &Program) -> NlAbstractTy {
+    fn output_type(&self, _names: NameContext) -> NlAbstractTy {
         NlAbstractTy::Boolean
     }
 
@@ -156,7 +156,7 @@ pub struct PatchRelative {
 }
 
 impl Expr for PatchRelative {
-    fn output_type(&self, _program: &Program) -> NlAbstractTy {
+    fn output_type(&self, _names: NameContext) -> NlAbstractTy {
         NlAbstractTy::Patch
     }
 

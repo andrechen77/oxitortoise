@@ -5,7 +5,7 @@ use std::fmt;
 use pretty_print::PrettyPrinter;
 
 use crate::{
-    hir::{Expr, ExprKind, HirToMirFnBuilder, NlAbstractTy, Program, format::NameContext},
+    hir::{Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy},
     mir,
 };
 
@@ -18,7 +18,7 @@ pub struct OffsetDistanceByHeading {
 }
 
 impl Expr for OffsetDistanceByHeading {
-    fn output_type(&self, _program: &Program) -> NlAbstractTy {
+    fn output_type(&self, _names: NameContext) -> NlAbstractTy {
         NlAbstractTy::Point
     }
 
@@ -57,7 +57,7 @@ pub struct PatchAt {
 }
 
 impl Expr for PatchAt {
-    fn output_type(&self, _program: &Program) -> NlAbstractTy {
+    fn output_type(&self, _names: NameContext) -> NlAbstractTy {
         NlAbstractTy::Patch
     }
 
@@ -92,7 +92,7 @@ pub struct MaxPxcor {
 }
 
 impl Expr for MaxPxcor {
-    fn output_type(&self, _program: &Program) -> NlAbstractTy {
+    fn output_type(&self, _names: NameContext) -> NlAbstractTy {
         NlAbstractTy::Float
     }
 
@@ -123,7 +123,7 @@ pub struct MaxPycor {
 }
 
 impl Expr for MaxPycor {
-    fn output_type(&self, _program: &Program) -> NlAbstractTy {
+    fn output_type(&self, _names: NameContext) -> NlAbstractTy {
         NlAbstractTy::Float
     }
 
@@ -155,7 +155,7 @@ pub struct EuclideanDistanceNoWrap {
 }
 
 impl Expr for EuclideanDistanceNoWrap {
-    fn output_type(&self, _program: &Program) -> NlAbstractTy {
+    fn output_type(&self, _names: NameContext) -> NlAbstractTy {
         NlAbstractTy::Float
     }
 
@@ -189,7 +189,7 @@ pub struct PointConstructor {
 }
 
 impl Expr for PointConstructor {
-    fn output_type(&self, _program: &Program) -> NlAbstractTy {
+    fn output_type(&self, _names: NameContext) -> NlAbstractTy {
         NlAbstractTy::Point
     }
 

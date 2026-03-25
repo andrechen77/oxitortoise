@@ -5,7 +5,7 @@ use std::fmt::{self, Write};
 use pretty_print::PrettyPrinter;
 
 use crate::{
-    hir::{Expr, ExprKind, HirToMirFnBuilder, NlAbstractTy, Program, format::NameContext},
+    hir::{Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy},
     mir,
     sim::value::UnpackedAny,
 };
@@ -16,7 +16,7 @@ pub struct Constant {
 }
 
 impl Expr for Constant {
-    fn output_type(&self, _program: &Program) -> NlAbstractTy {
+    fn output_type(&self, _names: NameContext) -> NlAbstractTy {
         let Some(value) = &self.value else {
             return NlAbstractTy::Unit;
         };
@@ -57,7 +57,7 @@ pub struct ListLiteral {
 }
 
 impl Expr for ListLiteral {
-    fn output_type(&self, _program: &Program) -> NlAbstractTy {
+    fn output_type(&self, _names: NameContext) -> NlAbstractTy {
         // Until we have element-type inference for list literals.
         NlAbstractTy::List { element_ty: Box::new(NlAbstractTy::NlTop) }
     }

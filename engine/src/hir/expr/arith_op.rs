@@ -7,9 +7,7 @@ use derive_more::derive::TryFrom;
 use pretty_print::PrettyPrinter;
 
 use crate::{
-    hir::{
-        Expr, ExprKind, NlAbstractTy, Program, build_mir::HirToMirFnBuilder, format::NameContext,
-    },
+    hir::{Expr, ExprKind, NameContext, NlAbstractTy, build_mir::HirToMirFnBuilder},
     mir::{self, prelude::*},
     sim::{
         patch::OptionPatchId,
@@ -112,7 +110,7 @@ pub struct BinaryArith {
 }
 
 impl Expr for BinaryArith {
-    fn output_type(&self, _program: &Program) -> NlAbstractTy {
+    fn output_type(&self, _names: NameContext) -> NlAbstractTy {
         NlAbstractTy::Numeric
     }
 
@@ -150,7 +148,7 @@ pub struct BinaryCmp {
 }
 
 impl Expr for BinaryCmp {
-    fn output_type(&self, _program: &Program) -> NlAbstractTy {
+    fn output_type(&self, _names: NameContext) -> NlAbstractTy {
         NlAbstractTy::Boolean
     }
 
@@ -160,8 +158,8 @@ impl Expr for BinaryCmp {
     }
 
     fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, local_out: LocalId) {
-        let lhs_ty = self.lhs.output_type(builder.hir);
-        let rhs_ty = self.rhs.output_type(builder.hir);
+        let lhs_ty = self.lhs.output_type(builder.hir_names);
+        let rhs_ty = self.rhs.output_type(builder.hir_names);
 
         // special case comparisons against nobody (both as the sole
         // inhabitant of the nobody type and as the inhabitant of agent id types).
@@ -285,7 +283,7 @@ pub struct BinaryBool {
 }
 
 impl Expr for BinaryBool {
-    fn output_type(&self, _program: &Program) -> NlAbstractTy {
+    fn output_type(&self, _names: NameContext) -> NlAbstractTy {
         NlAbstractTy::Boolean
     }
 
@@ -319,7 +317,7 @@ pub struct LogicalNot {
 }
 
 impl Expr for LogicalNot {
-    fn output_type(&self, _program: &Program) -> NlAbstractTy {
+    fn output_type(&self, _names: NameContext) -> NlAbstractTy {
         NlAbstractTy::Boolean
     }
 
@@ -355,7 +353,7 @@ pub struct Negate {
 }
 
 impl Expr for Negate {
-    fn output_type(&self, _program: &Program) -> NlAbstractTy {
+    fn output_type(&self, _names: NameContext) -> NlAbstractTy {
         NlAbstractTy::Numeric
     }
 

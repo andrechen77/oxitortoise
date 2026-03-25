@@ -5,7 +5,7 @@ use std::fmt;
 use pretty_print::PrettyPrinter;
 
 use crate::{
-    hir::{Expr, ExprKind, HirToMirFnBuilder, NlAbstractTy, Program, format::NameContext},
+    hir::{Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy},
     mir,
 };
 
@@ -18,7 +18,7 @@ pub struct Distancexy {
 }
 
 impl Expr for Distancexy {
-    fn output_type(&self, _program: &Program) -> NlAbstractTy {
+    fn output_type(&self, _names: NameContext) -> NlAbstractTy {
         NlAbstractTy::Float
     }
 

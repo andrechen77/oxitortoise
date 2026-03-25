@@ -5,7 +5,7 @@ use std::fmt;
 use pretty_print::PrettyPrinter;
 
 use crate::{
-    hir::{Expr, ExprKind, HirToMirFnBuilder, NlAbstractTy, Program, format::NameContext},
+    hir::{Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy},
     mir,
 };
 
@@ -16,8 +16,8 @@ pub struct OneOf {
 }
 
 impl Expr for OneOf {
-    fn output_type(&self, program: &Program) -> NlAbstractTy {
-        let operand_ty = self.operand.output_type(program);
+    fn output_type(&self, names: NameContext) -> NlAbstractTy {
+        let operand_ty = self.operand.output_type(names);
         match operand_ty {
             NlAbstractTy::Agentset { agent_type } => *agent_type,
             NlAbstractTy::List { element_ty } => *element_ty,

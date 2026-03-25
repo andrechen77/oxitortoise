@@ -5,7 +5,7 @@ use std::fmt::{self, Write};
 use pretty_print::PrettyPrinter;
 
 use crate::{
-    hir::{Expr, ExprKind, HirToMirFnBuilder, NlAbstractTy, Program, format::NameContext},
+    hir::{Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy},
     mir::{self, prelude::*},
     sim::{
         observer::Globals,
@@ -24,8 +24,8 @@ pub struct GetGlobalVar {
 }
 
 impl Expr for GetGlobalVar {
-    fn output_type(&self, program: &Program) -> NlAbstractTy {
-        let Some(var) = program.global_vars.get(self.index) else {
+    fn output_type(&self, names: NameContext) -> NlAbstractTy {
+        let Some(var) = names.global_vars().get(self.index) else {
             panic!("Unknown global var index: {:?}", self.index);
         };
         var.ty.clone()
@@ -55,7 +55,7 @@ impl Expr for GetGlobalVar {
             p,
             "get_global_var({}#{})",
             self.index,
-            names.program().global_vars[self.index].name.as_ref()
+            names.global_vars()[self.index].name.as_ref()
         )
     }
 }
@@ -73,7 +73,7 @@ pub struct GetTurtleVar {
 }
 
 impl Expr for GetTurtleVar {
-    fn output_type(&self, program: &Program) -> NlAbstractTy {
+    fn output_type(&self, names: NameContext) -> NlAbstractTy {
         match self.var {
             TurtleVarDesc::Who => NlAbstractTy::Float,
             TurtleVarDesc::Color => NlAbstractTy::Color,
@@ -81,7 +81,7 @@ impl Expr for GetTurtleVar {
             TurtleVarDesc::Pos => NlAbstractTy::Point,
             TurtleVarDesc::Xcor => NlAbstractTy::Float,
             TurtleVarDesc::Ycor => NlAbstractTy::Float,
-            TurtleVarDesc::Custom(field) => program.custom_turtle_vars[field].ty.clone(),
+            TurtleVarDesc::Custom(field) => names.custom_turtle_vars()[field].ty.clone(),
         }
     }
 
@@ -115,7 +115,7 @@ impl Expr for GetTurtleVar {
     ) -> fmt::Result {
         let GetTurtleVar { var, workspace, turtle } = self;
         p.add_fn_call("get_turtle_var", |p| {
-            p.add_fn_arg_with(|p| var.pretty_print(p, &names.program().custom_turtle_vars))?;
+            p.add_fn_arg_with(|p| var.pretty_print(p, &names.custom_turtle_vars()))?;
             p.add_fn_arg_with(|p| workspace.pretty_print(p, names))?;
             p.add_fn_arg_with(|p| turtle.pretty_print(p, names))?;
             Ok(())
@@ -135,7 +135,7 @@ pub struct SetTurtleVar {
 }
 
 impl Expr for SetTurtleVar {
-    fn output_type(&self, _program: &Program) -> NlAbstractTy {
+    fn output_type(&self, _names: NameContext) -> NlAbstractTy {
         NlAbstractTy::Unit
     }
 
@@ -168,7 +168,7 @@ impl Expr for SetTurtleVar {
     ) -> fmt::Result {
         let SetTurtleVar { var, workspace, turtle, value } = self;
         p.add_fn_call("set_turtle_var", |p| {
-            p.add_fn_arg_with(|p| var.pretty_print(p, &names.program().custom_turtle_vars))?;
+            p.add_fn_arg_with(|p| var.pretty_print(p, &names.custom_turtle_vars()))?;
             p.add_fn_arg_with(|p| workspace.pretty_print(p, names))?;
             p.add_fn_arg_with(|p| turtle.pretty_print(p, names))?;
             p.add_fn_arg_with(|p| value.pretty_print(p, names))?;
@@ -199,11 +199,11 @@ pub struct GetPatchVar {
 }
 
 impl Expr for GetPatchVar {
-    fn output_type(&self, program: &Program) -> NlAbstractTy {
+    fn output_type(&self, names: NameContext) -> NlAbstractTy {
         match self.var {
             PatchVarDesc::Pcolor => NlAbstractTy::Color,
             PatchVarDesc::Pos => NlAbstractTy::Point,
-            PatchVarDesc::Custom(field) => program.custom_patch_vars[field].ty.clone(),
+            PatchVarDesc::Custom(field) => names.custom_patch_vars()[field].ty.clone(),
         }
     }
 
@@ -237,7 +237,7 @@ impl Expr for GetPatchVar {
     ) -> fmt::Result {
         let GetPatchVar { var, workspace, patch } = self;
         p.add_fn_call("get_patch_var", |p| {
-            p.add_fn_arg_with(|p| var.pretty_print(p, &names.program().custom_patch_vars))?;
+            p.add_fn_arg_with(|p| var.pretty_print(p, &names.custom_patch_vars()))?;
             p.add_fn_arg_with(|p| workspace.pretty_print(p, names))?;
             p.add_fn_arg_with(|p| patch.pretty_print(p, names))?;
             Ok(())
@@ -257,7 +257,7 @@ pub struct SetPatchVar {
 }
 
 impl Expr for SetPatchVar {
-    fn output_type(&self, _program: &Program) -> NlAbstractTy {
+    fn output_type(&self, _names: NameContext) -> NlAbstractTy {
         NlAbstractTy::Unit
     }
 
@@ -290,7 +290,7 @@ impl Expr for SetPatchVar {
     ) -> fmt::Result {
         let SetPatchVar { var, workspace, patch, value } = self;
         p.add_fn_call("set_patch_var", |p| {
-            p.add_fn_arg_with(|p| var.pretty_print(p, &names.program().custom_patch_vars))?;
+            p.add_fn_arg_with(|p| var.pretty_print(p, &names.custom_patch_vars()))?;
             p.add_fn_arg_with(|p| workspace.pretty_print(p, names))?;
             p.add_fn_arg_with(|p| patch.pretty_print(p, names))?;
             p.add_fn_arg_with(|p| value.pretty_print(p, names))?;

@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use crate::{
-    hir::{self, Expr},
+    hir::{self, Expr, NameContext},
     mir::{self, MirType, MirTypeInfo},
     sim::{
         observer::GlobalsSchema,
@@ -50,14 +50,15 @@ impl TypeMapping {
 }
 
 pub struct HirToMirFnBuilder<'a, 'b> {
-    pub hir: &'a hir::Program,
+    pub hir_names: NameContext<'a>,
+    // pub hir: &'a hir::Program,
     pub type_mapping: &'a TypeMapping,
     pub mir: &'a mut mir::FunctionBuilder<'b>,
-    pub translator: &'a mut HirToLirFnTranslator,
+    pub translator: &'a mut HirToMirFnTranslator,
 }
 
 #[derive(Debug, Default)]
-pub struct HirToLirFnTranslator {
+pub struct HirToMirFnTranslator {
     pub locals: BTreeMap<hir::LocalId, mir::LocalId>,
     /// Maps each HIR label to an MIR label, as well as the output local that
     /// breaks from that label should use.
@@ -80,7 +81,7 @@ impl<'a, 'b> HirToMirFnBuilder<'a, 'b> {
     /// There is currently no checking if dependencies have already been
     /// evaluated.
     pub fn translate_expr(&mut self, expr: &hir::ExprKind) -> mir::TypedPlace {
-        let output_ty = expr.output_type(self.hir).repr();
+        let output_ty = expr.output_type(self.hir_names).repr();
         // the expression's output will be stored in this local variable
         let (output_local, _output_local_decl) =
             self.mir.create_local(mir::LocalDecl { debug_name: None, ty: output_ty });
@@ -95,16 +96,29 @@ impl<'a, 'b> HirToMirFnBuilder<'a, 'b> {
     // HirToLirFnBuilder separately, this would not be necessary.
     pub fn with_inner_statement_seq<T>(
         &mut self,
-        f: impl FnOnce(&mut HirToMirFnBuilder<'_, '_>) -> T,
+        f: impl FnOnce(&mut HirToMirFnBuilder) -> T,
     ) -> (Vec<mir::Statement>, T) {
-        self.mir.with_inner_statement_seq(|lir| {
+        self.mir.with_inner_statement_seq(|mir| {
             let mut builder = HirToMirFnBuilder {
-                hir: self.hir,
+                hir_names: self.hir_names,
                 type_mapping: self.type_mapping,
-                mir: lir,
+                mir,
                 translator: self.translator,
             };
             f(&mut builder)
+        })
+    }
+
+    pub fn with_locals<T>(
+        &mut self,
+        local_vars: &BTreeMap<hir::LocalId, hir::LocalDecl>,
+        f: impl FnOnce(&mut HirToMirFnBuilder) -> T,
+    ) -> T {
+        f(&mut HirToMirFnBuilder {
+            hir_names: self.hir_names.with_locals(local_vars),
+            type_mapping: self.type_mapping,
+            mir: self.mir,
+            translator: self.translator,
         })
     }
 
@@ -170,12 +184,14 @@ pub fn hir_to_mir(hir: &hir::Program, type_mapping: &TypeMapping) -> mir::Progra
 
     // iterate through each function and convert it to an MIR function
     for (hir_fn_id, hir_fn) in &hir.functions {
+        let hir_fn_body = &hir.function_bodies[hir_fn_id];
+
         // create a builder to track state while translating
         let mut mir_fn_builder = builder.create_function();
-        let mut translator = HirToLirFnTranslator::default();
+        let mut translator = HirToMirFnTranslator::default();
 
         let mut builder = HirToMirFnBuilder {
-            hir,
+            hir_names: NameContext::from_program(hir),
             type_mapping,
             mir: &mut mir_fn_builder,
             translator: &mut translator,
@@ -184,9 +200,11 @@ pub fn hir_to_mir(hir: &hir::Program, type_mapping: &TypeMapping) -> mir::Progra
         // add all the nodes to the function body
         let (return_local, _) = builder.mir.create_local(mir::LocalDecl {
             debug_name: Some("return".into()),
-            ty: hir_fn.body.output_type(hir).repr(),
+            ty: hir_fn.return_ty.repr(),
         });
-        hir_fn.body.write_mir_execution(&mut builder, return_local);
+        builder.with_locals(&hir_fn.parameters, |builder| {
+            hir_fn_body.write_mir_execution(builder, return_local);
+        });
 
         mir_fn_builder.set_return(return_local);
         mir_fn_builder.finish();

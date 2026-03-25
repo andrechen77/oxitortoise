@@ -8,8 +8,7 @@ use std::{
 
 use crate::{
     hir::{
-        Expr, ExprKind, HirToMirFnBuilder, Label, LocalDecl, LocalId, NlAbstractTy, Program,
-        format::NameContext,
+        Expr, ExprKind, HirToMirFnBuilder, Label, LocalDecl, LocalId, NameContext, NlAbstractTy,
     },
     mir,
 };
@@ -64,8 +63,8 @@ pub struct Scope {
 }
 
 impl Expr for Scope {
-    fn output_type(&self, program: &super::Program) -> super::NlAbstractTy {
-        self.inner.output_type(program)
+    fn output_type(&self, names: NameContext) -> NlAbstractTy {
+        self.inner.output_type(names)
     }
 
     fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
@@ -79,9 +78,11 @@ impl Expr for Scope {
             let (mir_local_id, _) = builder.mir.create_local(mir_local_decl);
             builder.translator.locals.insert(*local_id, mir_local_id);
         }
-        self.inner.write_mir_execution(builder, local_out);
+        builder.with_locals(&self.locals, |builder| {
+            self.inner.write_mir_execution(builder, local_out);
+        });
 
-        // the scope does not remove the locals after the inner expression is
+        // the scope does not remove the locals from the translator after the inner expression is
         // evaluated. At the time this code was written, this did not seem to be
         // an issue.
     }
@@ -120,7 +121,7 @@ pub struct Block {
 }
 
 impl Expr for Block {
-    fn output_type(&self, program: &Program) -> NlAbstractTy {
+    fn output_type(&self, names: NameContext) -> NlAbstractTy {
         // This does not really need to be an option but since we move out of it
         // for a split second to do the join, the compiler requires it.
         // Logically it is never None.
@@ -129,7 +130,7 @@ impl Expr for Block {
             if let ExprKind::Break(Break { target, value }) = expr
                 && *target == self.label
             {
-                let break_ty = value.output_type(program);
+                let break_ty = value.output_type(names);
                 output_type = Some(output_type.take().unwrap().join(break_ty));
             }
         });
@@ -187,9 +188,9 @@ pub struct IfElse {
 }
 
 impl Expr for IfElse {
-    fn output_type(&self, program: &Program) -> NlAbstractTy {
-        let then_ty = self.then.output_type(program);
-        let else_ty = self.r#else.output_type(program);
+    fn output_type(&self, names: NameContext) -> NlAbstractTy {
+        let then_ty = self.then.output_type(names);
+        let else_ty = self.r#else.output_type(names);
         then_ty.join(else_ty)
     }
 
@@ -237,7 +238,7 @@ pub struct Break {
 }
 
 impl Expr for Break {
-    fn output_type(&self, _program: &Program) -> NlAbstractTy {
+    fn output_type(&self, _names: NameContext) -> NlAbstractTy {
         // a break diverges, it never returns
         NlAbstractTy::Bottom
     }

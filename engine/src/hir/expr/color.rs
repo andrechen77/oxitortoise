@@ -4,8 +4,8 @@ use std::fmt;
 
 use pretty_print::PrettyPrinter;
 
-use crate::hir::format::NameContext;
-use crate::hir::{Expr, ExprKind, HirToMirFnBuilder, NlAbstractTy, Program};
+use crate::hir::NameContext;
+use crate::hir::{Expr, ExprKind, HirToMirFnBuilder, NlAbstractTy};
 use crate::mir;
 
 /// NetLogo `scale-color`.
@@ -18,7 +18,7 @@ pub struct ScaleColor {
 }
 
 impl Expr for ScaleColor {
-    fn output_type(&self, _program: &Program) -> NlAbstractTy {
+    fn output_type(&self, _names: NameContext) -> NlAbstractTy {
         NlAbstractTy::Color
     }
 

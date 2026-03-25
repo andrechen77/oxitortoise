@@ -5,7 +5,7 @@ use std::fmt::{self, Write};
 use pretty_print::PrettyPrinter;
 
 use crate::{
-    hir::{Expr, ExprKind, HirToMirFnBuilder, NlAbstractTy, Program, TurtleBreedId, format::NameContext},
+    hir::{Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy, TurtleBreedId},
     mir,
 };
 
@@ -22,7 +22,7 @@ pub struct CreateTurtles {
 }
 
 impl Expr for CreateTurtles {
-    fn output_type(&self, _program: &Program) -> NlAbstractTy {
+    fn output_type(&self, _names: NameContext) -> NlAbstractTy {
         NlAbstractTy::Unit
     }
 
@@ -45,7 +45,7 @@ impl Expr for CreateTurtles {
         let CreateTurtles { workspace, rng, breed, num_turtles, body } = self;
         p.add_fn_call("create_turtles", |p| {
             p.add_fn_arg_with(|p| {
-                if let Some(b) = names.program().turtle_breeds.get(breed) {
+                if let Some(b) = names.turtle_breeds().get(breed) {
                     write!(p, "{}#{}", breed, b.name)
                 } else {
                     write!(p, "{:?}", breed)

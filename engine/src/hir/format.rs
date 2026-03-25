@@ -1,39 +1,7 @@
 use pretty_print::PrettyPrinter;
 
-use crate::hir::{Expr as _, Function, LocalDecl, LocalId, Program};
-use std::{collections::BTreeMap, fmt::Write};
-
-#[derive(Debug, Clone, Copy)]
-pub enum NameContext<'a> {
-    Global(&'a Program),
-    Local { local_vars: &'a BTreeMap<LocalId, LocalDecl>, parent: &'a NameContext<'a> },
-}
-
-impl<'a> NameContext<'a> {
-    pub fn from_program(program: &'a Program) -> Self {
-        NameContext::Global(program)
-    }
-
-    pub fn with_locals(&'a self, local_vars: &'a BTreeMap<LocalId, LocalDecl>) -> Self {
-        NameContext::Local { local_vars, parent: self }
-    }
-
-    pub fn program(&self) -> &'a Program {
-        match self {
-            NameContext::Global(program) => program,
-            NameContext::Local { parent, .. } => parent.program(),
-        }
-    }
-
-    pub fn lookup_local_var(&self, local_id: LocalId) -> Option<&'a LocalDecl> {
-        match self {
-            NameContext::Global(_program) => None,
-            NameContext::Local { local_vars, parent } => {
-                local_vars.get(&local_id).or_else(|| parent.lookup_local_var(local_id))
-            }
-        }
-    }
-}
+use crate::hir::{Expr as _, Function, NameContext, Program};
+use std::fmt::Write;
 
 impl Program {
     pub fn pretty_print(&self) -> String {
@@ -46,6 +14,7 @@ impl Program {
             custom_turtle_vars,
             custom_patch_vars,
             functions,
+            function_bodies,
         } = self;
 
         let _ = printer.add_struct("Program", |p| {
@@ -87,8 +56,8 @@ impl Program {
                         }
                         Ok(())
                     },
-                    |p, (_, function)| {
-                        let Function { debug_name: _, parameters, body } = function;
+                    |p, (fn_id, function)| {
+                        let Function { debug_name: _, parameters, return_ty } = function;
                         p.add_struct("Function", |p| {
                             p.add_field_with("parameters", |p| {
                                 p.indented(|p| {
@@ -106,8 +75,9 @@ impl Program {
                                     Ok(())
                                 })
                             })?;
+                            p.add_field_with("return_ty", |p| write!(p, "{}", return_ty))?;
                             p.add_field_with("body", |p| {
-                                body.pretty_print(
+                                function_bodies[fn_id].pretty_print(
                                     p,
                                     NameContext::from_program(self).with_locals(parameters),
                                 )

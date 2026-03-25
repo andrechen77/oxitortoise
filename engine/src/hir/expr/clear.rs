@@ -4,7 +4,7 @@ use std::fmt;
 
 use pretty_print::PrettyPrinter;
 
-use crate::hir::{Expr, ExprKind, HirToMirFnBuilder, NlAbstractTy, Program, format::NameContext};
+use crate::hir::{Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy};
 use crate::mir;
 
 #[derive(Debug, Clone)]
@@ -13,7 +13,7 @@ pub struct ClearAll {
 }
 
 impl Expr for ClearAll {
-    fn output_type(&self, _program: &Program) -> NlAbstractTy {
+    fn output_type(&self, _names: NameContext) -> NlAbstractTy {
         NlAbstractTy::Unit
     }
 

@@ -5,7 +5,7 @@ use std::fmt::{self, Write};
 use pretty_print::PrettyPrinter;
 
 use crate::{
-    hir::{Expr, ExprKind, HirToMirFnBuilder, LocalId, NlAbstractTy, Program, format::NameContext},
+    hir::{Expr, ExprKind, HirToMirFnBuilder, LocalId, NameContext, NlAbstractTy},
     mir,
 };
 
@@ -15,7 +15,7 @@ pub struct GetLocalVar {
 }
 
 impl Expr for GetLocalVar {
-    fn output_type(&self, _program: &Program) -> NlAbstractTy {
+    fn output_type(&self, _names: NameContext) -> NlAbstractTy {
         todo!("TODO(mvp) GetLocalVar output type inference")
     }
 
@@ -42,7 +42,7 @@ pub struct SetLocalVar {
 }
 
 impl Expr for SetLocalVar {
-    fn output_type(&self, _program: &Program) -> NlAbstractTy {
+    fn output_type(&self, _names: NameContext) -> NlAbstractTy {
         NlAbstractTy::Unit
     }
 

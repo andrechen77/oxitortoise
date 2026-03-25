@@ -5,7 +5,7 @@ use std::fmt::{self, Write};
 use pretty_print::PrettyPrinter;
 
 use crate::{
-    hir::{Expr, NlAbstractTy, Program, build_mir::HirToMirFnBuilder, format::NameContext},
+    hir::{Expr, NameContext, NlAbstractTy, build_mir::HirToMirFnBuilder},
     mir,
 };
 
@@ -17,7 +17,7 @@ pub enum Agentset {
 }
 
 impl Expr for Agentset {
-    fn output_type(&self, _program: &Program) -> NlAbstractTy {
+    fn output_type(&self, _names: NameContext) -> NlAbstractTy {
         let typ = match self {
             Agentset::AllTurtles => NlAbstractTy::Turtle,
             Agentset::AllPatches => NlAbstractTy::Patch,

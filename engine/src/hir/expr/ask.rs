@@ -4,8 +4,8 @@ use std::fmt;
 
 use pretty_print::PrettyPrinter;
 
-use crate::hir::format::NameContext;
-use crate::hir::{ClosureType, Expr, ExprKind, HirToMirFnBuilder, NlAbstractTy, Program};
+use crate::hir::NameContext;
+use crate::hir::{ClosureType, Expr, ExprKind, HirToMirFnBuilder, NlAbstractTy};
 use crate::mir;
 
 #[derive(Debug, Clone)]
@@ -19,7 +19,7 @@ pub struct Ask {
 }
 
 impl Expr for Ask {
-    fn output_type(&self, _program: &Program) -> NlAbstractTy {
+    fn output_type(&self, _names: NameContext) -> NlAbstractTy {
         NlAbstractTy::Unit
     }
 
@@ -61,8 +61,8 @@ pub struct Of {
 }
 
 impl Expr for Of {
-    fn output_type(&self, program: &Program) -> NlAbstractTy {
-        let body_ty = self.body.output_type(program);
+    fn output_type(&self, names: NameContext) -> NlAbstractTy {
+        let body_ty = self.body.output_type(names);
         let NlAbstractTy::Closure(ClosureType { return_ty, .. }) = body_ty else {
             panic!("Of body must have closure type, got: {:?}", body_ty);
         };

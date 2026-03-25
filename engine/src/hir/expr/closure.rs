@@ -5,9 +5,8 @@ use std::fmt::{self, Write};
 
 use pretty_print::PrettyPrinter;
 
-use crate::hir::format::NameContext;
 use crate::hir::{
-    ClosureType, Expr, ExprKind, HirToMirFnBuilder, LocalDecl, LocalId, NlAbstractTy, Program,
+    ClosureType, Expr, ExprKind, HirToMirFnBuilder, LocalDecl, LocalId, NameContext, NlAbstractTy,
 };
 use crate::mir;
 
@@ -22,8 +21,8 @@ pub struct Closure {
 }
 
 impl Expr for Closure {
-    fn output_type(&self, program: &Program) -> NlAbstractTy {
-        let return_ty = self.body.output_type(program);
+    fn output_type(&self, names: NameContext) -> NlAbstractTy {
+        let return_ty = self.body.output_type(names);
 
         NlAbstractTy::Closure(ClosureType {
             arg_tys: self.parameters.values().map(|decl| decl.ty.clone()).collect(),

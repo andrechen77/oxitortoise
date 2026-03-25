@@ -5,7 +5,7 @@ use std::fmt;
 use pretty_print::PrettyPrinter;
 
 use crate::{
-    hir::{Expr, ExprKind, HirToMirFnBuilder, NlAbstractTy, Program, format::NameContext},
+    hir::{Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy},
     mir,
 };
 
@@ -16,7 +16,7 @@ pub struct RandomInt {
 }
 
 impl Expr for RandomInt {
-    fn output_type(&self, _program: &Program) -> NlAbstractTy {
+    fn output_type(&self, _names: NameContext) -> NlAbstractTy {
         // Despite the name, the current HIR uses `Float` as the abstract output type.
         NlAbstractTy::Float
     }
