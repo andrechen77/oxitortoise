@@ -7,6 +7,11 @@ use crate::mir::{HostFunctionInfo, MirType, MirTypeContents};
 // TODO what to do about lifetimes? could cause unsafety and sadness
 
 /// A trait to indicate how accesses into values of this type can be generated.
+///
+/// # Safety
+///
+/// Implementors must guarantee that the associated `mir_type` is correct, as
+/// the information will be used to generate and run unsafe code.
 pub unsafe trait ReflectComponents {
     fn mir_type() -> MirType;
 }

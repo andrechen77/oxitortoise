@@ -322,8 +322,7 @@ impl Turtles {
         let ptr_to_row = ptr_to_buffer.proj_dynamic_index(turtle_idx);
         // turtles.data[field_desc.buffer_idx].ptr[turtle_id.index].var
         let var_pl = ptr_to_row.proj_field(field_desc.field_idx as usize);
-        let subvar_pl = if let Some(offset) = offset { var_pl.proj_field(offset) } else { var_pl };
-        subvar_pl
+        if let Some(offset) = offset { var_pl.proj_field(offset) } else { var_pl }
     }
 
     pub fn mir_type_from_schema(schema: &TurtleSchema) -> MirType {

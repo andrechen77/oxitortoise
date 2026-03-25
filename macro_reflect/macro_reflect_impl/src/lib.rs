@@ -33,10 +33,10 @@ impl Parse for ReflectArgs {
                     let _ = list.parse_args_with(Punctuated::<Meta, Comma>::parse_terminated).map(
                         |inner| {
                             for m in inner {
-                                if let Meta::Path(p) = &m {
-                                    if p.is_ident("is_zeroable") {
-                                        out.is_zeroable = true;
-                                    }
+                                if let Meta::Path(p) = &m
+                                    && p.is_ident("is_zeroable")
+                                {
+                                    out.is_zeroable = true;
                                 }
                             }
                         },

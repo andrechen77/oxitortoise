@@ -269,17 +269,6 @@ impl Patches {
                 // initialize other builtins
                 let pcolor_desc = self.patch_schema.pcolor();
 
-                if let Some(pcolor) = self.data[pcolor_desc.buffer_idx as usize]
-                    .as_mut()
-                    .unwrap()
-                    .row(id.0 as usize)
-                    .get::<Color>(pcolor_desc.field_idx as usize)
-                {
-                    if pcolor.to_float().get() % 10.0 > 1.0 {
-                        tracing::trace!("pcolor is not black, break here");
-                    }
-                }
-
                 self.data[pcolor_desc.buffer_idx as usize]
                     .as_mut()
                     .unwrap()
@@ -333,8 +322,7 @@ impl Patches {
         let ptr_to_row = ptr_to_buffer.proj_dynamic_index(patch_id.place.unwrap_local());
         // turtles.data[field_desc.buffer_idx].ptr[patch_id.index].var
         let var_pl = ptr_to_row.proj_field(field_desc.field_idx as usize);
-        let subvar_pl = if let Some(offset) = offset { var_pl.proj_field(offset) } else { var_pl };
-        subvar_pl
+        if let Some(offset) = offset { var_pl.proj_field(offset) } else { var_pl }
     }
 
     pub fn mir_type_from_schema(schema: &PatchSchema) -> MirType {

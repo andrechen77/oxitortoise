@@ -1,4 +1,4 @@
-use std::{collections::HashMap, mem, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 use engine::{
     hir::{
@@ -89,7 +89,7 @@ pub fn ast_to_hir(ast: Ast) -> anyhow::Result<HirResult> {
     let mut global_vars = Vec::new();
     for (var_idx, global_var_name) in global_var_names.into_iter().enumerate() {
         let global_var_name: Arc<str> = global_var_name.to_uppercase().into();
-        let decl = CustomVarDecl { name: global_var_name.clone(), ty: NlAbstractTy::NlTop.into() };
+        let decl = CustomVarDecl { name: global_var_name.clone(), ty: NlAbstractTy::NlTop };
         global_vars.push(decl);
         hir_builder.global_names.global_vars.insert(global_var_name, var_idx);
     }
@@ -98,7 +98,7 @@ pub fn ast_to_hir(ast: Ast) -> anyhow::Result<HirResult> {
     let mut custom_turtle_vars = Vec::new();
     for (var_idx, turtle_var_name) in turtle_var_names.into_iter().enumerate() {
         let turtle_var_name: Arc<str> = turtle_var_name.to_uppercase().into();
-        let decl = CustomVarDecl { name: turtle_var_name.clone(), ty: NlAbstractTy::NlTop.into() };
+        let decl = CustomVarDecl { name: turtle_var_name.clone(), ty: NlAbstractTy::NlTop };
         custom_turtle_vars.push(decl);
         hir_builder
             .global_names
@@ -125,7 +125,7 @@ pub fn ast_to_hir(ast: Ast) -> anyhow::Result<HirResult> {
     // create custom patch variables
     let mut custom_patch_vars = Vec::new();
     for (var_idx, patch_var_name) in patch_var_names.into_iter().enumerate() {
-        let decl = CustomVarDecl { name: patch_var_name.clone(), ty: NlAbstractTy::NlTop.into() };
+        let decl = CustomVarDecl { name: patch_var_name.clone(), ty: NlAbstractTy::NlTop };
         custom_patch_vars.push(decl);
         hir_builder.global_names.patch_vars.insert(patch_var_name, PatchVarDesc::Custom(var_idx));
     }
@@ -244,7 +244,7 @@ fn translate_node(ctx: &mut FnBodyBuilderCtx<'_>, ast_node: ast::Node) -> (ExprK
             // create a new local variable
             let local_id = ctx.hir.next_local_id();
             let local_decl =
-                LocalDecl { debug_name: Some(var_name.clone()), ty: NlAbstractTy::NlTop.into() };
+                LocalDecl { debug_name: Some(var_name.clone()), ty: NlAbstractTy::NlTop };
             ctx.local_vars.insert(local_id, local_decl);
             ctx.local_names.insert(var_name, local_id);
 
@@ -765,7 +765,7 @@ fn translate_statement_block(
     statements_ast: Vec<ast::Node>,
 ) -> ExprKind {
     let label = ctx.hir.next_label();
-    let old_label = mem::replace(&mut ctx.fn_body_label, Some(label));
+    let old_label = ctx.fn_body_label.replace(label);
 
     // translate each statement in the block
     let mut statements = Vec::new();

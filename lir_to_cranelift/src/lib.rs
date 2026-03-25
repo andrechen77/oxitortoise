@@ -121,14 +121,14 @@ fn translate_function(
     let signature = clir::Signature {
         params: (0..lir.num_parameters)
             .map(|i| translate_val_type(lir.local_vars[lir::VarId(i)], triple))
-            .map(|t| clir::AbiParam::new(t))
+            .map(clir::AbiParam::new)
             .collect(),
         returns: lir
             .body
             .output_type
             .iter()
             .map(|&t| translate_val_type(t, triple))
-            .map(|t| clir::AbiParam::new(t))
+            .map(clir::AbiParam::new)
             .collect(),
         call_conv,
     };
@@ -166,8 +166,7 @@ fn translate_function(
 
     // make parameters available as cranelift variables
     let lir_parameters = lir.local_vars[..lir.num_parameters.into()].keys();
-    let cl_parameters =
-        builder.cl.block_params(entry_bb).iter().copied().collect::<Vec<_>>().into_iter();
+    let cl_parameters = builder.cl.block_params(entry_bb).to_vec().into_iter();
     for (lir_var_id, cl_val) in lir_parameters.zip(cl_parameters) {
         builder.cl.def_var(builder.var_map[&lir_var_id], cl_val);
     }
@@ -523,12 +522,12 @@ fn translate_fn_signature(
     let params = params
         .iter()
         .map(|param| translate_val_type(*param, triple))
-        .map(|t| clir::AbiParam::new(t))
+        .map(clir::AbiParam::new)
         .collect();
     let returns = returns
         .iter()
         .map(|ret| translate_val_type(*ret, triple))
-        .map(|t| clir::AbiParam::new(t))
+        .map(clir::AbiParam::new)
         .collect();
     let call_conv = isa::CallConv::triple_default(triple);
     clir::Signature { params, returns, call_conv }

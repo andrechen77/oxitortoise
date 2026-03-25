@@ -157,6 +157,6 @@ impl GlobalsSchema {
     }
 
     pub fn field_type(&self, field_index: usize) -> Type {
-        &self.custom_fields[field_index].1
+        self.custom_fields[field_index].1
     }
 }
