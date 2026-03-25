@@ -5,7 +5,7 @@ use std::fmt::{self, Write};
 use pretty_print::PrettyPrinter;
 
 use crate::{
-    hir::{Expr, ExprKind, HirToMirFnBuilder, NlAbstractTy, Program, TurtleBreedId},
+    hir::{Expr, ExprKind, HirToMirFnBuilder, NlAbstractTy, Program, TurtleBreedId, format::NameContext},
     mir,
 };
 
@@ -40,21 +40,21 @@ impl Expr for CreateTurtles {
     fn pretty_print<W: fmt::Write>(
         &self,
         p: &mut PrettyPrinter<W>,
-        program: &Program,
+        names: NameContext,
     ) -> fmt::Result {
         let CreateTurtles { workspace, rng, breed, num_turtles, body } = self;
         p.add_fn_call("create_turtles", |p| {
             p.add_fn_arg_with(|p| {
-                if let Some(b) = program.turtle_breeds.get(breed) {
-                    write!(p, "{} ({})", breed, b.name)
+                if let Some(b) = names.program().turtle_breeds.get(breed) {
+                    write!(p, "{}#{}", breed, b.name)
                 } else {
                     write!(p, "{:?}", breed)
                 }
             })?;
-            p.add_fn_arg_with(|p| workspace.pretty_print(p, program))?;
-            p.add_fn_arg_with(|p| rng.pretty_print(p, program))?;
-            p.add_fn_arg_with(|p| num_turtles.pretty_print(p, program))?;
-            p.add_fn_arg_with(|p| body.pretty_print(p, program))?;
+            p.add_fn_arg_with(|p| workspace.pretty_print(p, names))?;
+            p.add_fn_arg_with(|p| rng.pretty_print(p, names))?;
+            p.add_fn_arg_with(|p| num_turtles.pretty_print(p, names))?;
+            p.add_fn_arg_with(|p| body.pretty_print(p, names))?;
             Ok(())
         })
     }

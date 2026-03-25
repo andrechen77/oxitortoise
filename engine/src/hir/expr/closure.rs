@@ -1,9 +1,11 @@
 //! Nodes to represent closures.
 
+use std::collections::BTreeMap;
 use std::fmt::{self, Write};
 
 use pretty_print::PrettyPrinter;
 
+use crate::hir::format::NameContext;
 use crate::hir::{
     ClosureType, Expr, ExprKind, HirToMirFnBuilder, LocalDecl, LocalId, NlAbstractTy, Program,
 };
@@ -13,7 +15,7 @@ use crate::mir;
 pub struct Closure {
     /// All the local variables that are captured by the closure.
     pub captures: Vec<LocalId>,
-    pub parameters: Vec<(LocalId, LocalDecl)>,
+    pub parameters: BTreeMap<LocalId, LocalDecl>,
     /// The body of the closure. This is the part of the closure with deferred
     /// evaluation.
     pub body: Box<ExprKind>,
@@ -24,7 +26,7 @@ impl Expr for Closure {
         let return_ty = self.body.output_type(program);
 
         NlAbstractTy::Closure(ClosureType {
-            arg_tys: self.parameters.iter().map(|(_, decl)| decl.ty.clone()).collect(),
+            arg_tys: self.parameters.values().map(|decl| decl.ty.clone()).collect(),
             return_ty: Box::new(return_ty),
         })
     }
@@ -40,7 +42,7 @@ impl Expr for Closure {
     fn pretty_print<W: fmt::Write>(
         &self,
         p: &mut PrettyPrinter<W>,
-        program: &Program,
+        names: NameContext,
     ) -> fmt::Result {
         let Closure { captures, parameters, body } = self;
         p.add_fn_call("closure", |p| {
@@ -72,7 +74,7 @@ impl Expr for Closure {
                 p.line()?;
                 write!(p, ")")
             })?;
-            p.add_fn_arg_with(|p| body.pretty_print(p, program))?;
+            p.add_fn_arg_with(|p| body.pretty_print(p, names.with_locals(parameters)))?;
             Ok(())
         })
     }

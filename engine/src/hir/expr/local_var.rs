@@ -1,11 +1,11 @@
 //! Nodes for getting and setting local variables.
 
-use std::fmt;
+use std::fmt::{self, Write};
 
 use pretty_print::PrettyPrinter;
 
 use crate::{
-    hir::{Expr, ExprKind, HirToMirFnBuilder, LocalId, NlAbstractTy, Program},
+    hir::{Expr, ExprKind, HirToMirFnBuilder, LocalId, NlAbstractTy, Program, format::NameContext},
     mir,
 };
 
@@ -27,13 +27,9 @@ impl Expr for GetLocalVar {
         todo!("TODO(mvp) write MIR execution for GetLocalVar")
     }
 
-    fn pretty_print<W: fmt::Write>(
-        &self,
-        p: &mut PrettyPrinter<W>,
-        _program: &Program,
-    ) -> fmt::Result {
-        p.add_fn_call("get_local", |p| {
-            p.add_fn_arg(self.local_id.0)?;
+    fn pretty_print<W: Write>(&self, p: &mut PrettyPrinter<W>, names: NameContext) -> fmt::Result {
+        p.add_fn_call("get", |p| {
+            p.add_fn_arg_with(|p| pretty_print_local(p, self.local_id, names))?;
             Ok(())
         })
     }
@@ -61,13 +57,23 @@ impl Expr for SetLocalVar {
     fn pretty_print<W: fmt::Write>(
         &self,
         p: &mut PrettyPrinter<W>,
-        program: &Program,
+        names: NameContext,
     ) -> fmt::Result {
         let SetLocalVar { local_id, value } = self;
-        p.add_fn_call("set_local", |p| {
-            p.add_fn_arg(local_id.0)?;
-            p.add_fn_arg_with(|p| value.pretty_print(p, program))?;
+        p.add_fn_call("set", |p| {
+            p.add_fn_arg_with(|p| pretty_print_local(p, *local_id, names))?;
+            p.add_fn_arg_with(|p| value.pretty_print(p, names))?;
             Ok(())
         })
     }
+}
+
+fn pretty_print_local(
+    p: &mut PrettyPrinter<impl Write>,
+    local_id: LocalId,
+    names: NameContext,
+) -> fmt::Result {
+    let name =
+        names.lookup_local_var(local_id).and_then(|decl| decl.debug_name.as_deref()).unwrap_or("?");
+    write!(p, "{}#{}", local_id.0, name)
 }

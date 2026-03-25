@@ -187,27 +187,27 @@ fn translate_function_body(hir: &mut HirBuilder, function_ast: ast::Procedure) -
     let ast::Procedure { name, arg_names, return_type: _, agent_class: _, body } = function_ast;
 
     let mut non_param_locals = BTreeMap::new(); // local variables that are not parametrs
-    let mut parameters = Vec::new(); // local variables that are parameters
+    let mut parameters = BTreeMap::new(); // local variables that are parameters
     let mut local_names = BTreeMap::new(); // all local variables
 
     // all procedures take workspace, rng, and self parameters by default
     let workspace_param = hir.next_local_id();
-    parameters.push((
+    parameters.insert(
         workspace_param,
         LocalDecl { debug_name: Some("workspace".into()), ty: NlAbstractTy::Workspace },
-    ));
+    );
     let rng_param = hir.next_local_id();
     parameters
-        .push((rng_param, LocalDecl { debug_name: Some("rng".into()), ty: NlAbstractTy::Rng }));
+        .insert(rng_param, LocalDecl { debug_name: Some("rng".into()), ty: NlAbstractTy::Rng });
     let self_param = hir.next_local_id();
     parameters
-        .push((self_param, LocalDecl { debug_name: Some("self".into()), ty: NlAbstractTy::NlTop }));
+        .insert(self_param, LocalDecl { debug_name: Some("self".into()), ty: NlAbstractTy::NlTop });
 
     // add user-defined parameters
     for arg_name in arg_names {
         let local_id = hir.next_local_id();
         let local_decl = LocalDecl { debug_name: Some(arg_name.clone()), ty: NlAbstractTy::NlTop };
-        parameters.push((local_id, local_decl));
+        parameters.insert(local_id, local_decl);
         local_names.insert(arg_name, local_id);
     }
 
@@ -295,7 +295,7 @@ fn translate_node(ctx: &mut FnBodyBuilderCtx<'_>, ast_node: ast::Node) -> (ExprK
         N::CommandCall(C::CreateTurtles([num_turtles, body])) => {
             let (num_turtles, diverges) = translate_node(ctx, *num_turtles);
             breaking_node &= diverges;
-            let body = translate_ephemeral_closure(ctx, vec![], *body);
+            let body = translate_ephemeral_closure(ctx, Default::default(), *body);
             let breed = ctx.hir.global_names.turtle_breeds[DEFAULT_TURTLE_BREED_NAME];
             ExprKind::from(expr::CreateTurtles {
                 workspace: ctx.expr_workspace(),
@@ -388,7 +388,7 @@ fn translate_node(ctx: &mut FnBodyBuilderCtx<'_>, ast_node: ast::Node) -> (ExprK
             );
             let body = translate_ephemeral_closure(
                 ctx,
-                vec![closure_workspace_param, closure_rng_param],
+                BTreeMap::from([closure_workspace_param, closure_rng_param]),
                 *body,
             );
 
@@ -413,7 +413,7 @@ fn translate_node(ctx: &mut FnBodyBuilderCtx<'_>, ast_node: ast::Node) -> (ExprK
             );
             let body = translate_ephemeral_closure(
                 ctx,
-                vec![closure_workspace_param, closure_rng_param],
+                BTreeMap::from([closure_workspace_param, closure_rng_param]),
                 *body,
             );
 
@@ -796,7 +796,7 @@ fn translate_statement_block(
 
 fn translate_ephemeral_closure(
     ctx: &mut FnBodyBuilderCtx<'_>,
-    parameters: Vec<(LocalId, LocalDecl)>,
+    parameters: BTreeMap<LocalId, LocalDecl>,
     body_ast: ast::Node,
 ) -> ExprKind {
     let statements = match body_ast {

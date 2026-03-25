@@ -5,7 +5,7 @@ use std::fmt;
 use pretty_print::PrettyPrinter;
 
 use crate::{
-    hir::{Expr, ExprKind, HirToMirFnBuilder, NlAbstractTy, Program},
+    hir::{Expr, ExprKind, HirToMirFnBuilder, NlAbstractTy, Program, format::NameContext},
     mir,
 };
 
@@ -36,14 +36,14 @@ impl Expr for Distancexy {
     fn pretty_print<W: fmt::Write>(
         &self,
         p: &mut PrettyPrinter<W>,
-        program: &Program,
+        names: NameContext,
     ) -> fmt::Result {
         let Distancexy { workspace, agent, x, y } = self;
         p.add_fn_call("distancexy", |p| {
-            p.add_fn_arg_with(|p| workspace.pretty_print(p, program))?;
-            p.add_fn_arg_with(|p| agent.pretty_print(p, program))?;
-            p.add_fn_arg_with(|p| x.pretty_print(p, program))?;
-            p.add_fn_arg_with(|p| y.pretty_print(p, program))?;
+            p.add_fn_arg_with(|p| workspace.pretty_print(p, names))?;
+            p.add_fn_arg_with(|p| agent.pretty_print(p, names))?;
+            p.add_fn_arg_with(|p| x.pretty_print(p, names))?;
+            p.add_fn_arg_with(|p| y.pretty_print(p, names))?;
             Ok(())
         })
     }

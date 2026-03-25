@@ -5,7 +5,9 @@ use std::fmt::{self, Write};
 use pretty_print::PrettyPrinter;
 
 use crate::{
-    hir::{Expr, ExprKind, FunctionId, HirToMirFnBuilder, NlAbstractTy, Program},
+    hir::{
+        Expr, ExprKind, FunctionId, HirToMirFnBuilder, NlAbstractTy, Program, format::NameContext,
+    },
     mir,
 };
 
@@ -38,20 +40,21 @@ impl Expr for CallUserFn {
     fn pretty_print<W: fmt::Write>(
         &self,
         p: &mut PrettyPrinter<W>,
-        program: &Program,
+        names: NameContext,
     ) -> fmt::Result {
         let CallUserFn { target, args } = self;
         p.add_fn_call("call_user_fn", |p| {
             p.add_fn_arg_with(|p| {
-                let label = program
+                let label = names
+                    .program()
                     .functions
                     .get(target)
                     .and_then(|f| f.debug_name.as_deref())
                     .unwrap_or("?");
-                write!(p, "{:?} /* {} */", target, label)
+                write!(p, "{}#{}", target.0, label)
             })?;
             for arg in args {
-                p.add_fn_arg_with(|p| arg.pretty_print(p, program))?;
+                p.add_fn_arg_with(|p| arg.pretty_print(p, names))?;
             }
             Ok(())
         })

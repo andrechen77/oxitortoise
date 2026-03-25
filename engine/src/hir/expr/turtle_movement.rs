@@ -5,25 +5,25 @@ use std::fmt::{self, Write};
 use pretty_print::PrettyPrinter;
 
 use crate::{
-    hir::{Expr, ExprKind, HirToMirFnBuilder, NlAbstractTy, Program},
+    hir::{Expr, ExprKind, HirToMirFnBuilder, NlAbstractTy, Program, format::NameContext},
     mir,
 };
 
 fn pretty_print_patch_loc_relation<W: fmt::Write>(
     rel: &PatchLocRelation,
     p: &mut PrettyPrinter<W>,
-    program: &Program,
+    names: NameContext,
 ) -> fmt::Result {
     match rel {
         PatchLocRelation::Ahead => write!(p, "Ahead"),
         PatchLocRelation::LeftAhead(h) => {
             write!(p, "LeftAhead(")?;
-            h.pretty_print(p, program)?;
+            h.pretty_print(p, names)?;
             write!(p, ")")
         }
         PatchLocRelation::RightAhead(h) => {
             write!(p, "RightAhead(")?;
-            h.pretty_print(p, program)?;
+            h.pretty_print(p, names)?;
             write!(p, ")")
         }
     }
@@ -61,13 +61,13 @@ impl Expr for TurtleRotate {
     fn pretty_print<W: fmt::Write>(
         &self,
         p: &mut PrettyPrinter<W>,
-        program: &Program,
+        names: NameContext,
     ) -> fmt::Result {
         let TurtleRotate { workspace, turtle, angle } = self;
         p.add_fn_call("turtle_rotate", |p| {
-            p.add_fn_arg_with(|p| workspace.pretty_print(p, program))?;
-            p.add_fn_arg_with(|p| turtle.pretty_print(p, program))?;
-            p.add_fn_arg_with(|p| angle.pretty_print(p, program))?;
+            p.add_fn_arg_with(|p| workspace.pretty_print(p, names))?;
+            p.add_fn_arg_with(|p| turtle.pretty_print(p, names))?;
+            p.add_fn_arg_with(|p| angle.pretty_print(p, names))?;
             Ok(())
         })
     }
@@ -98,13 +98,13 @@ impl Expr for TurtleForward {
     fn pretty_print<W: fmt::Write>(
         &self,
         p: &mut PrettyPrinter<W>,
-        program: &Program,
+        names: NameContext,
     ) -> fmt::Result {
         let TurtleForward { workspace, turtle, distance } = self;
         p.add_fn_call("turtle_forward", |p| {
-            p.add_fn_arg_with(|p| workspace.pretty_print(p, program))?;
-            p.add_fn_arg_with(|p| turtle.pretty_print(p, program))?;
-            p.add_fn_arg_with(|p| distance.pretty_print(p, program))?;
+            p.add_fn_arg_with(|p| workspace.pretty_print(p, names))?;
+            p.add_fn_arg_with(|p| turtle.pretty_print(p, names))?;
+            p.add_fn_arg_with(|p| distance.pretty_print(p, names))?;
             Ok(())
         })
     }
@@ -135,13 +135,13 @@ impl Expr for CanMove {
     fn pretty_print<W: fmt::Write>(
         &self,
         p: &mut PrettyPrinter<W>,
-        program: &Program,
+        names: NameContext,
     ) -> fmt::Result {
         let CanMove { workspace, turtle, distance } = self;
         p.add_fn_call("can_move", |p| {
-            p.add_fn_arg_with(|p| workspace.pretty_print(p, program))?;
-            p.add_fn_arg_with(|p| turtle.pretty_print(p, program))?;
-            p.add_fn_arg_with(|p| distance.pretty_print(p, program))?;
+            p.add_fn_arg_with(|p| workspace.pretty_print(p, names))?;
+            p.add_fn_arg_with(|p| turtle.pretty_print(p, names))?;
+            p.add_fn_arg_with(|p| distance.pretty_print(p, names))?;
             Ok(())
         })
     }
@@ -178,14 +178,14 @@ impl Expr for PatchRelative {
     fn pretty_print<W: fmt::Write>(
         &self,
         p: &mut PrettyPrinter<W>,
-        program: &Program,
+        names: NameContext,
     ) -> fmt::Result {
         let PatchRelative { workspace, relative_loc, turtle, distance } = self;
         p.add_fn_call("patch_relative", |p| {
-            p.add_fn_arg_with(|p| workspace.pretty_print(p, program))?;
-            p.add_fn_arg_with(|p| pretty_print_patch_loc_relation(relative_loc, p, program))?;
-            p.add_fn_arg_with(|p| turtle.pretty_print(p, program))?;
-            p.add_fn_arg_with(|p| distance.pretty_print(p, program))?;
+            p.add_fn_arg_with(|p| workspace.pretty_print(p, names))?;
+            p.add_fn_arg_with(|p| pretty_print_patch_loc_relation(relative_loc, p, names))?;
+            p.add_fn_arg_with(|p| turtle.pretty_print(p, names))?;
+            p.add_fn_arg_with(|p| distance.pretty_print(p, names))?;
             Ok(())
         })
     }

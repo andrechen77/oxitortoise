@@ -7,7 +7,9 @@ use derive_more::derive::TryFrom;
 use pretty_print::PrettyPrinter;
 
 use crate::{
-    hir::{Expr, ExprKind, NlAbstractTy, Program, build_mir::HirToMirFnBuilder},
+    hir::{
+        Expr, ExprKind, NlAbstractTy, Program, build_mir::HirToMirFnBuilder, format::NameContext,
+    },
     mir::{self, prelude::*},
     sim::{
         patch::OptionPatchId,
@@ -126,13 +128,13 @@ impl Expr for BinaryArith {
     fn pretty_print<W: fmt::Write>(
         &self,
         p: &mut PrettyPrinter<W>,
-        program: &Program,
+        names: NameContext,
     ) -> fmt::Result {
         let BinaryArith { op, lhs, rhs } = self;
         p.add_fn_call("binary_arith", |p| {
             p.add_fn_arg(*op)?;
-            p.add_fn_arg_with(|p| lhs.pretty_print(p, program))?;
-            p.add_fn_arg_with(|p| rhs.pretty_print(p, program))?;
+            p.add_fn_arg_with(|p| lhs.pretty_print(p, names))?;
+            p.add_fn_arg_with(|p| rhs.pretty_print(p, names))?;
             Ok(())
         })
     }
@@ -248,13 +250,13 @@ impl Expr for BinaryCmp {
     fn pretty_print<W: fmt::Write>(
         &self,
         p: &mut PrettyPrinter<W>,
-        program: &Program,
+        names: NameContext,
     ) -> fmt::Result {
         let BinaryCmp { op, lhs, rhs } = self;
         p.add_fn_call("binary_cmp", |p| {
             p.add_fn_arg(*op)?;
-            p.add_fn_arg_with(|p| lhs.pretty_print(p, program))?;
-            p.add_fn_arg_with(|p| rhs.pretty_print(p, program))?;
+            p.add_fn_arg_with(|p| lhs.pretty_print(p, names))?;
+            p.add_fn_arg_with(|p| rhs.pretty_print(p, names))?;
             Ok(())
         })
     }
@@ -299,13 +301,13 @@ impl Expr for BinaryBool {
     fn pretty_print<W: fmt::Write>(
         &self,
         p: &mut PrettyPrinter<W>,
-        program: &Program,
+        names: NameContext,
     ) -> fmt::Result {
         let BinaryBool { op, lhs, rhs } = self;
         p.add_fn_call("binary_bool", |p| {
             p.add_fn_arg(*op)?;
-            p.add_fn_arg_with(|p| lhs.pretty_print(p, program))?;
-            p.add_fn_arg_with(|p| rhs.pretty_print(p, program))?;
+            p.add_fn_arg_with(|p| lhs.pretty_print(p, names))?;
+            p.add_fn_arg_with(|p| rhs.pretty_print(p, names))?;
             Ok(())
         })
     }
@@ -337,11 +339,11 @@ impl Expr for LogicalNot {
     fn pretty_print<W: fmt::Write>(
         &self,
         p: &mut PrettyPrinter<W>,
-        program: &Program,
+        names: NameContext,
     ) -> fmt::Result {
         let LogicalNot { operand } = self;
         p.add_fn_call("logical_not", |p| {
-            p.add_fn_arg_with(|p| operand.pretty_print(p, program))?;
+            p.add_fn_arg_with(|p| operand.pretty_print(p, names))?;
             Ok(())
         })
     }
@@ -373,11 +375,11 @@ impl Expr for Negate {
     fn pretty_print<W: fmt::Write>(
         &self,
         p: &mut PrettyPrinter<W>,
-        program: &Program,
+        names: NameContext,
     ) -> fmt::Result {
         let Negate { operand } = self;
         p.add_fn_call("negate", |p| {
-            p.add_fn_arg_with(|p| operand.pretty_print(p, program))?;
+            p.add_fn_arg_with(|p| operand.pretty_print(p, names))?;
             Ok(())
         })
     }

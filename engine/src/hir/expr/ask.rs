@@ -4,6 +4,7 @@ use std::fmt;
 
 use pretty_print::PrettyPrinter;
 
+use crate::hir::format::NameContext;
 use crate::hir::{ClosureType, Expr, ExprKind, HirToMirFnBuilder, NlAbstractTy, Program};
 use crate::mir;
 
@@ -36,14 +37,14 @@ impl Expr for Ask {
     fn pretty_print<W: fmt::Write>(
         &self,
         p: &mut PrettyPrinter<W>,
-        program: &Program,
+        names: NameContext,
     ) -> fmt::Result {
         let Ask { workspace, rng, recipients, body } = self;
         p.add_fn_call("ask", |p| {
-            p.add_fn_arg_with(|p| workspace.pretty_print(p, program))?;
-            p.add_fn_arg_with(|p| rng.pretty_print(p, program))?;
-            p.add_fn_arg_with(|p| recipients.pretty_print(p, program))?;
-            p.add_fn_arg_with(|p| body.pretty_print(p, program))?;
+            p.add_fn_arg_with(|p| workspace.pretty_print(p, names))?;
+            p.add_fn_arg_with(|p| rng.pretty_print(p, names))?;
+            p.add_fn_arg_with(|p| recipients.pretty_print(p, names))?;
+            p.add_fn_arg_with(|p| body.pretty_print(p, names))?;
             Ok(())
         })
     }
@@ -82,14 +83,14 @@ impl Expr for Of {
     fn pretty_print<W: fmt::Write>(
         &self,
         p: &mut PrettyPrinter<W>,
-        program: &Program,
+        names: NameContext,
     ) -> fmt::Result {
         let Of { workspace, rng, recipients, body } = self;
         p.add_fn_call("of", |p| {
-            p.add_fn_arg_with(|p| workspace.pretty_print(p, program))?;
-            p.add_fn_arg_with(|p| rng.pretty_print(p, program))?;
-            p.add_fn_arg_with(|p| recipients.pretty_print(p, program))?;
-            p.add_fn_arg_with(|p| body.pretty_print(p, program))?;
+            p.add_fn_arg_with(|p| workspace.pretty_print(p, names))?;
+            p.add_fn_arg_with(|p| rng.pretty_print(p, names))?;
+            p.add_fn_arg_with(|p| recipients.pretty_print(p, names))?;
+            p.add_fn_arg_with(|p| body.pretty_print(p, names))?;
             Ok(())
         })
     }

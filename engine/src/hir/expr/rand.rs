@@ -5,7 +5,7 @@ use std::fmt;
 use pretty_print::PrettyPrinter;
 
 use crate::{
-    hir::{Expr, ExprKind, HirToMirFnBuilder, NlAbstractTy, Program},
+    hir::{Expr, ExprKind, HirToMirFnBuilder, NlAbstractTy, Program, format::NameContext},
     mir,
 };
 
@@ -33,12 +33,12 @@ impl Expr for RandomInt {
     fn pretty_print<W: fmt::Write>(
         &self,
         p: &mut PrettyPrinter<W>,
-        program: &Program,
+        names: NameContext,
     ) -> fmt::Result {
         let RandomInt { rng, bound } = self;
         p.add_fn_call("random_int", |p| {
-            p.add_fn_arg_with(|p| rng.pretty_print(p, program))?;
-            p.add_fn_arg_with(|p| bound.pretty_print(p, program))?;
+            p.add_fn_arg_with(|p| rng.pretty_print(p, names))?;
+            p.add_fn_arg_with(|p| bound.pretty_print(p, names))?;
             Ok(())
         })
     }

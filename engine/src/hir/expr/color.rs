@@ -4,6 +4,7 @@ use std::fmt;
 
 use pretty_print::PrettyPrinter;
 
+use crate::hir::format::NameContext;
 use crate::hir::{Expr, ExprKind, HirToMirFnBuilder, NlAbstractTy, Program};
 use crate::mir;
 
@@ -35,14 +36,14 @@ impl Expr for ScaleColor {
     fn pretty_print<W: fmt::Write>(
         &self,
         p: &mut PrettyPrinter<W>,
-        program: &Program,
+        names: NameContext,
     ) -> fmt::Result {
         let ScaleColor { color, number, range1, range2 } = self;
         p.add_fn_call("scale_color", |p| {
-            p.add_fn_arg_with(|p| color.pretty_print(p, program))?;
-            p.add_fn_arg_with(|p| number.pretty_print(p, program))?;
-            p.add_fn_arg_with(|p| range1.pretty_print(p, program))?;
-            p.add_fn_arg_with(|p| range2.pretty_print(p, program))?;
+            p.add_fn_arg_with(|p| color.pretty_print(p, names))?;
+            p.add_fn_arg_with(|p| number.pretty_print(p, names))?;
+            p.add_fn_arg_with(|p| range1.pretty_print(p, names))?;
+            p.add_fn_arg_with(|p| range2.pretty_print(p, names))?;
             Ok(())
         })
     }

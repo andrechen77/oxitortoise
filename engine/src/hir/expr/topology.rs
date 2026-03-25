@@ -5,7 +5,7 @@ use std::fmt;
 use pretty_print::PrettyPrinter;
 
 use crate::{
-    hir::{Expr, ExprKind, HirToMirFnBuilder, NlAbstractTy, Program},
+    hir::{Expr, ExprKind, HirToMirFnBuilder, NlAbstractTy, Program, format::NameContext},
     mir,
 };
 
@@ -36,14 +36,14 @@ impl Expr for OffsetDistanceByHeading {
     fn pretty_print<W: fmt::Write>(
         &self,
         p: &mut PrettyPrinter<W>,
-        program: &Program,
+        names: NameContext,
     ) -> fmt::Result {
         let OffsetDistanceByHeading { workspace, position, amt, heading } = self;
         p.add_fn_call("offset_distance_by_heading", |p| {
-            p.add_fn_arg_with(|p| workspace.pretty_print(p, program))?;
-            p.add_fn_arg_with(|p| position.pretty_print(p, program))?;
-            p.add_fn_arg_with(|p| amt.pretty_print(p, program))?;
-            p.add_fn_arg_with(|p| heading.pretty_print(p, program))?;
+            p.add_fn_arg_with(|p| workspace.pretty_print(p, names))?;
+            p.add_fn_arg_with(|p| position.pretty_print(p, names))?;
+            p.add_fn_arg_with(|p| amt.pretty_print(p, names))?;
+            p.add_fn_arg_with(|p| heading.pretty_print(p, names))?;
             Ok(())
         })
     }
@@ -74,13 +74,13 @@ impl Expr for PatchAt {
     fn pretty_print<W: fmt::Write>(
         &self,
         p: &mut PrettyPrinter<W>,
-        program: &Program,
+        names: NameContext,
     ) -> fmt::Result {
         let PatchAt { workspace, x, y } = self;
         p.add_fn_call("patch_at", |p| {
-            p.add_fn_arg_with(|p| workspace.pretty_print(p, program))?;
-            p.add_fn_arg_with(|p| x.pretty_print(p, program))?;
-            p.add_fn_arg_with(|p| y.pretty_print(p, program))?;
+            p.add_fn_arg_with(|p| workspace.pretty_print(p, names))?;
+            p.add_fn_arg_with(|p| x.pretty_print(p, names))?;
+            p.add_fn_arg_with(|p| y.pretty_print(p, names))?;
             Ok(())
         })
     }
@@ -107,11 +107,11 @@ impl Expr for MaxPxcor {
     fn pretty_print<W: fmt::Write>(
         &self,
         p: &mut PrettyPrinter<W>,
-        program: &Program,
+        names: NameContext,
     ) -> fmt::Result {
         let MaxPxcor { workspace } = self;
         p.add_fn_call("max_pxcor", |p| {
-            p.add_fn_arg_with(|p| workspace.pretty_print(p, program))?;
+            p.add_fn_arg_with(|p| workspace.pretty_print(p, names))?;
             Ok(())
         })
     }
@@ -138,11 +138,11 @@ impl Expr for MaxPycor {
     fn pretty_print<W: fmt::Write>(
         &self,
         p: &mut PrettyPrinter<W>,
-        program: &Program,
+        names: NameContext,
     ) -> fmt::Result {
         let MaxPycor { workspace } = self;
         p.add_fn_call("max_pycor", |p| {
-            p.add_fn_arg_with(|p| workspace.pretty_print(p, program))?;
+            p.add_fn_arg_with(|p| workspace.pretty_print(p, names))?;
             Ok(())
         })
     }
@@ -171,12 +171,12 @@ impl Expr for EuclideanDistanceNoWrap {
     fn pretty_print<W: fmt::Write>(
         &self,
         p: &mut PrettyPrinter<W>,
-        program: &Program,
+        names: NameContext,
     ) -> fmt::Result {
         let EuclideanDistanceNoWrap { a, b } = self;
         p.add_fn_call("euclidean_distance_no_wrap", |p| {
-            p.add_fn_arg_with(|p| a.pretty_print(p, program))?;
-            p.add_fn_arg_with(|p| b.pretty_print(p, program))?;
+            p.add_fn_arg_with(|p| a.pretty_print(p, names))?;
+            p.add_fn_arg_with(|p| b.pretty_print(p, names))?;
             Ok(())
         })
     }
@@ -205,12 +205,12 @@ impl Expr for PointConstructor {
     fn pretty_print<W: fmt::Write>(
         &self,
         p: &mut PrettyPrinter<W>,
-        program: &Program,
+        names: NameContext,
     ) -> fmt::Result {
         let PointConstructor { x, y } = self;
         p.add_fn_call("point_constructor", |p| {
-            p.add_fn_arg_with(|p| x.pretty_print(p, program))?;
-            p.add_fn_arg_with(|p| y.pretty_print(p, program))?;
+            p.add_fn_arg_with(|p| x.pretty_print(p, names))?;
+            p.add_fn_arg_with(|p| y.pretty_print(p, names))?;
             Ok(())
         })
     }

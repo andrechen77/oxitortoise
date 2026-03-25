@@ -5,7 +5,7 @@ use std::fmt::{self, Write};
 use pretty_print::PrettyPrinter;
 
 use crate::{
-    hir::{Expr, ExprKind, HirToMirFnBuilder, NlAbstractTy, Program},
+    hir::{Expr, ExprKind, HirToMirFnBuilder, NlAbstractTy, Program, format::NameContext},
     mir,
     sim::value::UnpackedAny,
 };
@@ -39,7 +39,7 @@ impl Expr for Constant {
     fn pretty_print<W: fmt::Write>(
         &self,
         p: &mut PrettyPrinter<W>,
-        _program: &Program,
+        _names: NameContext,
     ) -> fmt::Result {
         p.add_fn_call("constant", |p| {
             p.add_fn_arg_with(|p| match &self.value {
@@ -75,11 +75,11 @@ impl Expr for ListLiteral {
     fn pretty_print<W: fmt::Write>(
         &self,
         p: &mut PrettyPrinter<W>,
-        program: &Program,
+        names: NameContext,
     ) -> fmt::Result {
         p.add_fn_call("list_literal", |p| {
             for item in &self.items {
-                p.add_fn_arg_with(|p| item.pretty_print(p, program))?;
+                p.add_fn_arg_with(|p| item.pretty_print(p, names))?;
             }
             Ok(())
         })

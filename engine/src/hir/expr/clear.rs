@@ -4,7 +4,7 @@ use std::fmt;
 
 use pretty_print::PrettyPrinter;
 
-use crate::hir::{Expr, ExprKind, HirToMirFnBuilder, NlAbstractTy, Program};
+use crate::hir::{Expr, ExprKind, HirToMirFnBuilder, NlAbstractTy, Program, format::NameContext};
 use crate::mir;
 
 #[derive(Debug, Clone)]
@@ -28,11 +28,11 @@ impl Expr for ClearAll {
     fn pretty_print<W: fmt::Write>(
         &self,
         p: &mut PrettyPrinter<W>,
-        program: &Program,
+        names: NameContext,
     ) -> fmt::Result {
         let ClearAll { workspace } = self;
         p.add_fn_call("clear_all", |p| {
-            p.add_fn_arg_with(|p| workspace.pretty_print(p, program))?;
+            p.add_fn_arg_with(|p| workspace.pretty_print(p, names))?;
             Ok(())
         })
     }

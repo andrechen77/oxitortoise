@@ -7,7 +7,10 @@ use std::{
 };
 
 use crate::{
-    hir::{Expr, ExprKind, HirToMirFnBuilder, Label, LocalDecl, LocalId, NlAbstractTy, Program},
+    hir::{
+        Expr, ExprKind, HirToMirFnBuilder, Label, LocalDecl, LocalId, NlAbstractTy, Program,
+        format::NameContext,
+    },
     mir,
 };
 
@@ -83,7 +86,7 @@ impl Expr for Scope {
         // an issue.
     }
 
-    fn pretty_print<W: Write>(&self, p: &mut PrettyPrinter<W>, program: &Program) -> fmt::Result {
+    fn pretty_print<W: Write>(&self, p: &mut PrettyPrinter<W>, names: NameContext) -> fmt::Result {
         let Scope { locals, inner } = self;
         write!(p, "with (")?;
         p.indented(|p| {
@@ -102,7 +105,7 @@ impl Expr for Scope {
         })?;
         p.line()?;
         write!(p, ") ")?;
-        inner.pretty_print(p, program)?;
+        inner.pretty_print(p, names.with_locals(&self.locals))?;
         Ok(())
     }
 }
@@ -160,13 +163,13 @@ impl Expr for Block {
         builder.mir.add_statement(block);
     }
 
-    fn pretty_print<W: Write>(&self, p: &mut PrettyPrinter<W>, program: &Program) -> fmt::Result {
+    fn pretty_print<W: Write>(&self, p: &mut PrettyPrinter<W>, names: NameContext) -> fmt::Result {
         let Block { label, statements } = self;
         write!(p, "{}: {{", label)?;
         p.indented(|p| {
             for statement in statements {
                 p.line()?;
-                statement.pretty_print(p, program)?;
+                statement.pretty_print(p, names)?;
             }
             Ok(())
         })?;
@@ -215,14 +218,14 @@ impl Expr for IfElse {
         builder.mir.add_statement(if_else);
     }
 
-    fn pretty_print<W: Write>(&self, p: &mut PrettyPrinter<W>, program: &Program) -> fmt::Result {
+    fn pretty_print<W: Write>(&self, p: &mut PrettyPrinter<W>, names: NameContext) -> fmt::Result {
         let IfElse { condition, then, r#else } = self;
         write!(p, "if ")?;
-        condition.pretty_print(p, program)?;
+        condition.pretty_print(p, names)?;
         write!(p, " ")?;
-        then.pretty_print(p, program)?;
+        then.pretty_print(p, names)?;
         write!(p, " else ")?;
-        r#else.pretty_print(p, program)?;
+        r#else.pretty_print(p, names)?;
         Ok(())
     }
 }
@@ -262,11 +265,11 @@ impl Expr for Break {
     fn pretty_print<W: fmt::Write>(
         &self,
         p: &mut PrettyPrinter<W>,
-        program: &Program,
+        names: NameContext,
     ) -> fmt::Result {
         let Break { target, value } = self;
         write!(p, "break {} ", target)?;
-        value.pretty_print(p, program)?;
+        value.pretty_print(p, names)?;
         Ok(())
     }
 }

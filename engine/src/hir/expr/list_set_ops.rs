@@ -5,7 +5,7 @@ use std::fmt;
 use pretty_print::PrettyPrinter;
 
 use crate::{
-    hir::{Expr, ExprKind, HirToMirFnBuilder, NlAbstractTy, Program},
+    hir::{Expr, ExprKind, HirToMirFnBuilder, NlAbstractTy, Program, format::NameContext},
     mir,
 };
 
@@ -37,12 +37,12 @@ impl Expr for OneOf {
     fn pretty_print<W: fmt::Write>(
         &self,
         p: &mut PrettyPrinter<W>,
-        program: &Program,
+        names: NameContext,
     ) -> fmt::Result {
         let OneOf { rng, operand } = self;
         p.add_fn_call("one_of", |p| {
-            p.add_fn_arg_with(|p| rng.pretty_print(p, program))?;
-            p.add_fn_arg_with(|p| operand.pretty_print(p, program))?;
+            p.add_fn_arg_with(|p| rng.pretty_print(p, names))?;
+            p.add_fn_arg_with(|p| operand.pretty_print(p, names))?;
             Ok(())
         })
     }

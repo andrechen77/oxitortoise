@@ -4,6 +4,7 @@ use std::fmt::{self, Write};
 
 use pretty_print::PrettyPrinter;
 
+use crate::hir::format::NameContext;
 use crate::hir::{Expr, ExprKind, HirToMirFnBuilder, NlAbstractTy, Program, TurtleBreedId};
 use crate::mir;
 
@@ -33,19 +34,19 @@ impl Expr for SetDefaultShape {
     fn pretty_print<W: fmt::Write>(
         &self,
         p: &mut PrettyPrinter<W>,
-        program: &Program,
+        names: NameContext,
     ) -> fmt::Result {
         let SetDefaultShape { workspace, breed, shape } = self;
         p.add_fn_call("set_default_shape", |p| {
             p.add_fn_arg_with(|p| {
-                if let Some(b) = program.turtle_breeds.get(breed) {
-                    write!(p, "{} ({})", breed, b.name)
+                if let Some(b) = names.program().turtle_breeds.get(breed) {
+                    write!(p, "{}#{}", breed, b.name)
                 } else {
                     write!(p, "{:?}", breed)
                 }
             })?;
-            p.add_fn_arg_with(|p| workspace.pretty_print(p, program))?;
-            p.add_fn_arg_with(|p| shape.pretty_print(p, program))?;
+            p.add_fn_arg_with(|p| workspace.pretty_print(p, names))?;
+            p.add_fn_arg_with(|p| shape.pretty_print(p, names))?;
             Ok(())
         })
     }

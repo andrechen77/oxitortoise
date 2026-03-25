@@ -5,7 +5,7 @@ use std::fmt::{self, Write};
 use pretty_print::PrettyPrinter;
 
 use crate::{
-    hir::{Expr, NlAbstractTy, Program, build_mir::HirToMirFnBuilder},
+    hir::{Expr, NlAbstractTy, Program, build_mir::HirToMirFnBuilder, format::NameContext},
     mir,
 };
 
@@ -37,7 +37,7 @@ impl Expr for Agentset {
         todo!("TODO(mvp) write MIR code to generate a value representing the agentset")
     }
 
-    fn pretty_print<W: Write>(&self, p: &mut PrettyPrinter<W>, _program: &Program) -> fmt::Result {
+    fn pretty_print<W: Write>(&self, p: &mut PrettyPrinter<W>, _names: NameContext) -> fmt::Result {
         match self {
             Agentset::AllTurtles => write!(p, "all_turtles()"),
             Agentset::AllPatches => write!(p, "all_patches()"),

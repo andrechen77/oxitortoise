@@ -7,6 +7,7 @@ use derive_more::derive::{Display, From, TryInto};
 use pretty_print::PrettyPrinter;
 
 use crate::{
+    hir::format::NameContext,
     mir::{self, prelude::*},
     sim::turtle::{TurtleBreed, TurtleBreedId},
 };
@@ -49,7 +50,7 @@ pub struct Function {
     /// The list of parameters for the function. Evaluation of the function
     /// requires that the body be wrapped in a Scope expression that provides
     /// values for these parameters.
-    pub parameters: Vec<(LocalId, LocalDecl)>,
+    pub parameters: BTreeMap<LocalId, LocalDecl>,
     pub body: ExprKind,
 }
 
@@ -89,7 +90,7 @@ pub trait Expr {
     fn pretty_print<W: fmt::Write>(
         &self,
         printer: &mut PrettyPrinter<W>,
-        program: &Program,
+        names: NameContext,
     ) -> fmt::Result;
 }
 

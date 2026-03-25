@@ -447,7 +447,9 @@ impl PatchVarDesc {
         match self {
             PatchVarDesc::Pos => write!(p, "POS"),
             PatchVarDesc::Pcolor => write!(p, "PCOLOR"),
-            PatchVarDesc::Custom(field) => write!(p, "{}", custom_patch_vars[*field].name),
+            PatchVarDesc::Custom(field) => {
+                write!(p, "{}#{}", field, custom_patch_vars[*field].name)
+            }
         }
     }
 }

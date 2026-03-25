@@ -499,7 +499,9 @@ impl TurtleVarDesc {
             TurtleVarDesc::Pos => write!(p, "POS"),
             TurtleVarDesc::Xcor => write!(p, "XCOR"),
             TurtleVarDesc::Ycor => write!(p, "YCOR"),
-            TurtleVarDesc::Custom(field) => write!(p, "{}", custom_turtle_vars[*field].name),
+            TurtleVarDesc::Custom(field) => {
+                write!(p, "{}#{}", field, custom_turtle_vars[*field].name)
+            }
         }
     }
 }

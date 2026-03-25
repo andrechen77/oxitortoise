@@ -5,7 +5,7 @@ use std::fmt::{self, Write};
 use pretty_print::PrettyPrinter;
 
 use crate::{
-    hir::{Expr, ExprKind, HirToMirFnBuilder, NlAbstractTy, Program},
+    hir::{Expr, ExprKind, HirToMirFnBuilder, NlAbstractTy, Program, format::NameContext},
     mir::{self, prelude::*},
     sim::{
         observer::Globals,
@@ -50,12 +50,12 @@ impl Expr for GetGlobalVar {
         );
     }
 
-    fn pretty_print<W: Write>(&self, p: &mut PrettyPrinter<W>, program: &Program) -> fmt::Result {
+    fn pretty_print<W: Write>(&self, p: &mut PrettyPrinter<W>, names: NameContext) -> fmt::Result {
         write!(
             p,
-            "get_global_var({} {})",
+            "get_global_var({}#{})",
             self.index,
-            program.global_vars[self.index].name.as_ref()
+            names.program().global_vars[self.index].name.as_ref()
         )
     }
 }
@@ -111,13 +111,13 @@ impl Expr for GetTurtleVar {
     fn pretty_print<W: fmt::Write>(
         &self,
         p: &mut PrettyPrinter<W>,
-        program: &Program,
+        names: NameContext,
     ) -> fmt::Result {
         let GetTurtleVar { var, workspace, turtle } = self;
         p.add_fn_call("get_turtle_var", |p| {
-            p.add_fn_arg_with(|p| var.pretty_print(p, &program.custom_turtle_vars))?;
-            p.add_fn_arg_with(|p| workspace.pretty_print(p, program))?;
-            p.add_fn_arg_with(|p| turtle.pretty_print(p, program))?;
+            p.add_fn_arg_with(|p| var.pretty_print(p, &names.program().custom_turtle_vars))?;
+            p.add_fn_arg_with(|p| workspace.pretty_print(p, names))?;
+            p.add_fn_arg_with(|p| turtle.pretty_print(p, names))?;
             Ok(())
         })
     }
@@ -164,14 +164,14 @@ impl Expr for SetTurtleVar {
     fn pretty_print<W: fmt::Write>(
         &self,
         p: &mut PrettyPrinter<W>,
-        program: &Program,
+        names: NameContext,
     ) -> fmt::Result {
         let SetTurtleVar { var, workspace, turtle, value } = self;
         p.add_fn_call("set_turtle_var", |p| {
-            p.add_fn_arg_with(|p| var.pretty_print(p, &program.custom_turtle_vars))?;
-            p.add_fn_arg_with(|p| workspace.pretty_print(p, program))?;
-            p.add_fn_arg_with(|p| turtle.pretty_print(p, program))?;
-            p.add_fn_arg_with(|p| value.pretty_print(p, program))?;
+            p.add_fn_arg_with(|p| var.pretty_print(p, &names.program().custom_turtle_vars))?;
+            p.add_fn_arg_with(|p| workspace.pretty_print(p, names))?;
+            p.add_fn_arg_with(|p| turtle.pretty_print(p, names))?;
+            p.add_fn_arg_with(|p| value.pretty_print(p, names))?;
             Ok(())
         })
     }
@@ -233,13 +233,13 @@ impl Expr for GetPatchVar {
     fn pretty_print<W: fmt::Write>(
         &self,
         p: &mut PrettyPrinter<W>,
-        program: &Program,
+        names: NameContext,
     ) -> fmt::Result {
         let GetPatchVar { var, workspace, patch } = self;
         p.add_fn_call("get_patch_var", |p| {
-            p.add_fn_arg_with(|p| var.pretty_print(p, &program.custom_patch_vars))?;
-            p.add_fn_arg_with(|p| workspace.pretty_print(p, program))?;
-            p.add_fn_arg_with(|p| patch.pretty_print(p, program))?;
+            p.add_fn_arg_with(|p| var.pretty_print(p, &names.program().custom_patch_vars))?;
+            p.add_fn_arg_with(|p| workspace.pretty_print(p, names))?;
+            p.add_fn_arg_with(|p| patch.pretty_print(p, names))?;
             Ok(())
         })
     }
@@ -286,14 +286,14 @@ impl Expr for SetPatchVar {
     fn pretty_print<W: fmt::Write>(
         &self,
         p: &mut PrettyPrinter<W>,
-        program: &Program,
+        names: NameContext,
     ) -> fmt::Result {
         let SetPatchVar { var, workspace, patch, value } = self;
         p.add_fn_call("set_patch_var", |p| {
-            p.add_fn_arg_with(|p| var.pretty_print(p, &program.custom_patch_vars))?;
-            p.add_fn_arg_with(|p| workspace.pretty_print(p, program))?;
-            p.add_fn_arg_with(|p| patch.pretty_print(p, program))?;
-            p.add_fn_arg_with(|p| value.pretty_print(p, program))?;
+            p.add_fn_arg_with(|p| var.pretty_print(p, &names.program().custom_patch_vars))?;
+            p.add_fn_arg_with(|p| workspace.pretty_print(p, names))?;
+            p.add_fn_arg_with(|p| patch.pretty_print(p, names))?;
+            p.add_fn_arg_with(|p| value.pretty_print(p, names))?;
             Ok(())
         })
     }
