@@ -1,7 +1,10 @@
 // Foundational expressions such as control flow and scope are defined here.
 // More specialized expression kinds are defined in their respective submodules.
 
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    fmt::{self, Write},
+};
 
 use crate::{
     hir::{Expr, ExprKind, HirToMirFnBuilder, Label, LocalDecl, LocalId, NlAbstractTy, Program},
@@ -41,6 +44,7 @@ pub use diffuse::*;
 pub use distancexy::*;
 pub use list_set_ops::*;
 pub use local_var::*;
+use pretty_print::PrettyPrinter;
 pub use rand::*;
 pub use set_default_shape::*;
 pub use ticks::*;
@@ -50,7 +54,7 @@ pub use user_fn::*;
 
 /// An expression that defines a set of mutable local variables that can be
 /// written and read in the evaluation of an inner expression.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Scope {
     pub locals: HashMap<LocalId, LocalDecl>,
     pub inner: Box<ExprKind>,
@@ -78,12 +82,35 @@ impl Expr for Scope {
         // evaluated. At the time this code was written, this did not seem to be
         // an issue.
     }
+
+    fn pretty_print<W: Write>(&self, p: &mut PrettyPrinter<W>, program: &Program) -> fmt::Result {
+        let Scope { locals, inner } = self;
+        write!(p, "with (")?;
+        p.indented(|p| {
+            // add local declarations
+            for (local_id, decl) in locals {
+                p.line()?;
+                write!(
+                    p,
+                    "{:?} {}: {},",
+                    local_id,
+                    decl.debug_name.as_ref().map_or("", |n| n.as_ref()),
+                    decl.ty
+                )?;
+            }
+            Ok(())
+        })?;
+        p.line()?;
+        write!(p, ") ")?;
+        inner.pretty_print(p, program)?;
+        Ok(())
+    }
 }
 
 /// An expression that represents multiple expressions evaluated in order.
 /// The only way to exit a block is to break out of it; "falling through" the
 /// end of the statement sequence is not allowed.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Block {
     pub label: Label,
     pub statements: Vec<ExprKind>,
@@ -132,9 +159,24 @@ impl Expr for Block {
         }));
         builder.mir.add_statement(block);
     }
+
+    fn pretty_print<W: Write>(&self, p: &mut PrettyPrinter<W>, program: &Program) -> fmt::Result {
+        let Block { label, statements } = self;
+        write!(p, "{}: {{", label)?;
+        p.indented(|p| {
+            for statement in statements {
+                p.line()?;
+                statement.pretty_print(p, program)?;
+            }
+            Ok(())
+        })?;
+        p.line()?;
+        write!(p, "}}")?;
+        Ok(())
+    }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct IfElse {
     pub condition: Box<ExprKind>,
     pub then: Box<ExprKind>,
@@ -172,9 +214,20 @@ impl Expr for IfElse {
         }));
         builder.mir.add_statement(if_else);
     }
+
+    fn pretty_print<W: Write>(&self, p: &mut PrettyPrinter<W>, program: &Program) -> fmt::Result {
+        let IfElse { condition, then, r#else } = self;
+        write!(p, "if ")?;
+        condition.pretty_print(p, program)?;
+        write!(p, " ")?;
+        then.pretty_print(p, program)?;
+        write!(p, " else ")?;
+        r#else.pretty_print(p, program)?;
+        Ok(())
+    }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Break {
     pub target: Label,
     pub value: Box<ExprKind>,
@@ -204,5 +257,16 @@ impl Expr for Break {
         builder.mir.add_statement(mir::Statement::Elementary(mir::ElementaryStatement::Break {
             target: target_label,
         }));
+    }
+
+    fn pretty_print<W: fmt::Write>(
+        &self,
+        p: &mut PrettyPrinter<W>,
+        program: &Program,
+    ) -> fmt::Result {
+        let Break { target, value } = self;
+        write!(p, "break {} ", target)?;
+        value.pretty_print(p, program)?;
+        Ok(())
     }
 }

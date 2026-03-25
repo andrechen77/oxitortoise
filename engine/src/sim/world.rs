@@ -150,7 +150,7 @@ impl World {
                     let heading = self.turtles.get_turtle_heading(id).expect("turtle id from iter should be valid");
                     let position = self.turtles.get_turtle_position(id).expect("turtle id from iter should be valid");
                     p.add_field_with("WHO", |p| write!(p, "{:.0}", base.who.0))?;
-                    p.add_field_with("BREED", |p| write!(p, "\"{}\"", self.turtles.get_breed(base.breed).name))?;
+                    p.add_field_with("BREED", |p| write!(p, "\"{}\"", self.turtles.breeds()[&base.breed].name))?;
                     p.add_field_with("COLOR", |p| write!(p, "{}", base.color.to_float().get()))?;
                     p.add_field_with("HEADING", |p| write!(p, "{}", heading.to_float().get()))?;
                     p.add_field_with("\"LABEL-COLOR\"", |p| write!(p, "{}", base.label_color.to_float().get()))?;

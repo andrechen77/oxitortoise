@@ -3,11 +3,12 @@ use std::fmt::{self, Write};
 pub struct PrettyPrinter<W> {
     out: W,
     indent: usize,
+    in_middle_of_list: bool,
 }
 
 impl<W: Write> PrettyPrinter<W> {
     pub fn new(out: W) -> Self {
-        Self { out, indent: 0 }
+        Self { out, indent: 0, in_middle_of_list: false }
     }
 
     /// Starts a new line with indentation.
@@ -90,6 +91,33 @@ impl<W: Write> PrettyPrinter<W> {
         })?;
         self.line()?;
         write!(self, "]")
+    }
+
+    pub fn add_fn_call(
+        &mut self,
+        fn_name: &str,
+        then: impl FnOnce(&mut Self) -> fmt::Result,
+    ) -> fmt::Result {
+        write!(self, "{}(", fn_name)?;
+        let prev_in_middle_of_list = self.in_middle_of_list;
+        self.in_middle_of_list = false;
+        then(self)?;
+        self.in_middle_of_list = prev_in_middle_of_list;
+        write!(self, ")")?;
+        Ok(())
+    }
+
+    pub fn add_fn_arg_with(&mut self, then: impl FnOnce(&mut Self) -> fmt::Result) -> fmt::Result {
+        if self.in_middle_of_list {
+            write!(self, ", ")?;
+        }
+        self.in_middle_of_list = true;
+        then(self)?;
+        Ok(())
+    }
+
+    pub fn add_fn_arg<T: fmt::Debug>(&mut self, arg: T) -> fmt::Result {
+        self.add_fn_arg_with(|p| write!(p, "{:?}", arg))
     }
 }
 

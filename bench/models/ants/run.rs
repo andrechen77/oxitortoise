@@ -4,18 +4,9 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use ast_to_hir::{add_cheats, serde_json, GlobalScope, NameReferent, ParseResult};
+use ast_to_hir::{HirResult, serde_json};
 use engine::{
-    exec::{
-        jit::{InstallLir, InstalledObj as _},
-        ExecutionContext,
-    },
-    hir::{
-        self, hir_to_lir,
-        transforms::{lower, optimize_of_agent_type, peephole_transform},
-        type_inference::narrow_types,
-        TurtleBreeds,
-    },
+    exec::jit::{InstallLir, InstalledObj as _},
     lir,
     sim::{
         observer::{Globals, GlobalsSchema},
@@ -23,7 +14,7 @@ use engine::{
         shapes::Shapes,
         tick::Tick,
         topology::{Topology, TopologySpec},
-        turtle::{Breed, BreedId, TurtleBaseData, TurtleSchema, Turtles},
+        turtle::{TurtleBaseData, TurtleBreed, TurtleBreedId, TurtleSchema, Turtles},
         value::NlFloat,
         world::World,
     },
@@ -33,10 +24,10 @@ use engine::{
     workspace::Workspace,
 };
 use oxitortoise_main::LirInstaller;
-use tracing::{error, info, trace, Level};
+use tracing::{Level, error, info, trace};
 use tracing_subscriber::{
-    filter::Targets, fmt::MakeWriter, layer::SubscriberExt as _, util::SubscriberInitExt as _,
-    Layer as _,
+    Layer as _, filter::Targets, fmt::MakeWriter, layer::SubscriberExt as _,
+    util::SubscriberInitExt as _,
 };
 
 macro_rules! print_offsets {
@@ -94,7 +85,7 @@ fn print_offsets(workspace: &Workspace) {
 fn create_workspace(
     globals_schema: GlobalsSchema,
     turtle_schema: TurtleSchema,
-    turtle_breeds: SecondaryMap<BreedId, Breed>,
+    turtle_breeds: HashMap<TurtleBreedId, TurtleBreed>,
     patch_schema: PatchSchema,
 ) -> Workspace {
     let topology_spec = TopologySpec {
@@ -118,14 +109,14 @@ fn create_workspace(
     }
 }
 
-struct CompileResult {
-    workspace: Workspace,
-    global_names: GlobalScope,
-    hir_to_lir_fns: HashMap<hir::FunctionId, lir::FunctionId>,
-    installed_obj: <LirInstaller as InstallLir>::Obj,
-}
+// struct CompileResult {
+//     workspace: Workspace,
+//     global_names: GlobalScope,
+//     hir_to_lir_fns: HashMap<hir::FunctionId, lir::FunctionId>,
+//     installed_obj: <LirInstaller as InstallLir>::Obj,
+// }
 
-static COMPILE_RESULT: Mutex<Option<CompileResult>> = Mutex::new(None);
+// static COMPILE_RESULT: Mutex<Option<CompileResult>> = Mutex::new(None);
 
 fn main() {
     tracing_subscriber::registry()
@@ -136,7 +127,7 @@ fn main() {
                 .with_filter(
                     Targets::new()
                         .with_target("oxitortoise_engine", Level::INFO)
-                        .with_target("oxitortoise_ast_to_hir", Level::INFO)
+                        .with_target("oxitortoise_ast_to_hir", Level::TRACE)
                         .with_target("ants", Level::TRACE)
                         .with_target("oxitortoise_main", Level::TRACE)
                         .with_target("oxitortoise_lir_to_wasm", Level::INFO),
@@ -148,226 +139,228 @@ fn main() {
 
     let ast = include_str!("ast.json");
     let ast = serde_json::from_str(ast).unwrap();
-    let ParseResult { mut program, global_names, fn_info } = ast_to_hir::ast_to_hir(ast).unwrap();
+    let HirResult { mut program, global_names } = ast_to_hir::ast_to_hir(ast).unwrap();
 
-    info!("applying cheats");
-    let cheats = include_str!("cheats.json");
-    let cheats = serde_json::from_str(cheats).unwrap();
-    add_cheats(&cheats, &mut program, &global_names, &fn_info);
+    println!("{}", program.pretty_print());
 
-    let hir_filename = "before.hir";
-    let hir_str = program.pretty_print();
-    write_to_file(hir_filename, hir_str);
+    // info!("applying cheats");
+    // let cheats = include_str!("cheats.json");
+    // let cheats = serde_json::from_str(cheats).unwrap();
+    // add_cheats(&cheats, &mut program, &global_names, &fn_info);
 
-    let fn_ids: Vec<_> = program.functions.keys().collect();
-    narrow_types(&mut program);
-    for fn_id in fn_ids {
-        info!(
-            "transforming function {} {}",
-            fn_id,
-            program.functions[fn_id].debug_name.as_deref().unwrap_or_default()
-        );
-        peephole_transform(&mut program, fn_id);
-        optimize_of_agent_type(&mut program, fn_id);
-        peephole_transform(&mut program, fn_id);
-        lower(&mut program, fn_id);
-    }
-    let hir_filename = "after.hir";
-    let hir_str = program.pretty_print();
-    write_to_file(hir_filename, hir_str);
+    // let hir_filename = "before.hir";
+    // let hir_str = program.pretty_print();
+    // write_to_file(hir_filename, hir_str);
 
-    let (lir_program, hir_to_lir_fns) = hir_to_lir::<LirInstaller>(&program);
-    let lir_str = lir_program.pretty_print();
-    let lir_filename = "model.lir";
-    write_to_file(lir_filename, lir_str);
+    // let fn_ids: Vec<_> = program.functions.keys().collect();
+    // narrow_types(&mut program);
+    // for fn_id in fn_ids {
+    //     info!(
+    //         "transforming function {} {}",
+    //         fn_id,
+    //         program.functions[fn_id].debug_name.as_deref().unwrap_or_default()
+    //     );
+    //     peephole_transform(&mut program, fn_id);
+    //     optimize_of_agent_type(&mut program, fn_id);
+    //     peephole_transform(&mut program, fn_id);
+    //     lower(&mut program, fn_id);
+    // }
+    // let hir_filename = "after.hir";
+    // let hir_str = program.pretty_print();
+    // write_to_file(hir_filename, hir_str);
 
-    // set up the workspace
-    let TurtleBreeds::Full(breeds) = program.turtle_breeds else {
-        panic!("turtle breeds are not full");
-    };
-    let mut workspace = create_workspace(
-        program.globals_schema.unwrap(),
-        program.turtle_schema.unwrap(),
-        breeds,
-        program.patch_schema.unwrap(),
-    );
+    // let (lir_program, hir_to_lir_fns) = hir_to_lir::<LirInstaller>(&program);
+    // let lir_str = lir_program.pretty_print();
+    // let lir_filename = "model.lir";
+    // write_to_file(lir_filename, lir_str);
 
-    print_offsets(&workspace);
-    for (i, row_buffer) in workspace.world.patches.data.iter().enumerate() {
-        trace!("patch row buffer {}: {:?}", i, row_buffer);
-    }
-    for (i, row_buffer) in workspace.world.turtles.data.iter().enumerate() {
-        trace!("turtle row buffer {}: {:?}", i, row_buffer);
-    }
+    // // set up the workspace
+    // let TurtleBreeds::Full(breeds) = program.turtle_breeds else {
+    //     panic!("turtle breeds are not full");
+    // };
+    // let mut workspace = create_workspace(
+    //     program.globals_schema.unwrap(),
+    //     program.turtle_schema.unwrap(),
+    //     breeds,
+    //     program.patch_schema.unwrap(),
+    // );
 
-    let mut lir_installer = LirInstaller::default();
-    let result = unsafe { lir_installer.install_lir(&lir_program) };
-    #[cfg(target_arch = "wasm32")]
-    {
-        let name = "model.wasm";
-        write_to_file(name, lir_installer.module_bytes);
-    }
-    let installed_obj = match result {
-        Ok(obj) => obj,
-        Err(_error) => {
-            error!("failed to install LIR program");
-            panic!();
-        }
-    };
+    // print_offsets(&workspace);
+    // for (i, row_buffer) in workspace.world.patches.data.iter().enumerate() {
+    //     trace!("patch row buffer {}: {:?}", i, row_buffer);
+    // }
+    // for (i, row_buffer) in workspace.world.turtles.data.iter().enumerate() {
+    //     trace!("turtle row buffer {}: {:?}", i, row_buffer);
+    // }
 
-    let NameReferent::Global(population) = global_names.lookup("POPULATION").unwrap() else {
-        panic!("expected a global variable");
-    };
-    let NameReferent::Global(diffusion_rate) = global_names.lookup("DIFFUSION-RATE").unwrap()
-    else {
-        panic!("expected a global variable");
-    };
-    let NameReferent::Global(evaporation_rate) = global_names.lookup("EVAPORATION-RATE").unwrap()
-    else {
-        panic!("expected a global variable");
-    };
-    *workspace.world.globals.get_mut::<NlFloat>(population).unwrap_left() = NlFloat::new(125.0);
-    *workspace.world.globals.get_mut::<NlFloat>(diffusion_rate).unwrap_left() = NlFloat::new(50.0);
-    *workspace.world.globals.get_mut::<NlFloat>(evaporation_rate).unwrap_left() =
-        NlFloat::new(10.0);
-    visualize_update(workspace.world.generate_js_update_full());
+    // let mut lir_installer = LirInstaller::default();
+    // let result = unsafe { lir_installer.install_lir(&lir_program) };
+    // #[cfg(target_arch = "wasm32")]
+    // {
+    //     let name = "model.wasm";
+    //     write_to_file(name, lir_installer.module_bytes);
+    // }
+    // let installed_obj = match result {
+    //     Ok(obj) => obj,
+    //     Err(_error) => {
+    //         error!("failed to install LIR program");
+    //         panic!();
+    //     }
+    // };
 
-    *COMPILE_RESULT.lock().unwrap() =
-        Some(CompileResult { workspace, global_names, hir_to_lir_fns, installed_obj });
+    // let NameReferent::Global(population) = global_names.lookup("POPULATION").unwrap() else {
+    //     panic!("expected a global variable");
+    // };
+    // let NameReferent::Global(diffusion_rate) = global_names.lookup("DIFFUSION-RATE").unwrap()
+    // else {
+    //     panic!("expected a global variable");
+    // };
+    // let NameReferent::Global(evaporation_rate) = global_names.lookup("EVAPORATION-RATE").unwrap()
+    // else {
+    //     panic!("expected a global variable");
+    // };
+    // *workspace.world.globals.get_mut::<NlFloat>(population).unwrap_left() = NlFloat::new(125.0);
+    // *workspace.world.globals.get_mut::<NlFloat>(diffusion_rate).unwrap_left() = NlFloat::new(50.0);
+    // *workspace.world.globals.get_mut::<NlFloat>(evaporation_rate).unwrap_left() =
+    //     NlFloat::new(10.0);
+    // visualize_update(workspace.world.generate_js_update_full());
 
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        let start = std::time::Instant::now();
-        perf_trials();
-        let duration = start.elapsed();
-        println!("perf_trials execution time: {:?}", duration);
+    // *COMPILE_RESULT.lock().unwrap() =
+    //     Some(CompileResult { workspace, global_names, hir_to_lir_fns, installed_obj });
 
-        // verification_trials();
-    }
+    // #[cfg(not(target_arch = "wasm32"))]
+    // {
+    //     let start = std::time::Instant::now();
+    //     perf_trials();
+    //     let duration = start.elapsed();
+    //     println!("perf_trials execution time: {:?}", duration);
+
+    //     // verification_trials();
+    // }
 }
 
-#[unsafe(no_mangle)]
-extern "C" fn call_setup() {
-    let mut compile_result = COMPILE_RESULT.lock().unwrap();
-    let Some(compile_result) = compile_result.as_mut() else {
-        panic!("no compile result");
-    };
-    let CompileResult { workspace, global_names, hir_to_lir_fns, installed_obj } = compile_result;
+// #[unsafe(no_mangle)]
+// extern "C" fn call_setup() {
+//     let mut compile_result = COMPILE_RESULT.lock().unwrap();
+//     let Some(compile_result) = compile_result.as_mut() else {
+//         panic!("no compile result");
+//     };
+//     let CompileResult { workspace, global_names, hir_to_lir_fns, installed_obj } = compile_result;
 
-    // find the function by name
-    let NameReferent::UserProc(fn_id) = global_names.lookup("SETUP").unwrap() else {
-        panic!("expected a user procedure");
-    };
-    let setup = installed_obj.entrypoint(hir_to_lir_fns[&fn_id]);
+//     // find the function by name
+//     let NameReferent::UserProc(fn_id) = global_names.lookup("SETUP").unwrap() else {
+//         panic!("expected a user procedure");
+//     };
+//     let setup = installed_obj.entrypoint(hir_to_lir_fns[&fn_id]);
 
-    // call the function
-    let next_int = workspace.rng.clone();
-    let mut ctx =
-        ExecutionContext { workspace, next_int, dirty_aggregator: DirtyAggregator::default() };
-    setup.call(&mut ctx, vec![]);
-    visualize_update(ctx.workspace.world.generate_js_update_full());
-}
+//     // call the function
+//     let next_int = workspace.rng.clone();
+//     let mut ctx =
+//         ExecutionContext { workspace, next_int, dirty_aggregator: DirtyAggregator::default() };
+//     setup.call(&mut ctx, vec![]);
+//     visualize_update(ctx.workspace.world.generate_js_update_full());
+// }
 
-#[unsafe(no_mangle)]
-extern "C" fn call_go() {
-    let mut compile_result = COMPILE_RESULT.lock().unwrap();
-    let Some(compile_result) = compile_result.as_mut() else {
-        panic!("no compile result");
-    };
-    let CompileResult { workspace, global_names, hir_to_lir_fns, installed_obj } = compile_result;
+// #[unsafe(no_mangle)]
+// extern "C" fn call_go() {
+//     let mut compile_result = COMPILE_RESULT.lock().unwrap();
+//     let Some(compile_result) = compile_result.as_mut() else {
+//         panic!("no compile result");
+//     };
+//     let CompileResult { workspace, global_names, hir_to_lir_fns, installed_obj } = compile_result;
 
-    // find the function by name
-    let NameReferent::UserProc(fn_id) = global_names.lookup("GO").unwrap() else {
-        panic!("expected a user procedure");
-    };
-    let go = installed_obj.entrypoint(hir_to_lir_fns[&fn_id]);
+//     // find the function by name
+//     let NameReferent::UserProc(fn_id) = global_names.lookup("GO").unwrap() else {
+//         panic!("expected a user procedure");
+//     };
+//     let go = installed_obj.entrypoint(hir_to_lir_fns[&fn_id]);
 
-    // call the function
-    let next_int = workspace.rng.clone();
-    let mut ctx =
-        ExecutionContext { workspace, next_int, dirty_aggregator: DirtyAggregator::default() };
-    go.call(&mut ctx, vec![]);
-    visualize_update(ctx.workspace.world.generate_js_update_full());
-}
+//     // call the function
+//     let next_int = workspace.rng.clone();
+//     let mut ctx =
+//         ExecutionContext { workspace, next_int, dirty_aggregator: DirtyAggregator::default() };
+//     go.call(&mut ctx, vec![]);
+//     visualize_update(ctx.workspace.world.generate_js_update_full());
+// }
 
-#[unsafe(no_mangle)]
-extern "C" fn perf_trials() {
-    let mut compile_result = COMPILE_RESULT.lock().unwrap();
-    let Some(compile_result) = compile_result.as_mut() else {
-        panic!("no compile result");
-    };
-    let CompileResult { workspace, global_names, hir_to_lir_fns, installed_obj } = compile_result;
+// #[unsafe(no_mangle)]
+// extern "C" fn perf_trials() {
+//     let mut compile_result = COMPILE_RESULT.lock().unwrap();
+//     let Some(compile_result) = compile_result.as_mut() else {
+//         panic!("no compile result");
+//     };
+//     let CompileResult { workspace, global_names, hir_to_lir_fns, installed_obj } = compile_result;
 
-    // find the functions by name
-    let NameReferent::UserProc(fn_id) = global_names.lookup("SETUP").unwrap() else {
-        panic!("expected a user procedure");
-    };
-    let setup = installed_obj.entrypoint(hir_to_lir_fns[&fn_id]);
-    let NameReferent::UserProc(fn_id) = global_names.lookup("GO").unwrap() else {
-        panic!("expected a user procedure");
-    };
-    let go = installed_obj.entrypoint(hir_to_lir_fns[&fn_id]);
+//     // find the functions by name
+//     let NameReferent::UserProc(fn_id) = global_names.lookup("SETUP").unwrap() else {
+//         panic!("expected a user procedure");
+//     };
+//     let setup = installed_obj.entrypoint(hir_to_lir_fns[&fn_id]);
+//     let NameReferent::UserProc(fn_id) = global_names.lookup("GO").unwrap() else {
+//         panic!("expected a user procedure");
+//     };
+//     let go = installed_obj.entrypoint(hir_to_lir_fns[&fn_id]);
 
-    // set up the execution context
-    let next_int = workspace.rng.clone();
-    let mut ctx =
-        ExecutionContext { workspace, next_int, dirty_aggregator: DirtyAggregator::default() };
+//     // set up the execution context
+//     let next_int = workspace.rng.clone();
+//     let mut ctx =
+//         ExecutionContext { workspace, next_int, dirty_aggregator: DirtyAggregator::default() };
 
-    // run the simulation
-    for _trial in 0..100 {
-        // call setup
-        setup.call(&mut ctx, vec![]);
+//     // run the simulation
+//     for _trial in 0..100 {
+//         // call setup
+//         setup.call(&mut ctx, vec![]);
 
-        // call go
-        for _tick in 0..1000 {
-            go.call(&mut ctx, vec![]);
-        }
-    }
-}
+//         // call go
+//         for _tick in 0..1000 {
+//             go.call(&mut ctx, vec![]);
+//         }
+//     }
+// }
 
-fn verification_trials() {
-    let mut compile_result = COMPILE_RESULT.lock().unwrap();
-    let Some(compile_result) = compile_result.as_mut() else {
-        panic!("no compile result");
-    };
-    let CompileResult { workspace, global_names, mir_to_lir_fns, installed_obj } = compile_result;
+// fn verification_trials() {
+//     let mut compile_result = COMPILE_RESULT.lock().unwrap();
+//     let Some(compile_result) = compile_result.as_mut() else {
+//         panic!("no compile result");
+//     };
+//     let CompileResult { workspace, global_names, mir_to_lir_fns, installed_obj } = compile_result;
 
-    // find the functions by name
-    let NameReferent::UserProc(fn_id) = global_names.lookup("SETUP").unwrap() else {
-        panic!("expected a user procedure");
-    };
-    let setup = installed_obj.entrypoint(mir_to_lir_fns[&fn_id]);
-    let NameReferent::UserProc(fn_id) = global_names.lookup("GO").unwrap() else {
-        panic!("expected a user procedure");
-    };
-    let go = installed_obj.entrypoint(mir_to_lir_fns[&fn_id]);
+//     // find the functions by name
+//     let NameReferent::UserProc(fn_id) = global_names.lookup("SETUP").unwrap() else {
+//         panic!("expected a user procedure");
+//     };
+//     let setup = installed_obj.entrypoint(mir_to_lir_fns[&fn_id]);
+//     let NameReferent::UserProc(fn_id) = global_names.lookup("GO").unwrap() else {
+//         panic!("expected a user procedure");
+//     };
+//     let go = installed_obj.entrypoint(mir_to_lir_fns[&fn_id]);
 
-    // set up the execution context
-    let next_int = workspace.rng.clone();
-    let mut ctx =
-        ExecutionContext { workspace, next_int, dirty_aggregator: DirtyAggregator::default() };
+//     // set up the execution context
+//     let next_int = workspace.rng.clone();
+//     let mut ctx =
+//         ExecutionContext { workspace, next_int, dirty_aggregator: DirtyAggregator::default() };
 
-    // run the simulation
-    for trial in 0..100 {
-        info!("running verification trial {}", trial);
+//     // run the simulation
+//     for trial in 0..100 {
+//         info!("running verification trial {}", trial);
 
-        // call setup
-        setup.call(&mut ctx, vec![]);
+//         // call setup
+//         setup.call(&mut ctx, vec![]);
 
-        // call go
-        for tick in 0..1000 {
-            go.call(&mut ctx, vec![]);
+//         // call go
+//         for tick in 0..1000 {
+//             go.call(&mut ctx, vec![]);
 
-            if trial == 0 || trial == 99 {
-                let update = ctx.workspace.world.generate_js_update_full();
-                write_to_file(
-                    format!("verification_trial_{}_tick_{}.txt", trial, tick),
-                    update.as_bytes(),
-                );
-            }
-        }
-    }
-}
+//             if trial == 0 || trial == 99 {
+//                 let update = ctx.workspace.world.generate_js_update_full();
+//                 write_to_file(
+//                     format!("verification_trial_{}_tick_{}.txt", trial, tick),
+//                     update.as_bytes(),
+//                 );
+//             }
+//         }
+//     }
+// }
 
 struct ConsoleWriter;
 

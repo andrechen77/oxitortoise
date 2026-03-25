@@ -1,27 +1,21 @@
 // TODO(doc) all of HIR
 
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, fmt, sync::Arc};
 
 use ambassador::{Delegate, delegatable_trait};
 use derive_more::derive::{Display, From, TryInto};
+use pretty_print::PrettyPrinter;
 
 use crate::{
     mir::{self, prelude::*},
-    sim::{
-        color::Color,
-        patch::OptionPatchId,
-        topology::Point,
-        turtle::{Breed, BreedId, TurtleId},
-        value::{NlBox, NlFloat, NlList, PackedAny},
-    },
-    util::reflection::ReflectComponents,
+    sim::turtle::{TurtleBreed, TurtleBreedId},
 };
 
 mod build_mir;
 pub mod expr;
 
 // TODO fix these modules
-// mod format;
+mod format;
 // pub mod transforms;
 // pub mod type_inference;
 
@@ -33,11 +27,11 @@ pub struct FunctionId(pub u32);
 
 #[derive(derive_more::Debug)]
 pub struct Program {
-    pub globals: Box<[CustomVarDecl]>,
+    pub global_vars: Box<[CustomVarDecl]>,
     // TODO this version of Breed contains type information (active custom
     // fields) that would not be available/ at the HIR stage of compilation;
     // consider using a more abstract version of Breed instead
-    pub turtle_breeds: HashMap<BreedId, Breed>,
+    pub turtle_breeds: HashMap<TurtleBreedId, TurtleBreed>,
     pub custom_turtle_vars: Vec<CustomVarDecl>,
     pub custom_patch_vars: Vec<CustomVarDecl>,
     pub functions: HashMap<FunctionId, Function>,
@@ -65,7 +59,8 @@ pub struct LocalDecl {
     pub ty: NlAbstractTy,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display)]
+#[display("L{_0}")]
 pub struct Label(pub u32);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -90,16 +85,24 @@ pub trait Expr {
     /// the MIR values for the dependencies, which will recursively call
     /// `write_mir_execution` if necessary.
     fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, local_out: mir::LocalId);
+
+    fn pretty_print<W: fmt::Write>(
+        &self,
+        printer: &mut PrettyPrinter<W>,
+        program: &Program,
+    ) -> fmt::Result;
 }
 
-#[derive(Debug, From, TryInto, Delegate)]
+#[derive(Debug, From, TryInto, Delegate, Clone)]
 #[try_into(owned, ref, ref_mut)]
 #[delegate(Expr)]
 pub enum ExprKind {
     Agentset(expr::Agentset),
     AdvanceTick(expr::AdvanceTick),
     Ask(expr::Ask),
-    BinaryOperation(expr::BinaryOperation),
+    BinaryArith(expr::BinaryArith),
+    BinaryBool(expr::BinaryBool),
+    BinaryCmp(expr::BinaryCmp),
     Block(expr::Block),
     Break(expr::Break),
     CallUserFn(expr::CallUserFn),
@@ -114,13 +117,14 @@ pub enum ExprKind {
     GetGlobalVar(expr::GetGlobalVar),
     GetLocalVar(expr::GetLocalVar),
     GetPatchVar(expr::GetPatchVar),
-    GetPatchVarAsTurtleOrPatch(expr::GetPatchVarAsTurtleOrPatch),
     GetTick(expr::GetTick),
     GetTurtleVar(expr::GetTurtleVar),
     IfElse(expr::IfElse),
+    LogicalNot(expr::LogicalNot),
     ListLiteral(expr::ListLiteral),
     MaxPxcor(expr::MaxPxcor),
     MaxPycor(expr::MaxPycor),
+    Negate(expr::Negate),
     Of(expr::Of),
     OffsetDistanceByHeading(expr::OffsetDistanceByHeading),
     OneOf(expr::OneOf),
@@ -135,19 +139,22 @@ pub enum ExprKind {
     SetDefaultShape(expr::SetDefaultShape),
     SetLocalVar(expr::SetLocalVar),
     SetPatchVar(expr::SetPatchVar),
-    SetPatchVarAsTurtleOrPatch(expr::SetPatchVarAsTurtleOrPatch),
     SetTurtleVar(expr::SetTurtleVar),
     TurtleForward(expr::TurtleForward),
     TurtleRotate(expr::TurtleRotate),
-    UnaryOp(expr::UnaryOp),
 }
 
 /// A representation of an element of the lattice making up all NetLogo types.
 #[derive(PartialEq, Debug, Clone, Eq, Hash, Default, Display)]
 pub enum NlAbstractTy {
+    // An independent type used to model a reference to the workspace itself.
+    Workspace,
+    // An independent type used to model a reference to the random number
+    // generator itself.
+    Rng,
     Unit,
-    /// Top only includes types that make sense in the NetLogo environment.
-    Top,
+    /// Supertype of all other types except for Workspace and Rng.
+    NlTop,
     /// A type that has no inhabitants.
     #[default]
     Bottom,
@@ -174,46 +181,48 @@ pub enum NlAbstractTy {
 impl NlAbstractTy {
     /// Calculates the least upper bound of two types.
     pub fn join(self, other: NlAbstractTy) -> NlAbstractTy {
-        if self == Self::Top {
-            Self::Top
-        } else if self == other {
-            self
-        } else if self == Self::Bottom {
-            other
-        } else {
-            Self::Top
+        if self == other {
+            return self;
         }
-        // TODO implement more granular least upper bound for other types
+        match self {
+            Self::Workspace => panic!("Cannot join Workspace with other types"),
+            Self::Rng => panic!("Cannot join Rng with other types"),
+            Self::NlTop => Self::NlTop,
+            Self::Bottom => other,
+            _ => Self::NlTop,
+        }
     }
 
     pub fn repr(&self) -> MirType {
-        // TODO(mvp) add machine types for all abstract types
-        match self {
-            Self::Unit => <()>::mir_type(),
-            Self::Top => PackedAny::mir_type(),
-            Self::Bottom => unimplemented!("bottom type has no concrete representation"),
-            Self::Numeric => NlFloat::mir_type(),
-            Self::Color => Color::mir_type(),
-            Self::Float => NlFloat::mir_type(),
-            Self::Boolean => bool::mir_type(),
-            Self::String => todo!(),
-            Self::Point => Point::mir_type(),
-            Self::Agent => PackedAny::mir_type(),
-            Self::Patch => OptionPatchId::mir_type(),
-            Self::Turtle => TurtleId::mir_type(),
-            Self::Link => todo!(""),
-            Self::Agentset { agent_type: _ } => todo!(""),
-            // If a type is just "nobody", then it is inhabited by only one
-            // value and therefore holds no data. Operations that take the
-            // nobody value as an operand typically see it as an inhabitant of
-            // some other type, e.g. nobody as a patch id, or nobody as a turtle
-            // id. This is why "nobody" just by itself has no concrete
-            // representation.
-            Self::Nobody => unimplemented!("nobody type has no concrete representation"),
-            Self::Closure(_) => todo!(),
-            Self::List { element_ty } if **element_ty == Self::Top => <NlBox<NlList>>::mir_type(),
-            Self::List { element_ty: _ } => todo!(),
-        }
+        todo!(
+            "We could just get rid of this entirely and have the type mappings be defined hir::TypeMapping"
+        )
+        // match self {
+        //     Self::Unit => <()>::mir_type(),
+        //     Self::NlTop => PackedAny::mir_type(),
+        //     Self::Bottom => unimplemented!("bottom type has no concrete representation"),
+        //     Self::Numeric => NlFloat::mir_type(),
+        //     Self::Color => Color::mir_type(),
+        //     Self::Float => NlFloat::mir_type(),
+        //     Self::Boolean => bool::mir_type(),
+        //     Self::String => todo!(),
+        //     Self::Point => Point::mir_type(),
+        //     Self::Agent => PackedAny::mir_type(),
+        //     Self::Patch => OptionPatchId::mir_type(),
+        //     Self::Turtle => TurtleId::mir_type(),
+        //     Self::Link => todo!(""),
+        //     Self::Agentset { agent_type: _ } => todo!(""),
+        //     // If a type is just "nobody", then it is inhabited by only one
+        //     // value and therefore holds no data. Operations that take the
+        //     // nobody value as an operand typically see it as an inhabitant of
+        //     // some other type, e.g. nobody as a patch id, or nobody as a turtle
+        //     // id. This is why "nobody" just by itself has no concrete
+        //     // representation.
+        //     Self::Nobody => unimplemented!("nobody type has no concrete representation"),
+        //     Self::Closure(_) => todo!(),
+        //     Self::List { element_ty } if **element_ty == Self::NlTop => <NlBox<NlList>>::mir_type(),
+        //     Self::List { element_ty: _ } => todo!(),
+        // }
     }
 }
 
@@ -222,10 +231,4 @@ impl NlAbstractTy {
 pub struct ClosureType {
     pub arg_tys: Vec<NlAbstractTy>,
     pub return_ty: Box<NlAbstractTy>,
-}
-
-pub struct TurtleBreed {
-    pub name: Arc<str>,
-    pub singular_name: Arc<str>,
-    pub custom_variables: Vec<CustomVarDecl>,
 }

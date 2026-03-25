@@ -4,7 +4,7 @@ use crate::{
     sim::{
         patch::PatchId,
         topology::Point,
-        turtle::{BreedId, TurtleId},
+        turtle::{TurtleBreedId, TurtleId},
         value::{
             NlFloat,
             agentset::{shuffled_patches, shuffled_turtles},
@@ -17,7 +17,7 @@ use crate::{
 pub fn create_turtles<R: Rng>(
     workspace: &mut Workspace,
     rng: &mut R,
-    breed: BreedId,
+    breed: TurtleBreedId,
     count: NlFloat,
     position: Point,
     mut birth_command: impl FnMut(&mut Workspace, &mut R, TurtleId),

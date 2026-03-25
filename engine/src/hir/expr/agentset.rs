@@ -1,11 +1,15 @@
 //! Nodes for representing agentsets.
 
+use std::fmt::{self, Write};
+
+use pretty_print::PrettyPrinter;
+
 use crate::{
     hir::{Expr, NlAbstractTy, Program, build_mir::HirToMirFnBuilder},
     mir,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Agentset {
     AllTurtles,
     AllPatches,
@@ -31,5 +35,12 @@ impl Expr for Agentset {
 
     fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {
         todo!("TODO(mvp) write MIR code to generate a value representing the agentset")
+    }
+
+    fn pretty_print<W: Write>(&self, p: &mut PrettyPrinter<W>, _program: &Program) -> fmt::Result {
+        match self {
+            Agentset::AllTurtles => write!(p, "all_turtles()"),
+            Agentset::AllPatches => write!(p, "all_patches()"),
+        }
     }
 }

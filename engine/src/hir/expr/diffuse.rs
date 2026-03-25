@@ -1,13 +1,18 @@
 //! The `diffuse` command.
 
+use std::fmt;
+
+use pretty_print::PrettyPrinter;
+
+use crate::mir;
 use crate::{
     hir::{Expr, ExprKind, HirToMirFnBuilder, NlAbstractTy, Program},
     sim::patch::PatchVarDesc,
 };
-use crate::mir;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Diffuse {
+    pub workspace: Box<ExprKind>,
     /// The patch variable to diffuse.
     pub variable: PatchVarDesc,
     /// The amount to diffuse.
@@ -20,11 +25,25 @@ impl Expr for Diffuse {
     }
 
     fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
+        visitor(&self.workspace);
         visitor(&self.amt);
     }
 
     fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {
         todo!("TODO(mvp) write MIR execution for Diffuse")
     }
-}
 
+    fn pretty_print<W: fmt::Write>(
+        &self,
+        p: &mut PrettyPrinter<W>,
+        program: &Program,
+    ) -> fmt::Result {
+        let Diffuse { workspace, variable, amt } = self;
+        p.add_fn_call("diffuse", |p| {
+            p.add_fn_arg_with(|p| variable.pretty_print(p, &program.custom_patch_vars))?;
+            p.add_fn_arg_with(|p| workspace.pretty_print(p, program))?;
+            p.add_fn_arg_with(|p| amt.pretty_print(p, program))?;
+            Ok(())
+        })
+    }
+}

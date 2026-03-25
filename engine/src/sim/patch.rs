@@ -14,7 +14,7 @@ use pretty_print::PrettyPrinter;
 
 use super::topology::Point;
 use crate::{
-    hir::{HirToMirFnBuilder, TypeMapping},
+    hir::{CustomVarDecl, HirToMirFnBuilder, TypeMapping},
     mir::{self, prelude::*},
     sim::{
         agent_schema::{AgentFieldDescriptor, AgentSchemaField, AgentSchemaFieldGroup},
@@ -448,6 +448,20 @@ pub enum PatchVarDesc {
     Pos,
     Pcolor,
     Custom(usize),
+}
+
+impl PatchVarDesc {
+    pub fn pretty_print(
+        &self,
+        p: &mut PrettyPrinter<impl Write>,
+        custom_patch_vars: &[CustomVarDecl],
+    ) -> fmt::Result {
+        match self {
+            PatchVarDesc::Pos => write!(p, "POS"),
+            PatchVarDesc::Pcolor => write!(p, "PCOLOR"),
+            PatchVarDesc::Custom(field) => write!(p, "{}", custom_patch_vars[*field].name),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

@@ -8,10 +8,9 @@ use engine::{
         agent_schema::AgentFieldDescriptor,
         patch::{OptionPatchId, PatchId},
         topology::Point,
-        turtle::{BreedId, TurtleId},
+        turtle::{TurtleBreedId, TurtleId},
         value::{NlBox, NlFloat, NlList, PackedAny},
     },
-    slotmap::KeyData,
     util::rng::{CanonRng, Rng as _},
     workspace::Workspace,
 };
@@ -68,7 +67,7 @@ pub extern "C" fn oxitortoise_advance_tick(workspace: &mut Workspace) {
 // NOTE: Signature mismatch - function takes breed, count, position, and callback, but HostFunctionInfo only has Ptr
 pub static CREATE_TURTLES_INFO: HostFunctionInfo = HostFunctionInfo {
     name: "oxitortoise_create_turtles",
-    parameter_types: &[Ptr, Ptr, I64, F64, Ptr, FnPtr],
+    parameter_types: &[Ptr, Ptr, I32, F64, Ptr, FnPtr],
     return_type: &[],
     addr: oxitortoise_create_turtles as *const u8,
 };
@@ -81,7 +80,7 @@ pub static CREATE_TURTLES_INFO: HostFunctionInfo = HostFunctionInfo {
 pub unsafe extern "C" fn oxitortoise_create_turtles(
     workspace: &mut Workspace,
     rng: &mut CanonRng,
-    breed: u64,
+    breed: u32,
     count: NlFloat,
     birth_command_env: *mut u8,
     birth_command_fn_ptr: extern "C" fn(
@@ -91,7 +90,7 @@ pub unsafe extern "C" fn oxitortoise_create_turtles(
         u64, /* TurtleId */
     ) -> (),
 ) {
-    let breed: BreedId = KeyData::from_ffi(breed).into();
+    let breed = TurtleBreedId(breed);
     let position = Point { x: 0.0, y: 0.0 };
     // SAFETY: precondition
     let mut birth_command = unsafe { JitCallback::new(birth_command_env, birth_command_fn_ptr) };

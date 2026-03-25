@@ -10,13 +10,13 @@ use std::mem::offset_of;
 use std::ops::Index;
 use std::sync::Arc;
 
+use derive_more::Display;
 use derive_more::derive::{From, Into};
 use either::Either;
 use macro_reflect::{ReflectComponents, reflect};
 use pretty_print::PrettyPrinter;
-use slotmap::SecondaryMap;
 
-use crate::hir::TypeMapping;
+use crate::hir::{CustomVarDecl, TypeMapping};
 use crate::mir::{self, prelude::*};
 use crate::util::reflection::Reflect;
 use crate::{
@@ -96,14 +96,12 @@ pub struct Turtles {
     turtle_schema: TurtleSchema,
     /// The number of turtles in the world.
     num_turtles: u64,
-    // TODO(mvp) this should be a secondary map, using the breed ids generated
-    // during HIR creation
     /// The breeds of turtles.
-    breeds: SecondaryMap<BreedId, Breed>,
+    breeds: HashMap<TurtleBreedId, TurtleBreed>,
 }
 
 impl Turtles {
-    pub fn new(turtle_schema: TurtleSchema, breeds: SecondaryMap<BreedId, Breed>) -> Self {
+    pub fn new(turtle_schema: TurtleSchema, breeds: HashMap<TurtleBreedId, TurtleBreed>) -> Self {
         Self {
             next_who: TurtleWho::default(),
             slot_tracker: GenSlotTracker::new(),
@@ -122,11 +120,7 @@ impl Turtles {
         &self.turtle_schema
     }
 
-    pub fn get_breed(&self, id: BreedId) -> &Breed {
-        &self.breeds[id]
-    }
-
-    pub fn breeds(&self) -> &SecondaryMap<BreedId, Breed> {
+    pub fn breeds(&self) -> &HashMap<TurtleBreedId, TurtleBreed> {
         &self.breeds
     }
 
@@ -136,7 +130,7 @@ impl Turtles {
 
     pub fn create_turtles(
         &mut self,
-        breed: BreedId,
+        breed: TurtleBreedId,
         count: u64,
         spawn_point: Point,
         next_int: &mut dyn Rng,
@@ -182,8 +176,11 @@ impl Turtles {
                 .set(position_desc.field_idx as usize, spawn_point);
 
             // put in the default value for custom fields
-            let custom_fields = &self.breeds[breed].active_custom_fields;
-            for &field in custom_fields {
+            let custom_fields = self.breeds[&breed]
+                .custom_variables
+                .iter()
+                .map(|&var_idx| self.turtle_schema.custom_fields()[var_idx].1);
+            for field in custom_fields {
                 let AgentSchemaField::Other(r#type) = self.turtle_schema[field] else {
                     panic!("field at index {:?} should be a custom field", field);
                 };
@@ -441,7 +438,7 @@ fn pretty_print_turtle(
 #[repr(C)]
 pub struct TurtleBaseData {
     pub who: TurtleWho,
-    pub breed: BreedId,
+    pub breed: TurtleBreedId,
     /// The shape of this turtle due to its breed. This may or may not be the
     /// default shape of the turtle's breed.
     pub shape_name: String, // FIXME consider using the netlogo version of string for this
@@ -455,17 +452,16 @@ pub struct TurtleBaseData {
 #[reflect]
 impl Reflect for TurtleBaseData {}
 
-slotmap::new_key_type! {
-    /// An ID for a breed.
-    pub struct BreedId;
-}
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Display)]
+#[display("{_0}")]
+pub struct TurtleBreedId(pub u32);
 
 #[derive(Debug)]
-pub struct Breed {
+pub struct TurtleBreed {
     pub name: Arc<str>,
     pub singular_name: Arc<str>,
-    /// Which fields of the turtle record are active for this breed.
-    pub active_custom_fields: Vec<AgentFieldDescriptor>,
+    /// The indices of the custom variables that are active for this breed.
+    pub custom_variables: Vec<usize>,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -487,6 +483,24 @@ pub enum TurtleVarDesc {
     /// The nth custom field of the turtle.
     Custom(usize),
     // TODO(mvp) add other builtin variables
+}
+
+impl TurtleVarDesc {
+    pub fn pretty_print(
+        &self,
+        p: &mut PrettyPrinter<impl Write>,
+        custom_turtle_vars: &[CustomVarDecl],
+    ) -> fmt::Result {
+        match self {
+            TurtleVarDesc::Who => write!(p, "WHO"),
+            TurtleVarDesc::Size => write!(p, "SIZE"),
+            TurtleVarDesc::Color => write!(p, "COLOR"),
+            TurtleVarDesc::Pos => write!(p, "POS"),
+            TurtleVarDesc::Xcor => write!(p, "XCOR"),
+            TurtleVarDesc::Ycor => write!(p, "YCOR"),
+            TurtleVarDesc::Custom(field) => write!(p, "{}", custom_turtle_vars[*field].name),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

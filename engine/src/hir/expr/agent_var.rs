@@ -1,5 +1,9 @@
 //! Nodes for getting and setting agent and global variables.
 
+use std::fmt::{self, Write};
+
+use pretty_print::PrettyPrinter;
+
 use crate::{
     hir::{Expr, ExprKind, HirToMirFnBuilder, NlAbstractTy, Program},
     mir::{self, prelude::*},
@@ -13,7 +17,7 @@ use crate::{
     workspace::Workspace,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct GetGlobalVar {
     pub workspace: Box<ExprKind>,
     pub index: usize,
@@ -21,7 +25,7 @@ pub struct GetGlobalVar {
 
 impl Expr for GetGlobalVar {
     fn output_type(&self, program: &Program) -> NlAbstractTy {
-        let Some(var) = program.globals.get(self.index) else {
+        let Some(var) = program.global_vars.get(self.index) else {
             panic!("Unknown global var index: {:?}", self.index);
         };
         var.ty.clone()
@@ -45,12 +49,21 @@ impl Expr for GetGlobalVar {
             &var.ty.static_ty.as_ref().unwrap().clone,
         );
     }
+
+    fn pretty_print<W: Write>(&self, p: &mut PrettyPrinter<W>, program: &Program) -> fmt::Result {
+        write!(
+            p,
+            "get_global_var({} {})",
+            self.index,
+            program.global_vars[self.index].name.as_ref()
+        )
+    }
 }
 
 // TODO(mvp) if this is a variable that may or may not exist depending on the
 // breed, then we should check the breed of the turtle as well
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct GetTurtleVar {
     pub workspace: Box<ExprKind>,
     /// The turtle whose variable is being gotten.
@@ -94,9 +107,23 @@ impl Expr for GetTurtleVar {
             &var.ty.static_ty.unwrap().clone,
         );
     }
+
+    fn pretty_print<W: fmt::Write>(
+        &self,
+        p: &mut PrettyPrinter<W>,
+        program: &Program,
+    ) -> fmt::Result {
+        let GetTurtleVar { var, workspace, turtle } = self;
+        p.add_fn_call("get_turtle_var", |p| {
+            p.add_fn_arg_with(|p| var.pretty_print(p, &program.custom_turtle_vars))?;
+            p.add_fn_arg_with(|p| workspace.pretty_print(p, program))?;
+            p.add_fn_arg_with(|p| turtle.pretty_print(p, program))?;
+            Ok(())
+        })
+    }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SetTurtleVar {
     pub workspace: Box<ExprKind>,
     /// The turtle whose variable is being set.
@@ -133,6 +160,21 @@ impl Expr for SetTurtleVar {
         // perform store
         move_to_init(builder.mir, var, value.place);
     }
+
+    fn pretty_print<W: fmt::Write>(
+        &self,
+        p: &mut PrettyPrinter<W>,
+        program: &Program,
+    ) -> fmt::Result {
+        let SetTurtleVar { var, workspace, turtle, value } = self;
+        p.add_fn_call("set_turtle_var", |p| {
+            p.add_fn_arg_with(|p| var.pretty_print(p, &program.custom_turtle_vars))?;
+            p.add_fn_arg_with(|p| workspace.pretty_print(p, program))?;
+            p.add_fn_arg_with(|p| turtle.pretty_print(p, program))?;
+            p.add_fn_arg_with(|p| value.pretty_print(p, program))?;
+            Ok(())
+        })
+    }
 }
 
 fn turtle_var_place(
@@ -147,7 +189,7 @@ fn turtle_var_place(
     Turtles::mir_project_turtle_variable(builder.mir, builder.type_mapping, turtles, turtle_id, var)
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct GetPatchVar {
     pub workspace: Box<ExprKind>,
     /// The patch whose variable is being gotten.
@@ -187,9 +229,23 @@ impl Expr for GetPatchVar {
             &var.ty.static_ty.unwrap().clone,
         );
     }
+
+    fn pretty_print<W: fmt::Write>(
+        &self,
+        p: &mut PrettyPrinter<W>,
+        program: &Program,
+    ) -> fmt::Result {
+        let GetPatchVar { var, workspace, patch } = self;
+        p.add_fn_call("get_patch_var", |p| {
+            p.add_fn_arg_with(|p| var.pretty_print(p, &program.custom_patch_vars))?;
+            p.add_fn_arg_with(|p| workspace.pretty_print(p, program))?;
+            p.add_fn_arg_with(|p| patch.pretty_print(p, program))?;
+            Ok(())
+        })
+    }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SetPatchVar {
     pub workspace: Box<ExprKind>,
     /// The patch whose variable is being set.
@@ -226,6 +282,21 @@ impl Expr for SetPatchVar {
         // perform store
         move_to_init(builder.mir, var, value.place);
     }
+
+    fn pretty_print<W: fmt::Write>(
+        &self,
+        p: &mut PrettyPrinter<W>,
+        program: &Program,
+    ) -> fmt::Result {
+        let SetPatchVar { var, workspace, patch, value } = self;
+        p.add_fn_call("set_patch_var", |p| {
+            p.add_fn_arg_with(|p| var.pretty_print(p, &program.custom_patch_vars))?;
+            p.add_fn_arg_with(|p| workspace.pretty_print(p, program))?;
+            p.add_fn_arg_with(|p| patch.pretty_print(p, program))?;
+            p.add_fn_arg_with(|p| value.pretty_print(p, program))?;
+            Ok(())
+        })
+    }
 }
 
 fn patch_var_place(
@@ -238,60 +309,6 @@ fn patch_var_place(
     let world = Workspace::mir_project_world(workspace);
     let patches = World::mir_project_patches(world);
     Patches::mir_project_patch_variable(builder.mir, builder.type_mapping, patches, patch_id, var)
-}
-
-/// A node for getting an patch variable when the type of the agent is unknown.
-#[derive(Debug)]
-pub struct GetPatchVarAsTurtleOrPatch {
-    /// The patch whose variable is being gotten, or the turtle who is getting
-    /// the variable of the current patch.
-    pub agent: Box<ExprKind>,
-    /// The variable to get.
-    pub var: PatchVarDesc,
-}
-
-impl Expr for GetPatchVarAsTurtleOrPatch {
-    fn output_type(&self, program: &Program) -> NlAbstractTy {
-        match self.var {
-            PatchVarDesc::Pcolor => NlAbstractTy::Color,
-            PatchVarDesc::Pos => NlAbstractTy::Point,
-            PatchVarDesc::Custom(field) => program.custom_patch_vars[field].ty.clone(),
-        }
-    }
-
-    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
-        visitor(&self.agent);
-    }
-
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: LocalId) {
-        todo!("write_mir_execution for GetPatchVarAsTurtleOrPatch");
-    }
-}
-
-#[derive(Debug)]
-pub struct SetPatchVarAsTurtleOrPatch {
-    /// The patch whose variable is being set, or the turtle who is setting
-    /// the variable of the current patch.
-    pub agent: Box<ExprKind>,
-    /// The variable to set.
-    pub var: PatchVarDesc,
-    /// The value to set the variable to.
-    pub value: Box<ExprKind>,
-}
-
-impl Expr for SetPatchVarAsTurtleOrPatch {
-    fn output_type(&self, _program: &Program) -> NlAbstractTy {
-        NlAbstractTy::Unit
-    }
-
-    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
-        visitor(&self.agent);
-        visitor(&self.value);
-    }
-
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: LocalId) {
-        todo!("write_mir_execution for SetPatchVarAsTurtleOrPatch");
-    }
 }
 
 /// Moves a value from one place to another. The source place is not

@@ -1,58 +1,103 @@
 //! Nodes for primitives relating purely to the tick counter.
 
+use std::fmt;
+
+use pretty_print::PrettyPrinter;
+
 use crate::{
     hir::{Expr, ExprKind, HirToMirFnBuilder, NlAbstractTy, Program},
     mir,
 };
 
-#[derive(Debug)]
-pub struct ResetTicks;
+#[derive(Debug, Clone)]
+pub struct ResetTicks {
+    pub workspace: Box<ExprKind>,
+}
 
 impl Expr for ResetTicks {
     fn output_type(&self, _program: &Program) -> NlAbstractTy {
         NlAbstractTy::Unit
     }
 
-    fn visit_children(&self, _visitor: impl FnMut(&ExprKind)) {
-        // no children
+    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
+        visitor(&self.workspace);
     }
 
     fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {
         todo!("TODO(mvp) write MIR execution for ResetTicks")
     }
+
+    fn pretty_print<W: fmt::Write>(
+        &self,
+        p: &mut PrettyPrinter<W>,
+        program: &Program,
+    ) -> fmt::Result {
+        let ResetTicks { workspace } = self;
+        p.add_fn_call("reset_ticks", |p| {
+            p.add_fn_arg_with(|p| workspace.pretty_print(p, program))?;
+            Ok(())
+        })
+    }
 }
 
-#[derive(Debug)]
-pub struct AdvanceTick;
+#[derive(Debug, Clone)]
+pub struct AdvanceTick {
+    pub workspace: Box<ExprKind>,
+}
 
 impl Expr for AdvanceTick {
     fn output_type(&self, _program: &Program) -> NlAbstractTy {
         NlAbstractTy::Unit
     }
 
-    fn visit_children(&self, _visitor: impl FnMut(&ExprKind)) {
-        // no children
+    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
+        visitor(&self.workspace);
     }
 
     fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {
         todo!("TODO(mvp) write MIR execution for AdvanceTick")
     }
+
+    fn pretty_print<W: fmt::Write>(
+        &self,
+        p: &mut PrettyPrinter<W>,
+        program: &Program,
+    ) -> fmt::Result {
+        let AdvanceTick { workspace } = self;
+        p.add_fn_call("advance_tick", |p| {
+            p.add_fn_arg_with(|p| workspace.pretty_print(p, program))?;
+            Ok(())
+        })
+    }
 }
 
-#[derive(Debug)]
-pub struct GetTick;
+#[derive(Debug, Clone)]
+pub struct GetTick {
+    pub workspace: Box<ExprKind>,
+}
 
 impl Expr for GetTick {
     fn output_type(&self, _program: &Program) -> NlAbstractTy {
         NlAbstractTy::Float
     }
 
-    fn visit_children(&self, _visitor: impl FnMut(&ExprKind)) {
-        // no children
+    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
+        visitor(&self.workspace);
     }
 
     fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {
         todo!("TODO(mvp) write MIR execution for GetTick")
     }
-}
 
+    fn pretty_print<W: fmt::Write>(
+        &self,
+        p: &mut PrettyPrinter<W>,
+        program: &Program,
+    ) -> fmt::Result {
+        let GetTick { workspace } = self;
+        p.add_fn_call("get_tick", |p| {
+            p.add_fn_arg_with(|p| workspace.pretty_print(p, program))?;
+            Ok(())
+        })
+    }
+}

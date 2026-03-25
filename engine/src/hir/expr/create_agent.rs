@@ -1,13 +1,20 @@
 //! The `create-turtles` command and friends.
 
-use crate::hir::{Expr, ExprKind, HirToMirFnBuilder, NlAbstractTy, Program};
-use crate::sim::turtle::BreedId;
-use crate::mir;
+use std::fmt::{self, Write};
 
-#[derive(Debug)]
+use pretty_print::PrettyPrinter;
+
+use crate::{
+    hir::{Expr, ExprKind, HirToMirFnBuilder, NlAbstractTy, Program, TurtleBreedId},
+    mir,
+};
+
+#[derive(Debug, Clone)]
 pub struct CreateTurtles {
+    pub workspace: Box<ExprKind>,
+    pub rng: Box<ExprKind>,
     /// The breed of turtles to create.
-    pub breed: BreedId,
+    pub breed: TurtleBreedId,
     /// The number of turtles to create.
     pub num_turtles: Box<ExprKind>,
     /// The closure representing the commands to run for each created turtle.
@@ -20,6 +27,8 @@ impl Expr for CreateTurtles {
     }
 
     fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
+        visitor(&self.workspace);
+        visitor(&self.rng);
         visitor(&self.num_turtles);
         visitor(&self.body);
     }
@@ -27,5 +36,26 @@ impl Expr for CreateTurtles {
     fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {
         todo!("TODO(mvp) write MIR execution for CreateTurtles")
     }
-}
 
+    fn pretty_print<W: fmt::Write>(
+        &self,
+        p: &mut PrettyPrinter<W>,
+        program: &Program,
+    ) -> fmt::Result {
+        let CreateTurtles { workspace, rng, breed, num_turtles, body } = self;
+        p.add_fn_call("create_turtles", |p| {
+            p.add_fn_arg_with(|p| {
+                if let Some(b) = program.turtle_breeds.get(breed) {
+                    write!(p, "{} ({})", breed, b.name)
+                } else {
+                    write!(p, "{:?}", breed)
+                }
+            })?;
+            p.add_fn_arg_with(|p| workspace.pretty_print(p, program))?;
+            p.add_fn_arg_with(|p| rng.pretty_print(p, program))?;
+            p.add_fn_arg_with(|p| num_turtles.pretty_print(p, program))?;
+            p.add_fn_arg_with(|p| body.pretty_print(p, program))?;
+            Ok(())
+        })
+    }
+}

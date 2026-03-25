@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use serde::Deserialize;
 use serde_json::Number;
 
@@ -13,18 +15,18 @@ pub struct Ast {
 #[serde(rename_all = "camelCase")]
 pub struct GlobalNames {
     #[serde(rename = "globals")]
-    pub global_vars: Vec<String>,
-    pub turtle_vars: Vec<String>,
-    pub patch_vars: Vec<String>,
-    pub link_vars: Vec<String>,
+    pub global_vars: Vec<Arc<str>>,
+    pub turtle_vars: Vec<Arc<str>>,
+    pub patch_vars: Vec<Arc<str>>,
+    pub link_vars: Vec<Arc<str>>,
 }
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Procedure {
-    pub name: String,
+    pub name: Arc<str>,
     #[serde(rename = "args")]
-    pub arg_names: Vec<String>,
+    pub arg_names: Vec<Arc<str>>,
     pub return_type: ReturnType,
     pub agent_class: AgentClass,
     pub body: CommandBlock,
@@ -50,7 +52,7 @@ impl<'de> Deserialize<'de> for AgentClass {
     where
         D: serde::Deserializer<'de>,
     {
-        let s = String::deserialize(deserializer)?;
+        let s = <&str>::deserialize(deserializer)?;
 
         Ok(AgentClass {
             observer: s.chars().nth(0) == Some('O'),
@@ -70,22 +72,22 @@ pub struct CommandBlock {
 #[derive(Deserialize, Debug)]
 #[serde(tag = "type", rename_all = "kebab-case", rename_all_fields = "camelCase")]
 pub enum Node {
-    CommandProcCall { name: String, args: Vec<Node> },
+    CommandProcCall { name: Arc<str>, args: Vec<Node> },
     CommandCall(CommandCall),
     ReporterCall(ReporterCall),
-    ReporterProcCall { name: String, args: Vec<Node> },
+    ReporterProcCall { name: Arc<str>, args: Vec<Node> },
     CommandBlock(CommandBlock),
     ReporterBlock { reporter_app: Box<Node> },
-    LetBinding { var_name: String, value: Box<Node> },
-    LetRef { name: String },
-    GlobalVar { name: String },
-    TurtleVar { name: String },
-    TurtleOrLinkVar { name: String },
-    PatchVar { name: String },
-    LinkVar { name: String },
-    ProcedureArgRef { name: String },
+    LetBinding { var_name: Arc<str>, value: Box<Node> },
+    LetRef { name: Arc<str> },
+    GlobalVar { name: Arc<str> },
+    TurtleVar { name: Arc<str> },
+    TurtleOrLinkVar { name: Arc<str> },
+    PatchVar { name: Arc<str> },
+    LinkVar { name: Arc<str> },
+    ProcedureArgRef { name: Arc<str> },
     Number { value: Number },
-    String { value: String },
+    String { value: Arc<str> },
     List { items: Vec<Node> },
     Nobody,
 }

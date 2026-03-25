@@ -1,11 +1,15 @@
 //! Nodes to represent closures.
 
+use std::fmt::{self, Write};
+
+use pretty_print::PrettyPrinter;
+
 use crate::hir::{
     ClosureType, Expr, ExprKind, HirToMirFnBuilder, LocalDecl, LocalId, NlAbstractTy, Program,
 };
 use crate::mir;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Closure {
     /// All the local variables that are captured by the closure.
     pub captures: Vec<LocalId>,
@@ -31,5 +35,45 @@ impl Expr for Closure {
 
     fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {
         todo!("TODO(mvp) write MIR execution for Closure")
+    }
+
+    fn pretty_print<W: fmt::Write>(
+        &self,
+        p: &mut PrettyPrinter<W>,
+        program: &Program,
+    ) -> fmt::Result {
+        let Closure { captures, parameters, body } = self;
+        p.add_fn_call("closure", |p| {
+            p.add_fn_arg_with(|p| {
+                write!(p, "[")?;
+                for (i, c) in captures.iter().enumerate() {
+                    if i > 0 {
+                        write!(p, ", ")?;
+                    }
+                    write!(p, "{:?}", c)?;
+                }
+                write!(p, "]")
+            })?;
+            p.add_fn_arg_with(|p| {
+                write!(p, "(")?;
+                p.indented(|p| {
+                    for (local_id, decl) in parameters {
+                        p.line()?;
+                        write!(
+                            p,
+                            "{:?} {}: {},",
+                            local_id,
+                            decl.debug_name.as_ref().map_or("", |n| n.as_ref()),
+                            decl.ty
+                        )?;
+                    }
+                    Ok(())
+                })?;
+                p.line()?;
+                write!(p, ")")
+            })?;
+            p.add_fn_arg_with(|p| body.pretty_print(p, program))?;
+            Ok(())
+        })
     }
 }

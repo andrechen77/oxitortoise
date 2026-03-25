@@ -1,140 +1,75 @@
-// #![feature(if_let_guard, slice_as_array)]
+use std::{collections::HashMap, mem, sync::Arc};
 
-use std::collections::HashMap;
-use std::sync::Arc;
-
-use engine::hir::BreedPartial;
-use engine::sim::turtle::DEFAULT_BREED_NAME;
-use engine::sim::value::NlString;
-use engine::slotmap::Key as _;
-use engine::util::reflection::Reflect;
 use engine::{
     hir::{
-        self, CustomVarDecl, Function, FunctionId, LocalDeclaration, LocalId, LocalStorage,
-        NlAbstractTy, NodeId, NodeKind, TurtleBreeds,
-        node::{self, Agentset, AskRecipient, BinaryOpcode, PatchLocRelation, UnaryOpcode},
+        self, CustomVarDecl, ExprKind, Function, FunctionId, Label, LocalDecl, LocalId,
+        NlAbstractTy,
+        expr::{self, PatchLocRelation},
     },
     sim::{
         patch::PatchVarDesc,
-        turtle::{BreedId, TurtleVarDesc},
-        value::{BoxedAny, UnpackedAny},
+        turtle::{TurtleBreed, TurtleBreedId, TurtleVarDesc},
+        value::{BoxedAny, NlString, UnpackedAny},
     },
-    slotmap::{SecondaryMap, SlotMap},
 };
-use tracing::{instrument, trace};
+use tracing::trace;
+
+use crate::{
+    ast::Ast,
+    global_scope::{DEFAULT_TURTLE_BREED_NAME, DEFAULT_TURTLE_BREED_SINGULAR_NAME, GlobalScope},
+};
+
+mod ast;
+mod global_scope;
 
 pub extern crate serde_json;
 
-mod ast;
-mod cheats;
-
-pub use cheats::add_cheats;
-
-use crate::ast::Ast;
-
-#[derive(Debug, Default)]
-pub struct GlobalScope {
-    constants: HashMap<&'static str, fn() -> NodeKind>,
-    global_vars: HashMap<Arc<str>, usize>,
-    patch_vars: HashMap<Arc<str>, PatchVarDesc>,
-    turtle_vars: HashMap<Arc<str>, TurtleVarDesc>,
-    turtle_breeds: HashMap<Arc<str>, BreedId>,
-    functions: HashMap<Arc<str>, FunctionId>,
-    // TODO(mvp) add link variables
-}
-
-#[non_exhaustive]
-#[derive(Debug)]
-pub enum NameReferent {
-    Constant(fn() -> NodeKind),
-    Global(usize),
-    TurtleVar(TurtleVarDesc),
-    PatchVar(PatchVarDesc),
-    #[allow(dead_code)] // remove when turtle breeds are implemented
-    TurtleBreed(BreedId),
-    UserProc(FunctionId),
-}
-
-impl GlobalScope {
-    fn add_builtins(&mut self, default_turtle_breed: BreedId) {
-        self.constants.extend([
-            (
-                "RED",
-                (|| NodeKind::from(node::Constant { value: UnpackedAny::Float(15.0) }))
-                    as fn() -> NodeKind,
-            ),
-            ("ORANGE", || NodeKind::from(node::Constant { value: UnpackedAny::Float(25.0) })),
-            ("GREEN", || NodeKind::from(node::Constant { value: UnpackedAny::Float(55.0) })),
-            ("CYAN", || NodeKind::from(node::Constant { value: UnpackedAny::Float(85.0) })),
-            ("SKY", || NodeKind::from(node::Constant { value: UnpackedAny::Float(95.0) })),
-            ("BLUE", || NodeKind::from(node::Constant { value: UnpackedAny::Float(105.0) })),
-            ("VIOLET", || NodeKind::from(node::Constant { value: UnpackedAny::Float(115.0) })),
-        ]);
-        self.patch_vars.extend([(Arc::from("PCOLOR"), PatchVarDesc::Pcolor)]);
-        self.turtle_vars.extend([
-            (Arc::from("WHO"), TurtleVarDesc::Who),
-            (Arc::from("COLOR"), TurtleVarDesc::Color),
-            (Arc::from("SIZE"), TurtleVarDesc::Size),
-        ]);
-        self.turtle_breeds.extend([(DEFAULT_BREED_NAME.into(), default_turtle_breed)]);
-    }
-
-    pub fn lookup(&self, name: &str) -> Option<NameReferent> {
-        let Self {
-            constants,
-            global_vars: globals,
-            patch_vars,
-            turtle_vars,
-            turtle_breeds,
-            functions,
-        } = self;
-        if let Some(mk_node) = constants.get(name) {
-            return Some(NameReferent::Constant(*mk_node));
-        }
-        if let Some(global_id) = globals.get(name) {
-            return Some(NameReferent::Global(*global_id));
-        }
-        if let Some(turtle_var_id) = turtle_vars.get(name) {
-            return Some(NameReferent::TurtleVar(*turtle_var_id));
-        }
-        if let Some(patch_var_id) = patch_vars.get(name) {
-            return Some(NameReferent::PatchVar(*patch_var_id));
-        }
-        if let Some(turtle_breed_id) = turtle_breeds.get(name) {
-            return Some(NameReferent::TurtleBreed(*turtle_breed_id));
-        }
-        if let Some(function_id) = functions.get(name) {
-            return Some(NameReferent::UserProc(*function_id));
-        }
-        None
-    }
-}
-
-#[derive(Debug, Default)]
-struct HirBuilder {
-    global_names: GlobalScope,
-    global_vars: Vec<CustomVarDecl>,
-    turtle_breeds: SlotMap<BreedId, BreedPartial>,
-    turtle_vars: Vec<CustomVarDecl>,
-    patch_vars: Vec<CustomVarDecl>,
-    /// Maps a function id to the function data
-    functions: SecondaryMap<FunctionId, Function>,
-    aux_fn_info: SlotMap<FunctionId, FnInfo>,
-    locals: SlotMap<LocalId, LocalDeclaration>,
-    nodes: SlotMap<NodeId, NodeKind>,
-}
-
-pub struct ParseResult {
+pub struct HirResult {
     pub program: hir::Program,
     pub global_names: GlobalScope,
-    pub fn_info: SecondaryMap<FunctionId, FnInfo>,
 }
 
-pub fn ast_to_hir(ast: Ast) -> anyhow::Result<ParseResult> {
-    trace!("starting AST to HIR conversion");
+#[derive(Default)]
+pub struct HirBuilder {
+    next_local_id: u32,
+    next_function_id: u32,
+    next_label: u32,
+    next_turtle_breed_id: u32,
+    global_names: GlobalScope,
+}
 
-    // TODO add builtin names to the global scope
-    let mut hir = HirBuilder::default();
+impl HirBuilder {
+    fn new() -> Self {
+        Default::default()
+    }
+
+    fn next_local_id(&mut self) -> LocalId {
+        let id = LocalId(self.next_local_id);
+        self.next_local_id += 1;
+        id
+    }
+
+    fn next_function_id(&mut self) -> FunctionId {
+        let id = FunctionId(self.next_function_id);
+        self.next_function_id += 1;
+        id
+    }
+
+    fn next_label(&mut self) -> Label {
+        let id = Label(self.next_label);
+        self.next_label += 1;
+        id
+    }
+
+    fn next_turtle_breed_id(&mut self) -> TurtleBreedId {
+        let id = TurtleBreedId(self.next_turtle_breed_id);
+        self.next_turtle_breed_id += 1;
+        id
+    }
+}
+
+pub fn ast_to_hir(ast: Ast) -> anyhow::Result<HirResult> {
+    trace!("starting AST to HIR conversion");
 
     let Ast {
         global_names:
@@ -148,837 +83,735 @@ pub fn ast_to_hir(ast: Ast) -> anyhow::Result<ParseResult> {
         procedures,
     } = ast;
 
-    // create the default turtle breed
-    let default_turtle_breed = hir
+    let mut hir_builder = HirBuilder::new();
+
+    // create global variables
+    let mut global_vars = Vec::new();
+    for (var_idx, global_var_name) in global_var_names.into_iter().enumerate() {
+        let global_var_name: Arc<str> = global_var_name.to_uppercase().into();
+        let decl = CustomVarDecl { name: global_var_name.clone(), ty: NlAbstractTy::NlTop.into() };
+        global_vars.push(decl);
+        hir_builder.global_names.global_vars.insert(global_var_name, var_idx);
+    }
+
+    // create custom turtle variables
+    let mut custom_turtle_vars = Vec::new();
+    for (var_idx, turtle_var_name) in turtle_var_names.into_iter().enumerate() {
+        let turtle_var_name: Arc<str> = turtle_var_name.to_uppercase().into();
+        let decl = CustomVarDecl { name: turtle_var_name.clone(), ty: NlAbstractTy::NlTop.into() };
+        custom_turtle_vars.push(decl);
+        hir_builder
+            .global_names
+            .turtle_vars
+            .insert(turtle_var_name, TurtleVarDesc::Custom(var_idx));
+    }
+
+    // create turtle breeds
+    let mut turtle_breeds = HashMap::new();
+    let default_turtle_breed = TurtleBreed {
+        name: DEFAULT_TURTLE_BREED_NAME.into(),
+        singular_name: DEFAULT_TURTLE_BREED_SINGULAR_NAME.into(),
+        // TODO(mvp) only assign custom variables to those that are actually
+        // used by the breed in question.
+        custom_variables: (0..custom_turtle_vars.len()).collect(),
+    };
+    let default_turtle_breed_id = hir_builder.next_turtle_breed_id();
+    turtle_breeds.insert(default_turtle_breed_id, default_turtle_breed);
+    hir_builder
+        .global_names
         .turtle_breeds
-        .insert(BreedPartial { name: Arc::from("TURTLES"), singular_name: Arc::from("turtle") });
+        .insert(DEFAULT_TURTLE_BREED_NAME.into(), default_turtle_breed_id);
 
-    // add builtin names to the global scope
-    hir.global_names.add_builtins(default_turtle_breed);
-
-    // create the global variables
-    for name in global_var_names {
-        let name: Arc<str> = name.to_uppercase().into();
-        let decl = CustomVarDecl { name: name.clone(), ty: NlAbstractTy::Top.into() };
-        let index = hir.global_vars.len();
-        hir.global_vars.push(decl);
-        trace!("Added global variable `{}` at index {:?}", name, index);
-        hir.global_names.global_vars.insert(name, index);
-    }
-    // add custom patch variables
-    for (i, name) in patch_var_names.into_iter().enumerate() {
-        let name: Arc<str> = name.to_uppercase().into();
-        let patch_var_id = PatchVarDesc::Custom(i);
-        trace!("Adding patch variable `{}` with id {:?}", name, patch_var_id);
-        hir.global_names.patch_vars.insert(name.clone(), patch_var_id);
-        hir.patch_vars.push(CustomVarDecl { name, ty: NlAbstractTy::Top.into() });
-    }
-    // add custom turtle variables
-    for (i, name) in turtle_var_names.into_iter().enumerate() {
-        let name: Arc<str> = name.to_uppercase().into();
-        let turtle_var_id = TurtleVarDesc::Custom(i);
-        trace!("Adding turtle variable `{}` with id {:?}", name, turtle_var_id);
-        hir.global_names.turtle_vars.insert(name.clone(), turtle_var_id);
-        hir.turtle_vars.push(CustomVarDecl { name, ty: NlAbstractTy::Top.into() });
+    // create custom patch variables
+    let mut custom_patch_vars = Vec::new();
+    for (var_idx, patch_var_name) in patch_var_names.into_iter().enumerate() {
+        let decl = CustomVarDecl { name: patch_var_name.clone(), ty: NlAbstractTy::NlTop.into() };
+        custom_patch_vars.push(decl);
+        hir_builder.global_names.patch_vars.insert(patch_var_name, PatchVarDesc::Custom(var_idx));
     }
 
-    // go through each procedure and build the function info before building the
-    // bodies
-    let mut bodies_to_build = Vec::new();
-    for procedure_ast in procedures {
-        // compile for a set of hardcoded agent classes
-        use ast::AgentClass as Ac;
-        let agent_class = match procedure_ast.agent_class {
-            // if any agent can execute it, it's probably the observer that executes it
-            Ac { observer: true, turtle: true, patch: true, link: true } => AgentClass::Observer,
-            Ac { observer: true, turtle: false, patch: false, link: false } => AgentClass::Observer,
-            // -TP- means it uses patch variables, which is probably for patches
-            Ac { observer: false, turtle: true, patch: true, link: false } => AgentClass::Patch,
-            Ac { observer: false, turtle: true, patch: false, link: false } => AgentClass::Turtle,
-            // TODO(mvp) I believe the correct way to handle this is, instead of
-            // just picking the most plausible agent class to generate the
-            // function for, is to generate a different version of the function
-            // for each agent class (except for observer functions, which any
-            // agent can execute since it doesn't have a self parameter). Not
-            // all of those variants will actually be needed, but we can just
-            // prune the unused ones later (perhaps selectively compiling only
-            // the bodies that are needed).
-            _ => todo!("handle all combinations of agent classes"),
-        };
+    // add builtin names
+    hir_builder.global_names.add_builtins(default_turtle_breed_id);
 
-        let (fn_id, body) = build_function_info(procedure_ast, agent_class, &mut hir);
-
-        hir.global_names.functions.insert(hir.aux_fn_info[fn_id].debug_name.clone(), fn_id);
-
-        // save the ast to build the body later
-        bodies_to_build.push((fn_id, body));
+    // assign function ids to names
+    let mut functions_to_build = Vec::new();
+    for function in procedures {
+        let function_id = hir_builder.next_function_id();
+        hir_builder.global_names.functions.insert(function.name.clone(), function_id);
+        functions_to_build.push((function_id, function));
     }
 
-    // then go through each procedure and build it
-    for (fn_id, body) in bodies_to_build {
-        // assume every user defined procedure can be an entrypoint.
-        build_function_body(fn_id, body.statements, &mut hir, true);
+    // translate each function body
+    let mut functions = HashMap::new();
+    for (function_id, function) in functions_to_build {
+        let function = translate_function_body(&mut hir_builder, function);
+        functions.insert(function_id, function);
     }
 
-    Ok(ParseResult {
-        program: hir::Program {
-            globals: hir.global_vars.into(),
-            globals_schema: None,
-            turtle_breeds: TurtleBreeds::Partial(hir.turtle_breeds),
-            custom_turtle_vars: hir.turtle_vars,
-            custom_patch_vars: hir.patch_vars,
-            turtle_schema: None,
-            patch_schema: None,
-            functions: hir.functions.into_iter().collect(),
-            locals: hir.locals,
-            nodes: hir.nodes,
-        },
-        global_names: hir.global_names,
-        fn_info: hir.aux_fn_info.into_iter().collect(),
-    })
-}
-
-// The first step to building a function. This does everything except for
-// building the body.
-fn build_function_info(
-    procedure_ast: ast::Procedure,
-    agent_class: AgentClass,
-    hir: &mut HirBuilder,
-) -> (FunctionId, ast::CommandBlock) {
-    let ast::Procedure { name, arg_names, return_type, agent_class: supported_classes, body } =
-        procedure_ast;
-
-    // verify that the procedure can support the given agent class
-    match agent_class {
-        AgentClass::Observer => assert!(supported_classes.observer),
-        AgentClass::Turtle => assert!(supported_classes.turtle),
-        AgentClass::Patch => assert!(supported_classes.patch),
-        AgentClass::Link => assert!(supported_classes.link),
-        AgentClass::Any => {}
-    }
-
-    // calculate the function parameters
-    let mut positional_params = Vec::new();
-    // always add the context parameter
-    let context_param = hir.locals.insert(LocalDeclaration {
-        debug_name: Some("context".into()),
-        ty: (<*mut u8 as Reflect>::CONCRETE_TY).into(),
-        storage: LocalStorage::Register,
-    });
-    positional_params.push(context_param);
-    trace!("Added context parameter with local_id: {:?}", context_param);
-    // add the self parameter
-    let self_param = match agent_class {
-        AgentClass::Observer => {
-            trace!("No self parameter needed for Observer agent class");
-            None
-        }
-        AgentClass::Turtle => {
-            let local_id = hir.locals.insert(LocalDeclaration {
-                debug_name: Some("self_turtle_id".into()),
-                ty: NlAbstractTy::Turtle.into(),
-                storage: LocalStorage::Register,
-            });
-            trace!("Added turtle self parameter with local_id: {:?}", local_id);
-            Some(local_id)
-        }
-        AgentClass::Patch => {
-            let local_id = hir.locals.insert(LocalDeclaration {
-                debug_name: Some("self_patch_id".into()),
-                ty: NlAbstractTy::Patch.into(),
-                storage: LocalStorage::Register,
-            });
-            trace!("Added patch self parameter with local_id: {:?}", local_id);
-            Some(local_id)
-        }
-        AgentClass::Link => todo!("TODO(mvp) add self parameter for Link agent class"),
-        AgentClass::Any => todo!("TODO(mvp) add self parameter that can be any agent"),
+    let program = hir::Program {
+        global_vars: global_vars.into(),
+        turtle_breeds,
+        custom_turtle_vars,
+        custom_patch_vars,
+        functions,
     };
-    positional_params.extend(self_param);
-    // add user-defined parameters
-    let mut local_names = HashMap::new();
-    for name in arg_names {
-        let name: Arc<str> = name.to_uppercase().into();
-        let local_id = hir.locals.insert(LocalDeclaration {
-            debug_name: Some(name.clone()),
-            ty: NlAbstractTy::Top.into(),
-            storage: LocalStorage::Register,
-        });
-        trace!("Adding positional parameter {} with local_id: {:?}", name, local_id);
-        positional_params.push(local_id);
-        local_names.insert(name, local_id);
-    }
 
-    // calculate the return type
-    let return_ty = match return_type {
-        ast::ReturnType::Unit => NlAbstractTy::Unit,
-        ast::ReturnType::Wildcard => NlAbstractTy::Top,
-    };
-    trace!("calculated return type: {:?}", return_ty);
-
-    let fn_info = FnInfo {
-        debug_name: name.to_uppercase().into(),
-        env_param: None,
-        context_param: Some(context_param),
-        self_param,
-        positional_params,
-        return_ty,
-        local_names,
-        num_internal_bodies: 0,
-    };
-    (hir.aux_fn_info.insert(fn_info), body)
-}
-
-fn build_function_body(
-    fn_id: FunctionId,
-    statements: Vec<ast::Node>,
-    hir: &mut HirBuilder,
-    is_entrypoint: bool,
-) {
-    trace!("building body");
-
-    let mut break_nodes = Vec::new();
-    let mut locals = hir.aux_fn_info[fn_id].positional_params.clone();
-    let body_node = translate_statement_block(
-        statements,
-        FnBodyBuilderCtx { hir, fn_id, locals: &mut locals, come_from: &mut break_nodes },
-    );
-    // point the body node and the nodes that break out of that body to each other
-    for &break_node in &break_nodes {
-        let NodeKind::Break(node::Break { target, value: _ }) = &mut hir.nodes[break_node] else {
-            panic!("expected a break node, got {:?}", hir.nodes[break_node]);
-        };
-
-        *target = body_node;
-    }
-    let NodeKind::Block(node::Block { statements: _, come_from }) = &mut hir.nodes[body_node]
-    else {
-        panic!("expected a block node, got {:?}", hir.nodes[body_node]);
-    };
-    come_from.extend(break_nodes);
-
-    let fn_info = &hir.aux_fn_info[fn_id];
-    hir.functions.insert(
-        fn_id,
-        Function {
-            debug_name: Some(fn_info.debug_name.clone()),
-            parameters: fn_info.positional_params.clone(),
-            return_ty: fn_info.return_ty.clone().into(),
-            locals,
-            root_node: body_node,
-            is_entrypoint,
-        },
-    );
-}
-
-#[derive(Debug, Copy, Clone)]
-enum AgentClass {
-    Observer,
-    Turtle,
-    Patch,
-    #[allow(dead_code)] // remove when link procedures are implemented
-    Link,
-    Any,
-}
-
-/// Holds information about a function while it is being built.
-#[derive(Debug)]
-pub struct FnInfo {
-    debug_name: Arc<str>,
-    env_param: Option<LocalId>,
-    context_param: Option<LocalId>,
-    self_param: Option<LocalId>,
-    positional_params: Vec<LocalId>,
-    return_ty: NlAbstractTy,
-    local_names: HashMap<Arc<str>, LocalId>,
-    num_internal_bodies: usize,
+    Ok(HirResult { program, global_names: hir_builder.global_names })
 }
 
 struct FnBodyBuilderCtx<'a> {
     hir: &'a mut HirBuilder,
-    fn_id: FunctionId,
-    /// Tracks the local variables created in the body of the function.
-    locals: &'a mut Vec<LocalId>,
-    /// Lists all nodes that want to break out of this function's body. Since
-    /// these nodes are constructed before the enclosing body's node, they must
-    /// be modified after the fact to point to the enclosing body's node.
-    come_from: &'a mut Vec<NodeId>,
+    fn_body_label: Option<Label>,
+    local_vars: &'a mut HashMap<LocalId, LocalDecl>,
+    workspace_param: LocalId,
+    rng_param: LocalId,
+    self_param: LocalId,
+    local_names: HashMap<Arc<str>, LocalId>,
 }
 
 impl<'a> FnBodyBuilderCtx<'a> {
-    fn reborrow<'s>(&'s mut self) -> FnBodyBuilderCtx<'s> {
-        FnBodyBuilderCtx {
-            hir: self.hir,
-            fn_id: self.fn_id,
-            locals: self.locals,
-            come_from: self.come_from,
-        }
+    fn expr_workspace(&self) -> Box<ExprKind> {
+        Box::new(ExprKind::from(expr::GetLocalVar { local_id: self.workspace_param }))
     }
 
-    /// Returns a node that gets the context parameter for the current function
-    fn get_context(&mut self) -> NodeId {
-        let id = self.hir.nodes.insert(NodeKind::from(node::GetLocalVar {
-            local_id: self.hir.aux_fn_info[self.fn_id]
-                .context_param
-                .expect("expected context parameter"),
-        }));
-        trace!("Got context parameter with id: {:?}", id);
-        id
+    fn expr_rng(&self) -> Box<ExprKind> {
+        Box::new(ExprKind::from(expr::GetLocalVar { local_id: self.rng_param }))
     }
 
-    /// Returns a node that gets the self parameter.
-    fn get_self_agent(&mut self) -> NodeId {
-        let self_param =
-            self.hir.aux_fn_info[self.fn_id].self_param.expect("expected self parameter");
-        self.hir.nodes.insert(NodeKind::from(node::GetLocalVar { local_id: self_param }))
+    fn expr_self(&self) -> Box<ExprKind> {
+        Box::new(ExprKind::from(expr::GetLocalVar { local_id: self.self_param }))
     }
 }
 
-fn translate_recipients(
-    recips: ast::Node,
-    mut ctx: FnBodyBuilderCtx<'_>,
-) -> (AskRecipient, AgentClass) {
-    let recipients_id = translate_node(recips, ctx.reborrow()).0;
-    // TODO(mvp): Does not currently give type info on individual agents, nor breeds, nor links,
-    // nor recipients within variables
-    match &ctx.hir.nodes[recipients_id] {
-        NodeKind::Agentset(Agentset::AllPatches) => (AskRecipient::AllPatches, AgentClass::Patch),
-        NodeKind::Agentset(Agentset::AllTurtles) => (AskRecipient::AllTurtles, AgentClass::Turtle),
-        _ => (AskRecipient::Any(recipients_id), AgentClass::Any),
+fn translate_function_body(hir: &mut HirBuilder, function_ast: ast::Procedure) -> Function {
+    let ast::Procedure { name, arg_names, return_type: _, agent_class: _, body } = function_ast;
+
+    let mut non_param_locals = HashMap::new(); // local variables that are not parametrs
+    let mut parameters = Vec::new(); // local variables that are parameters
+    let mut local_names = HashMap::new(); // all local variables
+
+    // all procedures take workspace, rng, and self parameters by default
+    let workspace_param = hir.next_local_id();
+    parameters.push((
+        workspace_param,
+        LocalDecl { debug_name: Some("workspace".into()), ty: NlAbstractTy::Workspace },
+    ));
+    let rng_param = hir.next_local_id();
+    parameters
+        .push((rng_param, LocalDecl { debug_name: Some("rng".into()), ty: NlAbstractTy::Rng }));
+    let self_param = hir.next_local_id();
+    parameters
+        .push((self_param, LocalDecl { debug_name: Some("self".into()), ty: NlAbstractTy::NlTop }));
+
+    // add user-defined parameters
+    for arg_name in arg_names {
+        let local_id = hir.next_local_id();
+        let local_decl = LocalDecl { debug_name: Some(arg_name.clone()), ty: NlAbstractTy::NlTop };
+        parameters.push((local_id, local_decl));
+        local_names.insert(arg_name, local_id);
     }
+
+    let mut ctx = FnBodyBuilderCtx {
+        hir,
+        fn_body_label: None,
+        local_vars: &mut non_param_locals,
+        workspace_param,
+        rng_param,
+        self_param,
+        local_names,
+    };
+
+    let body_without_locals = translate_statement_block(&mut ctx, body.statements);
+    let body = ExprKind::from(expr::Scope {
+        locals: non_param_locals,
+        inner: Box::new(body_without_locals),
+    });
+
+    // can make additional assertions based on return type and agent class here
+
+    Function { debug_name: Some(name.clone()), parameters, body }
 }
 
-// Returns the id of the created HIR node as well as whether it diverges (e.g.
-// early return)
-#[instrument(skip_all, fields(node_type, name))]
-fn translate_node(ast_node: ast::Node, mut ctx: FnBodyBuilderCtx<'_>) -> (NodeId, bool) {
+// Returns the HIR node as well as whether it diverges (e.g. early return).
+fn translate_node(ctx: &mut FnBodyBuilderCtx<'_>, ast_node: ast::Node) -> (ExprKind, bool) {
     use ast::CommandCall as C;
     use ast::Node as N;
     use ast::ReporterCall as R;
+
     let mut breaking_node = false;
-    let node = match ast_node {
+    let expr = match ast_node {
         N::LetBinding { var_name, value } => {
-            translate_let_binding(Arc::from(var_name.as_str()), *value, ctx.reborrow())
+            // create a new local variable
+            let local_id = ctx.hir.next_local_id();
+            let local_decl =
+                LocalDecl { debug_name: Some(var_name.clone()), ty: NlAbstractTy::NlTop.into() };
+            ctx.local_vars.insert(local_id, local_decl);
+            ctx.local_names.insert(var_name, local_id);
+
+            // emit a set statement that defines tha local variable
+            let (value, diverges) = translate_node(ctx, *value);
+            breaking_node &= diverges;
+            ExprKind::from(expr::SetLocalVar { local_id, value: Box::new(value) })
         }
-        N::CommandProcCall { name, args } => {
-            let referent = ctx
-                .hir
-                .global_names
-                .lookup(&name)
-                .unwrap_or_else(|| panic!("unknown command {:?}", name));
-            let NameReferent::UserProc(target) = referent else {
-                panic!("expected a user procedure, got {:?}", referent);
+        N::CommandProcCall { name, args } | N::ReporterProcCall { name, args } => {
+            let Some(&target) = ctx.hir.global_names.functions.get(&name) else {
+                panic!("unknown command {:?}", name);
             };
-            let mut arg_nodes = Vec::new();
-            let fn_info = &ctx.hir.aux_fn_info[target];
-            assert!(fn_info.env_param.is_none());
-            // TODO: this assumes the argument order. it would be better if it
-            // was made dependent on some definition of the signature
-            if fn_info.context_param.is_some() {
-                arg_nodes.push(ctx.get_context());
+            let mut arg_exprs = Vec::new();
+            arg_exprs.push(ctx.expr_workspace());
+            arg_exprs.push(ctx.expr_rng());
+            arg_exprs.push(ctx.expr_self());
+            for arg in args {
+                let (arg_expr, diverges) = translate_node(ctx, arg);
+                breaking_node &= diverges;
+                arg_exprs.push(Box::new(arg_expr));
             }
-            if ctx.hir.aux_fn_info[target].self_param.is_some() {
-                arg_nodes.push(ctx.get_self_agent());
-            }
-            arg_nodes.extend(args.into_iter().map(|arg| translate_node(arg, ctx.reborrow()).0));
-            trace!(
-                "expected {} positional parameters",
-                ctx.hir.aux_fn_info[target].positional_params.len()
-            );
-            trace!("added {} positional parameters", arg_nodes.len());
-            assert!(ctx.hir.aux_fn_info[target].positional_params.len() == arg_nodes.len());
-            NodeKind::from(node::CallUserFn { target, args: arg_nodes })
+            ExprKind::from(expr::CallUserFn { target, args: arg_exprs })
         }
         N::CommandCall(C::Report([value])) => {
-            breaking_node = true; // mark this node to have its target fixed later
-            let value = translate_node(*value, ctx.reborrow()).0;
-            NodeKind::from(node::Break { target: NodeId::null(), value: Some(value) })
+            breaking_node = true;
+            let (value, _diverges) = translate_node(ctx, *value);
+            // could emit a lint here if the evaluation of the value itself diverges
+            let target = ctx.fn_body_label.unwrap();
+            ExprKind::from(expr::Break { target, value: Box::new(value) })
         }
         N::CommandCall(C::Stop([])) => {
-            breaking_node = true; // mark this node to have its target fixed later
-            NodeKind::from(node::Break { target: NodeId::null(), value: None })
+            breaking_node = true;
+            let target = ctx.fn_body_label.unwrap();
+            ExprKind::from(expr::Break {
+                target,
+                value: Box::new(ExprKind::from(expr::Constant { value: None })),
+            })
+        }
+        N::CommandBlock(ast::CommandBlock { statements }) => {
+            panic!("unexpected command block {:?}", statements);
+        }
+        N::ReporterBlock { reporter_app } => {
+            panic!("unexpected reporter block {:?}", reporter_app);
         }
         N::CommandCall(C::ClearAll([])) => {
-            let context = ctx.get_context();
-            NodeKind::from(node::ClearAll { context })
+            ExprKind::from(expr::ClearAll { workspace: ctx.expr_workspace() })
         }
-        N::CommandCall(C::CreateTurtles([population, body])) => {
-            let context = ctx.get_context();
-            let population = translate_node(*population, ctx.reborrow()).0;
-            let body =
-                translate_ephemeral_closure(*body, ctx.fn_id, AgentClass::Turtle, ctx.reborrow());
-            NodeKind::from(node::CreateTurtles {
-                context,
-                breed: ctx.hir.global_names.turtle_breeds[DEFAULT_BREED_NAME], // TODO(mvp) add creating other turtle breeds
-                num_turtles: population,
-                body,
+        N::CommandCall(C::CreateTurtles([num_turtles, body])) => {
+            let (num_turtles, diverges) = translate_node(ctx, *num_turtles);
+            breaking_node &= diverges;
+            let body = translate_ephemeral_closure(ctx, vec![], *body);
+            let breed = ctx.hir.global_names.turtle_breeds[DEFAULT_TURTLE_BREED_NAME];
+            ExprKind::from(expr::CreateTurtles {
+                workspace: ctx.expr_workspace(),
+                rng: ctx.expr_rng(),
+                breed,
+                num_turtles: Box::new(num_turtles),
+                body: Box::new(body),
             })
         }
         N::CommandCall(C::Set([var, value])) => {
-            let var_name = translate_var_reporter_without_read(var.as_ref());
-            let var_desc = ctx.hir.global_names.lookup(var_name).unwrap();
-            let value = translate_node(*value, ctx.reborrow()).0;
-
-            // the kind of variable being  assigned determines which node to use
-            match var_desc {
-                NameReferent::TurtleVar(var) => {
-                    let context = ctx.get_context();
-                    let turtle = ctx.get_self_agent();
-                    NodeKind::from(node::SetTurtleVar { context, turtle, var, value })
+            let (value, diverges) = translate_node(ctx, *value);
+            breaking_node &= diverges;
+            match *var {
+                ast::Node::GlobalVar { name } => {
+                    let _var_idx = ctx.hir.global_names.global_vars[&name];
+                    todo!("TODO(mvp) add setting global variables")
                 }
-                NameReferent::PatchVar(var) => {
-                    let context = ctx.get_context();
-                    let agent = ctx.get_self_agent();
-                    NodeKind::from(node::SetPatchVarAsTurtleOrPatch { context, agent, var, value })
+                ast::Node::TurtleVar { name } => {
+                    let var = ctx.hir.global_names.turtle_vars[&name];
+                    ExprKind::from(expr::SetTurtleVar {
+                        workspace: ctx.expr_workspace(),
+                        turtle: ctx.expr_self(),
+                        var,
+                        value: Box::new(value),
+                    })
                 }
-                NameReferent::Global(_) => todo!("TODO(mvp) add setting global variables"),
-                other => panic!("cannot mutate value of {:?}", other),
+                ast::Node::PatchVar { name } => {
+                    let var = ctx.hir.global_names.patch_vars[&name];
+                    ExprKind::from(expr::SetPatchVar {
+                        workspace: ctx.expr_workspace(),
+                        patch: ctx.expr_self(),
+                        var,
+                        value: Box::new(value),
+                    })
+                }
+                ast::Node::TurtleOrLinkVar { name } => {
+                    // TODO(mvp) also handle the case where this is a link variable
+                    let var = ctx.hir.global_names.turtle_vars[&name];
+                    ExprKind::from(expr::SetTurtleVar {
+                        workspace: ctx.expr_workspace(),
+                        turtle: ctx.expr_self(),
+                        var,
+                        value: Box::new(value),
+                    })
+                }
+                _ => panic!("cannot set value of {:?}", var),
             }
         }
         N::CommandCall(C::Fd([distance])) => {
-            let context = ctx.get_context();
-            let turtle = ctx.get_self_agent();
-            let distance = translate_node(*distance, ctx.reborrow()).0;
-            NodeKind::from(node::TurtleForward { context, turtle, distance })
+            let (distance, diverges) = translate_node(ctx, *distance);
+            breaking_node &= diverges;
+            ExprKind::from(expr::TurtleForward {
+                workspace: ctx.expr_workspace(),
+                turtle: ctx.expr_self(),
+                distance: Box::new(distance),
+            })
         }
         N::CommandCall(C::Left([heading])) => {
-            let context = ctx.get_context();
-            let turtle = ctx.get_self_agent();
-            let angle_rt = translate_node(*heading, ctx.reborrow()).0;
-            let angle_lt = ctx
-                .hir
-                .nodes
-                .insert(NodeKind::from(node::UnaryOp { op: UnaryOpcode::Neg, operand: angle_rt }));
-            NodeKind::from(node::TurtleRotate { context, turtle, angle: angle_lt })
+            let (heading, diverges) = translate_node(ctx, *heading);
+            breaking_node &= diverges;
+            ExprKind::from(expr::TurtleRotate {
+                workspace: ctx.expr_workspace(),
+                turtle: ctx.expr_self(),
+                angle: Box::new(ExprKind::from(expr::Negate { operand: Box::new(heading) })),
+            })
         }
         N::CommandCall(C::Right([heading])) => {
-            let context = ctx.get_context();
-            let turtle = ctx.get_self_agent();
-            let angle = translate_node(*heading, ctx.reborrow()).0;
-            NodeKind::from(node::TurtleRotate { context, turtle, angle })
+            let (heading, diverges) = translate_node(ctx, *heading);
+            breaking_node &= diverges;
+            ExprKind::from(expr::TurtleRotate {
+                workspace: ctx.expr_workspace(),
+                turtle: ctx.expr_self(),
+                angle: Box::new(heading),
+            })
         }
         N::CommandCall(C::ResetTicks([])) => {
-            NodeKind::from(node::ResetTicks { context: ctx.get_context() })
+            ExprKind::from(expr::ResetTicks { workspace: ctx.expr_workspace() })
         }
         N::CommandCall(C::Ask([rs, body])) => {
-            let context = ctx.get_context();
-            let (recipients, agent_class) = translate_recipients(*rs, ctx.reborrow());
-            let body = translate_ephemeral_closure(*body, ctx.fn_id, agent_class, ctx.reborrow());
-            NodeKind::from(node::Ask { context, recipients, body })
+            let (recipients, diverges) = translate_node(ctx, *rs);
+            breaking_node &= diverges;
+
+            let closure_workspace_param = (
+                ctx.hir.next_local_id(),
+                LocalDecl { debug_name: Some("workspace".into()), ty: NlAbstractTy::Workspace },
+            );
+            let closure_rng_param = (
+                ctx.hir.next_local_id(),
+                LocalDecl { debug_name: Some("rng".into()), ty: NlAbstractTy::Rng },
+            );
+            let body = translate_ephemeral_closure(
+                ctx,
+                vec![closure_workspace_param, closure_rng_param],
+                *body,
+            );
+
+            ExprKind::from(expr::Ask {
+                workspace: ctx.expr_workspace(),
+                rng: ctx.expr_rng(),
+                recipients: Box::new(recipients),
+                body: Box::new(body),
+            })
+        }
+        N::ReporterCall(R::Of([body, rs])) => {
+            let (recipients, diverges) = translate_node(ctx, *rs);
+            breaking_node &= diverges;
+
+            let closure_workspace_param = (
+                ctx.hir.next_local_id(),
+                LocalDecl { debug_name: Some("workspace".into()), ty: NlAbstractTy::Workspace },
+            );
+            let closure_rng_param = (
+                ctx.hir.next_local_id(),
+                LocalDecl { debug_name: Some("rng".into()), ty: NlAbstractTy::Rng },
+            );
+            let body = translate_ephemeral_closure(
+                ctx,
+                vec![closure_workspace_param, closure_rng_param],
+                *body,
+            );
+
+            ExprKind::from(expr::Of {
+                workspace: ctx.expr_workspace(),
+                rng: ctx.expr_rng(),
+                recipients: Box::new(recipients),
+                body: Box::new(body),
+            })
         }
         N::CommandCall(C::If([condition, then_block])) => {
-            let condition = translate_node(*condition, ctx.reborrow()).0;
+            let (condition, diverges) = translate_node(ctx, *condition);
+            breaking_node &= diverges;
             let ast::Node::CommandBlock(ast::CommandBlock { statements }) = *then_block else {
                 panic!("expected a command block, got {:?}", then_block);
             };
-            let then_block = translate_statement_block(statements, ctx.reborrow());
-            let else_block = translate_statement_block(vec![], ctx.reborrow());
-            NodeKind::from(node::IfElse { condition, then_block, else_block })
+            let then_block = translate_statement_block(ctx, statements);
+            let else_block = translate_statement_block(ctx, vec![]);
+            ExprKind::from(expr::IfElse {
+                condition: Box::new(condition),
+                then: Box::new(then_block),
+                r#else: Box::new(else_block),
+            })
         }
         N::CommandCall(C::IfElse([condition, then_block, else_block])) => {
-            let condition = translate_node(*condition, ctx.reborrow()).0;
+            let (condition, diverges) = translate_node(ctx, *condition);
+            breaking_node &= diverges;
             let ast::Node::CommandBlock(ast::CommandBlock { statements }) = *then_block else {
                 panic!("expected a command block, got {:?}", then_block);
             };
-            let then_block = translate_statement_block(statements, ctx.reborrow());
+            let then_block = translate_statement_block(ctx, statements);
             let ast::Node::CommandBlock(ast::CommandBlock { statements }) = *else_block else {
                 panic!("expected a command block, got {:?}", else_block);
             };
-            let else_block = translate_statement_block(statements, ctx.reborrow());
-            NodeKind::from(node::IfElse { condition, then_block, else_block })
+            let else_block = translate_statement_block(ctx, statements);
+            ExprKind::from(expr::IfElse {
+                condition: Box::new(condition),
+                then: Box::new(then_block),
+                r#else: Box::new(else_block),
+            })
         }
         N::CommandCall(C::Diffuse([variable, amt])) => {
-            let var_name = translate_var_reporter_without_read(variable.as_ref());
-            let Some(NameReferent::PatchVar(var_desc)) = ctx.hir.global_names.lookup(var_name)
-            else {
-                panic!("expected patch variable for DIFFUSE");
+            let ast::Node::PatchVar { name } = *variable else {
+                panic!("expected a patch variable, got {:?}", variable);
             };
-            let context = ctx.get_context();
-            let amt = translate_node(*amt, ctx.reborrow()).0;
-            NodeKind::from(node::Diffuse { context, variable: var_desc, amt })
+            let variable = ctx.hir.global_names.patch_vars[&name];
+            let (amt, diverges) = translate_node(ctx, *amt);
+            breaking_node &= diverges;
+            ExprKind::from(expr::Diffuse {
+                workspace: ctx.expr_workspace(),
+                variable,
+                amt: Box::new(amt),
+            })
         }
         N::CommandCall(C::Tick([])) => {
-            NodeKind::from(node::AdvanceTick { context: ctx.get_context() })
+            ExprKind::from(expr::AdvanceTick { workspace: ctx.expr_workspace() })
         }
         N::CommandCall(C::SetDefaultShape([breed, shape])) => {
-            let breed = translate_node(*breed, ctx.reborrow()).0;
-            let shape = translate_node(*shape, ctx.reborrow()).0;
-            NodeKind::from(node::SetDefaultShape { breed, shape })
+            let (shape, diverges) = translate_node(ctx, *shape);
+            breaking_node &= diverges;
+            match *breed {
+                ast::Node::ReporterCall(R::Turtles([])) => {
+                    let breed = ctx.hir.global_names.turtle_breeds[DEFAULT_TURTLE_BREED_NAME];
+                    ExprKind::from(expr::SetDefaultShape {
+                        workspace: ctx.expr_workspace(),
+                        breed,
+                        shape: Box::new(shape),
+                    })
+                }
+                _ => panic!("unrecognized agent class/breed {:?}", breed),
+            }
         }
         N::LetRef { name } | N::ProcedureArgRef { name } => {
-            let Some(&local_id) = ctx.hir.aux_fn_info[ctx.fn_id].local_names.get(name.as_str())
-            else {
-                unreachable!("unknown variable reference: {}", name);
-            };
-            NodeKind::from(node::GetLocalVar { local_id })
+            let local_id = ctx.local_names[&name];
+            ExprKind::from(expr::GetLocalVar { local_id })
         }
-        N::Number { value } => {
-            NodeKind::from(node::Constant { value: UnpackedAny::Float(value.as_f64().unwrap()) })
-        }
-        N::String { value } => NodeKind::from(node::Constant {
-            value: UnpackedAny::Other(BoxedAny::new(NlString::new(&value))),
+        N::Number { value } => ExprKind::from(expr::Constant {
+            value: Some(UnpackedAny::Float(value.as_f64().unwrap())),
+        }),
+        N::String { value } => ExprKind::from(expr::Constant {
+            value: Some(UnpackedAny::Other(BoxedAny::new(NlString::new(&value)))),
         }),
         N::List { items } => {
-            let items =
-                items.into_iter().map(|item| translate_node(item, ctx.reborrow()).0).collect();
-            NodeKind::from(node::ListLiteral { items })
+            let items = items
+                .into_iter()
+                .map(|item| {
+                    let (item, diverges) = translate_node(ctx, item);
+                    breaking_node &= diverges;
+                    Box::new(item)
+                })
+                .collect();
+            ExprKind::from(expr::ListLiteral { items })
         }
-        N::Nobody => NodeKind::from(node::Constant { value: UnpackedAny::Nobody }),
-        N::ReporterProcCall { name, args } => {
-            let referent = ctx.hir.global_names.lookup(&name).unwrap_or_else(|| {
-                panic!("unknown reporter procedure {:?}", name);
-            });
-            let NameReferent::UserProc(target) = referent else {
-                panic!("expected a user reporter procedure, got {:?}", referent);
-            };
-            let mut arg_nodes = Vec::new();
-            let fn_info = &ctx.hir.aux_fn_info[target];
-            assert!(fn_info.env_param.is_none());
-            // TODO: this assumes the argument order. it would be better if it
-            // was made dependent on some definition of the signature
-            if fn_info.context_param.is_some() {
-                arg_nodes.push(ctx.get_context());
+        N::Nobody => ExprKind::from(expr::Constant { value: Some(UnpackedAny::Nobody) }),
+        N::GlobalVar { name } => {
+            if let Some(&var_idx) = ctx.hir.global_names.global_vars.get(&name) {
+                ExprKind::from(expr::GetGlobalVar {
+                    workspace: ctx.expr_workspace(),
+                    index: var_idx,
+                })
+            } else if let Some(value) = ctx.hir.global_names.constants.get(name.as_ref()) {
+                ExprKind::clone(value)
+            } else {
+                panic!("unknown name {:?}", name);
             }
-            if ctx.hir.aux_fn_info[target].self_param.is_some() {
-                arg_nodes.push(ctx.get_self_agent());
-            }
-            arg_nodes.extend(args.into_iter().map(|arg| translate_node(arg, ctx.reborrow()).0));
-            assert!(ctx.hir.aux_fn_info[target].positional_params.len() == arg_nodes.len());
-            NodeKind::from(node::CallUserFn { target, args: arg_nodes })
         }
-        N::GlobalVar { name } => match ctx.hir.global_names.lookup(&name) {
-            Some(NameReferent::Global(index)) => {
-                let context = ctx.get_context();
-                NodeKind::from(node::GetGlobalVar { context, index })
-            }
-            Some(NameReferent::Constant(mk_node)) => mk_node(),
-            _ => panic!("unknown global variable access `{}`", name),
-        },
         N::TurtleVar { name } => {
-            let Some(NameReferent::TurtleVar(var)) = ctx.hir.global_names.lookup(&name) else {
-                panic!("unknown turtle variable access `{}`", name);
-            };
-            let context = ctx.get_context();
-            let turtle = ctx.get_self_agent();
-            NodeKind::from(node::GetTurtleVar { context, turtle, var })
+            let var = ctx.hir.global_names.turtle_vars[&name];
+            ExprKind::from(expr::GetTurtleVar {
+                workspace: ctx.expr_workspace(),
+                turtle: ctx.expr_self(),
+                var,
+            })
         }
         N::PatchVar { name } => {
-            let Some(NameReferent::PatchVar(var)) = ctx.hir.global_names.lookup(&name) else {
-                panic!("unknown patch variable access `{}`", name);
-            };
-            let context = ctx.get_context();
-            let agent = ctx.get_self_agent();
-            NodeKind::from(node::GetPatchVarAsTurtleOrPatch { context, agent, var })
+            let var = ctx.hir.global_names.patch_vars[&name];
+            ExprKind::from(expr::GetPatchVar {
+                workspace: ctx.expr_workspace(),
+                patch: ctx.expr_self(),
+                var,
+            })
         }
-        N::LinkVar { .. } => {
+        N::LinkVar { name: _ } => {
             todo!("TODO(mvp) add accessing link variables")
         }
         N::TurtleOrLinkVar { name } => {
-            let Some(NameReferent::TurtleVar(var)) = ctx.hir.global_names.lookup(&name) else {
-                todo!("TODO(mvp) add accessing link variables")
-            };
-            let context = ctx.get_context();
-            let turtle = ctx.get_self_agent();
-            NodeKind::from(node::GetTurtleVar { context, turtle, var })
+            // TODO(mvp) also handle the case where this is a link variable
+            let var = ctx.hir.global_names.turtle_vars[&name];
+            ExprKind::from(expr::GetTurtleVar {
+                workspace: ctx.expr_workspace(),
+                turtle: ctx.expr_self(),
+                var,
+            })
         }
-        N::ReporterCall(R::Of([body, rs])) => {
-            let context = ctx.get_context();
-            let (recipients, agent_class) = translate_recipients(*rs, ctx.reborrow());
-            let body = translate_ephemeral_closure(*body, ctx.fn_id, agent_class, ctx.reborrow());
-            NodeKind::from(node::Of { context, recipients, body })
+        N::ReporterCall(R::Lt([lhs, rhs])) => {
+            let (lhs, diverges) = translate_node(ctx, *lhs);
+            breaking_node &= diverges;
+            let (rhs, diverges) = translate_node(ctx, *rhs);
+            breaking_node &= diverges;
+            ExprKind::from(expr::BinaryCmp {
+                op: expr::BinaryCmpOpcode::Lt,
+                lhs: Box::new(lhs),
+                rhs: Box::new(rhs),
+            })
         }
-        #[rustfmt::skip]
-        N::ReporterCall(reporter @ (
-            | R::Lt(..)
-            | R::Gt(..)
-            | R::Eq(..)
-            | R::Lte(..)
-            | R::Gte(..)
-            | R::Sub(..)
-            | R::Add(..)
-            | R::Mul(..)
-            | R::Div(..)
-            | R::And(..)
-            | R::Or(..)
-        )) => {
-            let (op, lhs, rhs) = match reporter {
-                R::Lt([lhs, rhs]) => (BinaryOpcode::Lt, lhs, rhs),
-                R::Gt([lhs, rhs]) => (BinaryOpcode::Gt, lhs, rhs),
-                R::Eq([lhs, rhs]) => (BinaryOpcode::Eq, lhs, rhs),
-                R::Lte([lhs, rhs]) => (BinaryOpcode::Lte, lhs, rhs),
-                R::Gte([lhs, rhs]) => (BinaryOpcode::Gte, lhs, rhs),
-                R::Sub([lhs, rhs]) => (BinaryOpcode::Sub, lhs, rhs),
-                R::Add([lhs, rhs]) => (BinaryOpcode::Add, lhs, rhs),
-                R::Mul([lhs, rhs]) => (BinaryOpcode::Mul, lhs, rhs),
-                R::Div([lhs, rhs]) => (BinaryOpcode::Div, lhs, rhs),
-                R::And([lhs, rhs]) => (BinaryOpcode::And, lhs, rhs),
-                R::Or([lhs, rhs]) => (BinaryOpcode::Or, lhs, rhs),
-                _ => unreachable!(),
-            };
-            let context = ctx.get_context();
-            let lhs = translate_node(*lhs, ctx.reborrow()).0;
-            let rhs = translate_node(*rhs, ctx.reborrow()).0;
-            NodeKind::from(node::BinaryOperation { context, op, lhs, rhs })
+        N::ReporterCall(R::Gt([lhs, rhs])) => {
+            let (lhs, diverges) = translate_node(ctx, *lhs);
+            breaking_node &= diverges;
+            let (rhs, diverges) = translate_node(ctx, *rhs);
+            breaking_node &= diverges;
+            ExprKind::from(expr::BinaryCmp {
+                op: expr::BinaryCmpOpcode::Gt,
+                lhs: Box::new(lhs),
+                rhs: Box::new(rhs),
+            })
+        }
+        N::ReporterCall(R::Lte([lhs, rhs])) => {
+            let (lhs, diverges) = translate_node(ctx, *lhs);
+            breaking_node &= diverges;
+            let (rhs, diverges) = translate_node(ctx, *rhs);
+            breaking_node &= diverges;
+            ExprKind::from(expr::BinaryCmp {
+                op: expr::BinaryCmpOpcode::Lte,
+                lhs: Box::new(lhs),
+                rhs: Box::new(rhs),
+            })
+        }
+        N::ReporterCall(R::Gte([lhs, rhs])) => {
+            let (lhs, diverges) = translate_node(ctx, *lhs);
+            breaking_node &= diverges;
+            let (rhs, diverges) = translate_node(ctx, *rhs);
+            breaking_node &= diverges;
+            ExprKind::from(expr::BinaryCmp {
+                op: expr::BinaryCmpOpcode::Gte,
+                lhs: Box::new(lhs),
+                rhs: Box::new(rhs),
+            })
+        }
+        N::ReporterCall(R::Eq([lhs, rhs])) => {
+            let (lhs, diverges) = translate_node(ctx, *lhs);
+            breaking_node &= diverges;
+            let (rhs, diverges) = translate_node(ctx, *rhs);
+            breaking_node &= diverges;
+            ExprKind::from(expr::BinaryCmp {
+                op: expr::BinaryCmpOpcode::Eq,
+                lhs: Box::new(lhs),
+                rhs: Box::new(rhs),
+            })
+        }
+        N::ReporterCall(R::Add([lhs, rhs])) => {
+            let (lhs, diverges) = translate_node(ctx, *lhs);
+            breaking_node &= diverges;
+            let (rhs, diverges) = translate_node(ctx, *rhs);
+            breaking_node &= diverges;
+            ExprKind::from(expr::BinaryArith {
+                op: expr::BinaryArithOpcode::Add,
+                lhs: Box::new(lhs),
+                rhs: Box::new(rhs),
+            })
+        }
+        N::ReporterCall(R::Sub([lhs, rhs])) => {
+            let (lhs, diverges) = translate_node(ctx, *lhs);
+            breaking_node &= diverges;
+            let (rhs, diverges) = translate_node(ctx, *rhs);
+            breaking_node &= diverges;
+            ExprKind::from(expr::BinaryArith {
+                op: expr::BinaryArithOpcode::Sub,
+                lhs: Box::new(lhs),
+                rhs: Box::new(rhs),
+            })
+        }
+        N::ReporterCall(R::Mul([lhs, rhs])) => {
+            let (lhs, diverges) = translate_node(ctx, *lhs);
+            breaking_node &= diverges;
+            let (rhs, diverges) = translate_node(ctx, *rhs);
+            breaking_node &= diverges;
+            ExprKind::from(expr::BinaryArith {
+                op: expr::BinaryArithOpcode::Mul,
+                lhs: Box::new(lhs),
+                rhs: Box::new(rhs),
+            })
+        }
+        N::ReporterCall(R::Div([lhs, rhs])) => {
+            let (lhs, diverges) = translate_node(ctx, *lhs);
+            breaking_node &= diverges;
+            let (rhs, diverges) = translate_node(ctx, *rhs);
+            breaking_node &= diverges;
+            ExprKind::from(expr::BinaryArith {
+                op: expr::BinaryArithOpcode::Div,
+                lhs: Box::new(lhs),
+                rhs: Box::new(rhs),
+            })
+        }
+        N::ReporterCall(R::And([lhs, rhs])) => {
+            let (lhs, diverges) = translate_node(ctx, *lhs);
+            breaking_node &= diverges;
+            let (rhs, diverges) = translate_node(ctx, *rhs);
+            breaking_node &= diverges;
+            ExprKind::from(expr::BinaryBool {
+                op: expr::BinaryBoolOpcode::And,
+                lhs: Box::new(lhs),
+                rhs: Box::new(rhs),
+            })
+        }
+        N::ReporterCall(R::Or([lhs, rhs])) => {
+            let (lhs, diverges) = translate_node(ctx, *lhs);
+            breaking_node &= diverges;
+            let (rhs, diverges) = translate_node(ctx, *rhs);
+            breaking_node &= diverges;
+            ExprKind::from(expr::BinaryBool {
+                op: expr::BinaryBoolOpcode::Or,
+                lhs: Box::new(lhs),
+                rhs: Box::new(rhs),
+            })
         }
         N::ReporterCall(R::Not([operand])) => {
-            let operand = translate_node(*operand, ctx.reborrow()).0;
-            NodeKind::from(node::UnaryOp { op: UnaryOpcode::Not, operand })
+            let (operand, diverges) = translate_node(ctx, *operand);
+            breaking_node &= diverges;
+            ExprKind::from(expr::LogicalNot { operand: Box::new(operand) })
         }
         N::ReporterCall(R::Distancexy([x, y])) => {
-            let context = ctx.get_context();
-            let agent = ctx.get_self_agent();
-            let x = translate_node(*x, ctx.reborrow()).0;
-            let y = translate_node(*y, ctx.reborrow()).0;
-            NodeKind::from(node::Distancexy { context, agent, x, y })
+            let (x, diverges) = translate_node(ctx, *x);
+            breaking_node &= diverges;
+            let (y, diverges) = translate_node(ctx, *y);
+            breaking_node &= diverges;
+            ExprKind::from(expr::Distancexy {
+                workspace: ctx.expr_workspace(),
+                agent: ctx.expr_self(),
+                x: Box::new(x),
+                y: Box::new(y),
+            })
         }
         N::ReporterCall(R::CanMove([distance])) => {
-            let context = ctx.get_context();
-            let turtle = ctx.get_self_agent();
-            let distance = translate_node(*distance, ctx.reborrow()).0;
-            NodeKind::from(node::CanMove { context, turtle, distance })
+            let (distance, diverges) = translate_node(ctx, *distance);
+            breaking_node &= diverges;
+            ExprKind::from(expr::CanMove {
+                workspace: ctx.expr_workspace(),
+                turtle: ctx.expr_self(),
+                distance: Box::new(distance),
+            })
         }
-        N::ReporterCall(
-            reporter @ (R::PatchRightAndAhead { .. } | R::PatchLeftAndAhead { .. }),
-        ) => {
-            let (is_left, heading, distance) = match reporter {
-                R::PatchRightAndAhead([heading, distance]) => (false, heading, distance),
-                R::PatchLeftAndAhead([heading, distance]) => (true, heading, distance),
-                _ => unreachable!(),
-            };
-            let context = ctx.get_context();
-            let turtle = ctx.get_self_agent();
-            let heading = translate_node(*heading, ctx.reborrow()).0;
-            let distance = translate_node(*distance, ctx.reborrow()).0;
-            let relative_loc = if is_left {
-                PatchLocRelation::LeftAhead(heading)
-            } else {
-                PatchLocRelation::RightAhead(heading)
-            };
-            NodeKind::from(node::PatchRelative { context, turtle, relative_loc, distance })
+        N::ReporterCall(R::PatchRightAndAhead([heading, distance])) => {
+            let (heading, diverges) = translate_node(ctx, *heading);
+            breaking_node &= diverges;
+            let (distance, diverges) = translate_node(ctx, *distance);
+            breaking_node &= diverges;
+            ExprKind::from(expr::PatchRelative {
+                workspace: ctx.expr_workspace(),
+                turtle: ctx.expr_self(),
+                relative_loc: PatchLocRelation::RightAhead(Box::new(heading)),
+                distance: Box::new(distance),
+            })
+        }
+        N::ReporterCall(R::PatchLeftAndAhead([heading, distance])) => {
+            let (heading, diverges) = translate_node(ctx, *heading);
+            breaking_node &= diverges;
+            let (distance, diverges) = translate_node(ctx, *distance);
+            breaking_node &= diverges;
+            ExprKind::from(expr::PatchRelative {
+                workspace: ctx.expr_workspace(),
+                turtle: ctx.expr_self(),
+                relative_loc: PatchLocRelation::LeftAhead(Box::new(heading)),
+                distance: Box::new(distance),
+            })
         }
         N::ReporterCall(R::MaxPxcor([])) => {
-            NodeKind::from(node::MaxPxcor { context: ctx.get_context() })
+            ExprKind::from(expr::MaxPxcor { workspace: ctx.expr_workspace() })
         }
         N::ReporterCall(R::MaxPycor([])) => {
-            NodeKind::from(node::MaxPycor { context: ctx.get_context() })
+            ExprKind::from(expr::MaxPycor { workspace: ctx.expr_workspace() })
         }
         N::ReporterCall(R::OneOf([xs])) => {
-            let context = ctx.get_context();
-            let operand = translate_node(*xs, ctx.reborrow()).0;
-            NodeKind::from(node::OneOf { context, operand })
+            let (items, diverges) = translate_node(ctx, *xs);
+            breaking_node &= diverges;
+            ExprKind::from(expr::OneOf { rng: ctx.expr_rng(), operand: Box::new(items) })
         }
         N::ReporterCall(R::ScaleColor([color, number, range1, range2])) => {
-            let color = translate_node(*color, ctx.reborrow()).0;
-            let number = translate_node(*number, ctx.reborrow()).0;
-            let range1 = translate_node(*range1, ctx.reborrow()).0;
-            let range2 = translate_node(*range2, ctx.reborrow()).0;
-            NodeKind::from(node::ScaleColor { color, number, range1, range2 })
+            let (color, diverges) = translate_node(ctx, *color);
+            breaking_node &= diverges;
+            let (number, diverges) = translate_node(ctx, *number);
+            breaking_node &= diverges;
+            let (range1, diverges) = translate_node(ctx, *range1);
+            breaking_node &= diverges;
+            let (range2, diverges) = translate_node(ctx, *range2);
+            breaking_node &= diverges;
+            ExprKind::from(expr::ScaleColor {
+                color: Box::new(color),
+                number: Box::new(number),
+                range1: Box::new(range1),
+                range2: Box::new(range2),
+            })
         }
         N::ReporterCall(R::Ticks([])) => {
-            NodeKind::from(node::GetTick { context: ctx.get_context() })
+            ExprKind::from(expr::GetTick { workspace: ctx.expr_workspace() })
         }
         N::ReporterCall(R::Random([bound])) => {
-            let bound = translate_node(*bound, ctx.reborrow()).0;
-            NodeKind::from(node::RandomInt { context: ctx.get_context(), bound })
+            let (bound, diverges) = translate_node(ctx, *bound);
+            breaking_node &= diverges;
+            ExprKind::from(expr::RandomInt { rng: ctx.expr_rng(), bound: Box::new(bound) })
         }
-        N::ReporterCall(R::Patches([])) => NodeKind::from(node::Agentset::AllPatches),
-        N::ReporterCall(R::Turtles([])) => NodeKind::from(node::Agentset::AllTurtles),
-        other => panic!("expected a statement or expression, got {:?}", other),
+        N::ReporterCall(R::Turtles([])) => ExprKind::from(expr::Agentset::AllTurtles),
+        N::ReporterCall(R::Patches([])) => ExprKind::from(expr::Agentset::AllPatches),
     };
-    let node_id = ctx.hir.nodes.insert(node);
-    if breaking_node {
-        ctx.come_from.push(node_id);
-    }
-    (node_id, breaking_node)
+    (expr, breaking_node)
 }
 
 fn translate_statement_block(
+    ctx: &mut FnBodyBuilderCtx<'_>,
     statements_ast: Vec<ast::Node>,
-    mut ctx: FnBodyBuilderCtx<'_>,
-) -> NodeId {
-    // translate each statement that appears in the ast
+) -> ExprKind {
+    let label = ctx.hir.next_label();
+    let old_label = mem::replace(&mut ctx.fn_body_label, Some(label));
+
+    // translate each statement in the block
     let mut statements = Vec::new();
     let mut falls_through = true;
     for ast_node in statements_ast {
-        let (node_id, diverges) = translate_node(ast_node, ctx.reborrow());
-        statements.push(node_id);
+        let (expr, diverges) = translate_node(ctx, ast_node);
+        statements.push(expr);
         if diverges {
             falls_through = false;
+            // can assert here that there are no more statements
         }
     }
 
     // add a break node to prevent control flow from "falling through" the end
     // of the block without an early return
-    let mut additional_come_from = None;
     if falls_through {
-        let break_node = ctx
-            .hir
-            .nodes
-            .insert(NodeKind::from(node::Break { target: NodeId::null(), value: None }));
-        statements.push(break_node);
-        additional_come_from = Some(break_node);
+        let break_expr = ExprKind::from(expr::Break {
+            target: label,
+            value: Box::new(ExprKind::from(expr::Constant { value: None })),
+        });
+        statements.push(break_expr);
     }
 
-    let node = NodeKind::from(node::Block {
-        statements,
-        come_from: additional_come_from.into_iter().collect(),
-    });
-    let statement_block_node = ctx.hir.nodes.insert(node);
+    ctx.fn_body_label = old_label;
 
-    if let Some(additional_come_from) = additional_come_from {
-        let NodeKind::Break(node::Break { target, value: _ }) =
-            &mut ctx.hir.nodes[additional_come_from]
-        else {
-            panic!("expected a break node, got {:?}", ctx.hir.nodes[additional_come_from]);
-        };
-        *target = statement_block_node;
-    }
-
-    statement_block_node
+    ExprKind::from(expr::Block { label, statements })
 }
 
-fn translate_let_binding(
-    name: Arc<str>,
-    value: ast::Node,
-    mut ctx: FnBodyBuilderCtx<'_>,
-) -> NodeKind {
-    let local_id = ctx.hir.locals.insert(LocalDeclaration {
-        debug_name: Some(name.clone()),
-        ty: NlAbstractTy::Top.into(),
-        storage: LocalStorage::Register,
-    });
-    ctx.locals.push(local_id);
-    ctx.hir.aux_fn_info[ctx.fn_id].local_names.insert(name, local_id);
-    let value = translate_node(value, ctx.reborrow()).0;
-    NodeKind::from(node::SetLocalVar { local_id, value })
-}
-
-fn translate_var_reporter_without_read(ast_node: &ast::Node) -> &str {
-    match ast_node {
-        ast::Node::GlobalVar { name } => name,
-        ast::Node::TurtleVar { name } => name,
-        ast::Node::TurtleOrLinkVar { name } => name,
-        ast::Node::PatchVar { name } => name,
-        ast::Node::LinkVar { name } => name,
-        _ => panic!("expected a variable reporter call, got {:?}", ast_node),
-    }
-}
-
-// TODO a lot of this function should be deduplicated from
-// create_procedure_skeleton
-#[instrument(skip_all)]
 fn translate_ephemeral_closure(
-    expr: ast::Node,
-    parent_fn_id: FunctionId,
-    agent_class: AgentClass,
-    ctx: FnBodyBuilderCtx<'_>,
-) -> NodeId {
-    trace!("Translating ephemeral closure");
-
-    // the first part of this function before the body is built is analogous tok
-    // build_function_info
-
-    // generate a procedure name
-    let parent_fn_info = &mut ctx.hir.aux_fn_info[parent_fn_id];
-    let parent_fn_bodies = &mut parent_fn_info.num_internal_bodies;
-    let proc_name = Arc::from(format!("{} body {}", parent_fn_info.debug_name, *parent_fn_bodies));
-    *parent_fn_bodies += 1;
-
-    // calculate the function parameters
-    let mut positional_params = Vec::new();
-    // add the environment pointer
-    let env_param = ctx.hir.locals.insert(LocalDeclaration {
-        debug_name: Some("env".into()),
-        ty: (<*mut u8 as Reflect>::CONCRETE_TY).into(),
-        storage: LocalStorage::Register,
-    });
-    positional_params.push(env_param);
-    // add the context parameter
-    let context_param = ctx.hir.locals.insert(LocalDeclaration {
-        debug_name: Some("context".into()),
-        ty: (<*mut u8 as Reflect>::CONCRETE_TY).into(),
-        storage: LocalStorage::Register,
-    });
-    positional_params.push(context_param);
-    // add the self parameter
-    let self_param = match agent_class {
-        AgentClass::Observer => None,
-        AgentClass::Turtle => {
-            let local_id = ctx.hir.locals.insert(LocalDeclaration {
-                debug_name: Some("self_turtle_id".into()),
-                ty: NlAbstractTy::Turtle.into(),
-                storage: LocalStorage::Register,
-            });
-            Some(local_id)
-        }
-        AgentClass::Patch => {
-            let local_id = ctx.hir.locals.insert(LocalDeclaration {
-                debug_name: Some("self_patch_id".into()),
-                ty: NlAbstractTy::Patch.into(),
-                storage: LocalStorage::Register,
-            });
-            Some(local_id)
-        }
-        AgentClass::Link => todo!("TODO(mvp) add self parameter with link type"),
-        AgentClass::Any => {
-            let local_id = ctx.hir.locals.insert(LocalDeclaration {
-                debug_name: Some("self_any".into()),
-                ty: NlAbstractTy::Top.into(),
-                storage: LocalStorage::Register,
-            });
-            Some(local_id)
-        }
-    };
-    positional_params.extend(self_param);
-
-    let fn_info = FnInfo {
-        debug_name: proc_name,
-        env_param: Some(env_param),
-        context_param: Some(context_param),
-        self_param,
-        positional_params,
-        // I think we should be able to leave it like this at first and have
-        // type inference fix it up for us
-        return_ty: NlAbstractTy::Top,
-        local_names: HashMap::new(),
-        num_internal_bodies: 0,
-    };
-    let fn_id = ctx.hir.aux_fn_info.insert(fn_info);
-
-    // build the function body
-    let statements = match expr {
+    ctx: &mut FnBodyBuilderCtx<'_>,
+    parameters: Vec<(LocalId, LocalDecl)>,
+    body_ast: ast::Node,
+) -> ExprKind {
+    let statements = match body_ast {
         ast::Node::CommandBlock(ast::CommandBlock { statements }) => statements,
         ast::Node::ReporterBlock { reporter_app } => {
             vec![ast::Node::CommandCall(ast::CommandCall::Report([reporter_app]))]
         }
-        _ => panic!("expected a command or reporter block, got {:?}", expr),
+        _ => panic!("expected a command or reporter block, got {:?}", body_ast),
     };
-    build_function_body(fn_id, statements, ctx.hir, false);
+    let body = translate_statement_block(ctx, statements);
 
-    // return a closure object
-    ctx.hir.nodes.insert(NodeKind::from(node::Closure {
-        captures: vec![], // TODO(mvp) find which variables are captured by the closure
-        body: fn_id,
-    }))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn ants() {
-        tracing_subscriber::fmt().with_max_level(tracing::Level::TRACE).init();
-
-        let json = include_str!("../../bench/models/ants/ast.json");
-        let ast: ast::Ast = serde_json::from_str(json).unwrap();
-
-        std::fs::write("ast_debug.txt", format!("{:#?}", ast))
-            .expect("Failed to write AST debug output");
-
-        let ParseResult { program, .. } = ast_to_hir(ast).unwrap();
-
-        let debug_output = program.pretty_print();
-        std::fs::write("hir_debug.txt", debug_output).expect("Failed to write HIR debug output");
-    }
+    ExprKind::from(expr::Closure {
+        // TODO(mvp) find which variables are captured by the closure
+        captures: vec![],
+        parameters,
+        body: Box::new(body),
+    })
 }
