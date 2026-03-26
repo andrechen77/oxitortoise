@@ -8,7 +8,7 @@ pub struct Ast {
     #[serde(rename = "metaVars")]
     pub global_names: GlobalNames,
     pub procedures: Vec<Procedure>,
-    // TODO(mvp) add widgets
+    pub widgets: Vec<Widget>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -27,6 +27,14 @@ pub struct Procedure {
     pub name: Arc<str>,
     #[serde(rename = "args")]
     pub arg_names: Vec<Arc<str>>,
+    pub return_type: ReturnType,
+    pub agent_class: AgentClass,
+    pub body: CommandBlock,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct WidgetMiniProcedure {
     pub return_type: ReturnType,
     pub agent_class: AgentClass,
     pub body: CommandBlock,
@@ -115,6 +123,7 @@ pub enum CommandCall {
     Diffuse([Bn; 2]),
     Tick([Bn; 0]),
     Report([Bn; 1]),
+    Plotxy([Bn; 2]),
 }
 
 #[derive(Deserialize, Debug)]
@@ -155,4 +164,34 @@ pub enum ReporterCall {
     Random([Bn; 1]),
     Turtles([Bn; 0]),
     Patches([Bn; 0]),
+    Sum([Bn; 1]),
+    With([Bn; 2]),
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(tag = "type", rename_all = "kebab-case", rename_all_fields = "camelCase")]
+pub enum Widget {
+    Plot {
+        index: u32,
+        setup: WidgetMiniProcedure,
+        update: WidgetMiniProcedure,
+        pens: Vec<Pen>,
+    },
+    Slider {
+        index: u32,
+        get_min: WidgetMiniProcedure,
+        get_max: WidgetMiniProcedure,
+        get_step: WidgetMiniProcedure,
+    },
+    Button {
+        index: u32,
+        on_click: WidgetMiniProcedure,
+    },
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Pen {
+    pub name: Arc<str>,
+    pub setup: WidgetMiniProcedure,
+    pub update: WidgetMiniProcedure,
 }

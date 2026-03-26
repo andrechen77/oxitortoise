@@ -81,6 +81,7 @@ pub fn ast_to_hir(ast: Ast) -> anyhow::Result<HirResult> {
                 link_vars: _link_var_names,
             },
         procedures,
+        widgets: _,
     } = ast;
 
     let mut hir_builder = HirBuilder::new();
@@ -498,6 +499,9 @@ fn translate_node(ctx: &mut FnBodyBuilderCtx<'_>, ast_node: ast::Node) -> (ExprK
                 _ => panic!("unrecognized agent class/breed {:?}", breed),
             }
         }
+        N::CommandCall(C::Plotxy([_x, _y])) => {
+            todo!("TODO(mvp) implement plotxy HIR expr")
+        }
         N::LetRef { name } | N::ProcedureArgRef { name } => {
             let local_id = ctx.local_names[&name];
             ExprKind::from(expr::GetLocalVar { local_id })
@@ -768,6 +772,12 @@ fn translate_node(ctx: &mut FnBodyBuilderCtx<'_>, ast_node: ast::Node) -> (ExprK
         }
         N::ReporterCall(R::Turtles([])) => ExprKind::from(expr::Agentset::AllTurtles),
         N::ReporterCall(R::Patches([])) => ExprKind::from(expr::Agentset::AllPatches),
+        N::ReporterCall(R::Sum([_items])) => {
+            todo!("TODO(mvp) implement sum HIR expr")
+        }
+        N::ReporterCall(R::With([_items, _body])) => {
+            todo!("TODO(mvp) implement with HIR expr")
+        }
     };
     (expr, breaking_node)
 }
