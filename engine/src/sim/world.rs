@@ -4,7 +4,7 @@ use std::{alloc::Layout, fmt::Write, mem::offset_of};
 
 use super::shapes::Shapes;
 use crate::{
-    mir::prelude::*,
+    mir,
     sim::{
         observer::{Globals, GlobalsSchema},
         patch::{PatchSchema, Patches},
@@ -50,30 +50,30 @@ impl World {
     }
 
     /// Derives a `Globals` from a `World`.
-    pub fn mir_project_globals(world: TypedPlace) -> TypedPlace {
-        world.proj(Projection::Field { byte_offset: offset_of!(World, globals) })
+    pub fn mir_project_globals(world: mir::TypedPlace) -> mir::TypedPlace {
+        world.proj(mir::Projection::Field { byte_offset: offset_of!(World, globals) })
     }
 
     /// Derives a `Turtles` from a `World`.
-    pub fn mir_project_turtles(world: TypedPlace) -> TypedPlace {
-        world.proj(Projection::Field { byte_offset: offset_of!(World, turtles) })
+    pub fn mir_project_turtles(world: mir::TypedPlace) -> mir::TypedPlace {
+        world.proj(mir::Projection::Field { byte_offset: offset_of!(World, turtles) })
     }
 
     /// Derives a `Patches` from a `World`.
-    pub fn mir_project_patches(world: TypedPlace) -> TypedPlace {
-        world.proj(Projection::Field { byte_offset: offset_of!(World, patches) })
+    pub fn mir_project_patches(world: mir::TypedPlace) -> mir::TypedPlace {
+        world.proj(mir::Projection::Field { byte_offset: offset_of!(World, patches) })
     }
 
     pub fn mir_type_from_schemas(
         globals_schema: &GlobalsSchema,
         turtle_schema: &TurtleSchema,
         patch_schema: &PatchSchema,
-    ) -> MirType {
+    ) -> mir::MirType {
         let globals_ty = Globals::mir_type_from_schema(globals_schema);
         let turtles_ty = Turtles::mir_type_from_schema(turtle_schema);
         let patches_ty = Patches::mir_type_from_schema(patch_schema);
 
-        MirTypeInfo::with_fields(
+        mir::MirTypeInfo::with_fields(
             Layout::new::<Self>(),
             vec![
                 (offset_of!(Self, globals), globals_ty),

@@ -5,12 +5,12 @@ use crate::{sim::value::BoxedAny, util::reflection::Type};
 mod builder;
 mod reflection;
 
-pub mod prelude {
-    pub use super::{
-        DynPtr, DynPtrMut, FunctionBuilder, HasDynPtr, LocalId, MirType, MirTypeContents,
-        MirTypeInfo, Operation, Place, PlaceOperand, Projection, TypedPlace,
-    };
-}
+// pub mod prelude {
+//     pub use super::{
+//         DynPtr, DynPtrMut, FunctionBuilder, HasDynPtr, /* LocalId, */ MirType,
+//         MirTypeContents, MirTypeInfo, Operation, Place, PlaceOperand, Projection, TypedPlace,
+//     };
+// }
 
 pub use builder::{FunctionBuilder, ProgramBuilder};
 pub use reflection::{

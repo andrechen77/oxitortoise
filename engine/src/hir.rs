@@ -1,17 +1,13 @@
 // TODO(doc) all of HIR
 
-use std::{
-    collections::BTreeMap,
-    fmt::{self, Display},
-    sync::Arc,
-};
+use std::{collections::BTreeMap, fmt, sync::Arc};
 
 use ambassador::{Delegate, delegatable_trait};
 use derive_more::derive::{Display, From, TryInto};
 use pretty_print::PrettyPrinter;
 
 use crate::{
-    mir::{self, prelude::*},
+    mir,
     sim::turtle::{TurtleBreed, TurtleBreedId},
 };
 
@@ -205,7 +201,7 @@ impl NlAbstractTy {
         }
     }
 
-    pub fn repr(&self) -> MirType {
+    pub fn repr(&self) -> mir::MirType {
         todo!(
             "We could just get rid of this entirely and have the type mappings be defined hir::TypeMapping"
         )

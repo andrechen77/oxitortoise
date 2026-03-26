@@ -8,7 +8,7 @@ use pretty_print::PrettyPrinter;
 
 use crate::{
     hir::{Expr, ExprKind, NameContext, NlAbstractTy, build_mir::HirToMirFnBuilder},
-    mir::{self, prelude::*},
+    mir,
     sim::{
         patch::OptionPatchId,
         value::{BoxedAny, NlFloat, PackedAny},
@@ -53,9 +53,9 @@ static BINARY_ARITH_OPCODE_TYPE_INFO: TypeInfo = TypeInfo {
     clone: CloneKind::Copy,
     drop_fn: None,
     make_mir_type: || {
-        Arc::new(MirTypeInfo {
+        Arc::new(mir::MirTypeInfo {
             static_ty: Some(&BINARY_ARITH_OPCODE_TYPE_INFO),
-            contents: MirTypeContents::IsPrimitive(lir::ValType::I8),
+            contents: mir::MirTypeContents::IsPrimitive(lir::ValType::I8),
         })
     },
 };
@@ -71,9 +71,9 @@ static BINARY_CMP_OPCODE_TYPE_INFO: TypeInfo = TypeInfo {
     clone: CloneKind::Copy,
     drop_fn: None,
     make_mir_type: || {
-        Arc::new(MirTypeInfo {
+        Arc::new(mir::MirTypeInfo {
             static_ty: Some(&BINARY_CMP_OPCODE_TYPE_INFO),
-            contents: MirTypeContents::IsPrimitive(lir::ValType::I8),
+            contents: mir::MirTypeContents::IsPrimitive(lir::ValType::I8),
         })
     },
 };
@@ -89,9 +89,9 @@ static BINARY_BOOL_OPCODE_TYPE_INFO: TypeInfo = TypeInfo {
     clone: CloneKind::Copy,
     drop_fn: None,
     make_mir_type: || {
-        Arc::new(MirTypeInfo {
+        Arc::new(mir::MirTypeInfo {
             static_ty: Some(&BINARY_BOOL_OPCODE_TYPE_INFO),
-            contents: MirTypeContents::IsPrimitive(lir::ValType::I8),
+            contents: mir::MirTypeContents::IsPrimitive(lir::ValType::I8),
         })
     },
 };
@@ -124,7 +124,7 @@ impl Expr for BinaryArith {
         visitor(self.rhs.as_mut());
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: LocalId) {
+    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {
         todo!("TODO(mvp)");
     }
 
@@ -167,7 +167,7 @@ impl Expr for BinaryCmp {
         visitor(self.rhs.as_mut());
     }
 
-    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, local_out: LocalId) {
+    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, local_out: mir::LocalId) {
         let lhs_ty = self.lhs.output_type(builder.hir_names);
         let rhs_ty = self.rhs.output_type(builder.hir_names);
 
@@ -187,7 +187,7 @@ impl Expr for BinaryCmp {
                 let result = !negate;
                 builder.mir.add_operation_with_dst(
                     local_out.into(),
-                    Operation::Const { value: BoxedAny::new(result) },
+                    mir::Operation::Const { value: BoxedAny::new(result) },
                 );
                 return;
             }
@@ -231,22 +231,22 @@ impl Expr for BinaryCmp {
                 Op::Eq => lir::BinaryOpcode::FEq,
                 _ => unimplemented!("unsupported operation"),
             };
-            Operation::BinaryOp {
+            mir::Operation::BinaryOp {
                 opcode,
-                lhs: PlaceOperand::Move(lhs_pl.place),
-                rhs: PlaceOperand::Move(rhs_pl.place),
+                lhs: mir::PlaceOperand::Move(lhs_pl.place),
+                rhs: mir::PlaceOperand::Move(rhs_pl.place),
             }
         } else if lhs_ty.is::<PackedAny>() && rhs_ty.is::<PackedAny>() {
             let opcode_pl = builder.mir.add_operation(
                 None,
-                Operation::Const { value: BoxedAny::new::<BinaryCmpOpcode>(self.op) },
+                mir::Operation::Const { value: BoxedAny::new::<BinaryCmpOpcode>(self.op) },
             );
-            Operation::CallHostFunction {
+            mir::Operation::CallHostFunction {
                 function: &binary_cmp_any_bool::FN_INFO,
                 args: vec![
-                    PlaceOperand::Move(lhs_pl.place),
-                    PlaceOperand::Move(rhs_pl.place),
-                    PlaceOperand::Move(opcode_pl.place()),
+                    mir::PlaceOperand::Move(lhs_pl.place),
+                    mir::PlaceOperand::Move(rhs_pl.place),
+                    mir::PlaceOperand::Move(opcode_pl.place()),
                 ],
             }
         } else {
@@ -307,7 +307,7 @@ impl Expr for BinaryBool {
         visitor(self.rhs.as_mut());
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: LocalId) {
+    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {
         todo!("TODO(mvp)");
     }
 
@@ -348,7 +348,7 @@ impl Expr for LogicalNot {
         let operand_pl = builder.translate_expr(&self.operand);
         let final_operation = mir::Operation::UnaryOp {
             opcode: lir::UnaryOpcode::Not,
-            operand: PlaceOperand::Move(operand_pl.place),
+            operand: mir::PlaceOperand::Move(operand_pl.place),
         };
         builder.mir.add_operation_with_dst(local_out.into(), final_operation);
     }
@@ -388,7 +388,7 @@ impl Expr for Negate {
         let operand_pl = builder.translate_expr(&self.operand);
         let final_operation = mir::Operation::UnaryOp {
             opcode: lir::UnaryOpcode::FNeg,
-            operand: PlaceOperand::Move(operand_pl.place),
+            operand: mir::PlaceOperand::Move(operand_pl.place),
         };
         builder.mir.add_operation_with_dst(local_out.into(), final_operation);
     }

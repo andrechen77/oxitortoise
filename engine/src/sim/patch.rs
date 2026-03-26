@@ -15,7 +15,7 @@ use pretty_print::PrettyPrinter;
 use super::topology::Point;
 use crate::{
     hir::{CustomVarDecl, HirToMirFnBuilder, TypeMapping},
-    mir::{self, prelude::*},
+    mir::{self, HasDynPtr as _},
     sim::{
         agent_schema::{AgentFieldDescriptor, AgentSchemaField, AgentSchemaFieldGroup},
         color::Color,
@@ -81,8 +81,8 @@ impl OptionPatchId {
             local_out.into(),
             mir::Operation::BinaryOp {
                 opcode,
-                lhs: PlaceOperand::Move(operand.place),
-                rhs: PlaceOperand::Move(sentinel_pl.place()),
+                lhs: mir::PlaceOperand::Move(operand.place),
+                rhs: mir::PlaceOperand::Move(sentinel_pl.place()),
             },
         );
     }
@@ -304,10 +304,10 @@ impl Patches {
     pub fn mir_project_patch_variable(
         builder: &mut mir::FunctionBuilder,
         type_mapping: &TypeMapping,
-        patches: TypedPlace,
-        patch_id: TypedPlace,
+        patches: mir::TypedPlace,
+        patch_id: mir::TypedPlace,
         var: PatchVarDesc,
-    ) -> TypedPlace {
+    ) -> mir::TypedPlace {
         const { assert!(size_of::<RowBuffer>() == size_of::<Option<RowBuffer>>()) };
 
         let (field_desc, offset) = type_mapping.patch_schema().field_desc_and_offset(var);
@@ -315,7 +315,7 @@ impl Patches {
         // patches.data[field_desc.buffer_idx]
         let offset_of_buffer = offset_of!(Self, data)
             + usize::from(field_desc.buffer_idx) * size_of::<Option<RowBuffer>>();
-        let buffer_pl = patches.proj(Projection::Field { byte_offset: offset_of_buffer });
+        let buffer_pl = patches.proj(mir::Projection::Field { byte_offset: offset_of_buffer });
         // patches.data[field_desc.buffer_idx].ptr
         let ptr_to_buffer = RowBuffer::write_mir_get_data_ptr(builder, buffer_pl);
         // patches.data[field_desc.buffer_idx].ptr[patch_id.index]
@@ -325,7 +325,7 @@ impl Patches {
         if let Some(offset) = offset { var_pl.proj_field(offset) } else { var_pl }
     }
 
-    pub fn mir_type_from_schema(schema: &PatchSchema) -> MirType {
+    pub fn mir_type_from_schema(schema: &PatchSchema) -> mir::MirType {
         // this code relies on the fact that the RowBuffer struct is niche
         // optimized so that an Option<RowBuffer> which is known to be Some can
         // be treated as a RowBuffer. A better solution would be to use the
@@ -335,7 +335,7 @@ impl Patches {
         const { assert!(size_of::<RowBuffer>() == size_of::<Option<RowBuffer>>()) };
 
         // we get 4 to match the number of buffers in the Patches struct
-        let buffer_types: [Option<MirType>; 4] = schema
+        let buffer_types: [Option<mir::MirType>; 4] = schema
             .make_row_schemas()
             .map(|schema| schema.map(|s| RowBuffer::self_mir_type_from_metadata(&s)));
         let fields = buffer_types
@@ -348,7 +348,7 @@ impl Patches {
             })
             .collect();
 
-        MirTypeInfo::with_fields(Layout::new::<Self>(), fields)
+        mir::MirTypeInfo::with_fields(Layout::new::<Self>(), fields)
     }
 }
 

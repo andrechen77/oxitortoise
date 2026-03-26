@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    mir::prelude::*,
+    mir,
     sim::{observer::GlobalsSchema, patch::PatchSchema, turtle::TurtleSchema, world::World},
     util::rng::CanonRng,
 };
@@ -19,16 +19,16 @@ pub struct Workspace {
 
 impl Workspace {
     /// Derives a `World` from a `Workspace`.
-    pub fn mir_project_world(workspace: TypedPlace) -> TypedPlace {
-        workspace.proj(Projection::Field { byte_offset: offset_of!(Workspace, world) })
+    pub fn mir_project_world(workspace: mir::TypedPlace) -> mir::TypedPlace {
+        workspace.proj(mir::Projection::Field { byte_offset: offset_of!(Workspace, world) })
     }
 
     pub fn mir_type_from_schemas(
         globals_schema: &GlobalsSchema,
         turtle_schema: &TurtleSchema,
         patch_schema: &PatchSchema,
-    ) -> MirType {
+    ) -> mir::MirType {
         let world_ty = World::mir_type_from_schemas(globals_schema, turtle_schema, patch_schema);
-        MirTypeInfo::with_field(Layout::new::<Self>(), offset_of!(Self, world), world_ty)
+        mir::MirTypeInfo::with_field(Layout::new::<Self>(), offset_of!(Self, world), world_ty)
     }
 }

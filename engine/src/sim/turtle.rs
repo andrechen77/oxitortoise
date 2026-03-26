@@ -17,7 +17,7 @@ use macro_reflect::{ReflectComponents, reflect};
 use pretty_print::PrettyPrinter;
 
 use crate::hir::{CustomVarDecl, TypeMapping};
-use crate::mir::{self, prelude::*};
+use crate::mir::{self, HasDynPtr as _};
 use crate::util::reflection::Reflect;
 use crate::{
     sim::{
@@ -299,10 +299,10 @@ impl Turtles {
     pub fn mir_project_turtle_variable(
         builder: &mut mir::FunctionBuilder,
         type_mapping: &TypeMapping,
-        turtles: TypedPlace,
-        turtle_id: TypedPlace,
+        turtles: mir::TypedPlace,
+        turtle_id: mir::TypedPlace,
         var: TurtleVarDesc,
-    ) -> TypedPlace {
+    ) -> mir::TypedPlace {
         const { assert!(size_of::<RowBuffer>() == size_of::<Option<RowBuffer>>()) };
 
         let (field_desc, offset) = type_mapping.turtle_schema().field_desc_and_offset(var);
@@ -310,15 +310,15 @@ impl Turtles {
         // turtles.data[field_desc.buffer_idx]
         let offset_of_buffer = offset_of!(Self, data)
             + usize::from(field_desc.buffer_idx) * size_of::<Option<RowBuffer>>();
-        let buffer_pl = turtles.proj(Projection::Field { byte_offset: offset_of_buffer });
+        let buffer_pl = turtles.proj(mir::Projection::Field { byte_offset: offset_of_buffer });
         // turtles.data[field_desc.buffer_idx].ptr
         let ptr_to_buffer = RowBuffer::write_mir_get_data_ptr(builder, buffer_pl);
         // turtles.data[field_desc.buffer_idx].ptr[turtle_id.index]
         let turtle_idx = builder.add_operation(
             Some("turtle_idx".into()),
-            Operation::UnaryOp {
+            mir::Operation::UnaryOp {
                 opcode: lir::UnaryOpcode::I64ToI32,
-                operand: PlaceOperand::Move(turtle_id.place),
+                operand: mir::PlaceOperand::Move(turtle_id.place),
             },
         );
         let ptr_to_row = ptr_to_buffer.proj_dynamic_index(turtle_idx);
@@ -327,7 +327,7 @@ impl Turtles {
         if let Some(offset) = offset { var_pl.proj_field(offset) } else { var_pl }
     }
 
-    pub fn mir_type_from_schema(schema: &TurtleSchema) -> MirType {
+    pub fn mir_type_from_schema(schema: &TurtleSchema) -> mir::MirType {
         // this code relies on the fact that the RowBuffer struct is niche
         // optimized so that an Option<RowBuffer> which is known to be Some can
         // be treated as a RowBuffer. A better solution would be to use the
@@ -337,7 +337,7 @@ impl Turtles {
         const { assert!(size_of::<RowBuffer>() == size_of::<Option<RowBuffer>>()) };
 
         // we get 4 to match the number of buffers in the Turtles struct
-        let buffer_types: [Option<MirType>; 4] = schema
+        let buffer_types: [Option<mir::MirType>; 4] = schema
             .make_row_schemas()
             .map(|schema| schema.map(|s| RowBuffer::self_mir_type_from_metadata(&s)));
         let fields = buffer_types
@@ -350,7 +350,7 @@ impl Turtles {
             })
             .collect();
 
-        MirTypeInfo::with_fields(Layout::new::<Self>(), fields)
+        mir::MirTypeInfo::with_fields(Layout::new::<Self>(), fields)
     }
 }
 

@@ -2,7 +2,9 @@ use std::{collections::BTreeMap, fmt::Display, mem};
 
 use tracing::trace;
 
-use crate::hir::{Expr, ExprKind, FunctionId, LocalId, NameContext, NlAbstractTy, Program, expr};
+use crate::hir::{
+    self, Expr, ExprKind, FunctionId, LocalId, NameContext, NlAbstractTy, Program, expr,
+};
 
 // TODO(wishlist) this is a very basic algorithm that iteratively runs type
 // inference over every single node in the program until convergence. this can
@@ -44,7 +46,11 @@ impl ProgramTypes {
     /// scope. Although this takes a mutable reference to the table of locals,
     /// this does not actually mutate the locals, it just passes the mutable
     /// reference to the inner function.
-    fn with_locals(&mut self, locals: impl Iterator<Item = LocalId>, f: impl FnOnce(&mut Self)) {
+    fn with_locals(
+        &mut self,
+        locals: impl Iterator<Item = hir::LocalId>,
+        f: impl FnOnce(&mut Self),
+    ) {
         // any new variables that have the same LocalId as an existing variable
         // will shadow the existing variable. replace them in the map, but keep
         // track of them so that we can restore them after the inner function

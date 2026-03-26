@@ -11,7 +11,7 @@ use pretty_print::PrettyPrinter;
 
 use crate::{
     hir::TypeMapping,
-    mir::prelude::*,
+    mir::{self, HasDynPtr as _},
     sim::value::{NlFloat, NlList, NlString, PackedAny},
     util::{
         reflection::{Reflect, Type},
@@ -66,26 +66,26 @@ impl Globals {
     }
 
     pub fn mir_project_global_var(
-        builder: &mut FunctionBuilder,
+        builder: &mut mir::FunctionBuilder,
         type_mapping: &TypeMapping,
         var_index: usize,
-        globals: TypedPlace,
-    ) -> TypedPlace {
+        globals: mir::TypedPlace,
+    ) -> mir::TypedPlace {
         let byte_offset = type_mapping.globals_schema().offset_of_field(var_index);
 
         // globals.data
-        let data = globals.proj(Projection::Field { byte_offset: offset_of!(Globals, data) });
+        let data = globals.proj(mir::Projection::Field { byte_offset: offset_of!(Globals, data) });
         // globals.data.ptr
-        let ptr = <RowBuffer as HasDynPtr>::write_mir_get_data_ptr(builder, data);
+        let ptr = RowBuffer::write_mir_get_data_ptr(builder, data);
         // globals.data.ptr.var
-        ptr.proj(Projection::Field { byte_offset })
+        ptr.proj(mir::Projection::Field { byte_offset })
     }
 
-    pub fn mir_type_from_schema(schema: &GlobalsSchema) -> MirType {
+    pub fn mir_type_from_schema(schema: &GlobalsSchema) -> mir::MirType {
         let row_schema = schema.make_row_schema();
         let row_buffer_pointee_ty = RowBuffer::self_mir_type_from_metadata(&row_schema);
 
-        MirTypeInfo::with_field(
+        mir::MirTypeInfo::with_field(
             Layout::new::<Self>(),
             offset_of!(Self, data),
             row_buffer_pointee_ty,
