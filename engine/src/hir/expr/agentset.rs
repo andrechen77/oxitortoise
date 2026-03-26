@@ -5,7 +5,7 @@ use std::fmt::{self, Write};
 use pretty_print::PrettyPrinter;
 
 use crate::{
-    hir::{Expr, NameContext, NlAbstractTy, build_mir::HirToMirFnBuilder},
+    hir::{Expr, ExprKind, NameContext, NlAbstractTy, build_mir::HirToMirFnBuilder},
     mir,
 };
 
@@ -27,6 +27,13 @@ impl Expr for Agentset {
 
     fn visit_children(&self, _visitor: impl FnMut(&crate::hir::ExprKind)) {
         // nothing to do lolz
+        match self {
+            Agentset::AllTurtles => {}
+            Agentset::AllPatches => {}
+        }
+    }
+
+    fn visit_children_mut(&mut self, _visitor: impl FnMut(&mut ExprKind)) {
         match self {
             Agentset::AllTurtles => {}
             Agentset::AllPatches => {}

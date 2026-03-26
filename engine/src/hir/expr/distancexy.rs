@@ -29,6 +29,13 @@ impl Expr for Distancexy {
         visitor(&self.y);
     }
 
+    fn visit_children_mut(&mut self, mut visitor: impl FnMut(&mut ExprKind)) {
+        visitor(self.workspace.as_mut());
+        visitor(self.agent.as_mut());
+        visitor(self.x.as_mut());
+        visitor(self.y.as_mut());
+    }
+
     fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {
         todo!("TODO(mvp) write MIR execution for Distancexy")
     }

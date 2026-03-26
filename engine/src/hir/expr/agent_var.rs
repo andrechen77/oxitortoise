@@ -35,6 +35,10 @@ impl Expr for GetGlobalVar {
         visitor(&self.workspace);
     }
 
+    fn visit_children_mut(&mut self, mut visitor: impl FnMut(&mut ExprKind)) {
+        visitor(self.workspace.as_mut());
+    }
+
     fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, local_out: LocalId) {
         let ptr_to_workspace = builder.workspace_param();
         let workspace = ptr_to_workspace.proj_deref();
@@ -90,6 +94,11 @@ impl Expr for GetTurtleVar {
         visitor(&self.turtle);
     }
 
+    fn visit_children_mut(&mut self, mut visitor: impl FnMut(&mut ExprKind)) {
+        visitor(self.workspace.as_mut());
+        visitor(self.turtle.as_mut());
+    }
+
     fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, local_out: LocalId) {
         let ptr_to_workspace = builder.workspace_param();
 
@@ -143,6 +152,12 @@ impl Expr for SetTurtleVar {
         visitor(&self.workspace);
         visitor(&self.turtle);
         visitor(&self.value);
+    }
+
+    fn visit_children_mut(&mut self, mut visitor: impl FnMut(&mut ExprKind)) {
+        visitor(self.workspace.as_mut());
+        visitor(self.turtle.as_mut());
+        visitor(self.value.as_mut());
     }
 
     fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, _local_out: LocalId) {
@@ -212,6 +227,11 @@ impl Expr for GetPatchVar {
         visitor(&self.patch);
     }
 
+    fn visit_children_mut(&mut self, mut visitor: impl FnMut(&mut ExprKind)) {
+        visitor(self.workspace.as_mut());
+        visitor(self.patch.as_mut());
+    }
+
     fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, local_out: LocalId) {
         let ptr_to_workspace = builder.workspace_param();
 
@@ -265,6 +285,12 @@ impl Expr for SetPatchVar {
         visitor(&self.workspace);
         visitor(&self.patch);
         visitor(&self.value);
+    }
+
+    fn visit_children_mut(&mut self, mut visitor: impl FnMut(&mut ExprKind)) {
+        visitor(self.workspace.as_mut());
+        visitor(self.patch.as_mut());
+        visitor(self.value.as_mut());
     }
 
     fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, _local_out: LocalId) {

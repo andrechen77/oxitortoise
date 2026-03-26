@@ -1,13 +1,16 @@
 // TODO(doc) all of HIR
 
-use std::{collections::BTreeMap, fmt, sync::Arc};
+use std::{
+    collections::BTreeMap,
+    fmt::{self, Display},
+    sync::Arc,
+};
 
 use ambassador::{Delegate, delegatable_trait};
 use derive_more::derive::{Display, From, TryInto};
 use pretty_print::PrettyPrinter;
 
 use crate::{
-    hir::format::NameContext,
     mir::{self, prelude::*},
     sim::turtle::{TurtleBreed, TurtleBreedId},
 };
@@ -17,8 +20,8 @@ pub mod expr;
 
 // TODO fix these modules
 mod format;
+mod type_inference;
 // pub mod transforms;
-// pub mod type_inference;
 
 pub use build_mir::{HirToMirFnBuilder, TypeMapping};
 
@@ -67,7 +70,8 @@ pub struct LocalDecl {
 #[display("L{_0}")]
 pub struct Label(pub u32);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Display)]
+#[display("V{_0}")]
 pub struct LocalId(pub u32);
 
 /// Some kind of computation that takes inputs and produces outputs. The output
@@ -79,6 +83,10 @@ pub trait Expr {
     fn output_type(&self, names: NameContext) -> NlAbstractTy;
 
     fn visit_children(&self, visitor: impl FnMut(&ExprKind));
+
+    /// Like [`visit_children`](Expr::visit_children), but allows mutating each
+    /// child expression in place.
+    fn visit_children_mut(&mut self, visitor: impl FnMut(&mut ExprKind));
 
     /// Writes the MIR statements that correspond to the calculation represented
     /// by this expression. This means executing any necessary side effelts and

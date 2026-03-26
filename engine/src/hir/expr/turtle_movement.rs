@@ -54,6 +54,12 @@ impl Expr for TurtleRotate {
         visitor(&self.angle);
     }
 
+    fn visit_children_mut(&mut self, mut visitor: impl FnMut(&mut ExprKind)) {
+        visitor(self.workspace.as_mut());
+        visitor(self.turtle.as_mut());
+        visitor(self.angle.as_mut());
+    }
+
     fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {
         todo!("TODO(mvp) write MIR execution for TurtleRotate")
     }
@@ -91,6 +97,12 @@ impl Expr for TurtleForward {
         visitor(&self.distance);
     }
 
+    fn visit_children_mut(&mut self, mut visitor: impl FnMut(&mut ExprKind)) {
+        visitor(self.workspace.as_mut());
+        visitor(self.turtle.as_mut());
+        visitor(self.distance.as_mut());
+    }
+
     fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {
         todo!("TODO(mvp) write MIR execution for TurtleForward")
     }
@@ -126,6 +138,12 @@ impl Expr for CanMove {
         visitor(&self.workspace);
         visitor(&self.turtle);
         visitor(&self.distance);
+    }
+
+    fn visit_children_mut(&mut self, mut visitor: impl FnMut(&mut ExprKind)) {
+        visitor(self.workspace.as_mut());
+        visitor(self.turtle.as_mut());
+        visitor(self.distance.as_mut());
     }
 
     fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {
@@ -169,6 +187,17 @@ impl Expr for PatchRelative {
         }
         visitor(&self.turtle);
         visitor(&self.distance);
+    }
+
+    fn visit_children_mut(&mut self, mut visitor: impl FnMut(&mut ExprKind)) {
+        match &mut self.relative_loc {
+            PatchLocRelation::Ahead => {}
+            PatchLocRelation::LeftAhead(heading) | PatchLocRelation::RightAhead(heading) => {
+                visitor(heading.as_mut());
+            }
+        }
+        visitor(self.turtle.as_mut());
+        visitor(self.distance.as_mut());
     }
 
     fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {

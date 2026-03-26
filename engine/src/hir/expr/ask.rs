@@ -30,6 +30,13 @@ impl Expr for Ask {
         visitor(&self.body);
     }
 
+    fn visit_children_mut(&mut self, mut visitor: impl FnMut(&mut ExprKind)) {
+        visitor(self.workspace.as_mut());
+        visitor(self.rng.as_mut());
+        visitor(self.recipients.as_mut());
+        visitor(self.body.as_mut());
+    }
+
     fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {
         todo!("TODO(mvp) write MIR execution for Ask")
     }
@@ -74,6 +81,13 @@ impl Expr for Of {
         visitor(&self.rng);
         visitor(&self.recipients);
         visitor(&self.body);
+    }
+
+    fn visit_children_mut(&mut self, mut visitor: impl FnMut(&mut ExprKind)) {
+        visitor(self.workspace.as_mut());
+        visitor(self.rng.as_mut());
+        visitor(self.recipients.as_mut());
+        visitor(self.body.as_mut());
     }
 
     fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {

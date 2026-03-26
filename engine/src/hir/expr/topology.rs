@@ -29,6 +29,13 @@ impl Expr for OffsetDistanceByHeading {
         visitor(&self.heading);
     }
 
+    fn visit_children_mut(&mut self, mut visitor: impl FnMut(&mut ExprKind)) {
+        visitor(self.workspace.as_mut());
+        visitor(self.position.as_mut());
+        visitor(self.amt.as_mut());
+        visitor(self.heading.as_mut());
+    }
+
     fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {
         todo!("TODO(mvp) write MIR execution for OffsetDistanceByHeading")
     }
@@ -67,6 +74,12 @@ impl Expr for PatchAt {
         visitor(&self.y);
     }
 
+    fn visit_children_mut(&mut self, mut visitor: impl FnMut(&mut ExprKind)) {
+        visitor(self.workspace.as_mut());
+        visitor(self.x.as_mut());
+        visitor(self.y.as_mut());
+    }
+
     fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {
         todo!("TODO(mvp) write MIR execution for PatchAt")
     }
@@ -100,6 +113,10 @@ impl Expr for MaxPxcor {
         visitor(&self.workspace);
     }
 
+    fn visit_children_mut(&mut self, mut visitor: impl FnMut(&mut ExprKind)) {
+        visitor(self.workspace.as_mut());
+    }
+
     fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {
         todo!("TODO(mvp) write MIR execution for MaxPxcor")
     }
@@ -129,6 +146,10 @@ impl Expr for MaxPycor {
 
     fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
         visitor(&self.workspace);
+    }
+
+    fn visit_children_mut(&mut self, mut visitor: impl FnMut(&mut ExprKind)) {
+        visitor(self.workspace.as_mut());
     }
 
     fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {
@@ -164,6 +185,11 @@ impl Expr for EuclideanDistanceNoWrap {
         visitor(&self.b);
     }
 
+    fn visit_children_mut(&mut self, mut visitor: impl FnMut(&mut ExprKind)) {
+        visitor(self.a.as_mut());
+        visitor(self.b.as_mut());
+    }
+
     fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {
         todo!("TODO(mvp) write MIR execution for EuclideanDistanceNoWrap")
     }
@@ -196,6 +222,11 @@ impl Expr for PointConstructor {
     fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
         visitor(&self.x);
         visitor(&self.y);
+    }
+
+    fn visit_children_mut(&mut self, mut visitor: impl FnMut(&mut ExprKind)) {
+        visitor(self.x.as_mut());
+        visitor(self.y.as_mut());
     }
 
     fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {

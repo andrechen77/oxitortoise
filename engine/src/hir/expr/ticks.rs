@@ -23,6 +23,10 @@ impl Expr for ResetTicks {
         visitor(&self.workspace);
     }
 
+    fn visit_children_mut(&mut self, mut visitor: impl FnMut(&mut ExprKind)) {
+        visitor(self.workspace.as_mut());
+    }
+
     fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {
         todo!("TODO(mvp) write MIR execution for ResetTicks")
     }
@@ -54,6 +58,10 @@ impl Expr for AdvanceTick {
         visitor(&self.workspace);
     }
 
+    fn visit_children_mut(&mut self, mut visitor: impl FnMut(&mut ExprKind)) {
+        visitor(self.workspace.as_mut());
+    }
+
     fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {
         todo!("TODO(mvp) write MIR execution for AdvanceTick")
     }
@@ -83,6 +91,10 @@ impl Expr for GetTick {
 
     fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
         visitor(&self.workspace);
+    }
+
+    fn visit_children_mut(&mut self, mut visitor: impl FnMut(&mut ExprKind)) {
+        visitor(self.workspace.as_mut());
     }
 
     fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {

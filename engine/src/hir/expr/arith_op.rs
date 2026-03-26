@@ -119,6 +119,11 @@ impl Expr for BinaryArith {
         visitor(&self.rhs);
     }
 
+    fn visit_children_mut(&mut self, mut visitor: impl FnMut(&mut ExprKind)) {
+        visitor(self.lhs.as_mut());
+        visitor(self.rhs.as_mut());
+    }
+
     fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: LocalId) {
         todo!("TODO(mvp)");
     }
@@ -155,6 +160,11 @@ impl Expr for BinaryCmp {
     fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
         visitor(&self.lhs);
         visitor(&self.rhs);
+    }
+
+    fn visit_children_mut(&mut self, mut visitor: impl FnMut(&mut ExprKind)) {
+        visitor(self.lhs.as_mut());
+        visitor(self.rhs.as_mut());
     }
 
     fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, local_out: LocalId) {
@@ -292,6 +302,11 @@ impl Expr for BinaryBool {
         visitor(&self.rhs);
     }
 
+    fn visit_children_mut(&mut self, mut visitor: impl FnMut(&mut ExprKind)) {
+        visitor(self.lhs.as_mut());
+        visitor(self.rhs.as_mut());
+    }
+
     fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: LocalId) {
         todo!("TODO(mvp)");
     }
@@ -323,6 +338,10 @@ impl Expr for LogicalNot {
 
     fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
         visitor(&self.operand);
+    }
+
+    fn visit_children_mut(&mut self, mut visitor: impl FnMut(&mut ExprKind)) {
+        visitor(self.operand.as_mut());
     }
 
     fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, local_out: mir::LocalId) {
@@ -359,6 +378,10 @@ impl Expr for Negate {
 
     fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
         visitor(&self.operand);
+    }
+
+    fn visit_children_mut(&mut self, mut visitor: impl FnMut(&mut ExprKind)) {
+        visitor(self.operand.as_mut());
     }
 
     fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, local_out: mir::LocalId) {

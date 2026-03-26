@@ -71,6 +71,10 @@ impl Expr for Scope {
         visitor(&self.inner);
     }
 
+    fn visit_children_mut(&mut self, mut visitor: impl FnMut(&mut ExprKind)) {
+        visitor(self.inner.as_mut());
+    }
+
     fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, local_out: mir::LocalId) {
         for (local_id, decl) in &self.locals {
             let mir_local_decl =
@@ -143,6 +147,12 @@ impl Expr for Block {
         }
     }
 
+    fn visit_children_mut(&mut self, mut visitor: impl FnMut(&mut ExprKind)) {
+        for stmt in &mut self.statements {
+            visitor(stmt);
+        }
+    }
+
     fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, local_out: mir::LocalId) {
         let label = builder.mir.create_label();
 
@@ -200,6 +210,12 @@ impl Expr for IfElse {
         visitor(&self.r#else);
     }
 
+    fn visit_children_mut(&mut self, mut visitor: impl FnMut(&mut ExprKind)) {
+        visitor(self.condition.as_mut());
+        visitor(self.then.as_mut());
+        visitor(self.r#else.as_mut());
+    }
+
     fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, local_out: mir::LocalId) {
         let condition = builder.translate_expr(&self.condition);
         let (then_stmts, _) = builder.with_inner_statement_seq(|builder| {
@@ -245,6 +261,10 @@ impl Expr for Break {
 
     fn visit_children(&self, visitor: impl FnMut(&ExprKind)) {
         self.value.visit_children(visitor);
+    }
+
+    fn visit_children_mut(&mut self, visitor: impl FnMut(&mut ExprKind)) {
+        self.value.visit_children_mut(visitor);
     }
 
     fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, break_local_out: mir::LocalId) {

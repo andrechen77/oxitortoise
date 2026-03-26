@@ -29,6 +29,13 @@ impl Expr for ScaleColor {
         visitor(&self.range2);
     }
 
+    fn visit_children_mut(&mut self, mut visitor: impl FnMut(&mut ExprKind)) {
+        visitor(self.color.as_mut());
+        visitor(self.number.as_mut());
+        visitor(self.range1.as_mut());
+        visitor(self.range2.as_mut());
+    }
+
     fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {
         todo!("TODO(mvp) write MIR execution for ScaleColor")
     }

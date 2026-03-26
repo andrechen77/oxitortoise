@@ -31,6 +31,12 @@ impl Expr for CallUserFn {
         }
     }
 
+    fn visit_children_mut(&mut self, mut visitor: impl FnMut(&mut ExprKind)) {
+        for arg in &mut self.args {
+            visitor(arg.as_mut());
+        }
+    }
+
     fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {
         todo!("TODO(mvp) write MIR execution for CallUserFn")
     }

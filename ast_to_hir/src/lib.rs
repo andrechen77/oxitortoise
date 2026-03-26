@@ -143,9 +143,11 @@ pub fn ast_to_hir(ast: Ast) -> anyhow::Result<HirResult> {
 
     // translate each function body
     let mut functions = BTreeMap::new();
+    let mut function_bodies = BTreeMap::new();
     for (function_id, function) in functions_to_build {
-        let function = translate_function_body(&mut hir_builder, function);
+        let (function, body) = translate_function_body(&mut hir_builder, function);
         functions.insert(function_id, function);
+        function_bodies.insert(function_id, body);
     }
 
     let program = hir::Program {
@@ -154,6 +156,7 @@ pub fn ast_to_hir(ast: Ast) -> anyhow::Result<HirResult> {
         custom_turtle_vars,
         custom_patch_vars,
         functions,
+        function_bodies,
     };
 
     Ok(HirResult { program, global_names: hir_builder.global_names })
@@ -183,8 +186,11 @@ impl<'a> FnBodyBuilderCtx<'a> {
     }
 }
 
-fn translate_function_body(hir: &mut HirBuilder, function_ast: ast::Procedure) -> Function {
-    let ast::Procedure { name, arg_names, return_type: _, agent_class: _, body } = function_ast;
+fn translate_function_body(
+    hir: &mut HirBuilder,
+    function_ast: ast::Procedure,
+) -> (Function, ExprKind) {
+    let ast::Procedure { name, arg_names, return_type, agent_class: _, body } = function_ast;
 
     let mut non_param_locals = BTreeMap::new(); // local variables that are not parametrs
     let mut parameters = BTreeMap::new(); // local variables that are parameters
@@ -227,9 +233,15 @@ fn translate_function_body(hir: &mut HirBuilder, function_ast: ast::Procedure) -
         inner: Box::new(body_without_locals),
     });
 
+    let return_ty = match return_type {
+        ast::ReturnType::Unit => NlAbstractTy::Unit,
+        ast::ReturnType::Wildcard => NlAbstractTy::NlTop,
+    };
+
     // can make additional assertions based on return type and agent class here
 
-    Function { debug_name: Some(name.clone()), parameters, body }
+    let function = Function { debug_name: Some(name.clone()), parameters, return_ty };
+    (function, body)
 }
 
 // Returns the HIR node as well as whether it diverges (e.g. early return).
