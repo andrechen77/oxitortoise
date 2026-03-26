@@ -15,8 +15,8 @@ pub struct GetLocalVar {
 }
 
 impl Expr for GetLocalVar {
-    fn output_type(&self, _names: NameContext) -> NlAbstractTy {
-        todo!("TODO(mvp) GetLocalVar output type inference")
+    fn output_type(&self, names: NameContext) -> NlAbstractTy {
+        names.lookup_local_var(self.local_id).unwrap().ty.clone()
     }
 
     fn visit_children(&self, _visitor: impl FnMut(&ExprKind)) {

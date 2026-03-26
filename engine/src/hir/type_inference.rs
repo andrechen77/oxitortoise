@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, fmt::Display, mem};
+use std::{collections::BTreeMap, fmt::Debug, mem};
 
 use tracing::trace;
 
@@ -78,12 +78,16 @@ impl ProgramTypes {
 }
 
 fn narrow_types_once(program: &mut Program) -> bool {
+    trace!("performing single type inference pass");
+
     let mut changed = false;
     let mut types = ProgramTypes::default();
 
     let fn_ids = program.functions.keys().copied().collect::<Vec<_>>();
 
     for fn_id in &fn_ids {
+        trace!("narrowing types for function {:?}", fn_id);
+
         // split the program into an immutable "names context" and a mutable
         // section of function bodies
         let (names, function_bodies) = NameContext::from_program_mut(program);
@@ -133,29 +137,47 @@ fn narrow_types_once(program: &mut Program) -> bool {
     } = types;
 
     // mark invisible changes to local variables
-    if invisible_changes {
-        changed = true;
-    }
+    changed |= invisible_changes;
+
+    assert!(
+        locals.is_empty(),
+        "all local variables should have gone out of scope since we are not traversing a function body"
+    );
 
     // narrow global variables
-    replace_types(
+    changed |= replace_types(
         &mut program.global_vars,
         |global_vars, global_idx| &mut global_vars[global_idx].ty,
         global_vars.into_iter(),
     );
 
     // narrow patch variables
-    replace_types(
+    changed |= replace_types(
         &mut program.custom_patch_vars,
         |custom_patch_vars, patch_idx| &mut custom_patch_vars[patch_idx].ty,
         patch_vars.into_iter(),
     );
 
     // narrow turtle variables
-    replace_types(
+    changed |= replace_types(
         &mut program.custom_turtle_vars,
         |custom_turtle_vars, turtle_idx| &mut custom_turtle_vars[turtle_idx].ty,
         turtle_vars.into_iter(),
+    );
+
+    // narrow function parameters
+    changed |= replace_types(
+        &mut program.functions,
+        |program_functions, (fn_id, local_id)| {
+            &mut program_functions
+                .get_mut(&fn_id)
+                .unwrap()
+                .parameters
+                .get_mut(&local_id)
+                .unwrap()
+                .ty
+        },
+        fn_params.into_iter(),
     );
 
     // return whether any changes were made
@@ -190,7 +212,25 @@ fn narrow_types_expr(types: &mut ProgramTypes, names: NameContext, expr: &mut Ex
         }
         ExprKind::SetLocalVar(expr::SetLocalVar { local_id, value }) => {
             let ty = value.output_type(names);
+            trace!("found assignment to local variable {:?}: {:?}", local_id, ty);
             join_type(&mut types.locals, *local_id, ty);
+        }
+        ExprKind::CallUserFn(expr::CallUserFn { target, args }) => {
+            let target_params = &names.functions()[target].parameters;
+            assert_eq!(
+                args.len(),
+                target_params.len(),
+                "number of arguments to call user fn must match number of parameters"
+            );
+            for (arg, target_param) in args.iter().zip(target_params.keys()) {
+                let ty = arg.output_type(names);
+                trace!(
+                    "found assignment to function parameter {:?}: {:?}",
+                    (*target, *target_param),
+                    ty
+                );
+                join_type(&mut types.fn_params, (*target, *target_param), ty);
+            }
         }
         // TODO handle setting agent variables
         _ => {} // do nothing
@@ -200,7 +240,7 @@ fn narrow_types_expr(types: &mut ProgramTypes, names: NameContext, expr: &mut Ex
 
 /// For each local variable declaration in `actual_types`, update the actual
 /// type of the local variable with the type from new_types
-fn replace_types<K: Display + Copy, T>(
+fn replace_types<K: Debug + Copy, T>(
     // these two arguments are used to function as an `IndexMut<K, Output =
     // NlAbstractTy>` (which requires disgusting newtype wrappers), or a
     // `FnMut(K) -> &mut NlAbstractTy` (which doesn't properly bind the lifetime
@@ -215,7 +255,10 @@ fn replace_types<K: Display + Copy, T>(
         let actual_ty = get_actual_ty(actual_types_storage, id);
         if *actual_ty != new_ty {
             changed = true;
-            trace!("type inference: variable {} type changed from {} to {}", id, actual_ty, new_ty);
+            trace!(
+                "type inference: variable {:?} type changed from {} to {}",
+                id, actual_ty, new_ty
+            );
             *actual_ty = new_ty;
         }
     }

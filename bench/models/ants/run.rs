@@ -7,7 +7,7 @@ use std::{
 use ast_to_hir::{HirResult, serde_json};
 use engine::{
     exec::jit::{InstallLir, InstalledObj as _},
-    lir,
+    hir, lir,
     sim::{
         observer::{Globals, GlobalsSchema},
         patch::{PatchBaseData, PatchSchema, Patches},
@@ -126,7 +126,7 @@ fn main() {
                 .without_time()
                 .with_filter(
                     Targets::new()
-                        .with_target("oxitortoise_engine", Level::INFO)
+                        .with_target("oxitortoise_engine", Level::TRACE)
                         .with_target("oxitortoise_ast_to_hir", Level::TRACE)
                         .with_target("ants", Level::TRACE)
                         .with_target("oxitortoise_main", Level::TRACE)
@@ -141,7 +141,11 @@ fn main() {
     let ast = serde_json::from_str(ast).unwrap();
     let HirResult { mut program, global_names } = ast_to_hir::ast_to_hir(ast).unwrap();
 
-    println!("{}", program.pretty_print());
+    write_to_file("before.hir", program.pretty_print());
+
+    hir::narrow_types(&mut program);
+
+    write_to_file("after.hir", program.pretty_print());
 
     // info!("applying cheats");
     // let cheats = include_str!("cheats.json");

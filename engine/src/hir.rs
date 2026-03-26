@@ -13,13 +13,14 @@ use crate::{
 
 mod build_mir;
 pub mod expr;
-
-// TODO fix these modules
 mod format;
 mod type_inference;
+
+// TODO fix these modules
 // pub mod transforms;
 
 pub use build_mir::{HirToMirFnBuilder, TypeMapping};
+pub use type_inference::narrow_types;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Display, PartialOrd, Ord)]
 #[display("{_0}")]
@@ -189,15 +190,16 @@ pub enum NlAbstractTy {
 impl NlAbstractTy {
     /// Calculates the least upper bound of two types.
     pub fn join(self, other: NlAbstractTy) -> NlAbstractTy {
-        if self == other {
-            return self;
-        }
-        match self {
-            Self::Workspace => panic!("Cannot join Workspace with other types"),
-            Self::Rng => panic!("Cannot join Rng with other types"),
-            Self::NlTop => Self::NlTop,
-            Self::Bottom => other,
-            _ => Self::NlTop,
+        use NlAbstractTy as Ty;
+        match (self, other) {
+            (Ty::Bottom, other) | (other, Ty::Bottom) => other,
+            (a, b) if a == b => a,
+            (Ty::Workspace, other) | (other, Ty::Workspace) => {
+                panic!("Cannot join Workspace with type {:?}", other)
+            }
+            (Ty::Rng, other) | (other, Ty::Rng) => panic!("Cannot join Rng with type {:?}", other),
+            (Ty::NlTop, _) | (_, Ty::NlTop) => Ty::NlTop,
+            (_, _) => Ty::NlTop,
         }
     }
 
