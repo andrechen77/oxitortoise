@@ -3,7 +3,7 @@ use std::{collections::BTreeMap, fmt::Debug, mem};
 use tracing::trace;
 
 use crate::hir::{
-    self, Expr, ExprKind, FunctionId, LocalId, NameContext, NlAbstractTy, Program, expr,
+    self, Expr, ExprKind, Function, FunctionId, LocalId, NameContext, NlAbstractTy, Program, expr,
 };
 
 // TODO(wishlist) this is a very basic algorithm that iteratively runs type
@@ -91,10 +91,22 @@ fn narrow_types_once(program: &mut Program) -> bool {
         // split the program into an immutable "names context" and a mutable
         // section of function bodies
         let (names, function_bodies) = NameContext::from_program_mut(program);
-        let fn_params = &names.functions()[fn_id].parameters;
+        let Function { parameters: fn_params, is_entrypoint, .. } = &names.functions()[fn_id];
         let body_expr = function_bodies.get_mut(fn_id).unwrap();
         // visit the function body and narrow types for inner expressions
         types.with_locals(fn_params.keys().copied().collect::<Vec<_>>().into_iter(), |types| {
+            // to prevent entrypoint functions from having their
+            // parameter types narrowed, we reassert their parameter
+            // types to emulate the fact that they can be called with
+            // parameters of any value (subject to the initial type
+            // constraint with which they were declared)
+            if *is_entrypoint {
+                for local_id in fn_params.keys() {
+                    let og_declared_ty = fn_params[local_id].ty.clone();
+                    join_type(&mut types.fn_params, (*fn_id, *local_id), og_declared_ty);
+                }
+            }
+
             narrow_types_expr(types, names.with_locals(fn_params), body_expr);
 
             // the call to narrow_types_expr will update the types of any
@@ -106,10 +118,9 @@ fn narrow_types_once(program: &mut Program) -> bool {
             // `types.fn_params` field to persist them beyond the function body.
             for local_id in fn_params.keys() {
                 // the minimal type covering all assignments to this variable
-                // inside the function body
-                let local_assigment_type =
-                    types.locals.remove(local_id).unwrap_or(NlAbstractTy::Bottom);
-                join_type(&mut types.fn_params, (*fn_id, *local_id), local_assigment_type);
+                // inside the function body.
+                let local_assigns = types.locals.remove(local_id).unwrap_or(NlAbstractTy::Bottom);
+                join_type(&mut types.fn_params, (*fn_id, *local_id), local_assigns);
             }
         });
 

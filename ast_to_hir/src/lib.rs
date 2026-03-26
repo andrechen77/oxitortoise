@@ -81,7 +81,7 @@ pub fn ast_to_hir(ast: Ast) -> anyhow::Result<HirResult> {
                 link_vars: _link_var_names,
             },
         procedures,
-        widgets: _,
+        widgets,
     } = ast;
 
     let mut hir_builder = HirBuilder::new();
@@ -134,19 +134,52 @@ pub fn ast_to_hir(ast: Ast) -> anyhow::Result<HirResult> {
     // add builtin names
     hir_builder.global_names.add_builtins(default_turtle_breed_id);
 
-    // assign function ids to names
-    let mut functions_to_build = Vec::new();
+    // functions to build can come from actual user-defined procedures or
+    // from widgets
+    let mut functions_to_translate = Vec::new();
+
+    // collect widget procedures
+    for widget in widgets {
+        match widget {
+            ast::Widget::Plot { .. } => {}   // TODO(mvp) handle this widget
+            ast::Widget::Slider { .. } => {} // TODO(mvp) handle this widget
+            ast::Widget::Button { index, on_click } => {
+                let function_id = hir_builder.next_function_id();
+                // imagine that the widget procedure was just a code tab
+                // procedure that was unnamed and had no parameters
+                let function_to_translate = FunctionToTranslate {
+                    debug_name: format!("widget-button {index}").into(),
+                    arg_names: vec![],
+                    return_type: on_click.return_type,
+                    agent_class: on_click.agent_class,
+                    body: on_click.body,
+                    is_entrypoint: true, // widget procedures are always entrypoints
+                };
+                functions_to_translate.push((function_id, function_to_translate));
+            }
+        }
+    }
+
+    // collect code-tab procedures
     for function in procedures {
         let function_id = hir_builder.next_function_id();
         hir_builder.global_names.functions.insert(function.name.clone(), function_id);
-        functions_to_build.push((function_id, function));
+        let function_to_compile = FunctionToTranslate {
+            debug_name: function.name.clone(),
+            arg_names: function.arg_names.clone(),
+            return_type: function.return_type,
+            agent_class: function.agent_class,
+            body: function.body,
+            is_entrypoint: false, // code-tab procedures are never entrypoints
+        };
+        functions_to_translate.push((function_id, function_to_compile));
     }
 
     // translate each function body
     let mut functions = BTreeMap::new();
     let mut function_bodies = BTreeMap::new();
-    for (function_id, function) in functions_to_build {
-        let (function, body) = translate_function_body(&mut hir_builder, function);
+    for (function_id, function) in functions_to_translate {
+        let (function, body) = translate_function(&mut hir_builder, function);
         functions.insert(function_id, function);
         function_bodies.insert(function_id, body);
     }
@@ -187,13 +220,26 @@ impl<'a> FnBodyBuilderCtx<'a> {
     }
 }
 
-fn translate_function_body(
-    hir: &mut HirBuilder,
-    function_ast: ast::Procedure,
-) -> (Function, ExprKind) {
-    let ast::Procedure { name, arg_names, return_type, agent_class: _, body } = function_ast;
+struct FunctionToTranslate {
+    debug_name: Arc<str>,
+    arg_names: Vec<Arc<str>>,
+    return_type: ast::ReturnType,
+    agent_class: ast::AgentClass,
+    body: ast::CommandBlock,
+    is_entrypoint: bool,
+}
 
-    let mut non_param_locals = BTreeMap::new(); // local variables that are not parametrs
+fn translate_function(hir: &mut HirBuilder, function: FunctionToTranslate) -> (Function, ExprKind) {
+    let FunctionToTranslate {
+        debug_name,
+        arg_names,
+        return_type,
+        agent_class,
+        body,
+        is_entrypoint,
+    } = function;
+
+    let mut non_param_locals = BTreeMap::new(); // local variables that are not parameters
     let mut parameters = BTreeMap::new(); // local variables that are parameters
     let mut local_names = BTreeMap::new(); // all local variables
 
@@ -207,8 +253,22 @@ fn translate_function_body(
     parameters
         .insert(rng_param, LocalDecl { debug_name: Some("rng".into()), ty: NlAbstractTy::Rng });
     let self_param = hir.next_local_id();
-    parameters
-        .insert(self_param, LocalDecl { debug_name: Some("self".into()), ty: NlAbstractTy::NlTop });
+    let self_param_ty = match agent_class {
+        ast::AgentClass { observer: true, turtle: false, patch: false, link: false } => {
+            NlAbstractTy::Unit
+        }
+        ast::AgentClass { observer: false, turtle: true, patch: false, link: false } => {
+            NlAbstractTy::Turtle
+        }
+        ast::AgentClass { observer: false, turtle: false, patch: true, link: false } => {
+            NlAbstractTy::Patch
+        }
+        ast::AgentClass { observer: false, turtle: false, patch: false, link: true } => {
+            NlAbstractTy::Link
+        }
+        _ => NlAbstractTy::NlTop,
+    };
+    parameters.insert(self_param, LocalDecl { debug_name: Some("self".into()), ty: self_param_ty });
 
     // add user-defined parameters
     for arg_name in arg_names {
@@ -241,7 +301,7 @@ fn translate_function_body(
 
     // can make additional assertions based on return type and agent class here
 
-    let function = Function { debug_name: Some(name.clone()), parameters, return_ty };
+    let function = Function { debug_name, parameters, return_ty, is_entrypoint };
     (function, body)
 }
 
@@ -828,6 +888,9 @@ fn translate_ephemeral_closure(
         }
         _ => panic!("expected a command or reporter block, got {:?}", body_ast),
     };
+    // FIXME it is plain incorrect to use the ctx from the outer function here.
+    // the closure introduces new workspace, rng, and self parameters that need
+    // to treated separately.
     let body = translate_statement_block(ctx, statements);
 
     ExprKind::from(expr::Closure {

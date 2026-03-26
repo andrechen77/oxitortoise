@@ -50,15 +50,14 @@ impl Program {
                 p.add_map(
                     functions.iter(),
                     |p, fn_id| {
-                        write!(p, "{:?}", fn_id)?;
-                        if let Some(debug_name) = &functions[fn_id].debug_name {
-                            write!(p, " ({:?})", debug_name)?;
-                        }
+                        write!(p, "{:?}#{:?}", fn_id, functions[fn_id].debug_name)?;
                         Ok(())
                     },
                     |p, (fn_id, function)| {
-                        let Function { debug_name: _, parameters, return_ty } = function;
+                        let Function { debug_name: _, parameters, return_ty, is_entrypoint } =
+                            function;
                         p.add_struct("Function", |p| {
+                            p.add_field("is_entrypoint", is_entrypoint)?;
                             p.add_field_with("parameters", |p| {
                                 p.indented(|p| {
                                     // add local declarations

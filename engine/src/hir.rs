@@ -47,7 +47,7 @@ pub struct CustomVarDecl {
 
 #[derive(derive_more::Debug)]
 pub struct Function {
-    pub debug_name: Option<Arc<str>>,
+    pub debug_name: Arc<str>,
     /// The list of parameters for the function. Evaluation of the function
     /// requires that the body be wrapped in a Scope expression that provides
     /// values for these parameters.
@@ -55,6 +55,11 @@ pub struct Function {
     /// This is stored separately from the function body, so both must be updated
     /// when the function body is updated.
     pub return_ty: NlAbstractTy,
+    /// Whether this function is an entrypoint.
+    ///
+    /// The arguments to entrypoint functions are set and not subject to
+    /// narrowing type inference.
+    pub is_entrypoint: bool,
 }
 
 #[derive(Clone, Debug)]

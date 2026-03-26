@@ -49,11 +49,7 @@ impl Expr for CallUserFn {
         let CallUserFn { target, args } = self;
         p.add_fn_call("call_user_fn", |p| {
             p.add_fn_arg_with(|p| {
-                let label = names
-                    .functions()
-                    .get(target)
-                    .and_then(|f| f.debug_name.as_deref())
-                    .unwrap_or("?");
+                let label = &names.functions()[target].debug_name;
                 write!(p, "{}#{}", target.0, label)
             })?;
             for arg in args {
