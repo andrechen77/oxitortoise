@@ -127,10 +127,6 @@ fn narrow_types_once(program: &mut Program) -> bool {
         // check if the return type of the function is different and update it
         // if it is narrowable
         let new_return_ty = body_expr.output_type(names);
-        trace!(
-            "function {:?} with body {:?} has return type {:?}",
-            fn_id, body_expr, new_return_ty
-        );
         narrow_types_specific(
             &mut program.functions,
             |program_functions, fn_id| &mut program_functions.get_mut(&fn_id).unwrap().return_ty,

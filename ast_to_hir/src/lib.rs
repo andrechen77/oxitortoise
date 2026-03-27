@@ -198,8 +198,10 @@ pub fn ast_to_hir(ast: Ast) -> anyhow::Result<HirResult> {
 
 struct FnBodyBuilderCtx<'a> {
     hir: &'a mut HirBuilder,
-    /// The label to target when `stop` or `report` is called.
-    fn_body_label: Label,
+    /// The label to target when `stop` or `report` is called. This refers to
+    /// the topmost block expression that is still inside the same function body
+    /// (without crossing closure boundaries).
+    fn_body_label: Option<Label>,
     local_scope: Option<Box<LocalVarScope>>,
     workspace_param: LocalId,
     rng_param: LocalId,
@@ -361,12 +363,14 @@ fn translate_node(ctx: &mut FnBodyBuilderCtx, ast_node: ast::Node) -> (ExprKind,
             breaking_node = true;
             let (value, _diverges) = translate_node(ctx, *value);
             // could emit a lint here if the evaluation of the value itself diverges
-            ExprKind::from(expr::Break { target: ctx.fn_body_label, value: Box::new(value) })
+            let target = ctx.fn_body_label.expect("report call should have a block to break from");
+            ExprKind::from(expr::Break { target, value: Box::new(value) })
         }
         N::CommandCall(C::Stop([])) => {
             breaking_node = true;
+            let target = ctx.fn_body_label.expect("stop call should have a block to break from");
             ExprKind::from(expr::Break {
-                target: ctx.fn_body_label,
+                target,
                 value: Box::new(ExprKind::from(expr::Constant { value: None })),
             })
         }
@@ -824,7 +828,13 @@ fn translate_node(ctx: &mut FnBodyBuilderCtx, ast_node: ast::Node) -> (ExprKind,
 
 fn translate_statement_block(ctx: &mut FnBodyBuilderCtx, block: ast::CommandBlock) -> ExprKind {
     let ast::CommandBlock { statements: statements_ast } = block;
+
     let label = ctx.hir.next_label();
+    if ctx.fn_body_label.is_none() {
+        // since this is the topmost block expression, set any early returns
+        // from the function to target this block
+        ctx.fn_body_label = Some(label);
+    }
 
     // translate each statement in the block
     let mut statements = Vec::new();
@@ -846,6 +856,11 @@ fn translate_statement_block(ctx: &mut FnBodyBuilderCtx, block: ast::CommandBloc
             value: Box::new(ExprKind::from(expr::Constant { value: None })),
         });
         statements.push(break_expr);
+    }
+
+    // after exiting the block unset ourselves as the target for early returns
+    if ctx.fn_body_label == Some(label) {
+        ctx.fn_body_label = None;
     }
 
     ExprKind::from(expr::Block { label, statements })
@@ -897,13 +912,11 @@ fn make_fn_ctx<'a>(
 
     let local_scope = Box::new(LocalVarScope { decls: parameters, names, parent: parent_scope });
 
-    let fn_body_label = hir.next_label();
-
     trace!("new function context; scope: {:?}", local_scope);
 
     FnBodyBuilderCtx {
         hir,
-        fn_body_label,
+        fn_body_label: None,
         local_scope: Some(local_scope),
         workspace_param,
         rng_param,
