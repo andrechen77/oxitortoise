@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, sync::Arc};
+use std::{collections::BTreeMap, iter, mem, sync::Arc};
 
 use engine::{
     hir::{
@@ -198,12 +198,12 @@ pub fn ast_to_hir(ast: Ast) -> anyhow::Result<HirResult> {
 
 struct FnBodyBuilderCtx<'a> {
     hir: &'a mut HirBuilder,
-    fn_body_label: Option<Label>,
-    local_vars: &'a mut BTreeMap<LocalId, LocalDecl>,
+    /// The label to target when `stop` or `report` is called.
+    fn_body_label: Label,
+    local_scope: Option<Box<LocalVarScope>>,
     workspace_param: LocalId,
     rng_param: LocalId,
     self_param: LocalId,
-    local_names: BTreeMap<Arc<str>, LocalId>,
 }
 
 impl<'a> FnBodyBuilderCtx<'a> {
@@ -220,6 +220,23 @@ impl<'a> FnBodyBuilderCtx<'a> {
     }
 }
 
+#[derive(Debug)]
+struct LocalVarScope {
+    decls: BTreeMap<LocalId, LocalDecl>,
+    names: BTreeMap<Arc<str>, LocalId>,
+    parent: Option<Box<LocalVarScope>>,
+}
+
+impl LocalVarScope {
+    fn lookup_name(&self, name: &str) -> Option<LocalId> {
+        if let Some(id) = self.names.get(name) {
+            Some(*id)
+        } else {
+            self.parent.as_ref().and_then(|p| p.lookup_name(name))
+        }
+    }
+}
+
 struct FunctionToTranslate {
     debug_name: Arc<str>,
     arg_names: Vec<Arc<str>>,
@@ -230,6 +247,8 @@ struct FunctionToTranslate {
 }
 
 fn translate_function(hir: &mut HirBuilder, function: FunctionToTranslate) -> (Function, ExprKind) {
+    trace!("translating function {}", function.debug_name);
+
     let FunctionToTranslate {
         debug_name,
         arg_names,
@@ -239,60 +258,15 @@ fn translate_function(hir: &mut HirBuilder, function: FunctionToTranslate) -> (F
         is_entrypoint,
     } = function;
 
-    let mut non_param_locals = BTreeMap::new(); // local variables that are not parameters
-    let mut parameters = BTreeMap::new(); // local variables that are parameters
-    let mut local_names = BTreeMap::new(); // all local variables
+    let mut ctx = make_fn_ctx(hir, None, agent_class, arg_names.into_iter());
+    let (body, diverges) = translate_node_with_new_scope(&mut ctx, ast::Node::CommandBlock(body));
+    assert!(!diverges, "function should return");
 
-    // all procedures take workspace, rng, and self parameters by default
-    let workspace_param = hir.next_local_id();
-    parameters.insert(
-        workspace_param,
-        LocalDecl { debug_name: Some("workspace".into()), ty: NlAbstractTy::Workspace },
-    );
-    let rng_param = hir.next_local_id();
-    parameters
-        .insert(rng_param, LocalDecl { debug_name: Some("rng".into()), ty: NlAbstractTy::Rng });
-    let self_param = hir.next_local_id();
-    let self_param_ty = match agent_class {
-        ast::AgentClass { observer: true, turtle: false, patch: false, link: false } => {
-            NlAbstractTy::Unit
-        }
-        ast::AgentClass { observer: false, turtle: true, patch: false, link: false } => {
-            NlAbstractTy::Turtle
-        }
-        ast::AgentClass { observer: false, turtle: false, patch: true, link: false } => {
-            NlAbstractTy::Patch
-        }
-        ast::AgentClass { observer: false, turtle: false, patch: false, link: true } => {
-            NlAbstractTy::Link
-        }
-        _ => NlAbstractTy::NlTop,
-    };
-    parameters.insert(self_param, LocalDecl { debug_name: Some("self".into()), ty: self_param_ty });
-
-    // add user-defined parameters
-    for arg_name in arg_names {
-        let local_id = hir.next_local_id();
-        let local_decl = LocalDecl { debug_name: Some(arg_name.clone()), ty: NlAbstractTy::NlTop };
-        parameters.insert(local_id, local_decl);
-        local_names.insert(arg_name, local_id);
-    }
-
-    let mut ctx = FnBodyBuilderCtx {
-        hir,
-        fn_body_label: None,
-        local_vars: &mut non_param_locals,
-        workspace_param,
-        rng_param,
-        self_param,
-        local_names,
-    };
-
-    let body_without_locals = translate_statement_block(&mut ctx, body.statements);
-    let body = ExprKind::from(expr::Scope {
-        locals: non_param_locals,
-        inner: Box::new(body_without_locals),
-    });
+    // the parameters are the local variables already in scope before entering
+    // the function body. we could have taken this data immediately after the
+    // make_fn_ctx call, but we do it after so that the translation can use
+    // the data structure
+    let parameters = ctx.local_scope.unwrap().decls;
 
     let return_ty = match return_type {
         ast::ReturnType::Unit => NlAbstractTy::Unit,
@@ -305,21 +279,64 @@ fn translate_function(hir: &mut HirBuilder, function: FunctionToTranslate) -> (F
     (function, body)
 }
 
+fn with_local_scope<T>(
+    ctx: &mut FnBodyBuilderCtx,
+    decls: BTreeMap<LocalId, LocalDecl>,
+    names: BTreeMap<Arc<str>, LocalId>,
+    f: impl FnOnce(&mut FnBodyBuilderCtx) -> T,
+) -> (T, BTreeMap<LocalId, LocalDecl>, BTreeMap<Arc<str>, LocalId>) {
+    // push a new scope
+    ctx.local_scope =
+        Some(Box::new(LocalVarScope { decls, names, parent: ctx.local_scope.take() }));
+
+    trace!("entering local scope; scope: {:?}", ctx.local_scope);
+
+    let result = f(ctx);
+
+    trace!("exiting local scope; scope: {:?}", ctx.local_scope);
+
+    // pop the top scope
+    let LocalVarScope { decls, names, parent } = *ctx.local_scope.take().unwrap();
+    ctx.local_scope = parent;
+
+    (result, decls, names)
+}
+
+fn translate_node_with_new_scope(
+    ctx: &mut FnBodyBuilderCtx,
+    ast_node: ast::Node,
+) -> (ExprKind, bool) {
+    let ((inner_expr, diverges), decls, _) =
+        with_local_scope(ctx, BTreeMap::new(), BTreeMap::new(), |ctx| {
+            translate_node(ctx, ast_node)
+        });
+    let final_expr = if decls.is_empty() {
+        inner_expr
+    } else {
+        ExprKind::from(expr::Scope { locals: decls, inner: Box::new(inner_expr) })
+    };
+    (final_expr, diverges)
+}
+
 // Returns the HIR node as well as whether it diverges (e.g. early return).
-fn translate_node(ctx: &mut FnBodyBuilderCtx<'_>, ast_node: ast::Node) -> (ExprKind, bool) {
+fn translate_node(ctx: &mut FnBodyBuilderCtx, ast_node: ast::Node) -> (ExprKind, bool) {
     use ast::CommandCall as C;
     use ast::Node as N;
     use ast::ReporterCall as R;
 
     let mut breaking_node = false;
     let expr = match ast_node {
+        N::CommandBlock(block) => ExprKind::from(translate_statement_block(ctx, block)),
+        N::ReporterBlock { reporter_app } => {
+            return translate_node(ctx, *reporter_app);
+        }
         N::LetBinding { var_name, value } => {
             // create a new local variable
             let local_id = ctx.hir.next_local_id();
             let local_decl =
                 LocalDecl { debug_name: Some(var_name.clone()), ty: NlAbstractTy::NlTop };
-            ctx.local_vars.insert(local_id, local_decl);
-            ctx.local_names.insert(var_name, local_id);
+            ctx.local_scope.as_mut().unwrap().decls.insert(local_id, local_decl);
+            ctx.local_scope.as_mut().unwrap().names.insert(var_name, local_id);
 
             // emit a set statement that defines tha local variable
             let (value, diverges) = translate_node(ctx, *value);
@@ -345,19 +362,14 @@ fn translate_node(ctx: &mut FnBodyBuilderCtx<'_>, ast_node: ast::Node) -> (ExprK
             breaking_node = true;
             let (value, _diverges) = translate_node(ctx, *value);
             // could emit a lint here if the evaluation of the value itself diverges
-            let target = ctx.fn_body_label.unwrap();
-            ExprKind::from(expr::Break { target, value: Box::new(value) })
+            ExprKind::from(expr::Break { target: ctx.fn_body_label, value: Box::new(value) })
         }
         N::CommandCall(C::Stop([])) => {
             breaking_node = true;
-            let target = ctx.fn_body_label.unwrap();
             ExprKind::from(expr::Break {
-                target,
+                target: ctx.fn_body_label,
                 value: Box::new(ExprKind::from(expr::Constant { value: None })),
             })
-        }
-        N::CommandBlock(ast::CommandBlock { statements }) => {
-            panic!("unexpected command block {:?}", statements);
         }
         N::ReporterBlock { reporter_app } => {
             panic!("unexpected reporter block {:?}", reporter_app);
@@ -368,7 +380,8 @@ fn translate_node(ctx: &mut FnBodyBuilderCtx<'_>, ast_node: ast::Node) -> (ExprK
         N::CommandCall(C::CreateTurtles([num_turtles, body])) => {
             let (num_turtles, diverges) = translate_node(ctx, *num_turtles);
             breaking_node &= diverges;
-            let body = translate_ephemeral_closure(ctx, Default::default(), *body);
+            let body =
+                translate_ephemeral_closure(ctx, iter::empty(), ast::AgentClass::TURTLE, *body);
             let breed = ctx.hir.global_names.turtle_breeds[DEFAULT_TURTLE_BREED_NAME];
             ExprKind::from(expr::CreateTurtles {
                 workspace: ctx.expr_workspace(),
@@ -451,19 +464,8 @@ fn translate_node(ctx: &mut FnBodyBuilderCtx<'_>, ast_node: ast::Node) -> (ExprK
             let (recipients, diverges) = translate_node(ctx, *rs);
             breaking_node &= diverges;
 
-            let closure_workspace_param = (
-                ctx.hir.next_local_id(),
-                LocalDecl { debug_name: Some("workspace".into()), ty: NlAbstractTy::Workspace },
-            );
-            let closure_rng_param = (
-                ctx.hir.next_local_id(),
-                LocalDecl { debug_name: Some("rng".into()), ty: NlAbstractTy::Rng },
-            );
-            let body = translate_ephemeral_closure(
-                ctx,
-                BTreeMap::from([closure_workspace_param, closure_rng_param]),
-                *body,
-            );
+            let body =
+                translate_ephemeral_closure(ctx, std::iter::empty(), ast::AgentClass::ANY, *body);
 
             ExprKind::from(expr::Ask {
                 workspace: ctx.expr_workspace(),
@@ -476,19 +478,8 @@ fn translate_node(ctx: &mut FnBodyBuilderCtx<'_>, ast_node: ast::Node) -> (ExprK
             let (recipients, diverges) = translate_node(ctx, *rs);
             breaking_node &= diverges;
 
-            let closure_workspace_param = (
-                ctx.hir.next_local_id(),
-                LocalDecl { debug_name: Some("workspace".into()), ty: NlAbstractTy::Workspace },
-            );
-            let closure_rng_param = (
-                ctx.hir.next_local_id(),
-                LocalDecl { debug_name: Some("rng".into()), ty: NlAbstractTy::Rng },
-            );
-            let body = translate_ephemeral_closure(
-                ctx,
-                BTreeMap::from([closure_workspace_param, closure_rng_param]),
-                *body,
-            );
+            let body =
+                translate_ephemeral_closure(ctx, std::iter::empty(), ast::AgentClass::ANY, *body);
 
             ExprKind::from(expr::Of {
                 workspace: ctx.expr_workspace(),
@@ -500,32 +491,25 @@ fn translate_node(ctx: &mut FnBodyBuilderCtx<'_>, ast_node: ast::Node) -> (ExprK
         N::CommandCall(C::If([condition, then_block])) => {
             let (condition, diverges) = translate_node(ctx, *condition);
             breaking_node &= diverges;
-            let ast::Node::CommandBlock(ast::CommandBlock { statements }) = *then_block else {
-                panic!("expected a command block, got {:?}", then_block);
-            };
-            let then_block = translate_statement_block(ctx, statements);
-            let else_block = translate_statement_block(ctx, vec![]);
+            let (then_block, diverges) = translate_node_with_new_scope(ctx, *then_block);
+            breaking_node &= diverges;
             ExprKind::from(expr::IfElse {
                 condition: Box::new(condition),
                 then: Box::new(then_block),
-                r#else: Box::new(else_block),
+                r#else: None,
             })
         }
         N::CommandCall(C::IfElse([condition, then_block, else_block])) => {
             let (condition, diverges) = translate_node(ctx, *condition);
             breaking_node &= diverges;
-            let ast::Node::CommandBlock(ast::CommandBlock { statements }) = *then_block else {
-                panic!("expected a command block, got {:?}", then_block);
-            };
-            let then_block = translate_statement_block(ctx, statements);
-            let ast::Node::CommandBlock(ast::CommandBlock { statements }) = *else_block else {
-                panic!("expected a command block, got {:?}", else_block);
-            };
-            let else_block = translate_statement_block(ctx, statements);
+            let (then_block, diverges) = translate_node_with_new_scope(ctx, *then_block);
+            breaking_node &= diverges;
+            let (else_block, diverges) = translate_node_with_new_scope(ctx, *else_block);
+            breaking_node &= diverges;
             ExprKind::from(expr::IfElse {
                 condition: Box::new(condition),
                 then: Box::new(then_block),
-                r#else: Box::new(else_block),
+                r#else: Some(Box::new(else_block)),
             })
         }
         N::CommandCall(C::Diffuse([variable, amt])) => {
@@ -563,7 +547,7 @@ fn translate_node(ctx: &mut FnBodyBuilderCtx<'_>, ast_node: ast::Node) -> (ExprK
             todo!("TODO(mvp) implement plotxy HIR expr")
         }
         N::LetRef { name } | N::ProcedureArgRef { name } => {
-            let local_id = ctx.local_names[&name];
+            let local_id = ctx.local_scope.as_ref().unwrap().lookup_name(&name).unwrap();
             ExprKind::from(expr::GetLocalVar { local_id })
         }
         N::Number { value } => ExprKind::from(expr::Constant {
@@ -842,12 +826,9 @@ fn translate_node(ctx: &mut FnBodyBuilderCtx<'_>, ast_node: ast::Node) -> (ExprK
     (expr, breaking_node)
 }
 
-fn translate_statement_block(
-    ctx: &mut FnBodyBuilderCtx<'_>,
-    statements_ast: Vec<ast::Node>,
-) -> ExprKind {
+fn translate_statement_block(ctx: &mut FnBodyBuilderCtx, block: ast::CommandBlock) -> ExprKind {
+    let ast::CommandBlock { statements: statements_ast } = block;
     let label = ctx.hir.next_label();
-    let old_label = ctx.fn_body_label.replace(label);
 
     // translate each statement in the block
     let mut statements = Vec::new();
@@ -871,27 +852,91 @@ fn translate_statement_block(
         statements.push(break_expr);
     }
 
-    ctx.fn_body_label = old_label;
-
     ExprKind::from(expr::Block { label, statements })
 }
 
+/// Creates a new scope with defaul
+fn make_fn_ctx<'a>(
+    hir: &'a mut HirBuilder,
+    parent_scope: Option<Box<LocalVarScope>>,
+    agent_class: ast::AgentClass,
+    arg_names: impl Iterator<Item = Arc<str>>,
+) -> FnBodyBuilderCtx<'a> {
+    let mut parameters = BTreeMap::new();
+    let mut names = BTreeMap::new();
+
+    // all procedures take workspace, rng, and self parameters by default
+    let workspace_param = hir.next_local_id();
+    parameters.insert(
+        workspace_param,
+        LocalDecl { debug_name: Some("workspace".into()), ty: NlAbstractTy::Workspace },
+    );
+    let rng_param = hir.next_local_id();
+    parameters
+        .insert(rng_param, LocalDecl { debug_name: Some("rng".into()), ty: NlAbstractTy::Rng });
+    let self_param = hir.next_local_id();
+    let self_param_ty = match agent_class {
+        ast::AgentClass { observer: true, turtle: false, patch: false, link: false } => {
+            NlAbstractTy::Unit
+        }
+        ast::AgentClass { observer: false, turtle: true, patch: false, link: false } => {
+            NlAbstractTy::Turtle
+        }
+        ast::AgentClass { observer: false, turtle: false, patch: true, link: false } => {
+            NlAbstractTy::Patch
+        }
+        ast::AgentClass { observer: false, turtle: false, patch: false, link: true } => {
+            NlAbstractTy::Link
+        }
+        _ => NlAbstractTy::NlTop,
+    };
+    parameters.insert(self_param, LocalDecl { debug_name: Some("self".into()), ty: self_param_ty });
+
+    // add user-defined parameters
+    for arg_name in arg_names {
+        let local_id = hir.next_local_id();
+        let local_decl = LocalDecl { debug_name: Some(arg_name.clone()), ty: NlAbstractTy::NlTop };
+        parameters.insert(local_id, local_decl);
+        names.insert(arg_name, local_id);
+    }
+
+    let local_scope = Box::new(LocalVarScope { decls: parameters, names, parent: parent_scope });
+
+    let fn_body_label = hir.next_label();
+
+    trace!("new function context; scope: {:?}", local_scope);
+
+    FnBodyBuilderCtx {
+        hir,
+        fn_body_label,
+        local_scope: Some(local_scope),
+        workspace_param,
+        rng_param,
+        self_param,
+    }
+}
+
 fn translate_ephemeral_closure(
-    ctx: &mut FnBodyBuilderCtx<'_>,
-    parameters: BTreeMap<LocalId, LocalDecl>,
+    outer_ctx: &mut FnBodyBuilderCtx<'_>,
+    additional_arg_names: impl Iterator<Item = Arc<str>>,
+    agent_class: ast::AgentClass,
     body_ast: ast::Node,
 ) -> ExprKind {
-    let statements = match body_ast {
-        ast::Node::CommandBlock(ast::CommandBlock { statements }) => statements,
-        ast::Node::ReporterBlock { reporter_app } => {
-            vec![ast::Node::CommandCall(ast::CommandCall::Report([reporter_app]))]
-        }
-        _ => panic!("expected a command or reporter block, got {:?}", body_ast),
-    };
-    // FIXME it is plain incorrect to use the ctx from the outer function here.
-    // the closure introduces new workspace, rng, and self parameters that need
-    // to treated separately.
-    let body = translate_statement_block(ctx, statements);
+    let parent_scope = outer_ctx.local_scope.take(); // remember to put it back!
+    let mut closure_ctx =
+        make_fn_ctx(outer_ctx.hir, parent_scope, agent_class, additional_arg_names);
+
+    let (body, diverges) = translate_node_with_new_scope(&mut closure_ctx, body_ast);
+    assert!(!diverges, "closure body should return");
+
+    // pop the top scope from the closure context
+    let LocalVarScope { decls, names: _, parent } = *closure_ctx.local_scope.take().unwrap();
+    // the parameters are the local variables already in scope before entering
+    // the function body. we take this after translation so that the translation
+    // can use the data structure
+    let parameters = decls;
+    // put back the parent scope in the outer function context
+    outer_ctx.local_scope = parent;
 
     ExprKind::from(expr::Closure {
         // TODO(mvp) find which variables are captured by the closure

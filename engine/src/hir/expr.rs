@@ -194,43 +194,55 @@ impl Expr for Block {
 pub struct IfElse {
     pub condition: Box<ExprKind>,
     pub then: Box<ExprKind>,
-    pub r#else: Box<ExprKind>,
+    pub r#else: Option<Box<ExprKind>>,
 }
 
 impl Expr for IfElse {
     fn output_type(&self, names: NameContext) -> NlAbstractTy {
         let then_ty = self.then.output_type(names);
-        let else_ty = self.r#else.output_type(names);
+        let else_ty = self
+            .r#else
+            .as_ref()
+            .map(|r#else| r#else.output_type(names))
+            .unwrap_or(NlAbstractTy::Unit);
         then_ty.join(else_ty)
     }
 
     fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
         visitor(&self.condition);
         visitor(&self.then);
-        visitor(&self.r#else);
+        if let Some(r#else) = &self.r#else {
+            visitor(r#else);
+        }
     }
 
     fn visit_children_mut(&mut self, mut visitor: impl FnMut(&mut ExprKind)) {
         visitor(self.condition.as_mut());
         visitor(self.then.as_mut());
-        visitor(self.r#else.as_mut());
+        if let Some(r#else) = &mut self.r#else {
+            visitor(r#else.as_mut());
+        }
     }
 
     fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, local_out: mir::LocalId) {
         let condition = builder.translate_expr(&self.condition);
-        let (then_stmts, _) = builder.with_inner_statement_seq(|builder| {
-            self.then.write_mir_execution(builder, local_out);
+        let then = {
+            let (then_stmts, _) = builder.with_inner_statement_seq(|builder| {
+                self.then.write_mir_execution(builder, local_out);
+            });
+            Box::new(mir::consolidate_statements(then_stmts))
+        };
+        let r#else = self.r#else.as_ref().map(|r#else| {
+            let (else_stmts, _) = builder.with_inner_statement_seq(|builder| {
+                r#else.write_mir_execution(builder, local_out);
+            });
+            Box::new(mir::consolidate_statements(else_stmts))
         });
-        let then = mir::consolidate_statements(then_stmts);
-        let (else_stmts, _) = builder.with_inner_statement_seq(|builder| {
-            self.r#else.write_mir_execution(builder, local_out);
-        });
-        let r#else = mir::consolidate_statements(else_stmts);
 
         let if_else = mir::Statement::CtrlFlow(mir::CtrlFlowConstruct::IfElse(mir::IfElse {
             condition: condition.place,
-            then: Box::new(then),
-            r#else: Box::new(r#else),
+            then,
+            r#else,
         }));
         builder.mir.add_statement(if_else);
     }
@@ -241,8 +253,10 @@ impl Expr for IfElse {
         condition.pretty_print(p, names)?;
         write!(p, " ")?;
         then.pretty_print(p, names)?;
-        write!(p, " else ")?;
-        r#else.pretty_print(p, names)?;
+        if let Some(r#else) = r#else {
+            write!(p, " else ")?;
+            r#else.pretty_print(p, names)?;
+        }
         Ok(())
     }
 }

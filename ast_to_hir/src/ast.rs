@@ -55,6 +55,14 @@ pub struct AgentClass {
     pub link: bool,
 }
 
+impl AgentClass {
+    pub const ANY: Self = Self { observer: true, turtle: true, patch: true, link: true };
+    pub const OBSERVER: Self = Self { observer: true, turtle: false, patch: false, link: false };
+    pub const TURTLE: Self = Self { observer: false, turtle: true, patch: false, link: false };
+    pub const PATCH: Self = Self { observer: false, turtle: false, patch: true, link: false };
+    pub const LINK: Self = Self { observer: false, turtle: false, patch: false, link: true };
+}
+
 impl<'de> Deserialize<'de> for AgentClass {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where

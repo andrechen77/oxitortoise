@@ -82,7 +82,7 @@ pub struct Block {
 pub struct IfElse {
     pub condition: Place,
     pub then: Box<Statement>,
-    pub r#else: Box<Statement>,
+    pub r#else: Option<Box<Statement>>,
 }
 
 #[derive(Debug)]

@@ -221,6 +221,26 @@ fn narrow_types_expr(types: &mut ProgramTypes, names: NameContext, expr: &mut Ex
             // early return so that we don't visit the inner expression twice
             return;
         }
+        ExprKind::Closure(expr::Closure { captures: _, parameters, body }) => {
+            let parameter_local_ids = parameters.keys().copied().collect::<Vec<_>>();
+            types.with_locals(parameter_local_ids.iter().copied(), |types| {
+                // collect all assignments inside the closure body
+                narrow_types_expr(types, names.with_locals(parameters), body);
+
+                // don't replace the types of parameters here (unlike with the
+                // Scope expression) because we haven't actually seen all the
+                // assigments to the parameters; specifically we don't know
+                // all the arguments that the closure could be called with.
+                // thus avoid attempting to narrow the closure parameter types
+
+                // TODO improve the algorithm so that we can infer that, e.g. if
+                // the closure is being passed to an `ask` where the recipients
+                // is an agentset of turtles, then the closure `self` parameter
+                // must be a turtle.
+            });
+            // early return so that we don't visit the inner expression twice
+            return;
+        }
         ExprKind::SetLocalVar(expr::SetLocalVar { local_id, value }) => {
             let ty = value.output_type(names);
             trace!("found assignment to local variable {:?}: {:?}", local_id, ty);
