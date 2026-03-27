@@ -193,6 +193,9 @@ pub enum NlAbstractTy {
 }
 
 impl NlAbstractTy {
+    // TODO the meet and join methods should take &mut self and &other and just
+    // modify self in place instead of requiring ownership
+
     /// Calculates the least upper bound of two types.
     pub fn join(self, other: NlAbstractTy) -> NlAbstractTy {
         use NlAbstractTy as Ty;
@@ -205,6 +208,30 @@ impl NlAbstractTy {
             (Ty::Rng, other) | (other, Ty::Rng) => panic!("Cannot join Rng with type {:?}", other),
             (Ty::NlTop, _) | (_, Ty::NlTop) => Ty::NlTop,
             (_, _) => Ty::NlTop,
+        }
+    }
+
+    /// Calculates the greatest lower bound of two types.
+    pub fn meet(self, other: NlAbstractTy) -> NlAbstractTy {
+        use NlAbstractTy as Ty;
+        match (self, other) {
+            (Ty::Bottom, _) | (_, Ty::Bottom) => Ty::Bottom,
+            (a, b) if a == b => a,
+            (Ty::Workspace, other) | (other, Ty::Workspace) => panic!(
+                "Meeting Workspace with a non-bottom type ({:?}) would be Bottom, which is almost certainly a bug",
+                other
+            ),
+            (Ty::Rng, other) | (other, Ty::Rng) => {
+                panic!(
+                    "Meeting Rng with a non-bottom type ({:?}) would be Bottom, which is almost certainly a bug",
+                    other
+                )
+            }
+            (Ty::NlTop, other) | (other, Ty::NlTop) => other,
+            (a, b) => panic!(
+                "Meeting incompatible types {:?} and {:?} would be Bottom, which is almost certainly a bug",
+                a, b
+            ),
         }
     }
 

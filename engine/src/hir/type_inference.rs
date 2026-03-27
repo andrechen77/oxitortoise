@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, fmt::Debug, mem};
+use std::{collections::BTreeMap, fmt::Debug, iter, mem};
 
 use tracing::trace;
 
@@ -127,15 +127,15 @@ fn narrow_types_once(program: &mut Program) -> bool {
         // check if the return type of the function is different and update it
         // if it is narrowable
         let new_return_ty = body_expr.output_type(names);
-        let old_return_ty = &mut program.functions.get_mut(fn_id).unwrap().return_ty;
-        if new_return_ty != *old_return_ty {
-            changed = true;
-            trace!(
-                "type inference: function {:?} return type changed from {:?} to {:?}",
-                fn_id, old_return_ty, new_return_ty
-            );
-            *old_return_ty = new_return_ty;
-        }
+        trace!(
+            "function {:?} with body {:?} has return type {:?}",
+            fn_id, body_expr, new_return_ty
+        );
+        narrow_types_specific(
+            &mut program.functions,
+            |program_functions, fn_id| &mut program_functions.get_mut(&fn_id).unwrap().return_ty,
+            iter::once((fn_id, new_return_ty)),
+        );
     }
 
     let ProgramTypes {
@@ -156,28 +156,28 @@ fn narrow_types_once(program: &mut Program) -> bool {
     );
 
     // narrow global variables
-    changed |= replace_types(
+    changed |= narrow_types_specific(
         &mut program.global_vars,
         |global_vars, global_idx| &mut global_vars[global_idx].ty,
         global_vars.into_iter(),
     );
 
     // narrow patch variables
-    changed |= replace_types(
+    changed |= narrow_types_specific(
         &mut program.custom_patch_vars,
         |custom_patch_vars, patch_idx| &mut custom_patch_vars[patch_idx].ty,
         patch_vars.into_iter(),
     );
 
     // narrow turtle variables
-    changed |= replace_types(
+    changed |= narrow_types_specific(
         &mut program.custom_turtle_vars,
         |custom_turtle_vars, turtle_idx| &mut custom_turtle_vars[turtle_idx].ty,
         turtle_vars.into_iter(),
     );
 
     // narrow function parameters
-    changed |= replace_types(
+    changed |= narrow_types_specific(
         &mut program.functions,
         |program_functions, (fn_id, local_id)| {
             &mut program_functions
@@ -210,7 +210,7 @@ fn narrow_types_expr(types: &mut ProgramTypes, names: NameContext, expr: &mut Ex
                 // we have seen all assignments to these local variables, so
                 // now we can take this information out of the map and update
                 // the actual types of the local variables
-                replace_types(
+                narrow_types_specific(
                     locals,
                     |locals, local_id| &mut locals.get_mut(&local_id).unwrap().ty,
                     local_ids
@@ -269,9 +269,11 @@ fn narrow_types_expr(types: &mut ProgramTypes, names: NameContext, expr: &mut Ex
     expr.visit_children_mut(|child| narrow_types_expr(types, names, child));
 }
 
-/// For each local variable declaration in `actual_types`, update the actual
-/// type of the local variable with the type from new_types
-fn replace_types<K: Debug + Copy, T>(
+/// For each local variable declaration in `actual_types`, narrow the actual
+/// type of the local variable to the type from new_types. This will not widen
+/// the actual type (which is considered to be an upper bound) even if the type
+/// from new_types is a more general type.
+fn narrow_types_specific<K: Debug + Copy, T>(
     // these two arguments are used to function as an `IndexMut<K, Output =
     // NlAbstractTy>` (which requires disgusting newtype wrappers), or a
     // `FnMut(K) -> &mut NlAbstractTy` (which doesn't properly bind the lifetime
@@ -284,13 +286,14 @@ fn replace_types<K: Debug + Copy, T>(
     let mut changed = false;
     for (id, new_ty) in new_types {
         let actual_ty = get_actual_ty(actual_types_storage, id);
-        if *actual_ty != new_ty {
+        let meet_ty = actual_ty.clone().meet(new_ty);
+        if *actual_ty != meet_ty {
             changed = true;
             trace!(
-                "type inference: variable {:?} type changed from {} to {}",
-                id, actual_ty, new_ty
+                "type inference: variable {:?} type narrowed from {} to {}",
+                id, actual_ty, meet_ty
             );
-            *actual_ty = new_ty;
+            *actual_ty = meet_ty;
         }
     }
     changed
