@@ -19,9 +19,6 @@ pub struct CallUserFn {
 
 impl Expr for CallUserFn {
     fn output_type(&self, names: NameContext) -> NlAbstractTy {
-        // The current HIR doesn't expose function signatures directly at this
-        // expression layer, but the return type can be inferred from the
-        // function body's output type.
         names.functions()[&self.target].return_ty.clone()
     }
 
