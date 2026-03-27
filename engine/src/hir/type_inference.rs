@@ -2,9 +2,18 @@ use std::{collections::BTreeMap, fmt::Debug, iter, mem};
 
 use tracing::trace;
 
-use crate::hir::{
-    self, Expr, ExprKind, Function, FunctionId, LocalId, NameContext, NlAbstractTy, Program, expr,
+use crate::{
+    hir::{
+        self, Expr, ExprKind, Function, FunctionId, LocalId, NameContext, NlAbstractTy, Program,
+        expr,
+    },
+    sim::{patch::PatchVarDesc, turtle::TurtleVarDesc},
 };
+
+// TODO(mvp) handle cases where an agent variable is not set, but keeps its
+// starting default value of 0. in that case, we should join the type with
+// Float. however, if the variable is immediately set when the agent is created,
+// then it should be as if it never got the default value at all.
 
 // TODO(wishlist) this is a very basic algorithm that iteratively runs type
 // inference over every single node in the program until convergence. this can
@@ -242,6 +251,25 @@ fn narrow_types_expr(types: &mut ProgramTypes, names: NameContext, expr: &mut Ex
             trace!("found assignment to local variable {:?}: {:?}", local_id, ty);
             join_type(&mut types.locals, *local_id, ty);
         }
+        // TODO(mvp) handle setting global variables and link variables
+        ExprKind::SetTurtleVar(expr::SetTurtleVar {
+            var: TurtleVarDesc::Custom(var_idx),
+            value,
+            ..
+        }) => {
+            let ty = value.output_type(names);
+            trace!("found assignment to turtle variable {:?}: {:?}", var_idx, ty);
+            join_type(&mut types.turtle_vars, *var_idx, ty);
+        }
+        ExprKind::SetPatchVar(expr::SetPatchVar {
+            var: PatchVarDesc::Custom(var_idx),
+            value,
+            ..
+        }) => {
+            let ty = value.output_type(names);
+            trace!("found assignment to patch variable {:?}: {:?}", var_idx, ty);
+            join_type(&mut types.patch_vars, *var_idx, ty);
+        }
         ExprKind::CallUserFn(expr::CallUserFn { target, args }) => {
             let target_params = &names.functions()[target].parameters;
             assert_eq!(
@@ -259,7 +287,6 @@ fn narrow_types_expr(types: &mut ProgramTypes, names: NameContext, expr: &mut Ex
                 join_type(&mut types.fn_params, (*target, *target_param), ty);
             }
         }
-        // TODO handle setting agent variables
         _ => {} // do nothing
     }
     expr.visit_children_mut(|child| narrow_types_expr(types, names, child));
