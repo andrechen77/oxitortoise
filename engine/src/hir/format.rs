@@ -19,11 +19,9 @@ impl Program {
 
         let _ = printer.add_struct("Program", |p| {
             p.add_field_with("global_vars", |p| {
-                p.add_map(
-                    global_vars.iter().enumerate(),
-                    |p, index| write!(p, "{}", index),
-                    |p, (_, global)| write!(p, "{:?}", global),
-                )
+                p.add_list(global_vars.iter().enumerate(), |p, (index, global)| {
+                    write!(p, "{}#{}: {}", index, global.name, global.ty)
+                })
             })?;
             p.add_field_with("turtle_breeds", |p| {
                 p.add_map(
@@ -33,18 +31,14 @@ impl Program {
                 )
             })?;
             p.add_field_with("custom_turtle_vars", |p| {
-                p.add_map(
-                    custom_turtle_vars.iter().enumerate(),
-                    |p, index| write!(p, "{}", index),
-                    |p, (_, var)| write!(p, "{:?}", var),
-                )
+                p.add_list(custom_turtle_vars.iter().enumerate(), |p, (index, var)| {
+                    write!(p, "{}#{}: {}", index, var.name, var.ty)
+                })
             })?;
             p.add_field_with("custom_patch_vars", |p| {
-                p.add_map(
-                    custom_patch_vars.iter().enumerate(),
-                    |p, index| write!(p, "{}", index),
-                    |p, (_, var)| write!(p, "{:?}", var),
-                )
+                p.add_list(custom_patch_vars.iter().enumerate(), |p, (index, var)| {
+                    write!(p, "{}#{}: {}", index, var.name, var.ty)
+                })
             })?;
             p.add_field_with("functions", |p| {
                 p.add_map(
@@ -59,19 +53,8 @@ impl Program {
                         p.add_struct("Function", |p| {
                             p.add_field("is_entrypoint", is_entrypoint)?;
                             p.add_field_with("parameters", |p| {
-                                p.indented(|p| {
-                                    // add local declarations
-                                    for (local_id, decl) in parameters {
-                                        p.line()?;
-                                        write!(
-                                            p,
-                                            "{:?} {}: {},",
-                                            local_id,
-                                            decl.debug_name.as_ref().map_or("", |n| n.as_ref()),
-                                            decl.ty
-                                        )?;
-                                    }
-                                    Ok(())
+                                p.add_list(parameters.iter(), |p, (local_id, decl)| {
+                                    write!(p, "{}#{}: {}", local_id.0, decl.debug_name, decl.ty)
                                 })
                             })?;
                             p.add_field_with("return_ty", |p| write!(p, "{}", return_ty))?;

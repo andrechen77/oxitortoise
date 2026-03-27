@@ -333,8 +333,7 @@ fn translate_node(ctx: &mut FnBodyBuilderCtx, ast_node: ast::Node) -> (ExprKind,
         N::LetBinding { var_name, value } => {
             // create a new local variable
             let local_id = ctx.hir.next_local_id();
-            let local_decl =
-                LocalDecl { debug_name: Some(var_name.clone()), ty: NlAbstractTy::NlTop };
+            let local_decl = LocalDecl { debug_name: var_name.clone(), ty: NlAbstractTy::NlTop };
             ctx.local_scope.as_mut().unwrap().decls.insert(local_id, local_decl);
             ctx.local_scope.as_mut().unwrap().names.insert(var_name, local_id);
 
@@ -869,11 +868,10 @@ fn make_fn_ctx<'a>(
     let workspace_param = hir.next_local_id();
     parameters.insert(
         workspace_param,
-        LocalDecl { debug_name: Some("workspace".into()), ty: NlAbstractTy::Workspace },
+        LocalDecl { debug_name: "workspace".into(), ty: NlAbstractTy::Workspace },
     );
     let rng_param = hir.next_local_id();
-    parameters
-        .insert(rng_param, LocalDecl { debug_name: Some("rng".into()), ty: NlAbstractTy::Rng });
+    parameters.insert(rng_param, LocalDecl { debug_name: "rng".into(), ty: NlAbstractTy::Rng });
     let self_param = hir.next_local_id();
     let self_param_ty = match agent_class {
         ast::AgentClass { observer: true, turtle: false, patch: false, link: false } => {
@@ -890,12 +888,12 @@ fn make_fn_ctx<'a>(
         }
         _ => NlAbstractTy::NlTop,
     };
-    parameters.insert(self_param, LocalDecl { debug_name: Some("self".into()), ty: self_param_ty });
+    parameters.insert(self_param, LocalDecl { debug_name: "self".into(), ty: self_param_ty });
 
     // add user-defined parameters
     for arg_name in arg_names {
         let local_id = hir.next_local_id();
-        let local_decl = LocalDecl { debug_name: Some(arg_name.clone()), ty: NlAbstractTy::NlTop };
+        let local_decl = LocalDecl { debug_name: arg_name.clone(), ty: NlAbstractTy::NlTop };
         parameters.insert(local_id, local_decl);
         names.insert(arg_name, local_id);
     }

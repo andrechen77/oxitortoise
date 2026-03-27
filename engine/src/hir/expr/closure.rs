@@ -48,36 +48,22 @@ impl Expr for Closure {
         names: NameContext,
     ) -> fmt::Result {
         let Closure { captures, parameters, body } = self;
-        p.add_fn_call("closure", |p| {
-            p.add_fn_arg_with(|p| {
-                write!(p, "[")?;
-                for (i, c) in captures.iter().enumerate() {
-                    if i > 0 {
-                        write!(p, ", ")?;
-                    }
-                    write!(p, "{:?}", c)?;
-                }
-                write!(p, "]")
+        p.add_struct("closure", |p| {
+            p.add_field_with("captures", |p| {
+                p.add_list(captures.iter(), |p, capture| {
+                    let name = names
+                        .lookup_local_var(*capture)
+                        .map(|decl| decl.debug_name.as_ref())
+                        .unwrap_or("?");
+                    write!(p, "{}#{}", capture.0, name)
+                })
             })?;
-            p.add_fn_arg_with(|p| {
-                write!(p, "(")?;
-                p.indented(|p| {
-                    for (local_id, decl) in parameters {
-                        p.line()?;
-                        write!(
-                            p,
-                            "{:?} {}: {},",
-                            local_id,
-                            decl.debug_name.as_ref().map_or("", |n| n.as_ref()),
-                            decl.ty
-                        )?;
-                    }
-                    Ok(())
-                })?;
-                p.line()?;
-                write!(p, ")")
+            p.add_field_with("parameters", |p| {
+                p.add_list(parameters.iter(), |p, (local_id, decl)| {
+                    write!(p, "{}#{}: {}", local_id.0, decl.debug_name, decl.ty)
+                })
             })?;
-            p.add_fn_arg_with(|p| body.pretty_print(p, names.with_locals(parameters)))?;
+            p.add_field_with("body", |p| body.pretty_print(p, names.with_locals(parameters)))?;
             Ok(())
         })
     }

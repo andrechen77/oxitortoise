@@ -78,7 +78,7 @@ impl Expr for Scope {
     fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, local_out: mir::LocalId) {
         for (local_id, decl) in &self.locals {
             let mir_local_decl =
-                mir::LocalDecl { debug_name: decl.debug_name.clone(), ty: decl.ty.repr() };
+                mir::LocalDecl { debug_name: Some(decl.debug_name.clone()), ty: decl.ty.repr() };
             let (mir_local_id, _) = builder.mir.create_local(mir_local_decl);
             builder.translator.locals.insert(*local_id, mir_local_id);
         }
@@ -93,23 +93,11 @@ impl Expr for Scope {
 
     fn pretty_print<W: Write>(&self, p: &mut PrettyPrinter<W>, names: NameContext) -> fmt::Result {
         let Scope { locals, inner } = self;
-        write!(p, "with (")?;
-        p.indented(|p| {
-            // add local declarations
-            for (local_id, decl) in locals {
-                p.line()?;
-                write!(
-                    p,
-                    "{:?} {}: {},",
-                    local_id,
-                    decl.debug_name.as_ref().map_or("", |n| n.as_ref()),
-                    decl.ty
-                )?;
-            }
-            Ok(())
+        write!(p, "with ")?;
+        p.add_list(locals.iter(), |p, (local_id, decl)| {
+            write!(p, "{}#{}: {}", local_id.0, decl.debug_name, decl.ty)
         })?;
-        p.line()?;
-        write!(p, ") ")?;
+        write!(p, " do ")?;
         inner.pretty_print(p, names.with_locals(&self.locals))?;
         Ok(())
     }

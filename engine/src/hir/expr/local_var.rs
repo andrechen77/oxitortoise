@@ -79,7 +79,6 @@ fn pretty_print_local(
     local_id: LocalId,
     names: NameContext,
 ) -> fmt::Result {
-    let name =
-        names.lookup_local_var(local_id).and_then(|decl| decl.debug_name.as_deref()).unwrap_or("?");
+    let name = names.lookup_local_var(local_id).map(|decl| decl.debug_name.as_ref()).unwrap_or("?");
     write!(p, "{}#{}", local_id.0, name)
 }

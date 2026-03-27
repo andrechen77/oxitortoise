@@ -64,7 +64,7 @@ pub struct Function {
 
 #[derive(Clone, Debug)]
 pub struct LocalDecl {
-    pub debug_name: Option<Arc<str>>,
+    pub debug_name: Arc<str>,
     pub ty: NlAbstractTy,
 }
 
