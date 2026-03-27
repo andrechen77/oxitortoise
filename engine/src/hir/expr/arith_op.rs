@@ -111,7 +111,7 @@ pub struct BinaryArith {
 
 impl Expr for BinaryArith {
     fn output_type(&self, _names: NameContext) -> NlAbstractTy {
-        NlAbstractTy::Numeric
+        NlAbstractTy::Float
     }
 
     fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
@@ -373,7 +373,7 @@ pub struct Negate {
 
 impl Expr for Negate {
     fn output_type(&self, _names: NameContext) -> NlAbstractTy {
-        NlAbstractTy::Numeric
+        NlAbstractTy::Float
     }
 
     fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {

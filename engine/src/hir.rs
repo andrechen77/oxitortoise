@@ -172,7 +172,6 @@ pub enum NlAbstractTy {
     /// A type that has no inhabitants.
     #[default]
     Bottom,
-    Numeric,
     Color,
     Float,
     Boolean,

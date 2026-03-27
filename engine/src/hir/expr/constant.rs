@@ -59,9 +59,12 @@ pub struct ListLiteral {
 }
 
 impl Expr for ListLiteral {
-    fn output_type(&self, _names: NameContext) -> NlAbstractTy {
-        // Until we have element-type inference for list literals.
-        NlAbstractTy::List { element_ty: Box::new(NlAbstractTy::NlTop) }
+    fn output_type(&self, names: NameContext) -> NlAbstractTy {
+        let mut ty = NlAbstractTy::Bottom;
+        for item in &self.items {
+            ty = ty.join(item.output_type(names));
+        }
+        NlAbstractTy::List { element_ty: Box::new(ty) }
     }
 
     fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {

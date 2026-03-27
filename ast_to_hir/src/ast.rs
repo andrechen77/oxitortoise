@@ -187,6 +187,7 @@ pub enum Widget {
     },
     Slider {
         index: u32,
+        var_name: Arc<str>,
         get_min: WidgetMiniProcedure,
         get_max: WidgetMiniProcedure,
         get_step: WidgetMiniProcedure,

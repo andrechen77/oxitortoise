@@ -138,11 +138,18 @@ pub fn ast_to_hir(ast: Ast) -> anyhow::Result<HirResult> {
     // from widgets
     let mut functions_to_translate = Vec::new();
 
-    // collect widget procedures
+    // collect widget procedures and narrow types of widget-controlled variables
     for widget in widgets {
         match widget {
-            ast::Widget::Plot { .. } => {}   // TODO(mvp) handle this widget
-            ast::Widget::Slider { .. } => {} // TODO(mvp) handle this widget
+            ast::Widget::Plot { .. } => {} // TODO(mvp) handle procedures in this widget
+            ast::Widget::Slider { var_name, .. } => {
+                let var_name = var_name.to_uppercase();
+                let var_name: &str = var_name.as_ref();
+                let global_var_idx = hir_builder.global_names.global_vars[var_name];
+
+                global_vars[global_var_idx].ty = NlAbstractTy::Float;
+                // TODO(mvp) handle the get_min, get_max, and get_step procedures
+            }
             ast::Widget::Button { index, on_click } => {
                 let function_id = hir_builder.next_function_id();
                 // imagine that the widget procedure was just a code tab
