@@ -1,16 +1,18 @@
-// Foundational expressions such as control flow and scope are defined here.
-// More specialized expression kinds are defined in their respective submodules.
-
-use std::{
-    collections::BTreeMap,
-    fmt::{self, Write},
-};
+use std::fmt;
 
 use crate::{
-    hir::{
-        Expr, ExprKind, HirToMirFnBuilder, Label, LocalDecl, LocalId, NameContext, NlAbstractTy,
-    },
+    hir::{HirToMirFnBuilder, NameContext, NlAbstractTy},
     mir,
+};
+
+use ambassador::{Delegate, delegatable_trait};
+use derive_more::{From, TryInto};
+use pretty_print::PrettyPrinter;
+
+pub use self::{
+    agent_var::*, agentset::*, arith_op::*, ask::*, clear::*, closure::*, color::*, constant::*,
+    control_flow::*, create_agent::*, diffuse::*, distancexy::*, list_set_ops::*, local_var::*,
+    rand::*, set_default_shape::*, ticks::*, topology::*, turtle_movement::*, user_fn::*,
 };
 
 mod agent_var;
@@ -21,6 +23,7 @@ mod clear;
 mod closure;
 mod color;
 mod constant;
+mod control_flow;
 mod create_agent;
 mod diffuse;
 mod distancexy;
@@ -33,266 +36,84 @@ mod topology;
 mod turtle_movement;
 mod user_fn;
 
-pub use agent_var::*;
-pub use agentset::*;
-pub use arith_op::*;
-pub use ask::*;
-pub use clear::*;
-pub use closure::*;
-pub use color::*;
-pub use constant::*;
-pub use create_agent::*;
-pub use diffuse::*;
-pub use distancexy::*;
-pub use list_set_ops::*;
-pub use local_var::*;
-use pretty_print::PrettyPrinter;
-pub use rand::*;
-pub use set_default_shape::*;
-pub use ticks::*;
-pub use topology::*;
-pub use turtle_movement::*;
-pub use user_fn::*;
+/// Some kind of computation that takes inputs and produces outputs. The output
+/// of an expression is immutable, though may change between instances if the
+/// expression is evaluated in different instances (e.g. as part of a loop or in
+/// different function calls).
+#[delegatable_trait]
+pub trait Expr {
+    fn output_type(&self, names: NameContext) -> NlAbstractTy;
 
-/// An expression that defines a set of mutable local variables that can be
-/// written and read in the evaluation of an inner expression.
-#[derive(Debug, Clone)]
-pub struct Scope {
-    pub locals: BTreeMap<LocalId, LocalDecl>,
-    pub inner: Box<ExprKind>,
-}
+    fn visit_children(&self, visitor: impl FnMut(&ExprKind));
 
-impl Expr for Scope {
-    fn output_type(&self, names: NameContext) -> NlAbstractTy {
-        self.inner.output_type(names)
-    }
+    /// Like [`visit_children`](Expr::visit_children), but allows mutating each
+    /// child expression in place.
+    fn visit_children_mut(&mut self, visitor: impl FnMut(&mut ExprKind));
 
-    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
-        visitor(&self.inner);
-    }
-
-    fn visit_children_mut(&mut self, mut visitor: impl FnMut(&mut ExprKind)) {
-        visitor(self.inner.as_mut());
-    }
-
-    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, local_out: mir::LocalId) {
-        for (local_id, decl) in &self.locals {
-            let mir_local_decl =
-                mir::LocalDecl { debug_name: Some(decl.debug_name.clone()), ty: decl.ty.repr() };
-            let (mir_local_id, _) = builder.mir.create_local(mir_local_decl);
-            builder.translator.locals.insert(*local_id, mir_local_id);
-        }
-        builder.with_locals(&self.locals, |builder| {
-            self.inner.write_mir_execution(builder, local_out);
-        });
-
-        // the scope does not remove the locals from the translator after the inner expression is
-        // evaluated. At the time this code was written, this did not seem to be
-        // an issue.
-    }
-
-    fn pretty_print<W: Write>(&self, p: &mut PrettyPrinter<W>, names: NameContext) -> fmt::Result {
-        let Scope { locals, inner } = self;
-        write!(p, "with ")?;
-        p.add_list(locals.iter(), |p, (local_id, decl)| {
-            write!(p, "{}#{}: {}", local_id.0, decl.debug_name, decl.ty)
-        })?;
-        write!(p, " do ")?;
-        inner.pretty_print(p, names.with_locals(&self.locals))?;
-        Ok(())
-    }
-}
-
-/// An expression that represents multiple expressions evaluated in order.
-/// The only way to exit a block is to break out of it; "falling through" the
-/// end of the statement sequence is not allowed.
-#[derive(Debug, Clone)]
-pub struct Block {
-    pub label: Label,
-    pub statements: Vec<ExprKind>,
-}
-
-impl Expr for Block {
-    fn output_type(&self, names: NameContext) -> NlAbstractTy {
-        // This does not really need to be an option but since we move out of it
-        // for a split second to do the join, the compiler requires it.
-        // Logically it is never None.
-        let mut output_type = Some(NlAbstractTy::Bottom);
-        self.visit_children(|expr| {
-            if let ExprKind::Break(Break { target, value }) = expr
-                && *target == self.label
-            {
-                let break_ty = value.output_type(names);
-                output_type = Some(output_type.take().unwrap().join(break_ty));
-            }
-        });
-        output_type.unwrap()
-    }
-
-    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
-        for stmt in &self.statements {
-            visitor(stmt);
-        }
-    }
-
-    fn visit_children_mut(&mut self, mut visitor: impl FnMut(&mut ExprKind)) {
-        for stmt in &mut self.statements {
-            visitor(stmt);
-        }
-    }
-
-    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, local_out: mir::LocalId) {
-        let label = builder.mir.create_label();
-
-        // make this label visible to child expressions
-        builder.translator.ctrl_flow_constructs.insert(self.label, (label, local_out));
-
-        // translate the statements in the block
-        let (statements, _) = builder.with_inner_statement_seq(|builder| {
-            for expr in &self.statements {
-                builder.translate_expr(expr);
-            }
-        });
-
-        // create a block statement with the translated statements
-        let block = mir::Statement::CtrlFlow(mir::CtrlFlowConstruct::Block(mir::Block {
-            label: Some(label),
-            statements,
-        }));
-        builder.mir.add_statement(block);
-    }
-
-    fn pretty_print<W: Write>(&self, p: &mut PrettyPrinter<W>, names: NameContext) -> fmt::Result {
-        let Block { label, statements } = self;
-        write!(p, "{}: {{", label)?;
-        p.indented(|p| {
-            for statement in statements {
-                p.line()?;
-                statement.pretty_print(p, names)?;
-            }
-            Ok(())
-        })?;
-        p.line()?;
-        write!(p, "}}")?;
-        Ok(())
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct IfElse {
-    pub condition: Box<ExprKind>,
-    pub then: Box<ExprKind>,
-    pub r#else: Option<Box<ExprKind>>,
-}
-
-impl Expr for IfElse {
-    fn output_type(&self, names: NameContext) -> NlAbstractTy {
-        let then_ty = self.then.output_type(names);
-        let else_ty = self
-            .r#else
-            .as_ref()
-            .map(|r#else| r#else.output_type(names))
-            .unwrap_or(NlAbstractTy::Unit);
-        then_ty.join(else_ty)
-    }
-
-    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
-        visitor(&self.condition);
-        visitor(&self.then);
-        if let Some(r#else) = &self.r#else {
-            visitor(r#else);
-        }
-    }
-
-    fn visit_children_mut(&mut self, mut visitor: impl FnMut(&mut ExprKind)) {
-        visitor(self.condition.as_mut());
-        visitor(self.then.as_mut());
-        if let Some(r#else) = &mut self.r#else {
-            visitor(r#else.as_mut());
-        }
-    }
-
-    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, local_out: mir::LocalId) {
-        let condition = builder.translate_expr(&self.condition);
-        let then = {
-            let (then_stmts, _) = builder.with_inner_statement_seq(|builder| {
-                self.then.write_mir_execution(builder, local_out);
-            });
-            Box::new(mir::consolidate_statements(then_stmts))
-        };
-        let r#else = self.r#else.as_ref().map(|r#else| {
-            let (else_stmts, _) = builder.with_inner_statement_seq(|builder| {
-                r#else.write_mir_execution(builder, local_out);
-            });
-            Box::new(mir::consolidate_statements(else_stmts))
-        });
-
-        let if_else = mir::Statement::CtrlFlow(mir::CtrlFlowConstruct::IfElse(mir::IfElse {
-            condition: condition.place,
-            then,
-            r#else,
-        }));
-        builder.mir.add_statement(if_else);
-    }
-
-    fn pretty_print<W: Write>(&self, p: &mut PrettyPrinter<W>, names: NameContext) -> fmt::Result {
-        let IfElse { condition, then, r#else } = self;
-        write!(p, "if ")?;
-        condition.pretty_print(p, names)?;
-        write!(p, " ")?;
-        then.pretty_print(p, names)?;
-        if let Some(r#else) = r#else {
-            write!(p, " else ")?;
-            r#else.pretty_print(p, names)?;
-        }
-        Ok(())
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Break {
-    pub target: Label,
-    pub value: Box<ExprKind>,
-}
-
-impl Expr for Break {
-    fn output_type(&self, _names: NameContext) -> NlAbstractTy {
-        // a break diverges, it never returns
-        NlAbstractTy::Bottom
-    }
-
-    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
-        visitor(self.value.as_ref());
-    }
-
-    fn visit_children_mut(&mut self, mut visitor: impl FnMut(&mut ExprKind)) {
-        visitor(self.value.as_mut());
-    }
-
-    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, break_local_out: mir::LocalId) {
-        // ignore this value, a break never returns
-        let _ = break_local_out;
-
-        let (target_label, target_local_out) =
-            builder.translator.ctrl_flow_constructs[&self.target];
-
-        // assign the break's value to the target local instead
-        self.value.write_mir_execution(builder, target_local_out);
-
-        // and add the break statement
-        builder.mir.add_statement(mir::Statement::Elementary(mir::ElementaryStatement::Break {
-            target: target_label,
-        }));
-    }
+    /// Writes the MIR statements that correspond to the calculation represented
+    /// by this expression. This means executing any necessary side effelts and
+    /// making the output of this node available in the given `local_out`. It is
+    /// not a precondition that all dependent expressions have been executed.
+    ///
+    /// Implementations may use [`MirFunctionBuilder::translate_hir_node`] to get
+    /// the MIR values for the dependencies, which will recursively call
+    /// `write_mir_execution` if necessary.
+    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, local_out: mir::LocalId);
 
     fn pretty_print<W: fmt::Write>(
         &self,
-        p: &mut PrettyPrinter<W>,
+        printer: &mut PrettyPrinter<W>,
         names: NameContext,
-    ) -> fmt::Result {
-        let Break { target, value } = self;
-        write!(p, "break {} ", target)?;
-        value.pretty_print(p, names)?;
-        Ok(())
-    }
+    ) -> fmt::Result;
+}
+
+#[derive(Debug, From, TryInto, Delegate, Clone)]
+#[try_into(owned, ref, ref_mut)]
+#[delegate(Expr)]
+pub enum ExprKind {
+    Agentset(Agentset),
+    AdvanceTick(AdvanceTick),
+    Ask(Ask),
+    BinaryArith(BinaryArith),
+    BinaryBool(BinaryBool),
+    BinaryCmp(BinaryCmp),
+    Block(Block),
+    Break(Break),
+    CallUserFn(CallUserFn),
+    CanMove(CanMove),
+    ClearAll(ClearAll),
+    Closure(Closure),
+    Constant(Constant),
+    CreateTurtles(CreateTurtles),
+    Diffuse(Diffuse),
+    Distancexy(Distancexy),
+    EuclideanDistanceNoWrap(EuclideanDistanceNoWrap),
+    GetGlobalVar(GetGlobalVar),
+    GetLocalVar(GetLocalVar),
+    GetPatchVar(GetPatchVar),
+    GetTick(GetTick),
+    GetTurtleVar(GetTurtleVar),
+    IfElse(IfElse),
+    LogicalNot(LogicalNot),
+    ListLiteral(ListLiteral),
+    MaxPxcor(MaxPxcor),
+    MaxPycor(MaxPycor),
+    Negate(Negate),
+    Of(Of),
+    OffsetDistanceByHeading(OffsetDistanceByHeading),
+    OneOf(OneOf),
+    PatchAt(PatchAt),
+    PatchRelative(PatchRelative),
+    PointConstructor(PointConstructor),
+    RandomInt(RandomInt),
+    ResetTicks(ResetTicks),
+    // Repeat(Repeat),
+    ScaleColor(ScaleColor),
+    Scope(Scope),
+    SetDefaultShape(SetDefaultShape),
+    SetLocalVar(SetLocalVar),
+    SetPatchVar(SetPatchVar),
+    SetTurtleVar(SetTurtleVar),
+    TurtleForward(TurtleForward),
+    TurtleRotate(TurtleRotate),
 }
