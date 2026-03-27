@@ -261,12 +261,12 @@ impl Expr for Break {
         NlAbstractTy::Bottom
     }
 
-    fn visit_children(&self, visitor: impl FnMut(&ExprKind)) {
-        self.value.visit_children(visitor);
+    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
+        visitor(self.value.as_ref());
     }
 
-    fn visit_children_mut(&mut self, visitor: impl FnMut(&mut ExprKind)) {
-        self.value.visit_children_mut(visitor);
+    fn visit_children_mut(&mut self, mut visitor: impl FnMut(&mut ExprKind)) {
+        visitor(self.value.as_mut());
     }
 
     fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, break_local_out: mir::LocalId) {

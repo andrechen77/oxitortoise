@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, fmt::Debug, iter, mem};
 
-use tracing::trace;
+use tracing::{trace, warn};
 
 use crate::{
     hir::{
@@ -223,30 +223,40 @@ fn narrow_types_expr(types: &mut ProgramTypes, names: NameContext, expr: &mut Ex
                         .map(|&local_id| (local_id, types.locals.remove(&local_id).unwrap())),
                 );
             });
-            // early return so that we don't visit the inner expression twice
-            return;
         }
-        ExprKind::Closure(expr::Closure { captures: _, parameters, body }) => {
-            let parameter_local_ids = parameters.keys().copied().collect::<Vec<_>>();
-            types.with_locals(parameter_local_ids.iter().copied(), |types| {
-                // collect all assignments inside the closure body
-                narrow_types_expr(types, names.with_locals(parameters), body);
+        ExprKind::Ask(expr::Ask { workspace, rng, recipients, body })
+        | ExprKind::Of(expr::Of { workspace, rng, recipients, body }) => 'a: {
+            narrow_types_expr(types, names, workspace);
+            narrow_types_expr(types, names, rng);
+            narrow_types_expr(types, names, recipients);
 
-                // don't replace the types of parameters here (unlike with the
-                // Scope expression) because we haven't actually seen all the
-                // assigments to the parameters; specifically we don't know
-                // all the arguments that the closure could be called with.
-                // thus avoid attempting to narrow the closure parameter types
+            let recipients_ty = recipients.output_type(names);
+            let closure_self_ty = if let NlAbstractTy::Agentset { agent_type } = recipients_ty {
+                *agent_type
+            } else {
+                recipients_ty
+            };
 
-                // TODO improve the algorithm so that we can infer that, e.g. if
-                // the closure is being passed to an `ask` where the recipients
-                // is an agentset of turtles, then the closure `self` parameter
-                // must be a turtle.
-            });
-            // early return so that we don't visit the inner expression twice
-            return;
+            // find which parameter corresponds to the self type
+            let ExprKind::Closure(closure) = body.as_mut() else {
+                warn!("expected ask/of body to be a closure literal, got: {:?}", body);
+                break 'a;
+            };
+            let self_param_id = *closure.parameters.keys().nth(2).unwrap(); // parameters[2] is the self type
+
+            narrow_types_in_closure(
+                types,
+                names,
+                closure,
+                iter::once((self_param_id, closure_self_ty)),
+            );
+        }
+        ExprKind::Closure(closure) => {
+            narrow_types_in_closure(types, names, closure, iter::empty());
         }
         ExprKind::SetLocalVar(expr::SetLocalVar { local_id, value }) => {
+            narrow_types_expr(types, names, value);
+
             let ty = value.output_type(names);
             trace!("found assignment to local variable {:?}: {:?}", local_id, ty);
             join_type(&mut types.locals, *local_id, ty);
@@ -254,23 +264,37 @@ fn narrow_types_expr(types: &mut ProgramTypes, names: NameContext, expr: &mut Ex
         // TODO(mvp) handle setting global variables and link variables
         ExprKind::SetTurtleVar(expr::SetTurtleVar {
             var: TurtleVarDesc::Custom(var_idx),
+            workspace,
+            turtle,
             value,
-            ..
         }) => {
+            narrow_types_expr(types, names, workspace);
+            narrow_types_expr(types, names, turtle);
+            narrow_types_expr(types, names, value);
+
             let ty = value.output_type(names);
             trace!("found assignment to turtle variable {:?}: {:?}", var_idx, ty);
             join_type(&mut types.turtle_vars, *var_idx, ty);
         }
         ExprKind::SetPatchVar(expr::SetPatchVar {
             var: PatchVarDesc::Custom(var_idx),
+            workspace,
+            patch,
             value,
-            ..
         }) => {
+            narrow_types_expr(types, names, workspace);
+            narrow_types_expr(types, names, patch);
+            narrow_types_expr(types, names, value);
+
             let ty = value.output_type(names);
             trace!("found assignment to patch variable {:?}: {:?}", var_idx, ty);
             join_type(&mut types.patch_vars, *var_idx, ty);
         }
         ExprKind::CallUserFn(expr::CallUserFn { target, args }) => {
+            for arg in args.iter_mut() {
+                narrow_types_expr(types, names, arg);
+            }
+
             let target_params = &names.functions()[target].parameters;
             assert_eq!(
                 args.len(),
@@ -287,9 +311,48 @@ fn narrow_types_expr(types: &mut ProgramTypes, names: NameContext, expr: &mut Ex
                 join_type(&mut types.fn_params, (*target, *target_param), ty);
             }
         }
-        _ => {} // do nothing
+        other => other.visit_children_mut(|child| narrow_types_expr(types, names, child)),
     }
-    expr.visit_children_mut(|child| narrow_types_expr(types, names, child));
+}
+
+/// Narrows the types of the parameters and body of the closure, recursively
+/// visiting subexpressions.
+///
+/// `arg_restrictions` maps a local ID corresponding to a closure parameter to
+/// the type of values that can be passed to that parameter. This is used to
+/// narrow the parameter types when additional context is known about how the
+/// closure is being used. If a closure parameter is not mapped, that implicitly
+/// means there is no restriction on the type of values that can be passed in
+/// that parameter, so that parameter type should not be narrowed.
+fn narrow_types_in_closure(
+    types: &mut ProgramTypes,
+    names: NameContext,
+    expr: &mut expr::Closure,
+    arg_restrictions: impl Iterator<Item = (LocalId, NlAbstractTy)>,
+) {
+    let expr::Closure { parameters, body, captures: _ } = expr;
+
+    let parameter_local_ids = parameters.keys().copied().collect::<Vec<_>>();
+    types.with_locals(parameter_local_ids.iter().copied(), |types| {
+        // collect all assignments inside the closure body
+        narrow_types_expr(types, names.with_locals(parameters), body);
+
+        // unlike with the Scope expression, we don't replace the types of *all*
+        // parameters here because we haven't actually seen all the assigments
+        // to the parameters; specifically we don't know all the arguments that
+        // the closure could be called with. thus, we only narrow the closure
+        // parameter types for which we have been given external information
+        // about all the ways that the closure could be called.
+        narrow_types_specific(
+            parameters,
+            |parameters, local_id| &mut parameters.get_mut(&local_id).unwrap().ty,
+            arg_restrictions.map(|(local_id, external_restriction)| {
+                let final_arg_ty =
+                    external_restriction.join(types.locals.remove(&local_id).unwrap());
+                (local_id, final_arg_ty)
+            }),
+        );
+    });
 }
 
 /// For each local variable declaration in `actual_types`, narrow the actual
