@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, iter, mem, sync::Arc};
+use std::{collections::BTreeMap, iter, sync::Arc};
 
 use engine::{
     hir::{
@@ -369,9 +369,6 @@ fn translate_node(ctx: &mut FnBodyBuilderCtx, ast_node: ast::Node) -> (ExprKind,
                 target: ctx.fn_body_label,
                 value: Box::new(ExprKind::from(expr::Constant { value: None })),
             })
-        }
-        N::ReporterBlock { reporter_app } => {
-            panic!("unexpected reporter block {:?}", reporter_app);
         }
         N::CommandCall(C::ClearAll([])) => {
             ExprKind::from(expr::ClearAll { workspace: ctx.expr_workspace() })
