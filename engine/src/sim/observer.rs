@@ -141,10 +141,8 @@ pub struct GlobalsSchema {
 }
 
 impl GlobalsSchema {
-    pub fn new(custom_fields: &[(&Arc<str>, Type)]) -> Self {
-        Self {
-            custom_fields: custom_fields.iter().map(|(name, ty)| (Arc::clone(name), *ty)).collect(),
-        }
+    pub fn new_with_custom_fields(custom_fields: Vec<(Arc<str>, Type)>) -> Self {
+        Self { custom_fields }
     }
 
     pub fn make_row_schema(&self) -> RowSchema {

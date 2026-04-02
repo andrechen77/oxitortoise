@@ -2,52 +2,14 @@ use std::collections::BTreeMap;
 
 use crate::{
     hir::{self, Expr, NameContext},
-    mir::{self, MirType, MirTypeInfo},
-    sim::{
-        observer::GlobalsSchema,
-        patch::{PatchId, PatchSchema},
-        turtle::{TurtleId, TurtleSchema},
-        value::PackedAny,
-    },
+    mir,
+    sim::{patch::PatchId, turtle::TurtleId, value::PackedAny},
     util::reflection::Reflect,
-    workspace::Workspace,
 };
 
-pub struct TypeMapping {
-    globals_schema: GlobalsSchema,
-    turtle_schema: TurtleSchema,
-    patch_schema: PatchSchema,
-    workspace_ptr_ty: MirType,
-}
+mod type_mapping;
 
-impl TypeMapping {
-    pub fn new(
-        globals_schema: GlobalsSchema,
-        turtle_schema: TurtleSchema,
-        patch_schema: PatchSchema,
-    ) -> Self {
-        let workspace_pointee_ty =
-            Workspace::mir_type_from_schemas(&globals_schema, &turtle_schema, &patch_schema);
-        let workspace_ptr_ty = MirTypeInfo::ptr_to(workspace_pointee_ty);
-        Self { globals_schema, turtle_schema, patch_schema, workspace_ptr_ty }
-    }
-
-    pub fn globals_schema(&self) -> &GlobalsSchema {
-        &self.globals_schema
-    }
-
-    pub fn turtle_schema(&self) -> &TurtleSchema {
-        &self.turtle_schema
-    }
-
-    pub fn patch_schema(&self) -> &PatchSchema {
-        &self.patch_schema
-    }
-
-    pub fn workspace_ptr_ty(&self) -> MirType {
-        self.workspace_ptr_ty.clone()
-    }
-}
+pub use type_mapping::{TypeMapping, make_type_mapping, mir_repr};
 
 pub struct HirToMirFnBuilder<'a, 'b> {
     pub hir_names: NameContext<'a>,
@@ -81,7 +43,8 @@ impl<'a, 'b> HirToMirFnBuilder<'a, 'b> {
     /// There is currently no checking if dependencies have already been
     /// evaluated.
     pub fn translate_expr(&mut self, expr: &hir::ExprKind) -> mir::TypedPlace {
-        let output_ty = expr.output_type(self.hir_names).repr();
+        let output_ty = expr.output_type(self.hir_names);
+        let output_ty = mir_repr(&output_ty);
         // the expression's output will be stored in this local variable
         let (output_local, _output_local_decl) =
             self.mir.create_local(mir::LocalDecl { debug_name: None, ty: output_ty });
@@ -126,7 +89,7 @@ impl<'a, 'b> HirToMirFnBuilder<'a, 'b> {
         let local_id = *self.translator.workspace_param.get_or_insert_with(|| {
             let (local_id, _local_decl) = self.mir.create_local(mir::LocalDecl {
                 debug_name: Some("workspace".into()),
-                ty: self.type_mapping.workspace_ptr_ty.clone(),
+                ty: self.type_mapping.workspace_ptr_ty(),
             });
             // TODO add as parameter to the function
             local_id
@@ -179,7 +142,9 @@ impl<'a, 'b> HirToMirFnBuilder<'a, 'b> {
     }
 }
 
-pub fn hir_to_mir(hir: &hir::Program, type_mapping: &TypeMapping) -> mir::Program {
+pub fn hir_to_mir(hir: &hir::Program) -> mir::Program {
+    let type_mapping = make_type_mapping(hir);
+
     let mut builder = mir::ProgramBuilder::new();
 
     // iterate through each function and convert it to an MIR function
@@ -192,7 +157,7 @@ pub fn hir_to_mir(hir: &hir::Program, type_mapping: &TypeMapping) -> mir::Progra
 
         let mut builder = HirToMirFnBuilder {
             hir_names: NameContext::from_program(hir),
-            type_mapping,
+            type_mapping: &type_mapping,
             mir: &mut mir_fn_builder,
             translator: &mut translator,
         };
@@ -200,7 +165,7 @@ pub fn hir_to_mir(hir: &hir::Program, type_mapping: &TypeMapping) -> mir::Progra
         // add all the nodes to the function body
         let (return_local, _) = builder.mir.create_local(mir::LocalDecl {
             debug_name: Some("return".into()),
-            ty: hir_fn.return_ty.repr(),
+            ty: type_mapping.function_return_ty(*hir_fn_id),
         });
         builder.with_locals(&hir_fn.parameters, |builder| {
             hir_fn_body.write_mir_execution(builder, return_local);

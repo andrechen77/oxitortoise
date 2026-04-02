@@ -431,7 +431,7 @@ pub struct PatchBaseData {
 #[reflect]
 impl Reflect for PatchBaseData {}
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum PatchVarDesc {
     Pos,
     Pcolor,
@@ -456,66 +456,69 @@ impl PatchVarDesc {
 
 #[derive(Debug, Clone)]
 pub struct PatchSchema {
+    base_data: AgentFieldDescriptor,
     pcolor: AgentFieldDescriptor,
     field_groups: Vec<AgentSchemaFieldGroup>,
     custom_fields: Vec<(Arc<str>, AgentFieldDescriptor)>,
 }
 
+pub enum PatchFieldGroupElement {
+    BaseData,
+    Pcolor,
+    Custom { name: Arc<str>, ty: Type },
+}
+
+pub struct PatchFieldGroup {
+    pub avoid_occupancy_bitfield: bool,
+    pub fields: Vec<PatchFieldGroupElement>,
+}
+
 impl PatchSchema {
-    pub fn new(
-        pcolor_buffer_idx: u8,
-        custom_fields: &[(&Arc<str>, Type, u8)],
-        avoid_occupancy_bitfield: &[u8],
-    ) -> Self {
-        // create field groups vector and add base data group
+    pub fn new_with_field_groups(field_groups_spec: Vec<PatchFieldGroup>) -> Self {
+        let mut base_data = None;
+        let mut pcolor = None;
         let mut field_groups = Vec::new();
-        field_groups.push(AgentSchemaFieldGroup {
-            avoid_occupancy_bitfield: false,
-            fields: vec![AgentSchemaField::BaseData],
-        });
+        let mut custom_fields = Vec::new();
 
-        // ensure field groups exist up to max needed index
-        let max_buffer_idx =
-            pcolor_buffer_idx.max(custom_fields.iter().map(|(_, _, idx)| *idx).max().unwrap_or(0));
-        while field_groups.len() <= max_buffer_idx as usize {
-            field_groups.push(AgentSchemaFieldGroup {
-                avoid_occupancy_bitfield: false,
-                fields: Vec::new(),
-            });
-        }
-
-        // add pcolor field
-        field_groups[pcolor_buffer_idx as usize].fields.push(AgentSchemaField::Other(Color::TYPE));
-
-        // add custom fields and collect their descriptors
-        let mut custom_field_descriptors = Vec::new();
-        for (field_name, field_type, buffer_idx) in custom_fields {
-            let field_idx = field_groups[*buffer_idx as usize].fields.len() as u8;
-            field_groups[*buffer_idx as usize].fields.push(AgentSchemaField::Other(field_type));
-            custom_field_descriptors.push((
-                Arc::clone(field_name),
-                AgentFieldDescriptor { buffer_idx: *buffer_idx, field_idx },
-            ));
-        }
-
-        // set avoid_occupancy_bitfield flags
-        for &buffer_idx in avoid_occupancy_bitfield {
-            assert!(
-                (buffer_idx as usize) < field_groups.len(),
-                "avoid_occupancy_bitfield index out of bounds"
-            );
-            field_groups[buffer_idx as usize].avoid_occupancy_bitfield = true;
-        }
-
-        // verify all field groups are non-empty
-        for (i, group) in field_groups.iter().enumerate() {
-            assert!(!group.fields.is_empty(), "field group at index {} is empty", i);
+        for (buffer_idx, PatchFieldGroup { avoid_occupancy_bitfield, fields }) in
+            field_groups_spec.into_iter().enumerate()
+        {
+            let mut agent_schema_field_group =
+                AgentSchemaFieldGroup { avoid_occupancy_bitfield, fields: Vec::new() };
+            for (field_idx, field) in fields.into_iter().enumerate() {
+                let current_field_desc = AgentFieldDescriptor {
+                    buffer_idx: buffer_idx.try_into().unwrap(),
+                    field_idx: field_idx.try_into().unwrap(),
+                };
+                match field {
+                    PatchFieldGroupElement::BaseData => {
+                        if base_data.is_some() {
+                            panic!("base data cannot be included more than once");
+                        }
+                        base_data = Some(current_field_desc);
+                        agent_schema_field_group.fields.push(AgentSchemaField::BaseData);
+                    }
+                    PatchFieldGroupElement::Pcolor => {
+                        if pcolor.is_some() {
+                            panic!("pcolor cannot be included more than once");
+                        }
+                        pcolor = Some(current_field_desc);
+                        agent_schema_field_group.fields.push(AgentSchemaField::Other(Color::TYPE));
+                    }
+                    PatchFieldGroupElement::Custom { name, ty } => {
+                        custom_fields.push((name, current_field_desc));
+                        agent_schema_field_group.fields.push(AgentSchemaField::Other(ty));
+                    }
+                };
+            }
+            field_groups.push(agent_schema_field_group);
         }
 
         Self {
-            pcolor: AgentFieldDescriptor { buffer_idx: pcolor_buffer_idx, field_idx: 0 },
+            base_data: base_data.expect("base data must be present"),
+            pcolor: pcolor.expect("pcolor must be present"),
             field_groups,
-            custom_fields: custom_field_descriptors,
+            custom_fields,
         }
     }
 
@@ -524,7 +527,7 @@ impl PatchSchema {
     }
 
     pub fn base_data(&self) -> AgentFieldDescriptor {
-        AgentFieldDescriptor { buffer_idx: 0, field_idx: 0 }
+        self.base_data
     }
 
     pub fn pcolor(&self) -> AgentFieldDescriptor {
@@ -549,7 +552,10 @@ impl PatchSchema {
 
 impl Default for PatchSchema {
     fn default() -> Self {
-        Self::new(0, &[], &[])
+        Self::new_with_field_groups(vec![PatchFieldGroup {
+            avoid_occupancy_bitfield: false,
+            fields: vec![PatchFieldGroupElement::BaseData, PatchFieldGroupElement::Pcolor],
+        }])
     }
 }
 

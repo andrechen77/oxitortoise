@@ -7,7 +7,8 @@ use std::{
 use ast_to_hir::{HirResult, serde_json};
 use engine::{
     exec::jit::{InstallLir, InstalledObj as _},
-    hir, lir,
+    hir::{self, make_type_mapping},
+    lir,
     sim::{
         observer::{Globals, GlobalsSchema},
         patch::{PatchBaseData, PatchSchema, Patches},
@@ -146,6 +147,10 @@ fn main() {
     hir::narrow_types(&mut program);
 
     write_to_file("after.hir", program.pretty_print());
+
+    let type_mapping = make_type_mapping(&program);
+    let type_mapping_str = format!("{:?}", type_mapping);
+    write_to_file("type_mapping.txt", type_mapping_str.as_bytes());
 
     // info!("applying cheats");
     // let cheats = include_str!("cheats.json");

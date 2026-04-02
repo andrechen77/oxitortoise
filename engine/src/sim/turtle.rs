@@ -514,79 +514,74 @@ pub struct TurtleSchema {
     custom_fields: Vec<(Arc<str>, AgentFieldDescriptor)>,
 }
 
+pub enum TurtleFieldGroupElement {
+    BaseData,
+    Position,
+    Heading,
+    Custom { name: Arc<str>, ty: Type },
+}
+
+pub struct TurtleFieldGroup {
+    pub avoid_occupancy_bitfield: bool,
+    pub fields: Vec<TurtleFieldGroupElement>,
+}
+
 impl TurtleSchema {
-    pub fn new(
-        heading_buffer_idx: u8,
-        position_buffer_idx: u8,
-        custom_fields: &[(&Arc<str>, Type, u8)],
-        avoid_occupancy_bitfield: &[u8],
-    ) -> Self {
-        // create field groups vector and add base data group
+    pub fn new_with_field_groups(field_groups_spec: Vec<TurtleFieldGroup>) -> Self {
+        let mut base_data = None;
+        let mut position = None;
+        let mut heading = None;
         let mut field_groups = Vec::new();
-        field_groups.push(AgentSchemaFieldGroup {
-            avoid_occupancy_bitfield: false,
-            fields: vec![AgentSchemaField::BaseData],
-        });
+        let mut custom_fields = Vec::new();
 
-        // ensure field groups exist up to max needed index
-        let max_buffer_idx = heading_buffer_idx
-            .max(position_buffer_idx)
-            .max(custom_fields.iter().map(|(_, _, idx)| *idx).max().unwrap_or(0));
-        while field_groups.len() <= max_buffer_idx as usize {
-            field_groups.push(AgentSchemaFieldGroup {
-                avoid_occupancy_bitfield: false,
-                fields: Vec::new(),
-            });
-        }
-
-        // add heading and position fields
-        let heading_group = &mut field_groups[heading_buffer_idx as usize];
-        let heading_field_idx = heading_group.fields.len() as u8;
-        heading_group.fields.push(AgentSchemaField::Other(Heading::TYPE));
-        let position_group = &mut field_groups[position_buffer_idx as usize];
-        let position_field_idx = position_group.fields.len() as u8;
-        position_group.fields.push(AgentSchemaField::Other(Point::TYPE));
-
-        // add custom fields
-        let mut custom_field_descriptors = Vec::new();
-        for (name, field_type, buffer_idx) in custom_fields {
-            let field_group = &mut field_groups[usize::from(*buffer_idx)];
-            let idx_within_buffer = field_group.fields.len();
-            field_group.fields.push(AgentSchemaField::Other(field_type));
-            custom_field_descriptors.push((
-                Arc::clone(name),
-                AgentFieldDescriptor {
-                    buffer_idx: *buffer_idx,
-                    field_idx: idx_within_buffer as u8,
-                },
-            ));
-        }
-
-        // set avoid_occupancy_bitfield flags
-        for &buffer_idx in avoid_occupancy_bitfield {
-            assert!(
-                (buffer_idx as usize) < field_groups.len(),
-                "avoid_occupancy_bitfield index out of bounds"
-            );
-            field_groups[buffer_idx as usize].avoid_occupancy_bitfield = true;
-        }
-
-        // verify all field groups are non-empty
-        for (i, group) in field_groups.iter().enumerate() {
-            assert!(!group.fields.is_empty(), "field group at index {} is empty", i);
+        for (buffer_idx, TurtleFieldGroup { avoid_occupancy_bitfield, fields }) in
+            field_groups_spec.into_iter().enumerate()
+        {
+            let mut agent_schema_field_group =
+                AgentSchemaFieldGroup { avoid_occupancy_bitfield, fields: Vec::new() };
+            for (field_idx, field) in fields.into_iter().enumerate() {
+                let current_field_desc = AgentFieldDescriptor {
+                    buffer_idx: buffer_idx.try_into().unwrap(),
+                    field_idx: field_idx.try_into().unwrap(),
+                };
+                match field {
+                    TurtleFieldGroupElement::BaseData => {
+                        if base_data.is_some() {
+                            panic!("base data cannot be included more than once");
+                        }
+                        base_data = Some(current_field_desc);
+                        agent_schema_field_group.fields.push(AgentSchemaField::BaseData);
+                    }
+                    TurtleFieldGroupElement::Position => {
+                        if position.is_some() {
+                            panic!("position cannot be included more than once");
+                        }
+                        position = Some(current_field_desc);
+                        agent_schema_field_group.fields.push(AgentSchemaField::Other(Point::TYPE));
+                    }
+                    TurtleFieldGroupElement::Heading => {
+                        if heading.is_some() {
+                            panic!("heading cannot be included more than once");
+                        }
+                        heading = Some(current_field_desc);
+                        agent_schema_field_group
+                            .fields
+                            .push(AgentSchemaField::Other(Heading::TYPE));
+                    }
+                    TurtleFieldGroupElement::Custom { name, ty } => {
+                        custom_fields.push((name, current_field_desc));
+                        agent_schema_field_group.fields.push(AgentSchemaField::Other(ty));
+                    }
+                }
+            }
+            field_groups.push(agent_schema_field_group);
         }
 
         Self {
-            heading: AgentFieldDescriptor {
-                buffer_idx: heading_buffer_idx,
-                field_idx: heading_field_idx,
-            },
-            position: AgentFieldDescriptor {
-                buffer_idx: position_buffer_idx,
-                field_idx: position_field_idx,
-            },
+            position: position.expect("position must be present"),
+            heading: heading.expect("heading must be present"),
             field_groups,
-            custom_fields: custom_field_descriptors,
+            custom_fields,
         }
     }
 
@@ -624,11 +619,36 @@ impl TurtleSchema {
             TurtleVarDesc::Ycor => (self.position(), Some(offset_of!(Point, y))),
         }
     }
+
+    pub fn var_type(&self, var: TurtleVarDesc) -> Type {
+        match var {
+            TurtleVarDesc::Who => NlFloat::TYPE,
+            TurtleVarDesc::Color => Color::TYPE,
+            TurtleVarDesc::Size => NlFloat::TYPE,
+            TurtleVarDesc::Pos => Point::TYPE,
+            TurtleVarDesc::Xcor => NlFloat::TYPE,
+            TurtleVarDesc::Ycor => NlFloat::TYPE,
+            TurtleVarDesc::Custom(field) => {
+                let var_desc = self.custom_fields()[field].1;
+                let AgentSchemaField::Other(ty) = self[var_desc] else {
+                    unreachable!("this is a custom field, so it cannot be part of the base data");
+                };
+                ty
+            }
+        }
+    }
 }
 
 impl Default for TurtleSchema {
     fn default() -> Self {
-        Self::new(0, 0, &[], &[])
+        Self::new_with_field_groups(vec![TurtleFieldGroup {
+            avoid_occupancy_bitfield: false,
+            fields: vec![
+                TurtleFieldGroupElement::BaseData,
+                TurtleFieldGroupElement::Position,
+                TurtleFieldGroupElement::Heading,
+            ],
+        }])
     }
 }
 

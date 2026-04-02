@@ -1,7 +1,5 @@
 use derive_more::Display;
 
-use crate::mir;
-
 /// A representation of an element of the lattice making up all NetLogo types.
 #[derive(PartialEq, Debug, Clone, Eq, Hash, Default, Display)]
 pub enum NlAbstractTy {
@@ -76,38 +74,6 @@ impl NlAbstractTy {
                 a, b
             ),
         }
-    }
-
-    pub fn repr(&self) -> mir::MirType {
-        todo!(
-            "We could just get rid of this entirely and have the type mappings be defined hir::TypeMapping"
-        )
-        // match self {
-        //     Self::Unit => <()>::mir_type(),
-        //     Self::NlTop => PackedAny::mir_type(),
-        //     Self::Bottom => unimplemented!("bottom type has no concrete representation"),
-        //     Self::Numeric => NlFloat::mir_type(),
-        //     Self::Color => Color::mir_type(),
-        //     Self::Float => NlFloat::mir_type(),
-        //     Self::Boolean => bool::mir_type(),
-        //     Self::String => todo!(),
-        //     Self::Point => Point::mir_type(),
-        //     Self::Agent => PackedAny::mir_type(),
-        //     Self::Patch => OptionPatchId::mir_type(),
-        //     Self::Turtle => TurtleId::mir_type(),
-        //     Self::Link => todo!(""),
-        //     Self::Agentset { agent_type: _ } => todo!(""),
-        //     // If a type is just "nobody", then it is inhabited by only one
-        //     // value and therefore holds no data. Operations that take the
-        //     // nobody value as an operand typically see it as an inhabitant of
-        //     // some other type, e.g. nobody as a patch id, or nobody as a turtle
-        //     // id. This is why "nobody" just by itself has no concrete
-        //     // representation.
-        //     Self::Nobody => unimplemented!("nobody type has no concrete representation"),
-        //     Self::Closure(_) => todo!(),
-        //     Self::List { element_ty } if **element_ty == Self::NlTop => <NlBox<NlList>>::mir_type(),
-        //     Self::List { element_ty: _ } => todo!(),
-        // }
     }
 }
 

@@ -193,13 +193,10 @@ impl Expr for BinaryCmp {
             }
 
             // find the operand that is not statically known to be nobody
-            let (operand, operand_ty) = if lhs_ty == NlAbstractTy::Nobody {
-                (&self.rhs, rhs_ty.repr())
-            } else {
-                (&self.lhs, lhs_ty.repr())
-            };
+            let operand = if lhs_ty == NlAbstractTy::Nobody { &self.rhs } else { &self.lhs };
+            let operand_pl = builder.translate_expr(operand);
+            let operand_ty = builder.mir.type_of_place(&operand_pl.place);
             if operand_ty.is::<OptionPatchId>() {
-                let operand_pl = builder.translate_expr(operand);
                 OptionPatchId::write_check_nobody(builder, negate, local_out, operand_pl);
             } else {
                 todo!("TODO(mvp) handle nobody check for other operand types: {:?}", operand_ty);
@@ -208,11 +205,10 @@ impl Expr for BinaryCmp {
             return;
         }
 
-        let lhs_ty = lhs_ty.repr();
-        let rhs_ty = rhs_ty.repr();
-
         let lhs_pl = builder.translate_expr(&self.lhs);
+        let lhs_ty = builder.mir.type_of_place(&lhs_pl.place);
         let rhs_pl = builder.translate_expr(&self.rhs);
+        let rhs_ty = builder.mir.type_of_place(&rhs_pl.place);
 
         use BinaryCmpOpcode as Op;
 

@@ -15,10 +15,7 @@ mod type_inference;
 pub use expr::{Expr, ExprKind};
 pub use ty::{ClosureType, NlAbstractTy};
 
-// TODO fix these modules
-// pub mod transforms;
-
-pub use build_mir::{HirToMirFnBuilder, TypeMapping};
+pub use build_mir::{HirToMirFnBuilder, TypeMapping, hir_to_mir, make_type_mapping};
 pub use type_inference::narrow_types;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Display, PartialOrd, Ord)]
@@ -28,9 +25,6 @@ pub struct FunctionId(pub u32);
 #[derive(derive_more::Debug)]
 pub struct Program {
     pub global_vars: Box<[CustomVarDecl]>,
-    // TODO this version of Breed contains type information (active custom
-    // fields) that would not be available/ at the HIR stage of compilation;
-    // consider using a more abstract version of Breed instead
     pub turtle_breeds: BTreeMap<TurtleBreedId, TurtleBreed>,
     pub custom_turtle_vars: Vec<CustomVarDecl>,
     pub custom_patch_vars: Vec<CustomVarDecl>,
