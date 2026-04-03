@@ -126,34 +126,8 @@ fn main() {
     write_to_file("after.hir", program.pretty_print());
 
     let type_mapping = make_type_mapping(&program);
-    let type_mapping_str = format!("{:?}", type_mapping);
+    let type_mapping_str = format!("{:#?}", type_mapping);
     write_to_file("type_mapping.txt", type_mapping_str.as_bytes());
-
-    // info!("applying cheats");
-    // let cheats = include_str!("cheats.json");
-    // let cheats = serde_json::from_str(cheats).unwrap();
-    // add_cheats(&cheats, &mut program, &global_names, &fn_info);
-
-    // let hir_filename = "before.hir";
-    // let hir_str = program.pretty_print();
-    // write_to_file(hir_filename, hir_str);
-
-    // let fn_ids: Vec<_> = program.functions.keys().collect();
-    // narrow_types(&mut program);
-    // for fn_id in fn_ids {
-    //     info!(
-    //         "transforming function {} {}",
-    //         fn_id,
-    //         program.functions[fn_id].debug_name.as_deref().unwrap_or_default()
-    //     );
-    //     peephole_transform(&mut program, fn_id);
-    //     optimize_of_agent_type(&mut program, fn_id);
-    //     peephole_transform(&mut program, fn_id);
-    //     lower(&mut program, fn_id);
-    // }
-    // let hir_filename = "after.hir";
-    // let hir_str = program.pretty_print();
-    // write_to_file(hir_filename, hir_str);
 
     // let (lir_program, hir_to_lir_fns) = hir_to_lir::<LirInstaller>(&program);
     // let lir_str = lir_program.pretty_print();

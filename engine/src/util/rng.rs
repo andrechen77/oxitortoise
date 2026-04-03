@@ -1,5 +1,7 @@
 use std::{ops::Deref, sync::Mutex};
 
+use macro_reflect::{ReflectComponents, reflect};
+
 mod mersenne_twister;
 
 pub trait Rng {
@@ -17,7 +19,14 @@ where
     }
 }
 
-// The canonical RNG to use for this engine. This is aliased here to make it
-// easier to change the RNG used in the future, and really only exists for
-// debugging purposes. Feel free to remove.
-pub type CanonRng = mersenne_twister::MersenneTwister;
+#[derive(Debug, ReflectComponents)]
+pub struct CanonRng(mersenne_twister::MersenneTwister);
+
+#[reflect]
+impl Reflect for CanonRng {}
+
+impl Rng for CanonRng {
+    fn next_int(&mut self, max: i64) -> i64 {
+        self.0.next_int(max)
+    }
+}

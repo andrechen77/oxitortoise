@@ -13,7 +13,7 @@ use crate::{
         turtle::{TurtleId, TurtleSchema},
         value::{NlBox, NlFloat, NlList, PackedAny},
     },
-    util::reflection::ReflectComponents as _,
+    util::{reflection::Reflect, rng::CanonRng},
     workspace::Workspace,
 };
 
@@ -79,14 +79,8 @@ pub fn make_type_mapping(hir: &hir::Program) -> TypeMapping {
     let mut function_return_tys = BTreeMap::new();
 
     for (fn_id, function) in &hir.functions {
-        let return_ty = mir_repr(&function.return_ty);
+        let return_ty = mir_repr_simple(&function.return_ty);
         function_return_tys.insert(*fn_id, return_ty);
-
-        for (param_id, param_decl) in &function.parameters {
-            let ty = mir_repr(&param_decl.ty);
-            let mapping = LocalVarMapping { ty, heap: false };
-            local_var_tys.insert(*param_id, mapping);
-        }
     }
 
     // iterate through the program and collect information about how each
@@ -105,7 +99,7 @@ pub fn make_type_mapping(hir: &hir::Program) -> TypeMapping {
                 }
                 ExprKind::Scope(expr::Scope { locals, .. }) => {
                     for (local_id, local_decl) in locals {
-                        let ty = mir_repr(&local_decl.ty);
+                        let ty = mir_repr_simple(&local_decl.ty);
                         // default to not being stored in the heap first. then
                         // any closures being visited that capture this local
                         // can set it to true.
@@ -134,7 +128,7 @@ pub fn make_type_mapping(hir: &hir::Program) -> TypeMapping {
         .global_vars
         .iter()
         .map(|var| {
-            let concrete_ty = mir_repr(&var.ty);
+            let concrete_ty = mir_repr_simple(&var.ty);
             let concrete_ty = concrete_ty
                 .static_ty
                 .expect("we cannot handled dynamically defined types in globals (yet)");
@@ -164,7 +158,7 @@ pub fn make_type_mapping(hir: &hir::Program) -> TypeMapping {
     for (var_id, var) in hir.custom_patch_vars.iter().enumerate() {
         let var_desc = PatchVarDesc::Custom(var_id);
 
-        let ty = mir_repr(&var.ty);
+        let ty = mir_repr_simple(&var.ty);
         let ty =
             ty.static_ty.expect("we cannot handled dynamically defined types in globals (yet)");
 
@@ -182,6 +176,19 @@ pub fn make_type_mapping(hir: &hir::Program) -> TypeMapping {
     let patch_schema = PatchSchema::new_with_field_groups(patch_field_groups);
 
     let workspace_ptr_ty = make_workspace_ptr_type(&globals_schema, &turtle_schema, &patch_schema);
+
+    for (_, function) in &hir.functions {
+        for (param_id, param_decl) in &function.parameters {
+            let ty = if param_decl.ty == NlAbstractTy::Workspace {
+                workspace_ptr_ty.clone()
+            } else {
+                mir_repr_simple(&param_decl.ty)
+            };
+            let mapping = LocalVarMapping { ty, heap: false };
+            local_var_tys.insert(*param_id, mapping);
+        }
+    }
+
     TypeMapping {
         globals_schema,
         turtle_schema,
@@ -204,10 +211,12 @@ fn make_workspace_ptr_type(
     ))
 }
 
-pub fn mir_repr(abstract_ty: &NlAbstractTy) -> MirType {
+pub fn mir_repr_simple(abstract_ty: &NlAbstractTy) -> MirType {
     match abstract_ty {
-        NlAbstractTy::Workspace => todo!(),
-        NlAbstractTy::Rng => todo!(),
+        NlAbstractTy::Workspace => {
+            unimplemented!("workspace type cannot be lowered in a simple manner")
+        }
+        NlAbstractTy::Rng => MirTypeInfo::ptr_to(CanonRng::mir_type()),
         NlAbstractTy::Unit => <()>::mir_type(),
         NlAbstractTy::NlTop => PackedAny::mir_type(),
         NlAbstractTy::Bottom => unimplemented!("bottom type has no concrete representation"),
