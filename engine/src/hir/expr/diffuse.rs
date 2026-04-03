@@ -45,7 +45,7 @@ impl Expr for Diffuse {
     ) -> fmt::Result {
         let Diffuse { workspace, variable, amt } = self;
         p.add_fn_call("diffuse", |p| {
-            p.add_fn_arg_with(|p| variable.pretty_print(p, &names.custom_patch_vars()))?;
+            p.add_fn_arg_with(|p| variable.pretty_print(p, names.custom_patch_vars()))?;
             p.add_fn_arg_with(|p| workspace.pretty_print(p, names))?;
             p.add_fn_arg_with(|p| amt.pretty_print(p, names))?;
             Ok(())

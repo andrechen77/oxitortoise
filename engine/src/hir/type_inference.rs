@@ -138,7 +138,7 @@ fn narrow_types_once(program: &mut Program) -> bool {
         let new_return_ty = body_expr.output_type(names);
         changed |= narrow_types_specific(
             &mut program.functions,
-            |program_functions, fn_id| &mut program_functions.get_mut(&fn_id).unwrap().return_ty,
+            |program_functions, fn_id| &mut program_functions.get_mut(fn_id).unwrap().return_ty,
             iter::once((fn_id, new_return_ty)),
         );
     }

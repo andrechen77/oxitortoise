@@ -1,114 +1,91 @@
-use std::{
-    collections::BTreeMap,
-    io,
-    sync::{Arc, Mutex},
-};
+use std::io;
 
 use ast_to_hir::{HirResult, serde_json};
-use engine::{
-    exec::jit::{InstallLir, InstalledObj as _},
-    hir::{self, make_type_mapping},
-    lir,
-    sim::{
-        observer::{Globals, GlobalsSchema},
-        patch::{PatchBaseData, PatchSchema, Patches},
-        shapes::Shapes,
-        tick::Tick,
-        topology::{Topology, TopologySpec},
-        turtle::{TurtleBaseData, TurtleBreed, TurtleBreedId, TurtleSchema, Turtles},
-        value::NlFloat,
-        world::World,
-    },
-    slotmap::SecondaryMap,
-    updater::DirtyAggregator,
-    util::{rng::CanonRng, row_buffer::RowBuffer},
-    workspace::Workspace,
-};
-use oxitortoise_main::LirInstaller;
-use tracing::{Level, error, info, trace};
+use engine::hir::{self, make_type_mapping};
+use tracing::{Level, info};
 use tracing_subscriber::{
     Layer as _, filter::Targets, fmt::MakeWriter, layer::SubscriberExt as _,
     util::SubscriberInitExt as _,
 };
 
-macro_rules! print_offsets {
-    ($struct:ident, $($field:ident).*) => {
-        let offset = std::mem::offset_of!($struct, $($field).*);
-        tracing::trace!("offset of {}: {}", stringify!($struct.$($field).*), offset);
-    }
-}
+// macro_rules! print_offsets {
+//     ($struct:ident, $($field:ident).*) => {
+//         let offset = std::mem::offset_of!($struct, $($field).*);
+//         tracing::trace!("offset of {}: {}", stringify!($struct.$($field).*), offset);
+//     }
+// }
 
-fn print_offsets(workspace: &Workspace) {
-    print_offsets!(Workspace, world);
-    print_offsets!(World, globals.data);
-    print_offsets!(World, turtles.data);
-    print_offsets!(World, patches.data);
-    print_offsets!(World, topology);
-    print_offsets!(World, topology.max_x);
-    print_offsets!(World, topology.max_y);
-    print_offsets!(World, tick_counter);
-    print_offsets!(World, shapes);
-    for (i, row_buffer) in workspace
-        .world
-        .turtles
-        .data
-        .iter()
-        .enumerate()
-        .filter_map(|(i, r)| r.as_ref().map(|r| (i, r)))
-    {
-        trace!("turtle row buffer {}: {:?}", i, row_buffer.schema());
-    }
-    print_offsets!(TurtleBaseData, who);
-    print_offsets!(TurtleBaseData, breed);
-    print_offsets!(TurtleBaseData, shape_name);
-    print_offsets!(TurtleBaseData, color);
-    print_offsets!(TurtleBaseData, label);
-    print_offsets!(TurtleBaseData, label_color);
-    print_offsets!(TurtleBaseData, hidden);
-    print_offsets!(TurtleBaseData, size);
-    for (i, row_buffer) in workspace
-        .world
-        .patches
-        .data
-        .iter()
-        .enumerate()
-        .filter_map(|(i, r)| r.as_ref().map(|r| (i, r)))
-    {
-        trace!("patch row buffer {}: {:?}", i, row_buffer.schema());
-    }
-    print_offsets!(PatchBaseData, position);
-    print_offsets!(PatchBaseData, plabel);
-    print_offsets!(PatchBaseData, plabel_color);
-    trace!("globals: {:?}", workspace.world.globals.data.schema());
-    trace!("size of row buffer: {}", size_of::<RowBuffer>());
-}
+// fn print_offsets(workspace: &Workspace) {
+//     print_offsets!(Workspace, world);
+//     print_offsets!(World, globals.data);
+//     print_offsets!(World, turtles.data);
+//     print_offsets!(World, patches.data);
+//     print_offsets!(World, topology);
+//     print_offsets!(World, topology.max_x);
+//     print_offsets!(World, topology.max_y);
+//     print_offsets!(World, tick_counter);
+//     print_offsets!(World, shapes);
+//     for (i, row_buffer) in workspace
+//         .world
+//         .turtles
+//         .data
+//         .iter()
+//         .enumerate()
+//         .filter_map(|(i, r)| r.as_ref().map(|r| (i, r)))
+//     {
+//         trace!("turtle row buffer {}: {:?}", i, row_buffer.schema());
+//     }
+//     print_offsets!(TurtleBaseData, who);
+//     print_offsets!(TurtleBaseData, breed);
+//     print_offsets!(TurtleBaseData, shape_name);
+//     print_offsets!(TurtleBaseData, color);
+//     print_offsets!(TurtleBaseData, label);
+//     print_offsets!(TurtleBaseData, label_color);
+//     print_offsets!(TurtleBaseData, hidden);
+//     print_offsets!(TurtleBaseData, size);
+//     for (i, row_buffer) in workspace
+//         .world
+//         .patches
+//         .data
+//         .iter()
+//         .enumerate()
+//         .filter_map(|(i, r)| r.as_ref().map(|r| (i, r)))
+//     {
+//         trace!("patch row buffer {}: {:?}", i, row_buffer.schema());
+//     }
+//     print_offsets!(PatchBaseData, position);
+//     print_offsets!(PatchBaseData, plabel);
+//     print_offsets!(PatchBaseData, plabel_color);
+//     trace!("globals: {:?}", workspace.world.globals.data.schema());
+//     trace!("size of row buffer: {}", size_of::<RowBuffer>());
+// }
 
-fn create_workspace(
-    globals_schema: GlobalsSchema,
-    turtle_schema: TurtleSchema,
-    turtle_breeds: BTreeMap<TurtleBreedId, TurtleBreed>,
-    patch_schema: PatchSchema,
-) -> Workspace {
-    let topology_spec = TopologySpec {
-        min_pxcor: -35,
-        max_pycor: 35,
-        patches_width: 71,
-        patches_height: 71,
-        wrap_x: false,
-        wrap_y: false,
-    };
-    Workspace {
-        world: World {
-            globals: Globals::new(globals_schema),
-            turtles: Turtles::new(turtle_schema, turtle_breeds),
-            patches: Patches::new(patch_schema, &topology_spec),
-            topology: Topology::new(topology_spec),
-            tick_counter: Tick::default(),
-            shapes: Shapes::default(),
-        },
-        rng: Arc::new(Mutex::new(CanonRng::new(0))),
-    }
-}
+// fn create_workspace(
+//     globals_schema: GlobalsSchema,
+//     turtle_schema: TurtleSchema,
+//     turtle_breeds: BTreeMap<TurtleBreedId, TurtleBreed>,
+//     patch_schema: PatchSchema,
+// ) -> Workspace {
+//     let topology_spec = TopologySpec {
+//         min_pxcor: -35,
+//         max_pycor: 35,
+//         patches_width: 71,
+//         patches_height: 71,
+//         wrap_x: false,
+//         wrap_y: false,
+//     };
+//     Workspace {
+//         world: World {
+//             globals: Globals::new(globals_schema),
+//             turtles: Turtles::new(turtle_schema, turtle_breeds),
+//             patches: Patches::new(patch_schema, &topology_spec),
+//             topology: Topology::new(topology_spec),
+//             tick_counter: Tick::default(),
+//             shapes: Shapes::default(),
+//         },
+//         rng: Arc::new(Mutex::new(CanonRng::new(0))),
+//     }
+// }
 
 // struct CompileResult {
 //     workspace: Workspace,
@@ -140,7 +117,7 @@ fn main() {
 
     let ast = include_str!("ast.json");
     let ast = serde_json::from_str(ast).unwrap();
-    let HirResult { mut program, global_names } = ast_to_hir::ast_to_hir(ast).unwrap();
+    let HirResult { mut program, global_names: _ } = ast_to_hir::ast_to_hir(ast).unwrap();
 
     write_to_file("before.hir", program.pretty_print());
 

@@ -335,7 +335,7 @@ fn translate_node(ctx: &mut FnBodyBuilderCtx, ast_node: ast::Node) -> (ExprKind,
 
     let mut breaking_node = false;
     let expr = match ast_node {
-        N::CommandBlock(block) => ExprKind::from(translate_statement_block(ctx, block)),
+        N::CommandBlock(block) => translate_statement_block(ctx, block),
         N::ReporterBlock { reporter_app } => {
             return translate_node(ctx, *reporter_app);
         }

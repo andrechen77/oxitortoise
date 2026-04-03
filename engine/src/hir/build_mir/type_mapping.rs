@@ -189,9 +189,9 @@ fn make_workspace_ptr_type(
     patch_schema: &PatchSchema,
 ) -> MirType {
     MirTypeInfo::ptr_to(Workspace::mir_type_from_schemas(
-        &globals_schema,
-        &turtle_schema,
-        &patch_schema,
+        globals_schema,
+        turtle_schema,
+        patch_schema,
     ))
 }
 

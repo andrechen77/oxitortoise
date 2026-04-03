@@ -116,7 +116,7 @@ impl Expr for GetTurtleVar {
     ) -> fmt::Result {
         let GetTurtleVar { var, workspace, turtle } = self;
         p.add_fn_call("get_turtle_var", |p| {
-            p.add_fn_arg_with(|p| var.pretty_print(p, &names.custom_turtle_vars()))?;
+            p.add_fn_arg_with(|p| var.pretty_print(p, names.custom_turtle_vars()))?;
             p.add_fn_arg_with(|p| workspace.pretty_print(p, names))?;
             p.add_fn_arg_with(|p| turtle.pretty_print(p, names))?;
             Ok(())
@@ -177,7 +177,7 @@ impl Expr for SetTurtleVar {
     ) -> fmt::Result {
         let SetTurtleVar { var, workspace, turtle, value } = self;
         p.add_fn_call("set_turtle_var", |p| {
-            p.add_fn_arg_with(|p| var.pretty_print(p, &names.custom_turtle_vars()))?;
+            p.add_fn_arg_with(|p| var.pretty_print(p, names.custom_turtle_vars()))?;
             p.add_fn_arg_with(|p| workspace.pretty_print(p, names))?;
             p.add_fn_arg_with(|p| turtle.pretty_print(p, names))?;
             p.add_fn_arg_with(|p| value.pretty_print(p, names))?;
@@ -247,7 +247,7 @@ impl Expr for GetPatchVar {
     ) -> fmt::Result {
         let GetPatchVar { var, workspace, patch } = self;
         p.add_fn_call("get_patch_var", |p| {
-            p.add_fn_arg_with(|p| var.pretty_print(p, &names.custom_patch_vars()))?;
+            p.add_fn_arg_with(|p| var.pretty_print(p, names.custom_patch_vars()))?;
             p.add_fn_arg_with(|p| workspace.pretty_print(p, names))?;
             p.add_fn_arg_with(|p| patch.pretty_print(p, names))?;
             Ok(())
@@ -308,7 +308,7 @@ impl Expr for SetPatchVar {
     ) -> fmt::Result {
         let SetPatchVar { var, workspace, patch, value } = self;
         p.add_fn_call("set_patch_var", |p| {
-            p.add_fn_arg_with(|p| var.pretty_print(p, &names.custom_patch_vars()))?;
+            p.add_fn_arg_with(|p| var.pretty_print(p, names.custom_patch_vars()))?;
             p.add_fn_arg_with(|p| workspace.pretty_print(p, names))?;
             p.add_fn_arg_with(|p| patch.pretty_print(p, names))?;
             p.add_fn_arg_with(|p| value.pretty_print(p, names))?;

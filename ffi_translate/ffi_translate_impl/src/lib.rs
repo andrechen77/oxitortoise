@@ -151,7 +151,7 @@ pub fn ffi_translate_impl(
     // build the new function
     let output = &input_fn.sig.output;
     let output_type: &[&Type] = match output {
-        ReturnType::Type(_, ty) => &[&ty],
+        ReturnType::Type(_, ty) => &[ty],
         ReturnType::Default => &[],
     };
     let generics = &input_fn.sig.generics;
