@@ -40,7 +40,7 @@ impl Expr for GetGlobalVar {
     }
 
     fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::Place> {
-        let ptr_to_workspace = builder.workspace_param().place();
+        let ptr_to_workspace = self.workspace.write_mir_execution(builder)?;
         let workspace = ptr_to_workspace.proj_deref();
         let world = Workspace::mir_project_world(workspace);
         let globals = World::mir_project_globals(world);
@@ -96,7 +96,7 @@ impl Expr for GetTurtleVar {
     }
 
     fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::Place> {
-        let ptr_to_workspace = builder.workspace_param().place();
+        let ptr_to_workspace = self.workspace.write_mir_execution(builder)?;
 
         // calculate the turtle id
         let turtle_id = self.turtle.write_mir_execution(builder)?;
@@ -153,7 +153,7 @@ impl Expr for SetTurtleVar {
     }
 
     fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::Place> {
-        let ptr_to_workspace = builder.workspace_param().place();
+        let ptr_to_workspace = self.workspace.write_mir_execution(builder)?;
 
         // calculate the value to store
         let value = self.value.write_mir_execution(builder)?;
@@ -227,7 +227,7 @@ impl Expr for GetPatchVar {
     }
 
     fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::Place> {
-        let ptr_to_workspace = builder.workspace_param().place();
+        let ptr_to_workspace = self.workspace.write_mir_execution(builder)?;
 
         // calculate the patch id
         let patch_id = self.patch.write_mir_execution(builder)?;
@@ -284,7 +284,7 @@ impl Expr for SetPatchVar {
     }
 
     fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::Place> {
-        let ptr_to_workspace = builder.workspace_param().place();
+        let ptr_to_workspace = self.workspace.write_mir_execution(builder)?;
 
         // calculate the value to store
         let value = self.value.write_mir_execution(builder)?;

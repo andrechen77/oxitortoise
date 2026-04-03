@@ -38,7 +38,8 @@ pub struct Program {
 
 #[derive(Debug)]
 pub struct Function {
-    // TODO specify the parameters
+    /// The parameters to the function.
+    pub parameters: Vec<LocalId>,
     /// Holds every local variable used in the function body, including
     /// parameters, temporaries, and return values.
     pub local_decls: BTreeMap<LocalId, LocalDecl>,

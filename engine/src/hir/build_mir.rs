@@ -26,12 +26,6 @@ pub struct HirToMirFnTranslator {
     /// breaks from that label should use. The output local might be none if
     /// it has not been used yet.
     pub ctrl_flow_constructs: BTreeMap<hir::Label, (mir::Label, Option<mir::LocalId>)>,
-    /// The local variable that contains the workspace parameter, if it exists.
-    pub workspace_param: Option<mir::LocalId>,
-    /// The local variable that contains the RNG parameter, if it exists.
-    pub rng_param: Option<mir::LocalId>,
-    /// The local variable that contains the self parameter, if it exists.
-    pub self_param: Option<mir::LocalId>,
 }
 
 impl<'a, 'b> HirToMirFnBuilder<'a, 'b> {
@@ -66,54 +60,6 @@ impl<'a, 'b> HirToMirFnBuilder<'a, 'b> {
             translator: self.translator,
         })
     }
-
-    pub fn workspace_param(&mut self) -> mir::LocalId {
-        *self.translator.workspace_param.get_or_insert_with(|| {
-            self.mir.create_local(mir::LocalDecl {
-                debug_name: Some("workspace".into()),
-                ty: self.type_mapping.workspace_ptr_ty(),
-            })
-            // TODO add as parameter to the function
-        })
-    }
-
-    // Returns the local variable that contains the self parameter, creating
-    // it if it does not exist.
-    pub fn self_param(&mut self) -> mir::LocalId {
-        *self.translator.self_param.get_or_insert_with(|| {
-            self.mir.create_local(mir::LocalDecl {
-                debug_name: Some("self".into()),
-                ty: (PackedAny::TYPE.make_mir_type)(),
-            })
-            // TODO add as parameter to the function
-        })
-    }
-
-    /// Returns the local variable that contains self as a turtle id. If
-    /// self is not statically known to be a turtle, this will generate runtime
-    /// code to downcast to a turtle
-    pub fn self_turtle(&mut self) -> mir::LocalId {
-        let self_param = self.self_param();
-        let ty = self.mir.type_of_place(&self_param.place());
-        if ty.is::<TurtleId>() {
-            self_param
-        } else {
-            panic!("self parameter is not a turtle");
-        }
-        // TODO add a branch that attemps to downcast to a turtle
-    }
-
-    // Returns the local variable that contains self as a patch id.
-    pub fn self_patch(&mut self) -> mir::LocalId {
-        let self_param = self.self_param();
-        let ty = self.mir.type_of_place(&self_param.place());
-        if ty.is::<PatchId>() {
-            self_param
-        } else {
-            panic!("self parameter is not a patch");
-        }
-        // TODO add a branch that attemps to downcast to a patch
-    }
 }
 
 pub fn hir_to_mir(hir: &hir::Program) -> mir::Program {
@@ -135,6 +81,18 @@ pub fn hir_to_mir(hir: &hir::Program) -> mir::Program {
             mir: &mut mir_fn_builder,
             translator: &mut translator,
         };
+
+        let hir::Function { debug_name, parameters, return_ty, is_entrypoint } = hir_fn;
+
+        // add all the function parameters to the function builder
+        for (hir_param_id, param_decl) in parameters {
+            let ty = builder.type_mapping.local_var_ty(*hir_param_id);
+            let mir_param_id = builder.mir.create_parameter(mir::LocalDecl {
+                debug_name: Some(param_decl.debug_name.clone()),
+                ty,
+            });
+            builder.translator.locals.insert(*hir_param_id, mir_param_id);
+        }
 
         // add all the nodes to the function body
         let return_value = builder

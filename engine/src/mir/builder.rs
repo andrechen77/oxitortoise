@@ -51,6 +51,7 @@ impl ProgramBuilder {
 pub struct FunctionBuilder<'a> {
     program_builder: &'a mut ProgramBuilder,
     fn_id: FunctionId,
+    parameters: Vec<LocalId>,
     locals: BTreeMap<LocalId, mir::LocalDecl>,
     return_local: Option<LocalId>,
     statements_out: Vec<Statement>,
@@ -64,6 +65,7 @@ impl<'a> FunctionBuilder<'a> {
             program_builder,
             fn_id,
             locals: BTreeMap::new(),
+            parameters: Vec::new(),
             return_local: None,
             statements_out: Vec::new(),
             unit_local: None,
@@ -81,6 +83,7 @@ impl<'a> FunctionBuilder<'a> {
             todo!()
         };
         let function = mir::Function {
+            parameters: self.parameters,
             local_decls: self.locals,
             return_local: self.return_local.expect("return local must be set"),
             body,
@@ -95,6 +98,12 @@ impl<'a> FunctionBuilder<'a> {
 
     pub fn unit_local(&self) -> Place {
         self.unit_local.expect("unit local must be set").into()
+    }
+
+    pub fn create_parameter(&mut self, decl: mir::LocalDecl) -> LocalId {
+        let id = self.create_local(decl);
+        self.parameters.push(id);
+        id
     }
 
     pub fn create_local(&mut self, decl: mir::LocalDecl) -> LocalId {
