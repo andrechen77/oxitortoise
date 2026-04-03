@@ -57,7 +57,7 @@ pub trait Expr {
     /// The return value is the place in which the expression's return value
     /// can be accessed. If the expression never returns, this should be `None`.
     /// If the expression returns unit, this should be the unit place.
-    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::Place>;
+    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId>;
 
     fn pretty_print<W: fmt::Write>(
         &self,

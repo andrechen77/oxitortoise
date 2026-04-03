@@ -35,7 +35,7 @@ impl Expr for Scope {
         visitor(self.inner.as_mut());
     }
 
-    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::Place> {
+    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
         for (local_id, decl) in &self.locals {
             let ty = builder.type_mapping.local_var_ty(*local_id);
             let mir_local_id = builder
@@ -100,7 +100,7 @@ impl Expr for Block {
         }
     }
 
-    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::Place> {
+    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
         let label = builder.mir.create_label();
 
         // make this label visible to child expressions
@@ -109,9 +109,9 @@ impl Expr for Block {
         // translate the statements in the block
         let (statements, _) = builder.with_inner_statement_seq(|builder| {
             for expr in &self.statements {
-                let pl = expr.write_mir_execution(builder)?;
+                let result = expr.write_mir_execution(builder)?;
                 builder.mir.add_statement(mir::Statement::Elementary(
-                    mir::ElementaryStatement::Drop { src: pl },
+                    mir::ElementaryStatement::Drop { src: result.place() },
                 ));
             }
             Some(())
@@ -126,7 +126,7 @@ impl Expr for Block {
 
         // get the return place of the statement
         let (_, return_place) = builder.translator.ctrl_flow_constructs[&self.label];
-        return_place.map(|local_id| local_id.place())
+        return_place
     }
 
     fn pretty_print<W: Write>(&self, p: &mut PrettyPrinter<W>, names: NameContext) -> fmt::Result {
@@ -171,17 +171,17 @@ impl Expr for IfElse {
         visitor(self.r#else.as_mut());
     }
 
-    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::Place> {
-        let condition = self.condition.write_mir_execution(builder)?;
+    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
+        let condition = self.condition.write_mir_execution(builder)?.place();
 
         let (then_stmts, then_out) =
             builder.with_inner_statement_seq(|builder| self.then.write_mir_execution(builder));
-        let then_ty = then_out.as_ref().map(|t| builder.mir.type_of_place(t));
+        let then_ty = then_out.as_ref().map(|t| builder.mir.type_of_place(&t.place()));
         let then_stmt = Box::new(mir::consolidate_statements(then_stmts));
 
         let (else_stmts, total_out) = builder.with_inner_statement_seq(|builder| {
             let else_out = self.r#else.write_mir_execution(builder);
-            let else_ty = else_out.as_ref().map(|t| builder.mir.type_of_place(t));
+            let else_ty = else_out.as_ref().map(|t| builder.mir.type_of_place(&t.place()));
             assert!(
                 then_ty.is_none() || else_ty.is_none() || then_ty == else_ty,
                 "then and else branches must have compatible types"
@@ -192,7 +192,7 @@ impl Expr for IfElse {
                     if then_out != else_out {
                         // move the else value into the then place
                         builder.mir.add_operation_with_dst(
-                            then_out.clone(),
+                            then_out.place(),
                             mir::Operation::Operand(mir::PlaceOperand::Move(else_out)),
                         )
                     }
@@ -247,13 +247,13 @@ impl Expr for Break {
         visitor(self.value.as_mut());
     }
 
-    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::Place> {
+    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
         let value = self.value.write_mir_execution(builder)?;
 
         let (target_label, target_local_out) =
             builder.translator.ctrl_flow_constructs.get_mut(&self.target).unwrap();
         let target_local_out = *target_local_out.get_or_insert_with(|| {
-            let ty = builder.mir.type_of_place(&value);
+            let ty = builder.mir.type_of_place(&value.place());
             builder.mir.create_local(mir::LocalDecl { debug_name: None, ty })
         });
 

@@ -40,7 +40,7 @@ impl Expr for Agentset {
         }
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::Place> {
+    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
         todo!("TODO(mvp) write MIR code to generate a value representing the agentset")
     }
 

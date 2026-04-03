@@ -318,7 +318,7 @@ impl Turtles {
             Some("turtle_idx".into()),
             mir::Operation::UnaryOp {
                 opcode: lir::UnaryOpcode::I64ToI32,
-                operand: mir::PlaceOperand::Move(turtle_id),
+                operand: mir::PlaceOperand::Copy(turtle_id),
             },
         );
         let ptr_to_row = ptr_to_buffer.proj_dynamic_index(turtle_idx);

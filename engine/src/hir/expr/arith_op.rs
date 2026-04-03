@@ -124,7 +124,7 @@ impl Expr for BinaryArith {
         visitor(self.rhs.as_mut());
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::Place> {
+    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
         todo!("TODO(mvp)");
     }
 
@@ -167,7 +167,7 @@ impl Expr for BinaryCmp {
         visitor(self.rhs.as_mut());
     }
 
-    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::Place> {
+    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
         let lhs_ty = self.lhs.output_type(builder.hir_names);
         let rhs_ty = self.rhs.output_type(builder.hir_names);
 
@@ -188,12 +188,12 @@ impl Expr for BinaryCmp {
                 let dst = builder
                     .mir
                     .add_operation(None, mir::Operation::Const { value: BoxedAny::new(result) });
-                return Some(dst.place());
+                return Some(dst);
             }
 
             // find the operand that is not statically known to be nobody
             let operand = if lhs_ty == NlAbstractTy::Nobody { &self.rhs } else { &self.lhs };
-            let operand_pl = operand.write_mir_execution(builder)?;
+            let operand_pl = operand.write_mir_execution(builder)?.place();
             let operand_ty = builder.mir.type_of_place(&operand_pl);
             if operand_ty.is::<OptionPatchId>() {
                 return Some(OptionPatchId::write_check_nobody(builder, negate, operand_pl));
@@ -202,10 +202,10 @@ impl Expr for BinaryCmp {
             }
         }
 
-        let lhs_pl = self.lhs.write_mir_execution(builder)?;
-        let lhs_ty = builder.mir.type_of_place(&lhs_pl);
-        let rhs_pl = self.rhs.write_mir_execution(builder)?;
-        let rhs_ty = builder.mir.type_of_place(&rhs_pl);
+        let lhs_local = self.lhs.write_mir_execution(builder)?;
+        let lhs_ty = builder.mir.type_of_place(&lhs_local.place());
+        let rhs_local = self.rhs.write_mir_execution(builder)?;
+        let rhs_ty = builder.mir.type_of_place(&rhs_local.place());
 
         use BinaryCmpOpcode as Op;
 
@@ -226,8 +226,8 @@ impl Expr for BinaryCmp {
             };
             mir::Operation::BinaryOp {
                 opcode,
-                lhs: mir::PlaceOperand::Move(lhs_pl),
-                rhs: mir::PlaceOperand::Move(rhs_pl),
+                lhs: mir::PlaceOperand::Copy(lhs_local.place()),
+                rhs: mir::PlaceOperand::Copy(rhs_local.place()),
             }
         } else if lhs_ty.is::<PackedAny>() && rhs_ty.is::<PackedAny>() {
             let opcode_pl = builder
@@ -240,15 +240,15 @@ impl Expr for BinaryCmp {
             mir::Operation::CallHostFunction {
                 function: &binary_cmp_any_bool::FN_INFO,
                 args: vec![
-                    mir::PlaceOperand::Move(lhs_pl),
-                    mir::PlaceOperand::Move(rhs_pl),
-                    mir::PlaceOperand::Move(opcode_pl),
+                    mir::PlaceOperand::Move(lhs_local),
+                    mir::PlaceOperand::Move(rhs_local),
+                    mir::PlaceOperand::Copy(opcode_pl),
                 ],
             }
         } else {
             todo!("TODO(mvp) handle other operand types: {:?} and {:?}", lhs_ty, rhs_ty);
         };
-        Some(builder.mir.add_operation(None, final_operation).place())
+        Some(builder.mir.add_operation(None, final_operation))
     }
 
     fn pretty_print<W: fmt::Write>(
@@ -303,7 +303,7 @@ impl Expr for BinaryBool {
         visitor(self.rhs.as_mut());
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::Place> {
+    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
         todo!("TODO(mvp)");
     }
 
@@ -340,13 +340,13 @@ impl Expr for LogicalNot {
         visitor(self.operand.as_mut());
     }
 
-    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::Place> {
-        let operand_pl = self.operand.write_mir_execution(builder)?;
+    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
+        let operand_lcl = self.operand.write_mir_execution(builder)?;
         let final_operation = mir::Operation::UnaryOp {
             opcode: lir::UnaryOpcode::Not,
-            operand: mir::PlaceOperand::Move(operand_pl),
+            operand: mir::PlaceOperand::Copy(operand_lcl.place()),
         };
-        Some(builder.mir.add_operation(None, final_operation).place())
+        Some(builder.mir.add_operation(None, final_operation))
     }
 
     fn pretty_print<W: fmt::Write>(
@@ -380,13 +380,13 @@ impl Expr for Negate {
         visitor(self.operand.as_mut());
     }
 
-    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::Place> {
-        let operand_pl = self.operand.write_mir_execution(builder)?;
+    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
+        let operand_local = self.operand.write_mir_execution(builder)?;
         let final_operation = mir::Operation::UnaryOp {
             opcode: lir::UnaryOpcode::FNeg,
-            operand: mir::PlaceOperand::Move(operand_pl),
+            operand: mir::PlaceOperand::Copy(operand_local.place()),
         };
-        Some(builder.mir.add_operation(None, final_operation).place())
+        Some(builder.mir.add_operation(None, final_operation))
     }
 
     fn pretty_print<W: fmt::Write>(

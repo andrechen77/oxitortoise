@@ -38,7 +38,7 @@ impl Expr for Closure {
         visitor(self.body.as_mut());
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::Place> {
+    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
         todo!("TODO(mvp) write MIR execution for Closure")
     }
 

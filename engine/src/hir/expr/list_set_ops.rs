@@ -35,7 +35,7 @@ impl Expr for OneOf {
         visitor(self.operand.as_mut());
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::Place> {
+    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
         todo!("TODO(mvp) write MIR execution for OneOf")
     }
 

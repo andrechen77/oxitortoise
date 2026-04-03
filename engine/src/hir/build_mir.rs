@@ -3,8 +3,6 @@ use std::collections::BTreeMap;
 use crate::{
     hir::{self, Expr, NameContext},
     mir,
-    sim::{patch::PatchId, turtle::TurtleId, value::PackedAny},
-    util::reflection::Reflect,
 };
 
 mod type_mapping;
@@ -99,7 +97,7 @@ pub fn hir_to_mir(hir: &hir::Program) -> mir::Program {
             .with_locals(&hir_fn.parameters, |builder| hir_fn_body.write_mir_execution(builder));
 
         if let Some(return_value) = return_value {
-            mir_fn_builder.set_return(return_value.unwrap_local());
+            mir_fn_builder.set_return(return_value);
         }
         mir_fn_builder.finish();
     }

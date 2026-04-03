@@ -142,8 +142,13 @@ pub enum Projection {
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum PlaceOperand {
     /// Produces an operand by moving out of the place. This is a destructive
-    /// move unless the type is Copy.
-    Move(Place),
+    /// move, and the source place is considered deinitialized afterward.
+    ///
+    /// To simplify things, it is only possible to move out of the entire local
+    /// variable, not just a subplace.
+    Move(LocalId),
+    /// Produces an operand by copying the place. The type must be Copy.
+    Copy(Place),
     /// Produces an operand by creating a reference to the place.
     Borrow(Place),
 }

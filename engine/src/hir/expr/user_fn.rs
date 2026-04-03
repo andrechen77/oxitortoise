@@ -34,7 +34,7 @@ impl Expr for CallUserFn {
         }
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::Place> {
+    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
         todo!("TODO(mvp) write MIR execution for CallUserFn")
     }
 

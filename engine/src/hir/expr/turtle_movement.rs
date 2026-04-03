@@ -60,7 +60,7 @@ impl Expr for TurtleRotate {
         visitor(self.angle.as_mut());
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::Place> {
+    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
         todo!("TODO(mvp) write MIR execution for TurtleRotate")
     }
 
@@ -103,7 +103,7 @@ impl Expr for TurtleForward {
         visitor(self.distance.as_mut());
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::Place> {
+    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
         todo!("TODO(mvp) write MIR execution for TurtleForward")
     }
 
@@ -146,7 +146,7 @@ impl Expr for CanMove {
         visitor(self.distance.as_mut());
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::Place> {
+    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
         todo!("TODO(mvp) write MIR execution for CanMove")
     }
 
@@ -200,7 +200,7 @@ impl Expr for PatchRelative {
         visitor(self.distance.as_mut());
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::Place> {
+    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
         todo!("TODO(mvp) write MIR execution for PatchRelative")
     }
 

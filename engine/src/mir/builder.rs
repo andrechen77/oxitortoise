@@ -96,7 +96,7 @@ impl<'a> FunctionBuilder<'a> {
         assert!(old.is_none(), "return local cannot be set twice");
     }
 
-    pub fn unit_local(&self) -> Place {
+    pub fn unit_local(&self) -> LocalId {
         self.unit_local.expect("unit local must be set").into()
     }
 
@@ -125,16 +125,11 @@ impl<'a> FunctionBuilder<'a> {
             .clone()
     }
 
-    // pub fn typed_place(&self, place: impl Into<Place>) -> TypedPlace {
-    //     let place = place.into();
-    //     let ty = self.type_of_place(&place);
-    //     TypedPlace { place, ty }
-    // }
-
     pub fn type_of_op(&self, op: &Operation) -> MirType {
         match op {
             Operation::Operand(operand) => match operand {
-                PlaceOperand::Move(place) => self.type_of_place(place),
+                PlaceOperand::Copy(place) => self.type_of_place(place),
+                PlaceOperand::Move(local) => self.type_of_place(&local.place()),
                 PlaceOperand::Borrow(place) => {
                     let place_ty = self.type_of_place(place);
                     Arc::new(MirTypeInfo {
