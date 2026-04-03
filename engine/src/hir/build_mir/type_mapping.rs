@@ -75,9 +75,24 @@ pub fn make_type_mapping(hir: &hir::Program) -> TypeMapping {
     // in the heap (captured by a closure that could outlives the stack frame)
     let mut local_var_tys = BTreeMap::new();
 
+    // stores the types of function returns
+    let mut function_return_tys = BTreeMap::new();
+
+    for (fn_id, function) in &hir.functions {
+        let return_ty = mir_repr(&function.return_ty);
+        function_return_tys.insert(*fn_id, return_ty);
+
+        for (param_id, param_decl) in &function.parameters {
+            let ty = mir_repr(&param_decl.ty);
+            let mapping = LocalVarMapping { ty, heap: false };
+            local_var_tys.insert(*param_id, mapping);
+        }
+    }
+
     // iterate through the program and collect information about how each
     // variable is used
     for function_body in hir.function_bodies.values() {
+        // visit the function body
         visit_expr(function_body, &mut patch_diffused, &mut local_var_tys);
         fn visit_expr(
             expr_kind: &ExprKind,
@@ -112,12 +127,6 @@ pub fn make_type_mapping(hir: &hir::Program) -> TypeMapping {
                 visit_expr(child_expr_kind, patch_diffused, local_var_tys)
             });
         }
-    }
-
-    let mut function_return_tys = BTreeMap::new();
-    for (fn_id, function) in &hir.functions {
-        let return_ty = mir_repr(&function.return_ty);
-        function_return_tys.insert(*fn_id, return_ty);
     }
 
     // make the globals schema
