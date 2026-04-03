@@ -624,9 +624,9 @@ unsafe impl HasDynPtr for RowBuffer {
 
     fn write_mir_get_data_ptr(
         _builder: &mut mir::FunctionBuilder,
-        self_pl: mir::TypedPlace,
-    ) -> mir::TypedPlace {
-        self_pl.proj(mir::Projection::Field { byte_offset: offset_of!(Self, bytes) })
+        self_pl: mir::Place,
+    ) -> mir::Place {
+        self_pl.proj_field(offset_of!(Self, bytes))
     }
 
     fn self_mir_type_from_metadata(schema: &RowSchema) -> MirType {

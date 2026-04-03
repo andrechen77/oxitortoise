@@ -500,10 +500,11 @@ fn translate_node(ctx: &mut FnBodyBuilderCtx, ast_node: ast::Node) -> (ExprKind,
             breaking_node &= diverges;
             let (then_block, diverges) = translate_node_with_new_scope(ctx, *then_block);
             breaking_node &= diverges;
+            let else_block = ExprKind::from(expr::Constant { value: None });
             ExprKind::from(expr::IfElse {
                 condition: Box::new(condition),
                 then: Box::new(then_block),
-                r#else: None,
+                r#else: Box::new(else_block),
             })
         }
         N::CommandCall(C::IfElse([condition, then_block, else_block])) => {
@@ -516,7 +517,7 @@ fn translate_node(ctx: &mut FnBodyBuilderCtx, ast_node: ast::Node) -> (ExprKind,
             ExprKind::from(expr::IfElse {
                 condition: Box::new(condition),
                 then: Box::new(then_block),
-                r#else: Some(Box::new(else_block)),
+                r#else: Box::new(else_block),
             })
         }
         N::CommandCall(C::Diffuse([variable, amt])) => {

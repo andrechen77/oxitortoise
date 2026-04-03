@@ -13,9 +13,7 @@ mod reflection;
 // }
 
 pub use builder::{FunctionBuilder, ProgramBuilder};
-pub use reflection::{
-    DynPtr, DynPtrMut, HasDynPtr, MirType, MirTypeContents, MirTypeInfo, TypedPlace,
-};
+pub use reflection::{DynPtr, DynPtrMut, HasDynPtr, MirType, MirTypeContents, MirTypeInfo};
 
 #[derive(Debug)]
 pub struct HostFunctionInfo {
@@ -82,7 +80,7 @@ pub struct Block {
 pub struct IfElse {
     pub condition: Place,
     pub then: Box<Statement>,
-    pub r#else: Option<Box<Statement>>,
+    pub r#else: Box<Statement>,
 }
 
 #[derive(Debug)]
@@ -104,6 +102,22 @@ impl Place {
     pub fn proj(mut self, projection: Projection) -> Self {
         self.projections.push(projection);
         self
+    }
+
+    pub fn proj_deref(self) -> Self {
+        self.proj(Projection::Deref)
+    }
+
+    pub fn proj_field(self, byte_offset: usize) -> Self {
+        self.proj(Projection::Field { byte_offset })
+    }
+
+    pub fn proj_dynamic_index(self, index: LocalId) -> Self {
+        self.proj(Projection::DynamicIndex(index))
+    }
+
+    pub fn proj_static_index(self, index: usize) -> Self {
+        self.proj(Projection::StaticIndex(index))
     }
 }
 

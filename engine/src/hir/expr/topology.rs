@@ -36,7 +36,7 @@ impl Expr for OffsetDistanceByHeading {
         visitor(self.heading.as_mut());
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {
+    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::Place> {
         todo!("TODO(mvp) write MIR execution for OffsetDistanceByHeading")
     }
 
@@ -80,7 +80,7 @@ impl Expr for PatchAt {
         visitor(self.y.as_mut());
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {
+    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::Place> {
         todo!("TODO(mvp) write MIR execution for PatchAt")
     }
 
@@ -117,7 +117,7 @@ impl Expr for MaxPxcor {
         visitor(self.workspace.as_mut());
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {
+    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::Place> {
         todo!("TODO(mvp) write MIR execution for MaxPxcor")
     }
 
@@ -152,7 +152,7 @@ impl Expr for MaxPycor {
         visitor(self.workspace.as_mut());
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {
+    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::Place> {
         todo!("TODO(mvp) write MIR execution for MaxPycor")
     }
 
@@ -190,7 +190,7 @@ impl Expr for EuclideanDistanceNoWrap {
         visitor(self.b.as_mut());
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {
+    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::Place> {
         todo!("TODO(mvp) write MIR execution for EuclideanDistanceNoWrap")
     }
 
@@ -229,7 +229,7 @@ impl Expr for PointConstructor {
         visitor(self.y.as_mut());
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {
+    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::Place> {
         todo!("TODO(mvp) write MIR execution for PointConstructor")
     }
 

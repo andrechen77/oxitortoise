@@ -34,7 +34,7 @@ impl Expr for Constant {
 
     fn visit_children_mut(&mut self, _visitor: impl FnMut(&mut ExprKind)) {}
 
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {
+    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::Place> {
         todo!("TODO(mvp) write MIR execution for Constant")
     }
 
@@ -79,7 +79,7 @@ impl Expr for ListLiteral {
         }
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {
+    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::Place> {
         todo!("TODO(mvp) write MIR execution for ListLiteral")
     }
 

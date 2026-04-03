@@ -19,8 +19,8 @@ pub struct Workspace {
 
 impl Workspace {
     /// Derives a `World` from a `Workspace`.
-    pub fn mir_project_world(workspace: mir::TypedPlace) -> mir::TypedPlace {
-        workspace.proj(mir::Projection::Field { byte_offset: offset_of!(Workspace, world) })
+    pub fn mir_project_world(workspace: mir::Place) -> mir::Place {
+        workspace.proj_field(offset_of!(Workspace, world))
     }
 
     pub fn mir_type_from_schemas(

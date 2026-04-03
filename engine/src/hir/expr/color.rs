@@ -36,7 +36,7 @@ impl Expr for ScaleColor {
         visitor(self.range2.as_mut());
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {
+    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::Place> {
         todo!("TODO(mvp) write MIR execution for ScaleColor")
     }
 

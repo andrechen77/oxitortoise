@@ -35,21 +35,19 @@ impl Expr for Scope {
         visitor(self.inner.as_mut());
     }
 
-    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, local_out: mir::LocalId) {
+    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::Place> {
         for (local_id, decl) in &self.locals {
             let ty = builder.type_mapping.local_var_ty(*local_id);
-            let (mir_local_id, _) = builder
+            let mir_local_id = builder
                 .mir
                 .create_local(mir::LocalDecl { debug_name: Some(decl.debug_name.clone()), ty });
             builder.translator.locals.insert(*local_id, mir_local_id);
         }
-        builder.with_locals(&self.locals, |builder| {
-            self.inner.write_mir_execution(builder, local_out);
-        });
-
         // the scope does not remove the locals from the translator after the inner expression is
         // evaluated. At the time this code was written, this did not seem to be
         // an issue.
+
+        builder.with_locals(&self.locals, |builder| self.inner.write_mir_execution(builder))
     }
 
     fn pretty_print<W: Write>(&self, p: &mut PrettyPrinter<W>, names: NameContext) -> fmt::Result {
@@ -102,17 +100,21 @@ impl Expr for Block {
         }
     }
 
-    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, local_out: mir::LocalId) {
+    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::Place> {
         let label = builder.mir.create_label();
 
         // make this label visible to child expressions
-        builder.translator.ctrl_flow_constructs.insert(self.label, (label, local_out));
+        builder.translator.ctrl_flow_constructs.insert(self.label, (label, None));
 
         // translate the statements in the block
         let (statements, _) = builder.with_inner_statement_seq(|builder| {
             for expr in &self.statements {
-                builder.translate_expr(expr);
+                let pl = expr.write_mir_execution(builder)?;
+                builder.mir.add_statement(mir::Statement::Elementary(
+                    mir::ElementaryStatement::Drop { src: pl },
+                ));
             }
+            Some(())
         });
 
         // create a block statement with the translated statements
@@ -121,6 +123,10 @@ impl Expr for Block {
             statements,
         }));
         builder.mir.add_statement(block);
+
+        // get the return place of the statement
+        let (_, return_place) = builder.translator.ctrl_flow_constructs[&self.label];
+        return_place.map(|local_id| local_id.place())
     }
 
     fn pretty_print<W: Write>(&self, p: &mut PrettyPrinter<W>, names: NameContext) -> fmt::Result {
@@ -143,57 +149,70 @@ impl Expr for Block {
 pub struct IfElse {
     pub condition: Box<ExprKind>,
     pub then: Box<ExprKind>,
-    pub r#else: Option<Box<ExprKind>>,
+    pub r#else: Box<ExprKind>,
 }
 
 impl Expr for IfElse {
     fn output_type(&self, names: NameContext) -> NlAbstractTy {
         let then_ty = self.then.output_type(names);
-        let else_ty = self
-            .r#else
-            .as_ref()
-            .map(|r#else| r#else.output_type(names))
-            .unwrap_or(NlAbstractTy::Unit);
+        let else_ty = self.r#else.output_type(names);
         then_ty.join(else_ty)
     }
 
     fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
         visitor(&self.condition);
         visitor(&self.then);
-        if let Some(r#else) = &self.r#else {
-            visitor(r#else);
-        }
+        visitor(&self.r#else);
     }
 
     fn visit_children_mut(&mut self, mut visitor: impl FnMut(&mut ExprKind)) {
         visitor(self.condition.as_mut());
         visitor(self.then.as_mut());
-        if let Some(r#else) = &mut self.r#else {
-            visitor(r#else.as_mut());
-        }
+        visitor(self.r#else.as_mut());
     }
 
-    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, local_out: mir::LocalId) {
-        let condition = builder.translate_expr(&self.condition);
-        let then = {
-            let (then_stmts, _) = builder.with_inner_statement_seq(|builder| {
-                self.then.write_mir_execution(builder, local_out);
-            });
-            Box::new(mir::consolidate_statements(then_stmts))
-        };
-        let r#else = self.r#else.as_ref().map(|r#else| {
-            let (else_stmts, _) = builder.with_inner_statement_seq(|builder| {
-                r#else.write_mir_execution(builder, local_out);
-            });
-            Box::new(mir::consolidate_statements(else_stmts))
+    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::Place> {
+        let condition = self.condition.write_mir_execution(builder)?;
+
+        let (then_stmts, then_out) =
+            builder.with_inner_statement_seq(|builder| self.then.write_mir_execution(builder));
+        let then_ty = then_out.as_ref().map(|t| builder.mir.type_of_place(t));
+        let then_stmt = Box::new(mir::consolidate_statements(then_stmts));
+
+        let (else_stmts, total_out) = builder.with_inner_statement_seq(|builder| {
+            let else_out = self.r#else.write_mir_execution(builder);
+            let else_ty = else_out.as_ref().map(|t| builder.mir.type_of_place(t));
+            assert!(
+                then_ty.is_none() || else_ty.is_none() || then_ty == else_ty,
+                "then and else branches must have compatible types"
+            );
+
+            match (then_out, else_out) {
+                (Some(then_out), Some(else_out)) => {
+                    if then_out != else_out {
+                        // move the else value into the then place
+                        builder.mir.add_operation_with_dst(
+                            then_out.clone(),
+                            mir::Operation::Operand(mir::PlaceOperand::Move(else_out)),
+                        )
+                    }
+                    Some(then_out)
+                }
+                (Some(then_out), None) => Some(then_out),
+                (None, Some(else_out)) => Some(else_out),
+                (None, None) => None,
+            }
         });
+        let else_stmt = Box::new(mir::consolidate_statements(else_stmts));
 
         let if_else = mir::Statement::CtrlFlow(mir::CtrlFlowConstruct::IfElse(mir::IfElse {
-            condition: condition.place,
-            then,
-            r#else,
+            condition,
+            then: then_stmt,
+            r#else: else_stmt,
         }));
         builder.mir.add_statement(if_else);
+
+        total_out
     }
 
     fn pretty_print<W: Write>(&self, p: &mut PrettyPrinter<W>, names: NameContext) -> fmt::Result {
@@ -202,10 +221,8 @@ impl Expr for IfElse {
         condition.pretty_print(p, names)?;
         write!(p, " ")?;
         then.pretty_print(p, names)?;
-        if let Some(r#else) = r#else {
-            write!(p, " else ")?;
-            r#else.pretty_print(p, names)?;
-        }
+        write!(p, " else ")?;
+        r#else.pretty_print(p, names)?;
         Ok(())
     }
 }
@@ -230,20 +247,29 @@ impl Expr for Break {
         visitor(self.value.as_mut());
     }
 
-    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, break_local_out: mir::LocalId) {
-        // ignore this value, a break never returns
-        let _ = break_local_out;
+    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::Place> {
+        let value = self.value.write_mir_execution(builder)?;
 
         let (target_label, target_local_out) =
-            builder.translator.ctrl_flow_constructs[&self.target];
+            builder.translator.ctrl_flow_constructs.get_mut(&self.target).unwrap();
+        let target_local_out = *target_local_out.get_or_insert_with(|| {
+            let ty = builder.mir.type_of_place(&value);
+            builder.mir.create_local(mir::LocalDecl { debug_name: None, ty })
+        });
 
         // assign the break's value to the target local instead
-        self.value.write_mir_execution(builder, target_local_out);
+        builder.mir.add_operation_with_dst(
+            target_local_out.place(),
+            mir::Operation::Operand(mir::PlaceOperand::Move(value)),
+        );
 
         // and add the break statement
         builder.mir.add_statement(mir::Statement::Elementary(mir::ElementaryStatement::Break {
-            target: target_label,
+            target: *target_label,
         }));
+
+        // a break never returns
+        None
     }
 
     fn pretty_print<W: fmt::Write>(

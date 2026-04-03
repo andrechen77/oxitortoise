@@ -37,7 +37,7 @@ impl Expr for Ask {
         visitor(self.body.as_mut());
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {
+    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::Place> {
         todo!("TODO(mvp) write MIR execution for Ask")
     }
 
@@ -90,7 +90,7 @@ impl Expr for Of {
         visitor(self.body.as_mut());
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {
+    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::Place> {
         todo!("TODO(mvp) write MIR execution for Of")
     }
 

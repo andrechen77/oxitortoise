@@ -1,7 +1,7 @@
 use std::{alloc::Layout, sync::Arc};
 
 use crate::{
-    mir::{LocalId, Place, Projection, builder::FunctionBuilder},
+    mir::{Place, Projection, builder::FunctionBuilder},
     util::{
         lifetime_ptr::{LifetimePtr, LifetimePtrMut},
         reflection::{Reflect, Type},
@@ -297,7 +297,7 @@ pub unsafe trait HasDynPtr {
 
     /// Builds the MIR code to get the data pointer of the dynamically typed
     /// data, where `self_place` contains a value of `Self`.
-    fn write_mir_get_data_ptr(builder: &mut FunctionBuilder, self_place: TypedPlace) -> TypedPlace;
+    fn write_mir_get_data_ptr(builder: &mut FunctionBuilder, self_place: Place) -> Place;
 
     /// Calculates a MIR type of self from the metadata.
     fn self_mir_type_from_metadata(metadata: &Self::MetaData) -> MirType;
@@ -307,46 +307,4 @@ pub unsafe trait HasDynPtr {
 
     /// Returns a mutable pointer to the dynamically typed data.
     fn dyn_ptr_mut(&mut self) -> DynPtrMut<'_>;
-}
-
-pub struct TypedPlace {
-    pub place: Place,
-    pub ty: MirType,
-}
-
-impl TypedPlace {
-    pub fn proj(self, projection: Projection) -> Self {
-        Self {
-            place: self.place.proj(projection),
-            ty: self.ty.contents.project(projection).clone(),
-        }
-    }
-
-    pub fn proj_deref(self) -> Self {
-        Self {
-            place: self.place.proj(Projection::Deref),
-            ty: self.ty.contents.proj_deref().clone(),
-        }
-    }
-
-    pub fn proj_field(self, byte_offset: usize) -> Self {
-        Self {
-            place: self.place.proj(Projection::Field { byte_offset }),
-            ty: self.ty.contents.proj_field(byte_offset).clone(),
-        }
-    }
-
-    pub fn proj_static_index(self, index: usize) -> Self {
-        Self {
-            place: self.place.proj(Projection::StaticIndex(index)),
-            ty: self.ty.contents.proj_static_index(index).clone(),
-        }
-    }
-
-    pub fn proj_dynamic_index(self, index: LocalId) -> Self {
-        Self {
-            place: self.place.proj(Projection::DynamicIndex(index)),
-            ty: self.ty.contents.proj_dynamic_index().clone(),
-        }
-    }
 }

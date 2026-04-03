@@ -69,8 +69,8 @@ impl Globals {
         builder: &mut mir::FunctionBuilder,
         type_mapping: &TypeMapping,
         var_index: usize,
-        globals: mir::TypedPlace,
-    ) -> mir::TypedPlace {
+        globals: mir::Place,
+    ) -> mir::Place {
         let byte_offset = type_mapping.globals_schema().offset_of_field(var_index);
 
         // globals.data

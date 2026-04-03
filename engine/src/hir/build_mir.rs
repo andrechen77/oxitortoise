@@ -9,7 +9,7 @@ use crate::{
 
 mod type_mapping;
 
-pub use type_mapping::{TypeMapping, make_type_mapping, mir_repr};
+pub use type_mapping::{TypeMapping, make_type_mapping};
 
 pub struct HirToMirFnBuilder<'a, 'b> {
     pub hir_names: NameContext<'a>,
@@ -23,8 +23,9 @@ pub struct HirToMirFnBuilder<'a, 'b> {
 pub struct HirToMirFnTranslator {
     pub locals: BTreeMap<hir::LocalId, mir::LocalId>,
     /// Maps each HIR label to an MIR label, as well as the output local that
-    /// breaks from that label should use.
-    pub ctrl_flow_constructs: BTreeMap<hir::Label, (mir::Label, mir::LocalId)>,
+    /// breaks from that label should use. The output local might be none if
+    /// it has not been used yet.
+    pub ctrl_flow_constructs: BTreeMap<hir::Label, (mir::Label, Option<mir::LocalId>)>,
     /// The local variable that contains the workspace parameter, if it exists.
     pub workspace_param: Option<mir::LocalId>,
     /// The local variable that contains the RNG parameter, if it exists.
@@ -34,25 +35,6 @@ pub struct HirToMirFnTranslator {
 }
 
 impl<'a, 'b> HirToMirFnBuilder<'a, 'b> {
-    /// Generates MIR statements to evaluate the given HIR expression with all
-    /// its dependencies. The return value is stored in a new out local whose id
-    /// is returned. Any temporary values created during evaluation are stored
-    /// in new local variables; this function does not reuse existing locals for
-    /// temporaries.
-    ///
-    /// There is currently no checking if dependencies have already been
-    /// evaluated.
-    pub fn translate_expr(&mut self, expr: &hir::ExprKind) -> mir::TypedPlace {
-        let output_ty = expr.output_type(self.hir_names);
-        let output_ty = mir_repr(&output_ty);
-        // the expression's output will be stored in this local variable
-        let (output_local, _output_local_decl) =
-            self.mir.create_local(mir::LocalDecl { debug_name: None, ty: output_ty });
-        // TODO could do something with the type assertion here
-        expr.write_mir_execution(self, output_local);
-        self.mir.typed_place(output_local)
-    }
-
     // a bunch of boilerplate code to recreate the state of the builder. This is
     // only necessary because we want to keep all builder information packaged
     // together in a single struct. if we passed all the components of
@@ -85,40 +67,34 @@ impl<'a, 'b> HirToMirFnBuilder<'a, 'b> {
         })
     }
 
-    pub fn workspace_param(&mut self) -> mir::TypedPlace {
-        let local_id = *self.translator.workspace_param.get_or_insert_with(|| {
-            let (local_id, _local_decl) = self.mir.create_local(mir::LocalDecl {
+    pub fn workspace_param(&mut self) -> mir::LocalId {
+        *self.translator.workspace_param.get_or_insert_with(|| {
+            self.mir.create_local(mir::LocalDecl {
                 debug_name: Some("workspace".into()),
                 ty: self.type_mapping.workspace_ptr_ty(),
-            });
+            })
             // TODO add as parameter to the function
-            local_id
-        });
-        self.mir.typed_place(local_id)
+        })
     }
 
     // Returns the local variable that contains the self parameter, creating
     // it if it does not exist.
-    pub fn self_param(&mut self) -> mir::TypedPlace {
-        let local_id = *self.translator.self_param.get_or_insert_with(|| {
-            let (local_id, _local_decl) = self.mir.create_local(mir::LocalDecl {
+    pub fn self_param(&mut self) -> mir::LocalId {
+        *self.translator.self_param.get_or_insert_with(|| {
+            self.mir.create_local(mir::LocalDecl {
                 debug_name: Some("self".into()),
                 ty: (PackedAny::TYPE.make_mir_type)(),
-            });
+            })
             // TODO add as parameter to the function
-            local_id
-        });
-        self.mir.typed_place(local_id)
+        })
     }
 
     /// Returns the local variable that contains self as a turtle id. If
     /// self is not statically known to be a turtle, this will generate runtime
     /// code to downcast to a turtle
-    pub fn self_turtle(&mut self) -> mir::TypedPlace {
+    pub fn self_turtle(&mut self) -> mir::LocalId {
         let self_param = self.self_param();
-        let Some(ty) = self_param.ty.static_ty else {
-            panic!("self parameter type is unknown");
-        };
+        let ty = self.mir.type_of_place(&self_param.place());
         if ty.is::<TurtleId>() {
             self_param
         } else {
@@ -128,11 +104,9 @@ impl<'a, 'b> HirToMirFnBuilder<'a, 'b> {
     }
 
     // Returns the local variable that contains self as a patch id.
-    pub fn self_patch(&mut self) -> mir::TypedPlace {
+    pub fn self_patch(&mut self) -> mir::LocalId {
         let self_param = self.self_param();
-        let Some(ty) = self_param.ty.static_ty else {
-            panic!("self parameter type is unknown");
-        };
+        let ty = self.mir.type_of_place(&self_param.place());
         if ty.is::<PatchId>() {
             self_param
         } else {
@@ -163,15 +137,12 @@ pub fn hir_to_mir(hir: &hir::Program) -> mir::Program {
         };
 
         // add all the nodes to the function body
-        let (return_local, _) = builder.mir.create_local(mir::LocalDecl {
-            debug_name: Some("return".into()),
-            ty: type_mapping.function_return_ty(*hir_fn_id),
-        });
-        builder.with_locals(&hir_fn.parameters, |builder| {
-            hir_fn_body.write_mir_execution(builder, return_local);
-        });
+        let return_value = builder
+            .with_locals(&hir_fn.parameters, |builder| hir_fn_body.write_mir_execution(builder));
 
-        mir_fn_builder.set_return(return_local);
+        if let Some(return_value) = return_value {
+            mir_fn_builder.set_return(return_value.unwrap_local());
+        }
         mir_fn_builder.finish();
     }
 

@@ -1,8 +1,11 @@
 use std::{collections::BTreeMap, sync::Arc};
 
-use crate::mir::{
-    self, ElementaryStatement, Function, FunctionId, Label, LocalId, MirType, MirTypeContents,
-    MirTypeInfo, Operation, Place, PlaceOperand, Statement, TypedPlace,
+use crate::{
+    mir::{
+        self, ElementaryStatement, Function, FunctionId, Label, LocalId, MirType, MirTypeContents,
+        MirTypeInfo, Operation, Place, PlaceOperand, Statement,
+    },
+    util::reflection::ReflectComponents as _,
 };
 
 #[derive(Default)]
@@ -51,18 +54,23 @@ pub struct FunctionBuilder<'a> {
     locals: BTreeMap<LocalId, mir::LocalDecl>,
     return_local: Option<LocalId>,
     statements_out: Vec<Statement>,
+    unit_local: Option<LocalId>,
 }
 
 impl<'a> FunctionBuilder<'a> {
     fn new(program_builder: &'a mut ProgramBuilder) -> Self {
         let fn_id = program_builder.next_function_id();
-        Self {
+        let mut new = Self {
             program_builder,
             fn_id,
             locals: BTreeMap::new(),
             return_local: None,
             statements_out: Vec::new(),
-        }
+            unit_local: None,
+        };
+        new.unit_local =
+            Some(new.create_local(mir::LocalDecl { debug_name: None, ty: <()>::mir_type() }));
+        new
     }
 
     /// Finishes the function builder and adds the function to the program builder.
@@ -85,10 +93,14 @@ impl<'a> FunctionBuilder<'a> {
         assert!(old.is_none(), "return local cannot be set twice");
     }
 
-    pub fn create_local(&mut self, decl: mir::LocalDecl) -> (LocalId, &mut mir::LocalDecl) {
+    pub fn unit_local(&self) -> Place {
+        self.unit_local.expect("unit local must be set").into()
+    }
+
+    pub fn create_local(&mut self, decl: mir::LocalDecl) -> LocalId {
         let id = self.program_builder.next_local_id();
-        let local_decl = self.locals.entry(id).or_insert(decl);
-        (id, local_decl)
+        self.locals.insert(id, decl);
+        id
     }
 
     pub fn get_local_mut(&mut self, id: LocalId) -> &mut mir::LocalDecl {
@@ -104,11 +116,11 @@ impl<'a> FunctionBuilder<'a> {
             .clone()
     }
 
-    pub fn typed_place(&self, place: impl Into<Place>) -> TypedPlace {
-        let place = place.into();
-        let ty = self.type_of_place(&place);
-        TypedPlace { place, ty }
-    }
+    // pub fn typed_place(&self, place: impl Into<Place>) -> TypedPlace {
+    //     let place = place.into();
+    //     let ty = self.type_of_place(&place);
+    //     TypedPlace { place, ty }
+    // }
 
     pub fn type_of_op(&self, op: &Operation) -> MirType {
         match op {
@@ -161,7 +173,7 @@ impl<'a> FunctionBuilder<'a> {
         let ty = self.type_of_op(&op);
         assert_eq!(ty, local_decl.ty, "type of operation must match type of local declaration");
 
-        let (dst, _) = self.create_local(local_decl);
+        let dst = self.create_local(local_decl);
         self.add_operation_with_dst(dst.into(), op);
         // TODO could do something with the type assertion here
         dst

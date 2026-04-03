@@ -50,18 +50,18 @@ impl World {
     }
 
     /// Derives a `Globals` from a `World`.
-    pub fn mir_project_globals(world: mir::TypedPlace) -> mir::TypedPlace {
-        world.proj(mir::Projection::Field { byte_offset: offset_of!(World, globals) })
+    pub fn mir_project_globals(world: mir::Place) -> mir::Place {
+        world.proj_field(offset_of!(World, globals))
     }
 
     /// Derives a `Turtles` from a `World`.
-    pub fn mir_project_turtles(world: mir::TypedPlace) -> mir::TypedPlace {
-        world.proj(mir::Projection::Field { byte_offset: offset_of!(World, turtles) })
+    pub fn mir_project_turtles(world: mir::Place) -> mir::Place {
+        world.proj_field(offset_of!(World, turtles))
     }
 
     /// Derives a `Patches` from a `World`.
-    pub fn mir_project_patches(world: mir::TypedPlace) -> mir::TypedPlace {
-        world.proj(mir::Projection::Field { byte_offset: offset_of!(World, patches) })
+    pub fn mir_project_patches(world: mir::Place) -> mir::Place {
+        world.proj_field(offset_of!(World, patches))
     }
 
     pub fn mir_type_from_schemas(

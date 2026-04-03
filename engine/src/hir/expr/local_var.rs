@@ -25,7 +25,7 @@ impl Expr for GetLocalVar {
 
     fn visit_children_mut(&mut self, _visitor: impl FnMut(&mut ExprKind)) {}
 
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {
+    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::Place> {
         todo!("TODO(mvp) write MIR execution for GetLocalVar")
     }
 
@@ -56,7 +56,7 @@ impl Expr for SetLocalVar {
         visitor(self.value.as_mut());
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder, _local_out: mir::LocalId) {
+    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::Place> {
         todo!("TODO(mvp) write MIR execution for SetLocalVar")
     }
 

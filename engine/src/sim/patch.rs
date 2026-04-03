@@ -69,22 +69,22 @@ impl OptionPatchId {
     pub fn write_check_nobody(
         builder: &mut HirToMirFnBuilder,
         negate: bool,
-        local_out: mir::LocalId,
-        operand: mir::TypedPlace,
-    ) {
+        operand: mir::Place,
+    ) -> mir::Place {
         let sentinel_pl = builder.mir.add_operation(
             None,
             mir::Operation::Const { value: BoxedAny::new(OptionPatchId::NOBODY) },
         );
         let opcode = if negate { lir::BinaryOpcode::INeq } else { lir::BinaryOpcode::IEq };
-        builder.mir.add_operation_with_dst(
-            local_out.into(),
+        let result = builder.mir.add_operation(
+            None,
             mir::Operation::BinaryOp {
                 opcode,
-                lhs: mir::PlaceOperand::Move(operand.place),
+                lhs: mir::PlaceOperand::Move(operand),
                 rhs: mir::PlaceOperand::Move(sentinel_pl.place()),
             },
         );
+        result.place()
     }
 }
 
@@ -304,10 +304,10 @@ impl Patches {
     pub fn mir_project_patch_variable(
         builder: &mut mir::FunctionBuilder,
         type_mapping: &TypeMapping,
-        patches: mir::TypedPlace,
-        patch_id: mir::TypedPlace,
+        patches: mir::Place,
+        patch_id: mir::Place,
         var: PatchVarDesc,
-    ) -> mir::TypedPlace {
+    ) -> mir::Place {
         const { assert!(size_of::<RowBuffer>() == size_of::<Option<RowBuffer>>()) };
 
         let (field_desc, offset) = type_mapping.patch_schema().field_desc_and_offset(var);
@@ -319,7 +319,7 @@ impl Patches {
         // patches.data[field_desc.buffer_idx].ptr
         let ptr_to_buffer = RowBuffer::write_mir_get_data_ptr(builder, buffer_pl);
         // patches.data[field_desc.buffer_idx].ptr[patch_id.index]
-        let ptr_to_row = ptr_to_buffer.proj_dynamic_index(patch_id.place.unwrap_local());
+        let ptr_to_row = ptr_to_buffer.proj_dynamic_index(patch_id.unwrap_local());
         // turtles.data[field_desc.buffer_idx].ptr[patch_id.index].var
         let var_pl = ptr_to_row.proj_field(field_desc.field_idx as usize);
         if let Some(offset) = offset { var_pl.proj_field(offset) } else { var_pl }

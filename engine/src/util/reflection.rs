@@ -25,6 +25,10 @@ pub unsafe trait ReflectComponents {
 /// the information will be used to generate and run unsafe code.
 pub unsafe trait Reflect {
     const TYPE: Type;
+
+    fn mir_type() -> MirType {
+        (Self::TYPE.make_mir_type)()
+    }
 }
 
 /// Information about a type that is used by the engine to generate code that

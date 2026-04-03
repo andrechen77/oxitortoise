@@ -51,14 +51,13 @@ pub trait Expr {
     fn visit_children_mut(&mut self, visitor: impl FnMut(&mut ExprKind));
 
     /// Writes the MIR statements that correspond to the calculation represented
-    /// by this expression. This means executing any necessary side effelts and
-    /// making the output of this node available in the given `local_out`. It is
-    /// not a precondition that all dependent expressions have been executed.
+    /// by this expression. It is not a precondition that all dependent
+    /// expressions have been executed.
     ///
-    /// Implementations may use [`MirFunctionBuilder::translate_hir_node`] to get
-    /// the MIR values for the dependencies, which will recursively call
-    /// `write_mir_execution` if necessary.
-    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder, local_out: mir::LocalId);
+    /// The return value is the place in which the expression's return value
+    /// can be accessed. If the expression never returns, this should be `None`.
+    /// If the expression returns unit, this should be the unit place.
+    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::Place>;
 
     fn pretty_print<W: fmt::Write>(
         &self,

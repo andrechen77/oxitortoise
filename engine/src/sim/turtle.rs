@@ -299,10 +299,10 @@ impl Turtles {
     pub fn mir_project_turtle_variable(
         builder: &mut mir::FunctionBuilder,
         type_mapping: &TypeMapping,
-        turtles: mir::TypedPlace,
-        turtle_id: mir::TypedPlace,
+        turtles: mir::Place,
+        turtle_id: mir::Place,
         var: TurtleVarDesc,
-    ) -> mir::TypedPlace {
+    ) -> mir::Place {
         const { assert!(size_of::<RowBuffer>() == size_of::<Option<RowBuffer>>()) };
 
         let (field_desc, offset) = type_mapping.turtle_schema().field_desc_and_offset(var);
@@ -318,7 +318,7 @@ impl Turtles {
             Some("turtle_idx".into()),
             mir::Operation::UnaryOp {
                 opcode: lir::UnaryOpcode::I64ToI32,
-                operand: mir::PlaceOperand::Move(turtle_id.place),
+                operand: mir::PlaceOperand::Move(turtle_id),
             },
         );
         let ptr_to_row = ptr_to_buffer.proj_dynamic_index(turtle_idx);
