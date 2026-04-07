@@ -79,7 +79,7 @@ pub fn derive_impl_components(input: proc_macro2::TokenStream) -> proc_macro2::T
 
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
 
-    let make_mir_type_fn = match &input.data {
+    let (make_mir_type_fn, make_mir_type_ref_fn) = match &input.data {
         Data::Struct(data) => {
             // for future use
             let _fields = match &data.fields {
@@ -88,14 +88,23 @@ pub fn derive_impl_components(input: proc_macro2::TokenStream) -> proc_macro2::T
                 Fields::Unnamed(u) => u.unnamed.iter().collect(),
             };
 
-            quote! {
+            let make_mir_type_fn = quote! {
                 fn mir_type() -> crate::mir::MirType {
                     std::sync::Arc::new(crate::mir::MirTypeInfo {
                         static_ty: Some(<Self as crate::util::reflection::Reflect>::TYPE),
                         contents: std::default::Default::default(),
                     })
                 }
-            }
+            };
+            let make_mir_type_ref_fn = quote! {
+                fn mir_type() -> crate::mir::MirType {
+                    std::sync::Arc::new(crate::mir::MirTypeInfo {
+                        static_ty: Some(<Self as crate::util::reflection::Reflect>::TYPE),
+                        contents: crate::mir::MirTypeContents::IsPointerTo(<Self as crate::util::reflection::ReflectComponents>::mir_type()),
+                    })
+                }
+            };
+            (make_mir_type_fn, make_mir_type_ref_fn)
         }
         _ => {
             return syn::Error::new_spanned(
@@ -121,6 +130,16 @@ pub fn derive_impl_components(input: proc_macro2::TokenStream) -> proc_macro2::T
         #[automatically_derived]
         unsafe impl #impl_generics crate::util::reflection::ReflectComponents for #name #ty_generics #where_clause {
             #make_mir_type_fn
+        }
+
+        #[automatically_derived]
+        unsafe impl #impl_generics crate::util::reflection::ReflectComponents for &#name #ty_generics #where_clause {
+            #make_mir_type_ref_fn
+        }
+
+        #[automatically_derived]
+        unsafe impl #impl_generics crate::util::reflection::ReflectComponents for &mut #name #ty_generics #where_clause {
+            #make_mir_type_ref_fn
         }
     }
 }
@@ -162,12 +181,20 @@ pub fn attribute_impl_reflect(args: TokenStream, input: TokenStream) -> TokenStr
             crate::util::reflection::CloneKind::Copy
         },
         CloneKind::Dynamic => {
+            let clone_fn_name = format!("{}::clone", self_ty.to_token_stream().to_string());
             clone_fn_info_def = Some(quote! {
                 static CLONE_HOST_FN_INFO: crate::mir::HostFunctionInfo = crate::mir::HostFunctionInfo {
-                    debug_name: concat!(stringify!(#self_ty), "::clone"),
+                    debug_name: #clone_fn_name,
                     parameter_types: &[&TYPE_INFO],
                     return_type: &TYPE_INFO,
+                    link_name: #clone_fn_name,
+                    link_addr: clone as *const u8,
                 };
+
+                #[unsafe(export_name = #clone_fn_name)]
+                fn clone(value: &#self_ty) -> #self_ty {
+                    value.clone()
+                }
             });
             quote! {
                 crate::util::reflection::CloneKind::Dynamic {

@@ -2,11 +2,6 @@ use std::{ops::Deref, sync::Mutex};
 
 use macro_reflect::{ReflectComponents, reflect};
 
-use crate::{
-    mir::{MirType, MirTypeInfo},
-    util::reflection::ReflectComponents,
-};
-
 mod mersenne_twister;
 
 pub trait Rng {
@@ -33,12 +28,6 @@ impl Reflect for CanonRng {}
 impl Rng for CanonRng {
     fn next_int(&mut self, max: i64) -> i64 {
         self.0.next_int(max)
-    }
-}
-
-unsafe impl ReflectComponents for &mut CanonRng {
-    fn mir_type() -> MirType {
-        MirTypeInfo::ptr_to(CanonRng::mir_type())
     }
 }
 

@@ -117,6 +117,8 @@ mod ask_all_turtles {
             <JitCallback<'static, TurtleId, ()>>::TYPE,
         ],
         return_type: <()>::TYPE,
+        link_name: "ask_all_turtles",
+        link_addr: call as *const u8,
     };
 
     pub fn call(
@@ -153,6 +155,8 @@ mod ask_all_patches {
             <JitCallback<'static, PatchId, ()>>::TYPE,
         ],
         return_type: <()>::TYPE,
+        link_name: "ask_all_patches",
+        link_addr: call as *const u8,
     };
 
     pub fn call(

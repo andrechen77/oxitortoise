@@ -5,13 +5,6 @@ use crate::{sim::value::BoxedAny, util::reflection::Type};
 mod builder;
 mod reflection;
 
-// pub mod prelude {
-//     pub use super::{
-//         DynPtr, DynPtrMut, FunctionBuilder, HasDynPtr, /* LocalId, */ MirType,
-//         MirTypeContents, MirTypeInfo, Operation, Place, PlaceOperand, Projection, TypedPlace,
-//     };
-// }
-
 pub use builder::{FunctionBuilder, ProgramBuilder};
 pub use reflection::{DynPtr, DynPtrMut, HasDynPtr, MirType, MirTypeContents, MirTypeInfo};
 
@@ -20,7 +13,15 @@ pub struct HostFunctionInfo {
     pub debug_name: &'static str,
     pub parameter_types: &'static [Type],
     pub return_type: Type,
+    /// Meaningful on Wasm targets. The function is exported by this name.
+    pub link_name: &'static str,
+    /// Meaningfun on native targets. The function is located at this address.
+    pub link_addr: *const u8,
 }
+
+// SAFETY: the only thing that prevents the struct from being Sync is the raw
+// pointer, which is just a function pointer so it is safe to share.
+unsafe impl Sync for HostFunctionInfo {}
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
 pub struct FunctionId(u32);

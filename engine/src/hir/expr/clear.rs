@@ -55,9 +55,11 @@ mod clear_all {
         debug_name: "clear_all",
         parameter_types: &[<&mut Workspace>::TYPE],
         return_type: <()>::TYPE,
+        link_name: "clear_all",
+        link_addr: call as *const u8,
     };
 
-    pub fn call(workspace: &mut Workspace) {
+    pub fn call(_workspace: &mut Workspace) {
         todo!()
     }
 }

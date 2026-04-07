@@ -7,9 +7,9 @@ use std::{
 use macro_reflect::{ReflectComponents, reflect};
 
 use crate::{
-    mir::{self, MirType, MirTypeInfo},
+    mir,
     sim::{observer::GlobalsSchema, patch::PatchSchema, turtle::TurtleSchema, world::World},
-    util::{reflection::ReflectComponents, rng::CanonRng},
+    util::rng::CanonRng,
 };
 
 #[derive(Debug, ReflectComponents)]
@@ -35,12 +35,6 @@ impl Workspace {
     ) -> mir::MirType {
         let world_ty = World::mir_type_from_schemas(globals_schema, turtle_schema, patch_schema);
         mir::MirTypeInfo::with_field(Layout::new::<Self>(), offset_of!(Self, world), world_ty)
-    }
-}
-
-unsafe impl ReflectComponents for &mut Workspace {
-    fn mir_type() -> MirType {
-        MirTypeInfo::ptr_to(Workspace::mir_type())
     }
 }
 

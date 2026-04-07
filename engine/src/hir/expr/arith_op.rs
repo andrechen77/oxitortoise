@@ -301,6 +301,8 @@ mod binary_cmp_any_bool {
         debug_name: "binary_cmp_any_bool",
         parameter_types: &[PackedAny::TYPE, PackedAny::TYPE, BinaryCmpOpcode::TYPE],
         return_type: bool::TYPE,
+        link_name: "binary_cmp_any_bool",
+        link_addr: binary_cmp_any_bool as *const u8,
     };
 }
 

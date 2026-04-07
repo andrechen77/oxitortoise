@@ -104,6 +104,8 @@ mod create_turtles {
             <JitCallback<'static, TurtleId, ()>>::TYPE,
         ],
         return_type: <()>::TYPE,
+        link_name: "create_turtles",
+        link_addr: call as *const u8,
     };
 
     pub fn call(
