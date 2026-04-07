@@ -40,8 +40,22 @@ impl Expr for CreateTurtles {
         visitor(self.body.as_mut());
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
-        todo!("TODO(mvp) write MIR execution for CreateTurtles")
+    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
+        let workspace_local = self.workspace.write_mir_execution(builder)?;
+        let rng_local = self.rng.write_mir_execution(builder)?;
+        let num_turtles_local = self.num_turtles.write_mir_execution(builder)?;
+        let body_local = self.body.write_mir_execution(builder)?;
+
+        let operation = mir::Operation::CallHostFunction {
+            function: &create_turtles::FN_INFO,
+            args: vec![
+                mir::PlaceOperand::Copy(workspace_local.place()),
+                mir::PlaceOperand::Copy(rng_local.place()),
+                mir::PlaceOperand::Copy(num_turtles_local.place()),
+                mir::PlaceOperand::Move(body_local),
+            ],
+        };
+        Some(builder.mir.add_operation(None, operation))
     }
 
     fn pretty_print<W: fmt::Write>(
@@ -64,5 +78,51 @@ impl Expr for CreateTurtles {
             p.add_fn_arg_with(|p| body.pretty_print(p, names))?;
             Ok(())
         })
+    }
+}
+
+mod create_turtles {
+    use crate::{
+        exec::jit::JitCallback,
+        mir::HostFunctionInfo,
+        sim::{
+            topology::Point,
+            turtle::{TurtleBreedId, TurtleId},
+            value::NlFloat,
+        },
+        util::{reflection::Reflect, rng::CanonRng},
+        workspace::Workspace,
+    };
+
+    pub static FN_INFO: HostFunctionInfo = HostFunctionInfo {
+        debug_name: "create_turtles",
+        parameter_types: &[
+            <&mut Workspace>::TYPE,
+            <&mut CanonRng>::TYPE,
+            TurtleBreedId::TYPE,
+            NlFloat::TYPE,
+            <JitCallback<'static, TurtleId, ()>>::TYPE,
+        ],
+        return_type: <()>::TYPE,
+    };
+
+    pub fn call(
+        workspace: &mut Workspace,
+        rng: &mut CanonRng,
+        breed: TurtleBreedId,
+        count: NlFloat,
+        mut birth_command: JitCallback<TurtleId, ()>,
+    ) {
+        let new_turtles = workspace.world.turtles.create_turtles(
+            breed,
+            count.to_u64_round_to_zero(),
+            Point { x: 0.0, y: 0.0 },
+            rng,
+        );
+
+        let mut iter = new_turtles.into_shuffler();
+        while let Some(turtle) = iter.next(rng) {
+            birth_command.call_mut(workspace, rng, turtle);
+        }
     }
 }

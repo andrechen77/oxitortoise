@@ -4,9 +4,13 @@ use std::fmt;
 
 use pretty_print::PrettyPrinter;
 
-use crate::hir::NameContext;
-use crate::hir::{ClosureType, Expr, ExprKind, HirToMirFnBuilder, NlAbstractTy};
-use crate::mir;
+use crate::{
+    hir::{
+        ClosureType, Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy, expr::Agentset,
+    },
+    mir,
+    util::reflection::Reflect,
+};
 
 #[derive(Debug, Clone)]
 pub struct Ask {
@@ -37,8 +41,42 @@ impl Expr for Ask {
         visitor(self.body.as_mut());
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
-        todo!("TODO(mvp) write MIR execution for Ask")
+    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
+        let workspace_local = self.workspace.write_mir_execution(builder)?;
+        let rng_local = self.rng.write_mir_execution(builder)?;
+
+        let operation = match self.recipients.as_ref() {
+            ExprKind::Agentset(Agentset::AllTurtles) => {
+                // statically known to be all turtles
+                let body_local = self.body.write_mir_execution(builder)?;
+                mir::Operation::CallHostFunction {
+                    function: &ask_all_turtles::FN_INFO,
+                    args: vec![
+                        mir::PlaceOperand::Copy(workspace_local.place()),
+                        mir::PlaceOperand::Copy(rng_local.place()),
+                        mir::PlaceOperand::Move(body_local),
+                    ],
+                }
+            }
+            ExprKind::Agentset(Agentset::AllPatches) => {
+                // statically known to be all patches
+                let body_local = self.body.write_mir_execution(builder)?;
+                mir::Operation::CallHostFunction {
+                    function: &ask_all_patches::FN_INFO,
+                    args: vec![
+                        mir::PlaceOperand::Copy(workspace_local.place()),
+                        mir::PlaceOperand::Copy(rng_local.place()),
+                        mir::PlaceOperand::Move(body_local),
+                    ],
+                }
+            }
+            other => {
+                let recipients_local = self.recipients.write_mir_execution(builder)?;
+                let body_local = self.body.write_mir_execution(builder)?;
+                todo!("TODO(mvp) write MIR execution for Ask with dynamic agentset: {:?}", other);
+            }
+        };
+        Some(builder.mir.add_operation(None, operation))
     }
 
     fn pretty_print<W: fmt::Write>(
@@ -54,6 +92,78 @@ impl Expr for Ask {
             p.add_fn_arg_with(|p| body.pretty_print(p, names))?;
             Ok(())
         })
+    }
+}
+
+mod ask_all_turtles {
+    use crate::{
+        exec::jit::JitCallback,
+        mir::HostFunctionInfo,
+        sim::{turtle::TurtleId, value::agentset::shuffled_turtles},
+        util::rng::CanonRng,
+        workspace::Workspace,
+    };
+
+    use super::*;
+
+    pub static FN_INFO: HostFunctionInfo = HostFunctionInfo {
+        debug_name: "ask_all_turtles",
+        parameter_types: &[
+            <&mut Workspace>::TYPE,
+            <&mut CanonRng>::TYPE,
+            // The lifetime is not actually 'static, but rather the
+            // existentially quantified lifetime that would have been inferred
+            // if it was part of a real Rust signature
+            <JitCallback<'static, TurtleId, ()>>::TYPE,
+        ],
+        return_type: <()>::TYPE,
+    };
+
+    pub fn call(
+        workspace: &mut Workspace,
+        rng: &mut CanonRng,
+        mut callback: JitCallback<TurtleId, ()>,
+    ) {
+        let mut iter = shuffled_turtles(&workspace.world);
+        while let Some(turtle) = iter.next(rng) {
+            callback.call_mut(workspace, rng, turtle);
+        }
+    }
+}
+
+mod ask_all_patches {
+    use crate::{
+        exec::jit::JitCallback,
+        mir::HostFunctionInfo,
+        sim::{patch::PatchId, value::agentset::shuffled_patches},
+        util::rng::CanonRng,
+        workspace::Workspace,
+    };
+
+    use super::*;
+
+    pub static FN_INFO: HostFunctionInfo = HostFunctionInfo {
+        debug_name: "ask_all_patches",
+        parameter_types: &[
+            <&mut Workspace>::TYPE,
+            <&mut CanonRng>::TYPE,
+            // The lifetime is not actually 'static, but rather the
+            // existentially quantified lifetime that would have been inferred
+            // if it was part of a real Rust signature
+            <JitCallback<'static, PatchId, ()>>::TYPE,
+        ],
+        return_type: <()>::TYPE,
+    };
+
+    pub fn call(
+        workspace: &mut Workspace,
+        rng: &mut CanonRng,
+        mut callback: JitCallback<PatchId, ()>,
+    ) {
+        let mut iter = shuffled_patches(&workspace.world);
+        while let Some(patch) = iter.next(rng) {
+            callback.call_mut(workspace, rng, patch);
+        }
     }
 }
 

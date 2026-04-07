@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use crate::{sim::value::PackedAny, util::rng::CanonRng, workspace::Workspace};
-use lir::HostFunction as Hf;
+use macro_reflect::{ReflectComponents, reflect};
 
 pub enum InstallLirError {
     /// Installer state was corrupted and cannot be used to install new
@@ -28,8 +28,6 @@ pub trait InstallLir {
     /// - [`JitEntrypoint::new`]
     /// - [`JitCallback::new`]
     unsafe fn install_lir(&mut self, lir: &lir::Program) -> Result<Self::Obj, InstallLirError>;
-
-    const HOST_FUNCTION_TABLE: HostFunctionTable;
 }
 
 pub trait InstalledObj {
@@ -91,25 +89,35 @@ impl<'a> JitEntrypoint<'a> {
 }
 
 /// A callback that can be called multiple times. Equivalent to FnMut.
+#[derive(ReflectComponents)]
 #[repr(C)]
 pub struct JitCallback<'env, Arg, Ret> {
     env: *mut u8,
-    fn_ptr: unsafe extern "C" fn(*mut u8, &mut Workspace, &mut CanonRng, Arg) -> Ret,
+    call: unsafe extern "C" fn(*mut u8, &mut Workspace, &mut CanonRng, Arg) -> Ret,
+    drop: unsafe extern "C" fn(*mut u8),
     _phantom: PhantomData<&'env mut ()>,
 }
+
+#[reflect]
+impl<'env> Reflect for JitCallback<'static, crate::sim::turtle::TurtleId, ()> {}
+
+#[reflect]
+impl<'env> Reflect for JitCallback<'static, crate::sim::patch::PatchId, ()> {}
 
 impl<'env, Arg, Ret> JitCallback<'env, Arg, Ret> {
     /// # Safety
     ///
-    /// The function pointer itself must be safe to call as long as the lifetime
-    /// `'env` is live for the duration of the call, and assuming the env
-    /// pointer being passed during the call is the same as the one passed to
-    /// this function. The function pointer may be called multiple times.
+    /// The `call` and `drop` functions must be safe to call as long as the
+    /// lifetime `'env` is live for the duration of the call, and assuming the
+    /// env pointer being passed during the call is the same as the one passed
+    /// to this function, and that the `drop` function has not been called yet.
+    /// It must be safe to call the `call` function multiple times.
     pub unsafe fn new(
         env: *mut u8,
-        fn_ptr: extern "C" fn(*mut u8, &mut Workspace, &mut CanonRng, Arg) -> Ret,
+        call: extern "C" fn(*mut u8, &mut Workspace, &mut CanonRng, Arg) -> Ret,
+        drop: extern "C" fn(*mut u8),
     ) -> Self {
-        Self { env, fn_ptr, _phantom: PhantomData }
+        Self { env, call, drop, _phantom: PhantomData }
     }
 
     pub fn call_mut(&mut self, workspace: &mut Workspace, rng: &mut CanonRng, arg: Arg) -> Ret {
@@ -117,61 +125,19 @@ impl<'env, Arg, Ret> JitCallback<'env, Arg, Ret> {
         // the one passed during the construction of the JitCallback. In
         // addition, because we take &mut Self where Self has lifetime 'env, we
         // also know that the lifetime of 'env is live for the duration of the
-        // call.
-        unsafe { (self.fn_ptr)(self.env, workspace, rng, arg) }
+        // call. The `drop` function has not been called yet.
+        unsafe { (self.call)(self.env, workspace, rng, arg) }
     }
 }
 
-/// A hard-coded table of all host function that the engine needs to generate
-/// the proper calls from LIR.
-pub struct HostFunctionTable {
-    pub clear_all: Hf,
-    pub reset_ticks: Hf,
-    pub advance_tick: Hf,
-    pub get_tick: Hf,
-    pub create_turtles: Hf,
-    pub ask_all_turtles: Hf,
-    pub ask_all_patches: Hf,
-    pub euclidean_distance_no_wrap: Hf,
-    pub list_new: Hf,
-    pub list_push: Hf,
-    pub one_of_list: Hf,
-    pub scale_color: Hf,
-    pub rotate_turtle: Hf,
-    pub turtle_forward: Hf,
-    pub patch_at: Hf,
-    pub random_int: Hf,
-    pub any_binary_op: Hf,
-    pub any_bool_binary_op: Hf,
-    pub patch_ahead: Hf,
-    pub patch_right_and_ahead: Hf,
-    pub diffuse_8_single_variable_buffer: Hf,
-}
-
-impl HostFunctionTable {
-    pub fn all_host_functions(&self) -> Vec<Hf> {
-        vec![
-            self.clear_all,
-            self.reset_ticks,
-            self.advance_tick,
-            self.get_tick,
-            self.create_turtles,
-            self.ask_all_turtles,
-            self.ask_all_patches,
-            self.euclidean_distance_no_wrap,
-            self.list_new,
-            self.list_push,
-            self.one_of_list,
-            self.scale_color,
-            self.rotate_turtle,
-            self.turtle_forward,
-            self.patch_at,
-            self.random_int,
-            self.any_binary_op,
-            self.any_bool_binary_op,
-            self.patch_ahead,
-            self.patch_right_and_ahead,
-            self.diffuse_8_single_variable_buffer,
-        ]
+impl<'env, Arg, Ret> Drop for JitCallback<'env, Arg, Ret> {
+    fn drop(&mut self) {
+        // SAFETY: we are passing the same env pointer to the function call as
+        // the one passed during the construction of the JitCallback. In
+        // addition, because we take &mut Self where Self has lifetime 'env, we
+        // also know that the lifetime of 'env is live for the duration of the
+        // call. The `drop` function has not been called yet as this is the only
+        // time the function is ever called.
+        unsafe { (self.drop)(self.env) };
     }
 }

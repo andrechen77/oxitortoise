@@ -453,9 +453,12 @@ pub struct TurtleBaseData {
 #[reflect]
 impl Reflect for TurtleBaseData {}
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Display, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Display, PartialOrd, Ord, ReflectComponents)]
 #[display("{_0}")]
 pub struct TurtleBreedId(pub u32);
+
+#[reflect]
+impl Reflect for TurtleBreedId {}
 
 #[derive(Debug)]
 pub struct TurtleBreed {

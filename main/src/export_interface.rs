@@ -1,14 +1,13 @@
 use engine::{
-    exec::{helpers, jit::JitCallback},
     lir::{
         HostFunctionInfo,
-        ValType::{F64, FnPtr, I32, I64, Ptr},
+        ValType::{F64, I32, I64, Ptr},
     },
     sim::{
         agent_schema::AgentFieldDescriptor,
         patch::{OptionPatchId, PatchId},
         topology::Point,
-        turtle::{TurtleBreedId, TurtleId},
+        turtle::TurtleId,
         value::{NlBox, NlFloat, NlList, PackedAny},
     },
     util::rng::{CanonRng, Rng as _},
@@ -18,17 +17,6 @@ use engine::{
 // TODO(mvp) the HostFunctionInfo should be automatically generated from the
 // signatures of the actual host functions (probably done from the main crate
 // rather than the engine crate).
-
-pub static CLEAR_ALL_INFO: HostFunctionInfo = HostFunctionInfo {
-    name: "oxitortoise_clear_all",
-    parameter_types: &[Ptr],
-    return_type: &[],
-    addr: oxitortoise_clear_all as *const u8,
-};
-#[unsafe(no_mangle)]
-pub extern "C" fn oxitortoise_clear_all(workspace: &mut Workspace) {
-    workspace.world.clear_all();
-}
 
 pub static RESET_TICKS_INFO: HostFunctionInfo = HostFunctionInfo {
     name: "oxitortoise_reset_ticks",
@@ -61,97 +49,6 @@ pub static ADVANCE_TICK_INFO: HostFunctionInfo = HostFunctionInfo {
 #[unsafe(no_mangle)]
 pub extern "C" fn oxitortoise_advance_tick(workspace: &mut Workspace) {
     workspace.world.tick_counter.advance().unwrap(); // TODO(mvp) handle error
-}
-
-// NOTE: HostFunctionInfo had wrong name "reset_ticks", should be "create_turtles"
-// NOTE: Signature mismatch - function takes breed, count, position, and callback, but HostFunctionInfo only has Ptr
-pub static CREATE_TURTLES_INFO: HostFunctionInfo = HostFunctionInfo {
-    name: "oxitortoise_create_turtles",
-    parameter_types: &[Ptr, Ptr, I32, F64, Ptr, FnPtr],
-    return_type: &[],
-    addr: oxitortoise_create_turtles as *const u8,
-};
-#[unsafe(no_mangle)]
-/// # Safety
-///
-/// The passed-in env and function pointer will be used to create a
-/// [`JitCallback`] that needs to be live for the duration of this function
-/// call. See [`JitCallback::new`] for the safety requirements on the caller.
-pub unsafe extern "C" fn oxitortoise_create_turtles(
-    workspace: &mut Workspace,
-    rng: &mut CanonRng,
-    breed: u32,
-    count: NlFloat,
-    birth_command_env: *mut u8,
-    birth_command_fn_ptr: extern "C" fn(
-        *mut u8,
-        &mut Workspace,
-        &mut CanonRng,
-        u64, /* TurtleId */
-    ) -> (),
-) {
-    let breed = TurtleBreedId(breed);
-    let position = Point { x: 0.0, y: 0.0 };
-    // SAFETY: precondition
-    let mut birth_command = unsafe { JitCallback::new(birth_command_env, birth_command_fn_ptr) };
-    helpers::create_turtles(workspace, rng, breed, count, position, |workspace, rng, turtle_id| {
-        birth_command.call_mut(workspace, rng, turtle_id.to_ffi())
-    });
-}
-
-pub static ASK_ALL_TURTLES_INFO: HostFunctionInfo = HostFunctionInfo {
-    name: "oxitortoise_for_all_turtles",
-    parameter_types: &[Ptr, Ptr, Ptr, FnPtr],
-    return_type: &[],
-    addr: oxitortoise_for_all_turtles as *const u8,
-};
-/// # Safety
-///
-/// The passed-in env and function pointer will be used to create a
-/// [`JitCallback`] that needs to be live for the duration of this function
-/// call. See [`JitCallback::new`] for the safety requirements on the caller.
-#[unsafe(no_mangle)]
-pub extern "C" fn oxitortoise_for_all_turtles(
-    workspace: &mut Workspace,
-    rng: &mut CanonRng,
-    block_env: *mut u8,
-    block_fn_ptr: extern "C" fn(
-        *mut u8,
-        &mut Workspace,
-        &mut CanonRng,
-        u64, /* TurtleId */
-    ) -> (),
-) {
-    // SAFETY: precondition
-    let mut block = unsafe { JitCallback::new(block_env, block_fn_ptr) };
-    helpers::for_all_turtles(workspace, rng, |workspace, rng, turtle_id| {
-        block.call_mut(workspace, rng, turtle_id.to_ffi())
-    });
-}
-
-pub static ASK_ALL_PATCHES_INFO: HostFunctionInfo = HostFunctionInfo {
-    name: "oxitortoise_for_all_patches",
-    parameter_types: &[Ptr, Ptr, Ptr, FnPtr],
-    return_type: &[],
-    addr: oxitortoise_for_all_patches as *const u8,
-};
-/// # Safety
-///
-/// The passed-in env and function pointer will be used to create a
-/// [`JitCallback`] that needs to be live for the duration of this function
-/// call. See [`JitCallback::new`] for the safety requirements on the caller.
-#[unsafe(no_mangle)]
-pub extern "C" fn oxitortoise_for_all_patches(
-    workspace: &mut Workspace,
-    rng: &mut CanonRng,
-    block_env: *mut u8,
-    block_fn_ptr: extern "C" fn(*mut u8, &mut Workspace, &mut CanonRng, PatchId) -> (),
-) {
-    // SAFETY: precondition
-    let mut block = unsafe { JitCallback::new(block_env, block_fn_ptr) };
-    helpers::for_all_patches(workspace, rng, |workspace, rng, patch_id| {
-        block.call_mut(workspace, rng, patch_id)
-    });
 }
 
 pub static EUCLIDEAN_DISTANCE_NO_WRAP_INFO: HostFunctionInfo = HostFunctionInfo {
