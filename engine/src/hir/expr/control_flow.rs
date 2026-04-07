@@ -47,7 +47,26 @@ impl Expr for Scope {
         // evaluated. At the time this code was written, this did not seem to be
         // an issue.
 
-        builder.with_locals(&self.locals, |builder| self.inner.write_mir_execution(builder))
+        let value =
+            builder.with_locals(&self.locals, |builder| self.inner.write_mir_execution(builder));
+
+        for local_id in self.locals.keys() {
+            let mir_local_id = builder.translator.locals[local_id];
+            let ty = builder.mir.type_of_place(&mir_local_id.place());
+
+            // only insert a drop instruction if the local has an associated
+            // statically known type, because it if doesn't have a statically
+            // known type then it probably doesn't have a destructor
+            if let Some(static_ty) = ty.static_ty
+                && static_ty.drop_fn.is_some()
+            {
+                builder.mir.add_statement(mir::Statement::Elementary(
+                    mir::ElementaryStatement::Drop { src: mir_local_id.place() },
+                ));
+            }
+        }
+
+        value
     }
 
     fn pretty_print<W: Write>(&self, p: &mut PrettyPrinter<W>, names: NameContext) -> fmt::Result {
@@ -110,9 +129,14 @@ impl Expr for Block {
         let (statements, _) = builder.with_inner_statement_seq(|builder| {
             for expr in &self.statements {
                 let result = expr.write_mir_execution(builder)?;
-                builder.mir.add_statement(mir::Statement::Elementary(
-                    mir::ElementaryStatement::Drop { src: result.place() },
-                ));
+                let ty = builder.mir.type_of_place(&result.place());
+                if let Some(static_ty) = ty.static_ty
+                    && static_ty.drop_fn.is_some()
+                {
+                    builder.mir.add_statement(mir::Statement::Elementary(
+                        mir::ElementaryStatement::Drop { src: result.place() },
+                    ));
+                }
             }
             Some(())
         });
