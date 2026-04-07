@@ -25,8 +25,14 @@ impl Expr for ClearAll {
         visitor(self.workspace.as_mut());
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
-        todo!("TODO(mvp) write MIR execution for ClearAll")
+    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
+        let workspace_local = self.workspace.write_mir_execution(builder)?;
+
+        let operation = mir::Operation::CallHostFunction {
+            function: &clear_all::FN_INFO,
+            args: vec![mir::PlaceOperand::Copy(workspace_local.place())],
+        };
+        Some(builder.mir.add_operation(None, operation))
     }
 
     fn pretty_print<W: fmt::Write>(
@@ -39,5 +45,19 @@ impl Expr for ClearAll {
             p.add_fn_arg_with(|p| workspace.pretty_print(p, names))?;
             Ok(())
         })
+    }
+}
+
+mod clear_all {
+    use crate::{mir::HostFunctionInfo, util::reflection::Reflect, workspace::Workspace};
+
+    pub static FN_INFO: HostFunctionInfo = HostFunctionInfo {
+        debug_name: "clear_all",
+        parameter_types: &[<&mut Workspace>::TYPE],
+        return_type: <()>::TYPE,
+    };
+
+    pub fn call(workspace: &mut Workspace) {
+        todo!()
     }
 }

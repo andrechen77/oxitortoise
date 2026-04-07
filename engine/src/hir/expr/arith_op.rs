@@ -124,8 +124,28 @@ impl Expr for BinaryArith {
         visitor(self.rhs.as_mut());
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
-        todo!("TODO(mvp)");
+    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
+        let lhs_local = self.lhs.write_mir_execution(builder)?;
+        let lhs_ty = builder.mir.type_of_place(&lhs_local.place());
+        let rhs_local = self.rhs.write_mir_execution(builder)?;
+        let rhs_ty = builder.mir.type_of_place(&rhs_local.place());
+
+        let operation = if lhs_ty.is::<NlFloat>() && rhs_ty.is::<NlFloat>() {
+            let opcode = match self.op {
+                BinaryArithOpcode::Add => lir::BinaryOpcode::FAdd,
+                BinaryArithOpcode::Sub => lir::BinaryOpcode::FSub,
+                BinaryArithOpcode::Mul => lir::BinaryOpcode::FMul,
+                BinaryArithOpcode::Div => lir::BinaryOpcode::FDiv,
+            };
+            mir::Operation::BinaryOp {
+                opcode,
+                lhs: mir::PlaceOperand::Copy(lhs_local.place()),
+                rhs: mir::PlaceOperand::Copy(rhs_local.place()),
+            }
+        } else {
+            panic!("unsupported operand types: {:?} and {:?}", lhs_ty, rhs_ty);
+        };
+        Some(builder.mir.add_operation(None, operation))
     }
 
     fn pretty_print<W: fmt::Write>(
@@ -196,6 +216,9 @@ impl Expr for BinaryCmp {
             let operand_pl = operand.write_mir_execution(builder)?.place();
             let operand_ty = builder.mir.type_of_place(&operand_pl);
             if operand_ty.is::<OptionPatchId>() {
+                // FIXME this is not quite right if agents can die, because then
+                // a dead agent is counted as nobody. we need to take a workspace
+                // parameter to properly compute the comparison
                 return Some(OptionPatchId::write_check_nobody(builder, negate, operand_pl));
             } else {
                 todo!("TODO(mvp) handle nobody check for other operand types: {:?}", operand_ty);
@@ -303,8 +326,26 @@ impl Expr for BinaryBool {
         visitor(self.rhs.as_mut());
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
-        todo!("TODO(mvp)");
+    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
+        let lhs_local = self.lhs.write_mir_execution(builder)?;
+        let lhs_ty = builder.mir.type_of_place(&lhs_local.place());
+        let rhs_local = self.rhs.write_mir_execution(builder)?;
+        let rhs_ty = builder.mir.type_of_place(&rhs_local.place());
+
+        let operation = if lhs_ty.is::<bool>() && rhs_ty.is::<bool>() {
+            let opcode = match self.op {
+                BinaryBoolOpcode::And => lir::BinaryOpcode::And,
+                BinaryBoolOpcode::Or => lir::BinaryOpcode::Or,
+            };
+            mir::Operation::BinaryOp {
+                opcode,
+                lhs: mir::PlaceOperand::Copy(lhs_local.place()),
+                rhs: mir::PlaceOperand::Copy(rhs_local.place()),
+            }
+        } else {
+            panic!("unsupported operand types: {:?} and {:?}", lhs_ty, rhs_ty);
+        };
+        Some(builder.mir.add_operation(None, operation))
     }
 
     fn pretty_print<W: fmt::Write>(

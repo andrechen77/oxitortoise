@@ -4,18 +4,23 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use macro_reflect::{ReflectComponents, reflect};
+
 use crate::{
-    mir,
+    mir::{self, MirType, MirTypeInfo},
     sim::{observer::GlobalsSchema, patch::PatchSchema, turtle::TurtleSchema, world::World},
-    util::rng::CanonRng,
+    util::{reflection::ReflectComponents, rng::CanonRng},
 };
 
-#[derive(Debug)]
+#[derive(Debug, ReflectComponents)]
 #[repr(C)]
 pub struct Workspace {
     pub world: World,
     pub rng: Arc<Mutex<CanonRng>>,
 }
+
+#[reflect]
+impl Reflect for Workspace {}
 
 impl Workspace {
     /// Derives a `World` from a `Workspace`.
@@ -32,3 +37,12 @@ impl Workspace {
         mir::MirTypeInfo::with_field(Layout::new::<Self>(), offset_of!(Self, world), world_ty)
     }
 }
+
+unsafe impl ReflectComponents for &mut Workspace {
+    fn mir_type() -> MirType {
+        MirTypeInfo::ptr_to(Workspace::mir_type())
+    }
+}
+
+#[reflect]
+impl Reflect for &mut Workspace {}
