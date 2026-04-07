@@ -38,5 +38,5 @@ impl Workspace {
     }
 }
 
-#[reflect]
+#[reflect(clone(copy))]
 impl Reflect for &mut Workspace {}

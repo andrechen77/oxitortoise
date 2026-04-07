@@ -10,6 +10,9 @@ pub struct NlList(Vec<PackedAny>);
 #[reflect(clone(dynamic))]
 impl Reflect for NlList {}
 
+#[reflect]
+impl Reflect for &NlList {}
+
 impl NlList {
     pub fn new() -> Self {
         Self::default()

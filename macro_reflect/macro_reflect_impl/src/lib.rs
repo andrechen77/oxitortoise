@@ -185,7 +185,7 @@ pub fn attribute_impl_reflect(args: TokenStream, input: TokenStream) -> TokenStr
             clone_fn_info_def = Some(quote! {
                 static CLONE_HOST_FN_INFO: crate::mir::HostFunctionInfo = crate::mir::HostFunctionInfo {
                     debug_name: #clone_fn_name,
-                    parameter_types: &[&TYPE_INFO],
+                    parameter_types: &[&<&#self_ty as crate::util::reflection::Reflect>::TYPE],
                     return_type: &TYPE_INFO,
                     link_name: #clone_fn_name,
                     link_addr: clone as *const u8,

@@ -12,3 +12,6 @@ impl NlString {
 
 #[reflect(clone(dynamic))]
 impl Reflect for NlString {}
+
+#[reflect]
+impl Reflect for &NlString {}

@@ -31,5 +31,5 @@ impl Rng for CanonRng {
     }
 }
 
-#[reflect]
+#[reflect(clone(copy))]
 impl Reflect for &mut CanonRng {}
