@@ -4,9 +4,7 @@ use std::fmt;
 
 use pretty_print::PrettyPrinter;
 
-use crate::hir::NameContext;
-use crate::hir::{Expr, ExprKind, HirToMirFnBuilder, NlAbstractTy};
-use crate::mir;
+use crate::hir::{Expr, ExprKind, NameContext, NlAbstractTy};
 
 /// NetLogo `scale-color`.
 #[derive(Debug, Clone)]
@@ -34,10 +32,6 @@ impl Expr for ScaleColor {
         visitor(self.number.as_mut());
         visitor(self.range1.as_mut());
         visitor(self.range2.as_mut());
-    }
-
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
-        todo!("TODO(mvp) write MIR execution for ScaleColor")
     }
 
     fn pretty_print<W: fmt::Write>(

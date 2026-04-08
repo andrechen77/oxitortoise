@@ -5,7 +5,10 @@ use std::fmt::{self, Write};
 use pretty_print::PrettyPrinter;
 
 use crate::{
-    hir::{Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy},
+    hir::{
+        Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy,
+        build_mir::{self, translate_expr},
+    },
     mir,
     sim::{
         observer::Globals,
@@ -13,7 +16,6 @@ use crate::{
         turtle::{TurtleVarDesc, Turtles},
         world::World,
     },
-    util::reflection::CloneKind,
     workspace::Workspace,
 };
 
@@ -39,17 +41,6 @@ impl Expr for GetGlobalVar {
         visitor(self.workspace.as_mut());
     }
 
-    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
-        let ptr_to_workspace = self.workspace.write_mir_execution(builder)?.place();
-        let workspace = ptr_to_workspace.proj_deref();
-        let world = Workspace::mir_project_world(workspace);
-        let globals = World::mir_project_globals(world);
-        let var =
-            Globals::mir_project_global_var(builder.mir, builder.type_mapping, self.index, globals);
-        let var_ty = builder.mir.type_of_place(&var);
-        Some(clone_to_new(builder.mir, var, &var_ty.static_ty.as_ref().unwrap().clone))
-    }
-
     fn pretty_print<W: Write>(&self, p: &mut PrettyPrinter<W>, names: NameContext) -> fmt::Result {
         write!(
             p,
@@ -57,6 +48,19 @@ impl Expr for GetGlobalVar {
             self.index,
             names.global_vars()[self.index].name.as_ref()
         )
+    }
+}
+
+impl GetGlobalVar {
+    pub fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
+        let ptr_to_workspace = translate_expr(builder, &self.workspace)?.place();
+        let workspace = ptr_to_workspace.proj_deref();
+        let world = Workspace::mir_project_world(workspace);
+        let globals = World::mir_project_globals(world);
+        let var =
+            Globals::mir_project_global_var(builder.mir, builder.type_mapping, self.index, globals);
+        let var_ty = builder.mir.type_of_place(&var);
+        Some(build_mir::clone_to_new(builder.mir, var, &var_ty.static_ty.as_ref().unwrap().clone))
     }
 }
 
@@ -95,20 +99,6 @@ impl Expr for GetTurtleVar {
         visitor(self.turtle.as_mut());
     }
 
-    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
-        let ptr_to_workspace = self.workspace.write_mir_execution(builder)?.place();
-
-        // calculate the turtle id
-        let turtle_id = self.turtle.write_mir_execution(builder)?.place();
-
-        // project the turtle variable
-        let var = turtle_var_place(builder, ptr_to_workspace, turtle_id, self.var);
-        let var_ty = builder.mir.type_of_place(&var);
-
-        // perform load
-        Some(clone_to_new(builder.mir, var, &var_ty.static_ty.as_ref().unwrap().clone))
-    }
-
     fn pretty_print<W: fmt::Write>(
         &self,
         p: &mut PrettyPrinter<W>,
@@ -121,6 +111,22 @@ impl Expr for GetTurtleVar {
             p.add_fn_arg_with(|p| turtle.pretty_print(p, names))?;
             Ok(())
         })
+    }
+}
+
+impl GetTurtleVar {
+    pub fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
+        let ptr_to_workspace = translate_expr(builder, &self.workspace)?.place();
+
+        // calculate the turtle id
+        let turtle_id = translate_expr(builder, &self.turtle)?.place();
+
+        // project the turtle variable
+        let var = turtle_var_place(builder, ptr_to_workspace, turtle_id, self.var);
+        let var_ty = builder.mir.type_of_place(&var);
+
+        // perform load
+        Some(build_mir::clone_to_new(builder.mir, var, &var_ty.static_ty.as_ref().unwrap().clone))
     }
 }
 
@@ -152,24 +158,6 @@ impl Expr for SetTurtleVar {
         visitor(self.value.as_mut());
     }
 
-    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
-        let ptr_to_workspace = self.workspace.write_mir_execution(builder)?.place();
-
-        // calculate the value to store
-        let value = self.value.write_mir_execution(builder)?;
-
-        // calculate the turtle id
-        let turtle_id = self.turtle.write_mir_execution(builder)?.place();
-
-        // project the turtle variable
-        let var = turtle_var_place(builder, ptr_to_workspace, turtle_id, self.var);
-
-        // perform store
-        move_to_init(builder.mir, var, value);
-
-        Some(builder.mir.unit_local())
-    }
-
     fn pretty_print<W: fmt::Write>(
         &self,
         p: &mut PrettyPrinter<W>,
@@ -183,6 +171,26 @@ impl Expr for SetTurtleVar {
             p.add_fn_arg_with(|p| value.pretty_print(p, names))?;
             Ok(())
         })
+    }
+}
+
+impl SetTurtleVar {
+    pub fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
+        let ptr_to_workspace = translate_expr(builder, &self.workspace)?.place();
+
+        // calculate the value to store
+        let value = translate_expr(builder, &self.value)?;
+
+        // calculate the turtle id
+        let turtle_id = translate_expr(builder, &self.turtle)?.place();
+
+        // project the turtle variable
+        let var = turtle_var_place(builder, ptr_to_workspace, turtle_id, self.var);
+
+        // perform store
+        build_mir::move_to_init(builder.mir, var, value);
+
+        Some(builder.mir.unit_local())
     }
 }
 
@@ -226,20 +234,6 @@ impl Expr for GetPatchVar {
         visitor(self.patch.as_mut());
     }
 
-    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
-        let ptr_to_workspace = self.workspace.write_mir_execution(builder)?.place();
-
-        // calculate the patch id
-        let patch_id = self.patch.write_mir_execution(builder)?.place();
-
-        // project the patch variable
-        let var = patch_var_place(builder, ptr_to_workspace, patch_id, self.var);
-        let var_ty = builder.mir.type_of_place(&var);
-
-        // perform load
-        Some(clone_to_new(builder.mir, var, &var_ty.static_ty.unwrap().clone))
-    }
-
     fn pretty_print<W: fmt::Write>(
         &self,
         p: &mut PrettyPrinter<W>,
@@ -252,6 +246,22 @@ impl Expr for GetPatchVar {
             p.add_fn_arg_with(|p| patch.pretty_print(p, names))?;
             Ok(())
         })
+    }
+}
+
+impl GetPatchVar {
+    pub fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
+        let ptr_to_workspace = translate_expr(builder, &self.workspace)?.place();
+
+        // calculate the patch id
+        let patch_id = translate_expr(builder, &self.patch)?.place();
+
+        // project the patch variable
+        let var = patch_var_place(builder, ptr_to_workspace, patch_id, self.var);
+        let var_ty = builder.mir.type_of_place(&var);
+
+        // perform load
+        Some(build_mir::clone_to_new(builder.mir, var, &var_ty.static_ty.unwrap().clone))
     }
 }
 
@@ -283,24 +293,6 @@ impl Expr for SetPatchVar {
         visitor(self.value.as_mut());
     }
 
-    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
-        let ptr_to_workspace = self.workspace.write_mir_execution(builder)?.place();
-
-        // calculate the value to store
-        let value = self.value.write_mir_execution(builder)?;
-
-        // calculate the patch id
-        let patch_id = self.patch.write_mir_execution(builder)?.place();
-
-        // project the patch variable
-        let var = patch_var_place(builder, ptr_to_workspace, patch_id, self.var);
-
-        // perform store
-        move_to_init(builder.mir, var, value);
-
-        Some(builder.mir.unit_local())
-    }
-
     fn pretty_print<W: fmt::Write>(
         &self,
         p: &mut PrettyPrinter<W>,
@@ -317,6 +309,26 @@ impl Expr for SetPatchVar {
     }
 }
 
+impl SetPatchVar {
+    pub fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
+        let ptr_to_workspace = translate_expr(builder, &self.workspace)?.place();
+
+        // calculate the value to store
+        let value = translate_expr(builder, &self.value)?;
+
+        // calculate the patch id
+        let patch_id = translate_expr(builder, &self.patch)?.place();
+
+        // project the patch variable
+        let var = patch_var_place(builder, ptr_to_workspace, patch_id, self.var);
+
+        // perform store
+        build_mir::move_to_init(builder.mir, var, value);
+
+        Some(builder.mir.unit_local())
+    }
+}
+
 fn patch_var_place(
     builder: &mut HirToMirFnBuilder,
     ptr_to_workspace: mir::Place,
@@ -327,46 +339,4 @@ fn patch_var_place(
     let world = Workspace::mir_project_world(workspace);
     let patches = World::mir_project_patches(world);
     Patches::mir_project_patch_variable(builder.mir, builder.type_mapping, patches, patch_id, var)
-}
-
-/// Moves a value from one place to another. The source place is not
-/// deinitialized. The destination place will not be deinitialized (i.e. it is
-/// assumed to be uninitialized). Useful for loading variables from memory.
-fn clone_to_new(
-    builder: &mut mir::FunctionBuilder,
-    src: mir::Place,
-    clone_kind: &CloneKind,
-) -> mir::LocalId {
-    let dst =
-        builder.create_local(mir::LocalDecl { debug_name: None, ty: builder.type_of_place(&src) });
-    match clone_kind {
-        CloneKind::Copy => builder.add_operation_with_dst(
-            dst.place(),
-            mir::Operation::Operand(mir::PlaceOperand::Copy(src)),
-        ),
-        CloneKind::Dynamic { clone_fn_info, .. } => builder.add_operation_with_dst(
-            dst.place(),
-            mir::Operation::CallHostFunction {
-                function: clone_fn_info,
-                args: vec![mir::PlaceOperand::Borrow(src)],
-            },
-        ),
-        CloneKind::None => {
-            panic!("Cannot load a variable from memory that is neither Copy nor Clone");
-        }
-    }
-    dst
-}
-
-/// Moves a value from one place to another. This may potentially destroy the
-/// source place if it is not Copy. The destination place is considered
-/// initialized and will be deinitialized before the value is moved in.
-fn move_to_init(builder: &mut mir::FunctionBuilder, dst_init: mir::Place, src: mir::LocalId) {
-    // deinitialize the destination place
-    builder.add_statement(mir::Statement::Elementary(mir::ElementaryStatement::Drop {
-        src: dst_init.clone(),
-    }));
-
-    // move the value into the place
-    builder.add_operation_with_dst(dst_init, mir::Operation::Operand(mir::PlaceOperand::Move(src)));
 }

@@ -4,10 +4,7 @@ use std::fmt;
 
 use pretty_print::PrettyPrinter;
 
-use crate::{
-    hir::{Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy},
-    mir,
-};
+use crate::hir::{Expr, ExprKind, NameContext, NlAbstractTy};
 
 #[derive(Debug, Clone)]
 pub struct Distancexy {
@@ -34,10 +31,6 @@ impl Expr for Distancexy {
         visitor(self.agent.as_mut());
         visitor(self.x.as_mut());
         visitor(self.y.as_mut());
-    }
-
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
-        todo!("TODO(mvp) write MIR execution for Distancexy")
     }
 
     fn pretty_print<W: fmt::Write>(

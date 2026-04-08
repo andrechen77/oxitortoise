@@ -1,9 +1,6 @@
 use std::fmt;
 
-use crate::{
-    hir::{HirToMirFnBuilder, NameContext, NlAbstractTy},
-    mir,
-};
+use crate::hir::{NameContext, NlAbstractTy};
 
 use ambassador::{Delegate, delegatable_trait};
 use derive_more::{From, TryInto};
@@ -49,15 +46,6 @@ pub trait Expr {
     /// Like [`visit_children`](Expr::visit_children), but allows mutating each
     /// child expression in place.
     fn visit_children_mut(&mut self, visitor: impl FnMut(&mut ExprKind));
-
-    /// Writes the MIR statements that correspond to the calculation represented
-    /// by this expression. It is not a precondition that all dependent
-    /// expressions have been executed.
-    ///
-    /// The return value is the place in which the expression's return value
-    /// can be accessed. If the expression never returns, this should be `None`.
-    /// If the expression returns unit, this should be the unit place.
-    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId>;
 
     fn pretty_print<W: fmt::Write>(
         &self,

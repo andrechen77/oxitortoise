@@ -4,6 +4,7 @@ use std::fmt;
 
 use pretty_print::PrettyPrinter;
 
+use crate::hir::build_mir::translate_expr;
 use crate::hir::{Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy};
 use crate::mir;
 
@@ -25,16 +26,6 @@ impl Expr for ClearAll {
         visitor(self.workspace.as_mut());
     }
 
-    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
-        let workspace_local = self.workspace.write_mir_execution(builder)?;
-
-        let operation = mir::Operation::CallHostFunction {
-            function: &clear_all::FN_INFO,
-            args: vec![mir::PlaceOperand::Copy(workspace_local.place())],
-        };
-        Some(builder.mir.add_operation(None, operation))
-    }
-
     fn pretty_print<W: fmt::Write>(
         &self,
         p: &mut PrettyPrinter<W>,
@@ -45,6 +36,18 @@ impl Expr for ClearAll {
             p.add_fn_arg_with(|p| workspace.pretty_print(p, names))?;
             Ok(())
         })
+    }
+}
+
+impl ClearAll {
+    pub fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
+        let workspace_local = translate_expr(builder, &self.workspace)?;
+
+        let operation = mir::Operation::CallHostFunction {
+            function: &clear_all::FN_INFO,
+            args: vec![mir::PlaceOperand::Copy(workspace_local.place())],
+        };
+        Some(builder.mir.add_operation(None, operation))
     }
 }
 

@@ -4,10 +4,7 @@ use std::fmt;
 
 use pretty_print::PrettyPrinter;
 
-use crate::{
-    hir::{Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy},
-    mir,
-};
+use crate::hir::{Expr, ExprKind, NameContext, NlAbstractTy};
 
 #[derive(Debug, Clone)]
 pub struct ResetTicks {
@@ -25,10 +22,6 @@ impl Expr for ResetTicks {
 
     fn visit_children_mut(&mut self, mut visitor: impl FnMut(&mut ExprKind)) {
         visitor(self.workspace.as_mut());
-    }
-
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
-        todo!("TODO(mvp) write MIR execution for ResetTicks")
     }
 
     fn pretty_print<W: fmt::Write>(
@@ -62,10 +55,6 @@ impl Expr for AdvanceTick {
         visitor(self.workspace.as_mut());
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
-        todo!("TODO(mvp) write MIR execution for AdvanceTick")
-    }
-
     fn pretty_print<W: fmt::Write>(
         &self,
         p: &mut PrettyPrinter<W>,
@@ -95,10 +84,6 @@ impl Expr for GetTick {
 
     fn visit_children_mut(&mut self, mut visitor: impl FnMut(&mut ExprKind)) {
         visitor(self.workspace.as_mut());
-    }
-
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
-        todo!("TODO(mvp) write MIR execution for GetTick")
     }
 
     fn pretty_print<W: fmt::Write>(

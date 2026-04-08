@@ -4,9 +4,8 @@ use std::fmt;
 
 use pretty_print::PrettyPrinter;
 
-use crate::mir;
 use crate::{
-    hir::{Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy},
+    hir::{Expr, ExprKind, NameContext, NlAbstractTy},
     sim::patch::PatchVarDesc,
 };
 
@@ -32,10 +31,6 @@ impl Expr for Diffuse {
     fn visit_children_mut(&mut self, mut visitor: impl FnMut(&mut ExprKind)) {
         visitor(self.workspace.as_mut());
         visitor(self.amt.as_mut());
-    }
-
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
-        todo!("TODO(mvp) write MIR execution for Diffuse")
     }
 
     fn pretty_print<W: fmt::Write>(

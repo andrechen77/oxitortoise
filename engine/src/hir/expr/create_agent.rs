@@ -5,7 +5,10 @@ use std::fmt::{self, Write};
 use pretty_print::PrettyPrinter;
 
 use crate::{
-    hir::{Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy, TurtleBreedId},
+    hir::{
+        Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy, TurtleBreedId,
+        build_mir::translate_expr,
+    },
     mir,
 };
 
@@ -40,24 +43,6 @@ impl Expr for CreateTurtles {
         visitor(self.body.as_mut());
     }
 
-    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
-        let workspace_local = self.workspace.write_mir_execution(builder)?;
-        let rng_local = self.rng.write_mir_execution(builder)?;
-        let num_turtles_local = self.num_turtles.write_mir_execution(builder)?;
-        let body_local = self.body.write_mir_execution(builder)?;
-
-        let operation = mir::Operation::CallHostFunction {
-            function: &create_turtles::FN_INFO,
-            args: vec![
-                mir::PlaceOperand::Copy(workspace_local.place()),
-                mir::PlaceOperand::Copy(rng_local.place()),
-                mir::PlaceOperand::Copy(num_turtles_local.place()),
-                mir::PlaceOperand::Move(body_local),
-            ],
-        };
-        Some(builder.mir.add_operation(None, operation))
-    }
-
     fn pretty_print<W: fmt::Write>(
         &self,
         p: &mut PrettyPrinter<W>,
@@ -78,6 +63,26 @@ impl Expr for CreateTurtles {
             p.add_fn_arg_with(|p| body.pretty_print(p, names))?;
             Ok(())
         })
+    }
+}
+
+impl CreateTurtles {
+    pub fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
+        let workspace_local = translate_expr(builder, &self.workspace)?;
+        let rng_local = translate_expr(builder, &self.rng)?;
+        let num_turtles_local = translate_expr(builder, &self.num_turtles)?;
+        let body_local = translate_expr(builder, &self.body)?;
+
+        let operation = mir::Operation::CallHostFunction {
+            function: &create_turtles::FN_INFO,
+            args: vec![
+                mir::PlaceOperand::Copy(workspace_local.place()),
+                mir::PlaceOperand::Copy(rng_local.place()),
+                mir::PlaceOperand::Copy(num_turtles_local.place()),
+                mir::PlaceOperand::Move(body_local),
+            ],
+        };
+        Some(builder.mir.add_operation(None, operation))
     }
 }
 

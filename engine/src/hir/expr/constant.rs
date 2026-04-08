@@ -5,8 +5,7 @@ use std::fmt::{self, Write};
 use pretty_print::PrettyPrinter;
 
 use crate::{
-    hir::{Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy},
-    mir,
+    hir::{Expr, ExprKind, NameContext, NlAbstractTy},
     sim::value::UnpackedAny,
 };
 
@@ -33,10 +32,6 @@ impl Expr for Constant {
     }
 
     fn visit_children_mut(&mut self, _visitor: impl FnMut(&mut ExprKind)) {}
-
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
-        todo!("TODO(mvp) write MIR execution for Constant")
-    }
 
     fn pretty_print<W: fmt::Write>(
         &self,
@@ -77,10 +72,6 @@ impl Expr for ListLiteral {
         for item in &mut self.items {
             visitor(item.as_mut());
         }
-    }
-
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
-        todo!("TODO(mvp) write MIR execution for ListLiteral")
     }
 
     fn pretty_print<W: fmt::Write>(

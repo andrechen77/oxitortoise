@@ -6,7 +6,8 @@ use pretty_print::PrettyPrinter;
 
 use crate::{
     hir::{
-        ClosureType, Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy, expr::Agentset,
+        ClosureType, Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy,
+        build_mir::translate_expr, expr::Agentset,
     },
     mir,
     util::reflection::Reflect,
@@ -41,44 +42,6 @@ impl Expr for Ask {
         visitor(self.body.as_mut());
     }
 
-    fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
-        let workspace_local = self.workspace.write_mir_execution(builder)?;
-        let rng_local = self.rng.write_mir_execution(builder)?;
-
-        let operation = match self.recipients.as_ref() {
-            ExprKind::Agentset(Agentset::AllTurtles) => {
-                // statically known to be all turtles
-                let body_local = self.body.write_mir_execution(builder)?;
-                mir::Operation::CallHostFunction {
-                    function: &ask_all_turtles::FN_INFO,
-                    args: vec![
-                        mir::PlaceOperand::Copy(workspace_local.place()),
-                        mir::PlaceOperand::Copy(rng_local.place()),
-                        mir::PlaceOperand::Move(body_local),
-                    ],
-                }
-            }
-            ExprKind::Agentset(Agentset::AllPatches) => {
-                // statically known to be all patches
-                let body_local = self.body.write_mir_execution(builder)?;
-                mir::Operation::CallHostFunction {
-                    function: &ask_all_patches::FN_INFO,
-                    args: vec![
-                        mir::PlaceOperand::Copy(workspace_local.place()),
-                        mir::PlaceOperand::Copy(rng_local.place()),
-                        mir::PlaceOperand::Move(body_local),
-                    ],
-                }
-            }
-            other => {
-                let recipients_local = self.recipients.write_mir_execution(builder)?;
-                let body_local = self.body.write_mir_execution(builder)?;
-                todo!("TODO(mvp) write MIR execution for Ask with dynamic agentset: {:?}", other);
-            }
-        };
-        Some(builder.mir.add_operation(None, operation))
-    }
-
     fn pretty_print<W: fmt::Write>(
         &self,
         p: &mut PrettyPrinter<W>,
@@ -92,6 +55,46 @@ impl Expr for Ask {
             p.add_fn_arg_with(|p| body.pretty_print(p, names))?;
             Ok(())
         })
+    }
+}
+
+impl Ask {
+    pub fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
+        let workspace_local = translate_expr(builder, &self.workspace)?;
+        let rng_local = translate_expr(builder, &self.rng)?;
+
+        let operation = match self.recipients.as_ref() {
+            ExprKind::Agentset(Agentset::AllTurtles) => {
+                // statically known to be all turtles
+                let body_local = translate_expr(builder, &self.body)?;
+                mir::Operation::CallHostFunction {
+                    function: &ask_all_turtles::FN_INFO,
+                    args: vec![
+                        mir::PlaceOperand::Copy(workspace_local.place()),
+                        mir::PlaceOperand::Copy(rng_local.place()),
+                        mir::PlaceOperand::Move(body_local),
+                    ],
+                }
+            }
+            ExprKind::Agentset(Agentset::AllPatches) => {
+                // statically known to be all patches
+                let body_local = translate_expr(builder, &self.body)?;
+                mir::Operation::CallHostFunction {
+                    function: &ask_all_patches::FN_INFO,
+                    args: vec![
+                        mir::PlaceOperand::Copy(workspace_local.place()),
+                        mir::PlaceOperand::Copy(rng_local.place()),
+                        mir::PlaceOperand::Move(body_local),
+                    ],
+                }
+            }
+            other => {
+                let recipients_local = translate_expr(builder, &self.recipients)?;
+                let body_local = translate_expr(builder, &self.body)?;
+                todo!("TODO(mvp) write MIR execution for Ask with dynamic agentset: {:?}", other);
+            }
+        };
+        Some(builder.mir.add_operation(None, operation))
     }
 }
 
@@ -202,10 +205,6 @@ impl Expr for Of {
         visitor(self.rng.as_mut());
         visitor(self.recipients.as_mut());
         visitor(self.body.as_mut());
-    }
-
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
-        todo!("TODO(mvp) write MIR execution for Of")
     }
 
     fn pretty_print<W: fmt::Write>(

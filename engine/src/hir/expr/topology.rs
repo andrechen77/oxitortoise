@@ -4,10 +4,7 @@ use std::fmt;
 
 use pretty_print::PrettyPrinter;
 
-use crate::{
-    hir::{Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy},
-    mir,
-};
+use crate::hir::{Expr, ExprKind, NameContext, NlAbstractTy};
 
 #[derive(Debug, Clone)]
 pub struct OffsetDistanceByHeading {
@@ -34,10 +31,6 @@ impl Expr for OffsetDistanceByHeading {
         visitor(self.position.as_mut());
         visitor(self.amt.as_mut());
         visitor(self.heading.as_mut());
-    }
-
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
-        todo!("TODO(mvp) write MIR execution for OffsetDistanceByHeading")
     }
 
     fn pretty_print<W: fmt::Write>(
@@ -80,10 +73,6 @@ impl Expr for PatchAt {
         visitor(self.y.as_mut());
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
-        todo!("TODO(mvp) write MIR execution for PatchAt")
-    }
-
     fn pretty_print<W: fmt::Write>(
         &self,
         p: &mut PrettyPrinter<W>,
@@ -117,10 +106,6 @@ impl Expr for MaxPxcor {
         visitor(self.workspace.as_mut());
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
-        todo!("TODO(mvp) write MIR execution for MaxPxcor")
-    }
-
     fn pretty_print<W: fmt::Write>(
         &self,
         p: &mut PrettyPrinter<W>,
@@ -150,10 +135,6 @@ impl Expr for MaxPycor {
 
     fn visit_children_mut(&mut self, mut visitor: impl FnMut(&mut ExprKind)) {
         visitor(self.workspace.as_mut());
-    }
-
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
-        todo!("TODO(mvp) write MIR execution for MaxPycor")
     }
 
     fn pretty_print<W: fmt::Write>(
@@ -190,10 +171,6 @@ impl Expr for EuclideanDistanceNoWrap {
         visitor(self.b.as_mut());
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
-        todo!("TODO(mvp) write MIR execution for EuclideanDistanceNoWrap")
-    }
-
     fn pretty_print<W: fmt::Write>(
         &self,
         p: &mut PrettyPrinter<W>,
@@ -227,10 +204,6 @@ impl Expr for PointConstructor {
     fn visit_children_mut(&mut self, mut visitor: impl FnMut(&mut ExprKind)) {
         visitor(self.x.as_mut());
         visitor(self.y.as_mut());
-    }
-
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
-        todo!("TODO(mvp) write MIR execution for PointConstructor")
     }
 
     fn pretty_print<W: fmt::Write>(

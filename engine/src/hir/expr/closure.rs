@@ -38,10 +38,6 @@ impl Expr for Closure {
         visitor(self.body.as_mut());
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
-        todo!("TODO(mvp) write MIR execution for Closure")
-    }
-
     fn pretty_print<W: fmt::Write>(
         &self,
         p: &mut PrettyPrinter<W>,
@@ -66,5 +62,28 @@ impl Expr for Closure {
             p.add_field_with("body", |p| body.pretty_print(p, names.with_locals(parameters)))?;
             Ok(())
         })
+    }
+}
+
+impl Closure {
+    pub fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
+        /*
+        there are a couple of scenarios to consider for the closure
+
+        no captures: the env pointer can be any dangling pointer, including null.
+        the call function does not use the env pointer and the drop function does nothing.
+
+        captures without escape: the env pointer is a non-owning reference that points to the stack
+        frame, and the call function uses stack frame offsets to access the
+        captured variables.
+
+        captures with escape: the env pointers is a owning pointer to an anonymous
+        struct that contains captured variables. the anonymous struct is initialized
+        by cloning all captured variables into the anonymous struct. to ensure
+        that modifications to the captured variables are visible to the creator
+        of the closure, captured variables that are modified must be shared RC
+        pointers to the actual value
+         */
+        todo!("TODO(mvp) write MIR execution for Closure")
     }
 }

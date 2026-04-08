@@ -4,10 +4,7 @@ use std::fmt::{self, Write};
 
 use pretty_print::PrettyPrinter;
 
-use crate::{
-    hir::{Expr, ExprKind, FunctionId, HirToMirFnBuilder, NameContext, NlAbstractTy},
-    mir,
-};
+use crate::hir::{Expr, ExprKind, FunctionId, NameContext, NlAbstractTy};
 
 #[derive(Debug, Clone)]
 pub struct CallUserFn {
@@ -32,10 +29,6 @@ impl Expr for CallUserFn {
         for arg in &mut self.args {
             visitor(arg.as_mut());
         }
-    }
-
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
-        todo!("TODO(mvp) write MIR execution for CallUserFn")
     }
 
     fn pretty_print<W: fmt::Write>(

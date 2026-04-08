@@ -4,10 +4,7 @@ use std::fmt::{self, Write};
 
 use pretty_print::PrettyPrinter;
 
-use crate::{
-    hir::{Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy},
-    mir,
-};
+use crate::hir::{Expr, ExprKind, NameContext, NlAbstractTy};
 
 fn pretty_print_patch_loc_relation<W: fmt::Write>(
     rel: &PatchLocRelation,
@@ -60,10 +57,6 @@ impl Expr for TurtleRotate {
         visitor(self.angle.as_mut());
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
-        todo!("TODO(mvp) write MIR execution for TurtleRotate")
-    }
-
     fn pretty_print<W: fmt::Write>(
         &self,
         p: &mut PrettyPrinter<W>,
@@ -103,10 +96,6 @@ impl Expr for TurtleForward {
         visitor(self.distance.as_mut());
     }
 
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
-        todo!("TODO(mvp) write MIR execution for TurtleForward")
-    }
-
     fn pretty_print<W: fmt::Write>(
         &self,
         p: &mut PrettyPrinter<W>,
@@ -144,10 +133,6 @@ impl Expr for CanMove {
         visitor(self.workspace.as_mut());
         visitor(self.turtle.as_mut());
         visitor(self.distance.as_mut());
-    }
-
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
-        todo!("TODO(mvp) write MIR execution for CanMove")
     }
 
     fn pretty_print<W: fmt::Write>(
@@ -198,10 +183,6 @@ impl Expr for PatchRelative {
         }
         visitor(self.turtle.as_mut());
         visitor(self.distance.as_mut());
-    }
-
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
-        todo!("TODO(mvp) write MIR execution for PatchRelative")
     }
 
     fn pretty_print<W: fmt::Write>(

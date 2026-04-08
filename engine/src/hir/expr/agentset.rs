@@ -4,10 +4,7 @@ use std::fmt::{self, Write};
 
 use pretty_print::PrettyPrinter;
 
-use crate::{
-    hir::{Expr, ExprKind, NameContext, NlAbstractTy, build_mir::HirToMirFnBuilder},
-    mir,
-};
+use crate::hir::{Expr, ExprKind, NameContext, NlAbstractTy};
 
 #[derive(Debug, Clone)]
 pub enum Agentset {
@@ -38,10 +35,6 @@ impl Expr for Agentset {
             Agentset::AllTurtles => {}
             Agentset::AllPatches => {}
         }
-    }
-
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
-        todo!("TODO(mvp) write MIR code to generate a value representing the agentset")
     }
 
     fn pretty_print<W: Write>(&self, p: &mut PrettyPrinter<W>, _names: NameContext) -> fmt::Result {

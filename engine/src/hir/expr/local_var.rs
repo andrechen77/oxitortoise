@@ -4,10 +4,7 @@ use std::fmt::{self, Write};
 
 use pretty_print::PrettyPrinter;
 
-use crate::{
-    hir::{Expr, ExprKind, HirToMirFnBuilder, LocalId, NameContext, NlAbstractTy},
-    mir,
-};
+use crate::hir::{Expr, ExprKind, LocalId, NameContext, NlAbstractTy};
 
 #[derive(Debug, Clone)]
 pub struct GetLocalVar {
@@ -24,10 +21,6 @@ impl Expr for GetLocalVar {
     }
 
     fn visit_children_mut(&mut self, _visitor: impl FnMut(&mut ExprKind)) {}
-
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
-        todo!("TODO(mvp) write MIR execution for GetLocalVar")
-    }
 
     fn pretty_print<W: Write>(&self, p: &mut PrettyPrinter<W>, names: NameContext) -> fmt::Result {
         p.add_fn_call("get", |p| {
@@ -54,10 +47,6 @@ impl Expr for SetLocalVar {
 
     fn visit_children_mut(&mut self, mut visitor: impl FnMut(&mut ExprKind)) {
         visitor(self.value.as_mut());
-    }
-
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
-        todo!("TODO(mvp) write MIR execution for SetLocalVar")
     }
 
     fn pretty_print<W: fmt::Write>(

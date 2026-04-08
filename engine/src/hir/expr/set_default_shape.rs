@@ -4,9 +4,7 @@ use std::fmt::{self, Write};
 
 use pretty_print::PrettyPrinter;
 
-use crate::hir::NameContext;
-use crate::hir::{Expr, ExprKind, HirToMirFnBuilder, NlAbstractTy, TurtleBreedId};
-use crate::mir;
+use crate::hir::{Expr, ExprKind, NameContext, NlAbstractTy, TurtleBreedId};
 
 #[derive(Debug, Clone)]
 pub struct SetDefaultShape {
@@ -30,10 +28,6 @@ impl Expr for SetDefaultShape {
     fn visit_children_mut(&mut self, mut visitor: impl FnMut(&mut ExprKind)) {
         visitor(self.workspace.as_mut());
         visitor(self.shape.as_mut());
-    }
-
-    fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
-        todo!("TODO(mvp) write MIR execution for SetDefaultShape")
     }
 
     fn pretty_print<W: fmt::Write>(
