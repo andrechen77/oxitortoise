@@ -10,6 +10,7 @@ use crate::{
         build_mir::translate_expr, expr::Agentset,
     },
     mir,
+    sim::{patch::PatchId, turtle::TurtleId},
     util::reflection::Reflect,
 };
 
@@ -66,7 +67,11 @@ impl Ask {
         let operation = match self.recipients.as_ref() {
             ExprKind::Agentset(Agentset::AllTurtles) => {
                 // statically known to be all turtles
-                let body_local = translate_expr(builder, &self.body)?;
+                let ExprKind::Closure(closure) = self.body.as_ref() else {
+                    panic!("expected ask body to be a closure literal, got: {:?}", self.body);
+                };
+                let body_local =
+                    closure.write_mir_execution_with_static_types::<TurtleId, ()>(builder);
                 mir::Operation::CallHostFunction {
                     function: &ask_all_turtles::FN_INFO,
                     args: vec![
@@ -78,7 +83,11 @@ impl Ask {
             }
             ExprKind::Agentset(Agentset::AllPatches) => {
                 // statically known to be all patches
-                let body_local = translate_expr(builder, &self.body)?;
+                let ExprKind::Closure(closure) = self.body.as_ref() else {
+                    panic!("expected ask body to be a closure literal, got: {:?}", self.body);
+                };
+                let body_local =
+                    closure.write_mir_execution_with_static_types::<PatchId, ()>(builder);
                 mir::Operation::CallHostFunction {
                     function: &ask_all_patches::FN_INFO,
                     args: vec![

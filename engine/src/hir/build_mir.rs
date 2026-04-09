@@ -132,30 +132,31 @@ pub fn translate_expr(
     builder: &mut HirToMirFnBuilder,
     expr: &hir::ExprKind,
 ) -> Option<mir::LocalId> {
+    use hir::ExprKind as E;
     match expr {
         // control flow
-        hir::ExprKind::Block(block) => block.write_mir_execution(builder),
-        hir::ExprKind::Break(break_expr) => break_expr.write_mir_execution(builder),
-        hir::ExprKind::IfElse(if_else) => if_else.write_mir_execution(builder),
+        E::Block(block) => block.write_mir_execution(builder),
+        E::Break(break_expr) => break_expr.write_mir_execution(builder),
+        E::IfElse(if_else) => if_else.write_mir_execution(builder),
 
         // agent variables
-        hir::ExprKind::GetGlobalVar(get_global_var) => get_global_var.write_mir_execution(builder),
-        hir::ExprKind::GetTurtleVar(get_turtle_var) => get_turtle_var.write_mir_execution(builder),
-        hir::ExprKind::SetTurtleVar(set_turtle_var) => set_turtle_var.write_mir_execution(builder),
-        hir::ExprKind::GetPatchVar(get_patch_var) => get_patch_var.write_mir_execution(builder),
-        hir::ExprKind::SetPatchVar(set_patch_var) => set_patch_var.write_mir_execution(builder),
+        E::GetGlobalVar(get_global_var) => get_global_var.write_mir_execution(builder),
+        E::GetTurtleVar(get_turtle_var) => get_turtle_var.write_mir_execution(builder),
+        E::SetTurtleVar(set_turtle_var) => set_turtle_var.write_mir_execution(builder),
+        E::GetPatchVar(get_patch_var) => get_patch_var.write_mir_execution(builder),
+        E::SetPatchVar(set_patch_var) => set_patch_var.write_mir_execution(builder),
 
         // arith ops
-        hir::ExprKind::BinaryArith(binary_arith) => binary_arith.write_mir_execution(builder),
-        hir::ExprKind::BinaryCmp(binary_cmp) => binary_cmp.write_mir_execution(builder),
-        hir::ExprKind::BinaryBool(binary_bool) => binary_bool.write_mir_execution(builder),
-        hir::ExprKind::LogicalNot(logical_not) => logical_not.write_mir_execution(builder),
-        hir::ExprKind::Negate(negate) => negate.write_mir_execution(builder),
+        E::BinaryArith(binary_arith) => binary_arith.write_mir_execution(builder),
+        E::BinaryCmp(binary_cmp) => binary_cmp.write_mir_execution(builder),
+        E::BinaryBool(binary_bool) => binary_bool.write_mir_execution(builder),
+        E::LogicalNot(logical_not) => logical_not.write_mir_execution(builder),
+        E::Negate(negate) => negate.write_mir_execution(builder),
 
-        hir::ExprKind::Ask(ask) => ask.write_mir_execution(builder),
-        hir::ExprKind::CreateTurtles(create_turtles) => create_turtles.write_mir_execution(builder),
+        E::Ask(ask) => ask.write_mir_execution(builder),
+        E::CreateTurtles(create_turtles) => create_turtles.write_mir_execution(builder),
 
-        hir::ExprKind::ClearAll(clear_all) => clear_all.write_mir_execution(builder),
+        E::ClearAll(clear_all) => clear_all.write_mir_execution(builder),
 
         _ => todo!("TODO(mvp) write MIR execution for {:?}", expr),
     }

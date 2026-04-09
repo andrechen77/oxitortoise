@@ -79,7 +79,7 @@ impl Closure {
     pub fn write_mir_execution_with_static_types<Arg, Ret>(
         &self,
         builder: &mut HirToMirFnBuilder,
-    ) -> Option<mir::LocalId>
+    ) -> mir::LocalId
     where
         JitCallback<'static, Arg, Ret>: Reflect,
     {
@@ -129,7 +129,7 @@ impl Closure {
             call_fn,
             drop_fn,
         );
-        Some(result)
+        result
     }
 }
 
