@@ -89,8 +89,8 @@ impl Ask {
                 }
             }
             other => {
-                let recipients_local = translate_expr(builder, &self.recipients)?;
-                let body_local = translate_expr(builder, &self.body)?;
+                let _recipients_local = translate_expr(builder, &self.recipients)?;
+                let _body_local = translate_expr(builder, &self.body)?;
                 todo!("TODO(mvp) write MIR execution for Ask with dynamic agentset: {:?}", other);
             }
         };

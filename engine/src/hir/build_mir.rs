@@ -20,7 +20,7 @@ pub struct HirToMirFnBuilder<'a, 'b> {
 
 #[derive(Debug, Default)]
 pub struct HirToMirFnTranslator {
-    pub locals: BTreeMap<hir::LocalId, mir::LocalId>,
+    pub locals: BTreeMap<hir::LocalId, mir::Place>,
     /// Maps each HIR label to an MIR label, as well as the output local that
     /// breaks from that label should use. The output local might be none if
     /// it has not been used yet.
@@ -70,40 +70,57 @@ pub fn hir_to_mir(hir: &hir::Program) -> mir::Program {
     for (hir_fn_id, hir_fn) in &hir.functions {
         let hir_fn_body = &hir.function_bodies[hir_fn_id];
 
-        // create a builder to track state while translating
+        let name_context = NameContext::from_program(hir);
         let mut mir_fn_builder = builder.create_function();
         let mut translator = HirToMirFnTranslator::default();
-
-        let mut builder = HirToMirFnBuilder {
-            hir_names: NameContext::from_program(hir),
-            type_mapping: &type_mapping,
-            mir: &mut mir_fn_builder,
-            translator: &mut translator,
-        };
-
         let hir::Function { debug_name, parameters, return_ty, is_entrypoint } = hir_fn;
 
-        // add all the function parameters to the function builder
-        for (hir_param_id, param_decl) in parameters {
-            let ty = builder.type_mapping.local_var_ty(*hir_param_id);
-            let mir_param_id = builder.mir.create_parameter(mir::LocalDecl {
-                debug_name: Some(param_decl.debug_name.clone()),
-                ty,
-            });
-            builder.translator.locals.insert(*hir_param_id, mir_param_id);
-        }
+        translate_function(
+            name_context,
+            &type_mapping,
+            &mut mir_fn_builder,
+            &mut translator,
+            &parameters,
+            hir_fn_body,
+        );
 
-        // add all the nodes to the function body
-        let return_value =
-            builder.with_locals(&hir_fn.parameters, |builder| translate_expr(builder, hir_fn_body));
-
-        if let Some(return_value) = return_value {
-            mir_fn_builder.set_return(return_value);
-        }
         mir_fn_builder.finish();
     }
 
     todo!()
+}
+
+pub fn translate_function(
+    hir_names: NameContext,
+    type_mapping: &TypeMapping,
+    mir_fn_builder: &mut mir::FunctionBuilder,
+    translator: &mut HirToMirFnTranslator,
+    parameters: &BTreeMap<hir::LocalId, hir::LocalDecl>,
+    body: &hir::ExprKind,
+) {
+    let mut builder = HirToMirFnBuilder {
+        hir_names,
+        type_mapping: &type_mapping,
+        mir: mir_fn_builder,
+        translator,
+    };
+
+    // add all the function parameters to the function builder
+    for (hir_param_id, param_decl) in parameters {
+        let ty = builder.type_mapping.local_var_ty(*hir_param_id);
+        let mir_param_id = builder.mir.create_parameter(mir::LocalDecl {
+            debug_name: Some(param_decl.debug_name.clone()),
+            ty,
+        });
+        builder.translator.locals.insert(*hir_param_id, mir_param_id.place());
+    }
+
+    // add all the nodes to the function body
+    let return_value = builder.with_locals(parameters, |builder| translate_expr(builder, body));
+
+    if let Some(return_value) = return_value {
+        mir_fn_builder.set_return(return_value);
+    }
 }
 
 /// Writes the MIR statements that correspond to the evaluation of the given
@@ -154,23 +171,30 @@ pub fn clone_to_new(
 ) -> mir::LocalId {
     let dst =
         builder.create_local(mir::LocalDecl { debug_name: None, ty: builder.type_of_place(&src) });
+    clone_to_uninit(builder, src, dst.place(), clone_kind);
+    dst
+}
+
+pub fn clone_to_uninit(
+    builder: &mut mir::FunctionBuilder,
+    src: mir::Place,
+    dst: mir::Place,
+    clone_kind: &CloneKind,
+) {
     match clone_kind {
-        CloneKind::Copy => builder.add_operation_with_dst(
-            dst.place(),
-            mir::Operation::Operand(mir::PlaceOperand::Copy(src)),
-        ),
+        CloneKind::Copy => builder
+            .add_operation_with_dst(dst, mir::Operation::Operand(mir::PlaceOperand::Copy(src))),
         CloneKind::Dynamic { clone_fn_info, .. } => builder.add_operation_with_dst(
-            dst.place(),
+            dst,
             mir::Operation::CallHostFunction {
                 function: clone_fn_info,
                 args: vec![mir::PlaceOperand::Borrow(src)],
             },
         ),
         CloneKind::None => {
-            panic!("Cannot load a variable from memory that is neither Copy nor Clone");
+            panic!("Cannot clone a value that is neither Copy nor Clone");
         }
     }
-    dst
 }
 
 /// Moves a value from one place to another. This may potentially destroy the

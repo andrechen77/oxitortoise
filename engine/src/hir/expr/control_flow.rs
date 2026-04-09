@@ -55,7 +55,7 @@ impl Scope {
             let mir_local_id = builder
                 .mir
                 .create_local(mir::LocalDecl { debug_name: Some(decl.debug_name.clone()), ty });
-            builder.translator.locals.insert(*local_id, mir_local_id);
+            builder.translator.locals.insert(*local_id, mir_local_id.place());
         }
         // the scope does not remove the locals from the translator after the inner expression is
         // evaluated. At the time this code was written, this did not seem to be
@@ -65,8 +65,9 @@ impl Scope {
             builder.with_locals(&self.locals, |builder| translate_expr(builder, &self.inner));
 
         for local_id in self.locals.keys() {
-            let mir_local_id = builder.translator.locals[local_id];
-            let ty = builder.mir.type_of_place(&mir_local_id.place());
+            let mir_place = builder.translator.locals[local_id].clone();
+            assert!(mir_place.projections.is_empty());
+            let ty = builder.mir.type_of_place(&mir_place);
 
             // only insert a drop instruction if the local has an associated
             // statically known type, because it if doesn't have a statically
@@ -75,7 +76,7 @@ impl Scope {
                 && static_ty.drop_fn.is_some()
             {
                 builder.mir.add_statement(mir::Statement::Elementary(
-                    mir::ElementaryStatement::Drop { src: mir_local_id.place() },
+                    mir::ElementaryStatement::Drop { src: mir_place },
                 ));
             }
         }

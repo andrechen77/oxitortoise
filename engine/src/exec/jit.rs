@@ -1,6 +1,12 @@
-use std::marker::PhantomData;
+use std::{marker::PhantomData, mem::offset_of};
 
-use crate::{sim::value::PackedAny, util::rng::CanonRng, workspace::Workspace};
+use crate::{
+    hir::HirToMirFnBuilder,
+    mir,
+    sim::value::PackedAny,
+    util::{reflection::Reflect, rng::CanonRng},
+    workspace::Workspace,
+};
 use macro_reflect::{ReflectComponents, reflect};
 
 pub enum InstallLirError {
@@ -127,6 +133,48 @@ impl<'env, Arg, Ret> JitCallback<'env, Arg, Ret> {
         // also know that the lifetime of 'env is live for the duration of the
         // call. The `drop` function has not been called yet.
         unsafe { (self.call)(self.env, workspace, rng, arg) }
+    }
+}
+
+impl<'env, Arg, Ret> JitCallback<'env, Arg, Ret>
+where
+    Self: Reflect,
+{
+    pub fn mir_initialize(
+        builder: &mut HirToMirFnBuilder,
+        env: mir::Place,
+        call_fn: mir::FunctionId,
+        drop_fn: mir::FunctionId,
+    ) -> mir::LocalId {
+        // this will light up if we change the fields without updating the function.
+        // This helps us ensure that all fields are initialized
+        #[allow(dead_code)]
+        fn assert_all_fields_present<'env, Arg, Ret>(s: &JitCallback<'env, Arg, Ret>) {
+            let JitCallback { env: _, call: _, drop: _, _phantom: _ } = s;
+        }
+
+        let result_local =
+            builder.mir.create_local(mir::LocalDecl { debug_name: None, ty: Self::mir_type() });
+
+        let call_fn =
+            builder.mir.add_operation(None, mir::Operation::FunctionPtr { function: call_fn });
+        let drop_fn =
+            builder.mir.add_operation(None, mir::Operation::FunctionPtr { function: drop_fn });
+
+        builder.mir.add_operation_with_dst(
+            result_local.place().proj_field(offset_of!(Self, env)),
+            mir::Operation::Operand(mir::PlaceOperand::Copy(env)),
+        );
+        builder.mir.add_operation_with_dst(
+            result_local.place().proj_field(offset_of!(Self, call)),
+            mir::Operation::Operand(mir::PlaceOperand::Move(call_fn)),
+        );
+        builder.mir.add_operation_with_dst(
+            result_local.place().proj_field(offset_of!(Self, drop)),
+            mir::Operation::Operand(mir::PlaceOperand::Move(drop_fn)),
+        );
+
+        todo!()
     }
 }
 

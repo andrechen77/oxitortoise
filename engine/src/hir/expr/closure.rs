@@ -1,14 +1,24 @@
 //! Nodes to represent closures.
 
-use std::collections::BTreeMap;
-use std::fmt::{self, Write};
+use std::{
+    alloc::Layout,
+    collections::BTreeMap,
+    fmt::{self, Write},
+};
 
 use pretty_print::PrettyPrinter;
 
-use crate::hir::{
-    ClosureType, Expr, ExprKind, HirToMirFnBuilder, LocalDecl, LocalId, NameContext, NlAbstractTy,
+use crate::{
+    exec::jit::JitCallback,
+    hir::{
+        ClosureType, Expr, ExprKind, HirToMirFnBuilder, LocalDecl, LocalId, NameContext,
+        NlAbstractTy,
+        build_mir::{self, HirToMirFnTranslator},
+    },
+    mir,
+    sim::value::BoxedAny,
+    util::{rc::create_erased_rc, reflection::Reflect},
 };
-use crate::mir;
 
 #[derive(Debug, Clone)]
 pub struct Closure {
@@ -66,24 +76,135 @@ impl Expr for Closure {
 }
 
 impl Closure {
-    pub fn write_mir_execution(&self, _builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
-        /*
-        there are a couple of scenarios to consider for the closure
+    pub fn write_mir_execution_with_static_types<Arg, Ret>(
+        &self,
+        builder: &mut HirToMirFnBuilder,
+    ) -> Option<mir::LocalId>
+    where
+        JitCallback<'static, Arg, Ret>: Reflect,
+    {
+        let mut inner_translator = HirToMirFnTranslator::default();
 
-        no captures: the env pointer can be any dangling pointer, including null.
-        the call function does not use the env pointer and the drop function does nothing.
+        let (env, env_ty) = if self.captures.is_empty() {
+            let env_ty = <*mut u8>::mir_type();
+            let env = builder.mir.add_operation_with_decl(
+                mir::LocalDecl { debug_name: None, ty: env_ty.clone() },
+                mir::Operation::Const { value: BoxedAny::new(std::ptr::null_mut::<u8>()) },
+            );
+            (env, env_ty)
+        } else {
+            // create an anonymous struct with the captures, and update
+            let captured_places: Vec<mir::Place> =
+                self.captures.iter().map(|cap| builder.translator.locals[cap].clone()).collect();
+            let (env, env_ty) = mir_create_anon_struct(builder, &captured_places);
+            (env, env_ty)
+        };
 
-        captures without escape: the env pointer is a non-owning reference that points to the stack
-        frame, and the call function uses stack frame offsets to access the
-        captured variables.
+        let call_fn = {
+            let mut mir_fn_builder = builder.mir.create_another_function();
+            build_mir::translate_function(
+                builder.hir_names,
+                builder.type_mapping,
+                &mut mir_fn_builder,
+                &mut inner_translator,
+                &self.parameters,
+                &self.body,
+            );
+            mir_fn_builder.finish()
+        };
 
-        captures with escape: the env pointers is a owning pointer to an anonymous
-        struct that contains captured variables. the anonymous struct is initialized
-        by cloning all captured variables into the anonymous struct. to ensure
-        that modifications to the captured variables are visible to the creator
-        of the closure, captured variables that are modified must be shared RC
-        pointers to the actual value
-         */
-        todo!("TODO(mvp) write MIR execution for Closure")
+        let drop_fn = {
+            let mut mir_fn_builder = builder.mir.create_another_function();
+            mir_fn_builder.create_parameter(mir::LocalDecl { debug_name: None, ty: env_ty });
+            if !self.captures.is_empty() {
+                todo!("add statements to the function to drop the value")
+            }
+            mir_fn_builder.finish()
+        };
+
+        // create and initialize a local variable to hold the closure
+        let result = <JitCallback<'static, Arg, Ret>>::mir_initialize(
+            builder,
+            env.place(),
+            call_fn,
+            drop_fn,
+        );
+        Some(result)
     }
+}
+
+/// Creates a heap-allocated anonymous struct with the provided values. The
+/// values are cloned into the struct and a pointer to the heap allocation is
+/// returned.
+fn mir_create_anon_struct(
+    builder: &mut HirToMirFnBuilder,
+    values: &[mir::Place],
+) -> (mir::LocalId, mir::MirType) {
+    // aggregate the fields together to find the total layout as well as offsets
+    // and types of each field
+    let mut total_layout = Layout::new::<()>();
+    let mut fields = Vec::new();
+    for value in values {
+        let field_ty = builder.mir.type_of_place(&value);
+        let field_layout = field_ty.layout();
+        let (new_layout, offset) = total_layout
+            .extend(field_layout)
+            .expect("if the layout overflows we have bigger problems");
+        total_layout = new_layout;
+        fields.push((offset, field_ty));
+    }
+
+    // now put it all together to create a definition of the struct type
+    let struct_ty = mir::MirTypeInfo::with_fields(total_layout, fields.clone());
+
+    // define a function that will drop all the values in the struct
+    let drop_fn = {
+        let mut drop_fn_builder = builder.mir.create_another_function();
+
+        // add the parameter: a pointer to the struct being dropped
+        let param_ty = mir::MirTypeInfo::ptr_to(struct_ty.clone());
+        let param =
+            drop_fn_builder.create_parameter(mir::LocalDecl { debug_name: None, ty: param_ty });
+
+        // add drop statements for each field
+        for (offset, _) in &fields {
+            let field_place = param.place().proj_field(*offset);
+            drop_fn_builder.add_statement(mir::Statement::Elementary(
+                mir::ElementaryStatement::Drop { src: field_place },
+            ));
+        }
+
+        drop_fn_builder.finish()
+    };
+
+    // call a host function to allocate the struct on the heap
+    let size: u32 = total_layout.size().try_into().unwrap();
+    let align: u32 = total_layout.align().try_into().unwrap();
+    let size =
+        builder.mir.add_operation(None, mir::Operation::Const { value: BoxedAny::new(size) });
+    let align =
+        builder.mir.add_operation(None, mir::Operation::Const { value: BoxedAny::new(align) });
+    let drop_fn =
+        builder.mir.add_operation(None, mir::Operation::FunctionPtr { function: drop_fn });
+    let erased_rc = builder.mir.add_operation(
+        None,
+        mir::Operation::CallHostFunction {
+            function: &create_erased_rc::FN_INFO,
+            args: vec![
+                mir::PlaceOperand::Move(size),
+                mir::PlaceOperand::Move(align),
+                mir::PlaceOperand::Move(drop_fn),
+            ],
+        },
+    );
+
+    // initialize the fields of the struct with clones of the values
+    for (src_place, (offset, ty)) in values.iter().zip(fields.iter()) {
+        let dst = erased_rc.place().proj_deref().proj_field(*offset);
+        let clone_kind =
+            &ty.static_ty.expect("the field must be cloneable to be initialized").clone;
+        build_mir::clone_to_uninit(builder.mir, src_place.clone(), dst, clone_kind);
+    }
+
+    (erased_rc, struct_ty)
 }

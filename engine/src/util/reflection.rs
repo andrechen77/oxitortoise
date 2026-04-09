@@ -1,4 +1,4 @@
-use std::alloc::Layout;
+use std::{alloc::Layout, ptr::NonNull};
 
 use macro_reflect::reflect;
 
@@ -102,9 +102,28 @@ macro_rules! impl_reflect_for_primitive {
         #[reflect(unsafe(is_zeroable))]
         impl Reflect for $ty {}
     };
+
+    ($ty:ty; unsafe(prim_contents($contents:expr))) => {
+        unsafe impl ReflectComponents for $ty
+        where
+            Self: Copy,
+        {
+            fn mir_type() -> MirType {
+                ::std::sync::Arc::new(crate::mir::MirTypeInfo {
+                    static_ty: Some(<$ty as Reflect>::TYPE),
+                    contents: $contents,
+                })
+            }
+        }
+
+        #[reflect]
+        impl Reflect for $ty {}
+    };
 }
 
 impl_reflect_for_primitive!((); unsafe(is_zeroable), unsafe(prim_contents(MirTypeContents::None)));
 impl_reflect_for_primitive!(bool; unsafe(is_zeroable), unsafe(prim_contents(MirTypeContents::IsPrimitive(lir::ValType::I8))));
 impl_reflect_for_primitive!(u32; unsafe(is_zeroable), unsafe(prim_contents(MirTypeContents::IsPrimitive(lir::ValType::I32))));
 impl_reflect_for_primitive!(f64; unsafe(is_zeroable), unsafe(prim_contents(MirTypeContents::IsPrimitive(lir::ValType::F64))));
+impl_reflect_for_primitive!(fn(NonNull<u8>); unsafe(prim_contents(MirTypeContents::IsPrimitive(lir::ValType::FnPtr))));
+impl_reflect_for_primitive!(*mut u8; unsafe(is_zeroable), unsafe(prim_contents(MirTypeContents::IsPrimitive(lir::ValType::Ptr))));

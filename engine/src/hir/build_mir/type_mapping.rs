@@ -34,9 +34,13 @@ pub struct LocalVarMapping {
     // allocation requirement in the type itself by having the type be a
     // rc-pointer to the type of the value
     /// Whether the local variable needs to be stored in the heap. This is true
-    /// if the local variable is captured by a closure that could outlive the
-    /// stack frame.
+    /// if the local variable is  captured by a closure that could outlive the
+    /// stack frame while also being modified.
     heap: bool,
+    /// Whether the local variable is captured by a closure.
+    ///
+    /// Used to determine if a variable must be stored on the stack.
+    captured: bool,
 }
 
 impl TypeMapping {
@@ -103,7 +107,7 @@ pub fn make_type_mapping(hir: &hir::Program) -> TypeMapping {
                         // default to not being stored in the heap first. then
                         // any closures being visited that capture this local
                         // can set it to true.
-                        let mapping = LocalVarMapping { ty, heap: false };
+                        let mapping = LocalVarMapping { ty, heap: false, captured: false };
                         local_var_tys.insert(*local_id, mapping);
                     }
                 }
@@ -112,6 +116,10 @@ pub fn make_type_mapping(hir: &hir::Program) -> TypeMapping {
                         let mapping = local_var_tys.get_mut(capture).expect(
                             "captured variable must have been previously defined by a scope",
                         );
+                        mapping.captured = true;
+                        // conservatively estimate that if a variable is captured,
+                        // it might outlive the stack frame. we could make this
+                        // more precise by actually checking how the closure is used
                         mapping.heap = true;
                     }
                 }
@@ -184,7 +192,7 @@ pub fn make_type_mapping(hir: &hir::Program) -> TypeMapping {
             } else {
                 mir_repr_simple(&param_decl.ty)
             };
-            let mapping = LocalVarMapping { ty, heap: false };
+            let mapping = LocalVarMapping { ty, heap: false, captured: false };
             local_var_tys.insert(*param_id, mapping);
         }
     }

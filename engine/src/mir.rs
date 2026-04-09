@@ -94,10 +94,10 @@ pub struct Loop {
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct Place {
     /// The local variable that the place is in.
-    local: LocalId,
+    pub local: LocalId,
     /// The projections that are applied to the local variable to get to the
     /// place. An empty list refers to the entire local variable.
-    projections: Vec<Projection>,
+    pub projections: Vec<Projection>,
 }
 
 impl Place {
@@ -171,6 +171,8 @@ pub enum Operation {
     Operand(PlaceOperand),
     /// Produces a new instance of the specified value.
     Const { value: BoxedAny }, // use BoxedAny because it can represent non-NetLogo types too
+    /// Lowers to the address of the specified function.
+    FunctionPtr { function: FunctionId },
     /// A binary arithmetic between two scalars.
     ///
     /// Since the operands are scalars, we can directly use the LIR opcode

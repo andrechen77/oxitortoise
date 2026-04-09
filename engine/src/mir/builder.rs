@@ -75,8 +75,12 @@ impl<'a> FunctionBuilder<'a> {
         new
     }
 
+    pub fn create_another_function(&mut self) -> FunctionBuilder<'_> {
+        FunctionBuilder::new(self.program_builder)
+    }
+
     /// Finishes the function builder and adds the function to the program builder.
-    pub fn finish(mut self) {
+    pub fn finish(mut self) -> FunctionId {
         let body = if self.statements_out.len() == 1 {
             self.statements_out.pop().expect("we checked that the length is 1")
         } else {
@@ -89,6 +93,7 @@ impl<'a> FunctionBuilder<'a> {
             body,
         };
         self.program_builder.functions.insert(self.fn_id, function);
+        self.fn_id
     }
 
     pub fn set_return(&mut self, local: LocalId) {
@@ -139,6 +144,10 @@ impl<'a> FunctionBuilder<'a> {
                 }
             },
             Operation::Const { value } => (value.ty().make_mir_type)(),
+            Operation::FunctionPtr { function: _ } => {
+                // we can probably get away with making no assertions about the type
+                MirType::default()
+            }
             Operation::CallHostFunction { function, .. } => (function.return_type.make_mir_type)(),
             Operation::CallUserFunction { function, .. } => {
                 self.program_builder.function(*function).return_ty().clone()
