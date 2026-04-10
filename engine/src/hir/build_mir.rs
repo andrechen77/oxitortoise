@@ -153,12 +153,44 @@ pub fn translate_expr(
         E::LogicalNot(logical_not) => logical_not.write_mir_execution(builder),
         E::Negate(negate) => negate.write_mir_execution(builder),
 
+        // other
         E::Ask(ask) => ask.write_mir_execution(builder),
         E::CreateTurtles(create_turtles) => create_turtles.write_mir_execution(builder),
-
         E::ClearAll(clear_all) => clear_all.write_mir_execution(builder),
+        E::Distancexy(distancexy) => distancexy.write_mir_execution(builder),
+        E::AdvanceTick(advance_tick) => advance_tick.write_mir_execution(builder),
+        E::Diffuse(diffuse) => diffuse.write_mir_execution(builder),
+        E::ScaleColor(scale_color) => scale_color.write_mir_execution(builder),
+        E::TurtleForward(turtle_forward) => turtle_forward.write_mir_execution(builder),
+        E::TurtleRotate(turtle_rotate) => turtle_rotate.write_mir_execution(builder),
+        E::PatchAt(patch_at) => patch_at.write_mir_execution(builder),
+        E::GetTick(get_tick) => get_tick.write_mir_execution(builder),
+        E::ResetTicks(reset_ticks) => reset_ticks.write_mir_execution(builder),
+        E::MaxPxcor(max_pxcor) => max_pxcor.write_mir_execution(builder),
+        E::MaxPycor(max_pycor) => max_pycor.write_mir_execution(builder),
+        E::OneOf(one_of) => one_of.write_mir_execution(builder),
+        E::ListLiteral(list_literal) => list_literal.write_mir_execution(builder),
+        E::NumberLiteral(number_literal) => number_literal.write_mir_execution(builder),
+        E::UnitLiteral(unit_literal) => Some(unit_literal.write_mir_execution(builder)),
 
-        _ => todo!("TODO(mvp) write MIR execution for {:?}", expr),
+        // TODO fill all other match arms
+        E::Agentset(_agentset) => todo!(),
+        E::CallUserFn(_call_user_fn) => todo!(),
+        E::CanMove(_can_move) => todo!(),
+        E::GetLocalVar(_get_local_var) => todo!(),
+        E::StringLiteral(_string_literal) => todo!(),
+        E::NobodyLiteral(_nobody_literal) => todo!(),
+        E::Of(_of) => todo!(),
+        E::OffsetDistanceByHeading(_offset_distance_by_heading) => todo!(),
+        E::PatchRelative(_patch_relative) => todo!(),
+        E::RandomInt(_random_int) => todo!(),
+        E::Scope(_scope) => todo!(),
+        E::SetDefaultShape(_set_default_shape) => todo!(),
+        E::SetLocalVar(_set_local_var) => todo!(),
+
+        E::Closure(_closure) => todo!("TODO implement standalone closure"),
+        E::EuclideanDistanceNoWrap(_euclidean_distance_no_wrap) => unimplemented!(),
+        E::PointConstructor(_point_constructor) => unimplemented!(),
     }
 }
 

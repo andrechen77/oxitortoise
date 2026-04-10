@@ -30,16 +30,17 @@ const HEADING_MAX: f64 = 360.0;
 impl Heading {
     /// The dx corresponding to this heading, which is the sine of the angle.
     pub fn dx(self) -> CoordFloat {
-        self.0.to_radians().sin()
+        self.0.to_radians().sin().into()
     }
 
     /// The dy corresponding to this heading, which is the cosine of the angle.
     pub fn dy(self) -> CoordFloat {
-        self.0.to_radians().cos()
+        self.0.to_radians().cos().into()
     }
 
     pub fn dx_and_dy(self) -> (CoordFloat, CoordFloat) {
-        self.0.to_radians().sin_cos()
+        let (dx, dy) = self.0.to_radians().sin_cos();
+        (dx.into(), dy.into())
     }
 
     pub fn random<R: Rng + ?Sized>(rng: &mut R) -> Self {

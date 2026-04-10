@@ -1,5 +1,6 @@
-use derive_more::derive::{
-    Add, AddAssign, Display, Div, DivAssign, From, Mul, MulAssign, Neg, Sub, SubAssign,
+use derive_more::{
+    Deref,
+    derive::{Add, AddAssign, Display, Div, DivAssign, From, Mul, MulAssign, Neg, Sub, SubAssign},
 };
 use macro_reflect::{ReflectComponents, reflect};
 
@@ -11,7 +12,7 @@ use crate::sim::{color::Color, topology::CoordInt, turtle::TurtleWho};
 // TODO(mvp) implement Ord and Eq
 // FIXME these impls don't guarantee that the result is finite. add similar
 // changes to the compilation of arithmetic operations in the HIR
-#[derive(Neg, Add, AddAssign, Sub, SubAssign, Mul, MulAssign, Div, DivAssign)]
+#[derive(Deref, Neg, Add, AddAssign, Sub, SubAssign, Mul, MulAssign, Div, DivAssign)]
 #[mul(forward)]
 #[div(forward)]
 #[repr(transparent)]

@@ -149,9 +149,11 @@ where
         // this will light up if we change the fields without updating the function.
         // This helps us ensure that all fields are initialized
         #[allow(dead_code)]
-        fn assert_all_fields_present<'env, Arg, Ret>(s: &JitCallback<'env, Arg, Ret>) {
-            let JitCallback { env: _, call: _, drop: _, _phantom: _ } = s;
-        }
+        const {
+            let _ = |s: JitCallback<'env, Arg, Ret>| {
+                let JitCallback::<'env, Arg, Ret> { env: _, call: _, drop: _, _phantom: _ } = s;
+            };
+        };
 
         let result_local =
             builder.mir.create_local(mir::LocalDecl { debug_name: None, ty: Self::mir_type() });

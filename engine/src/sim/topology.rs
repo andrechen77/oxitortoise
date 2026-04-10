@@ -1,6 +1,8 @@
-use std::fmt;
+use std::{fmt, mem::offset_of};
 
-use super::{patch::PatchId, value};
+use crate::{mir, util::reflection::Reflect as _};
+
+use super::{patch::PatchId, value, value::NlFloat};
 
 pub mod diffuse;
 mod heading;
@@ -12,7 +14,7 @@ use macro_reflect::{ReflectComponents, reflect};
 pub type CoordInt = i32;
 
 /// The type used to refer to floating-point patch coordinates.
-pub type CoordFloat = f64;
+pub type CoordFloat = NlFloat;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(C)]
@@ -43,10 +45,39 @@ pub struct Point {
 impl Reflect for Point {}
 
 impl Point {
-    pub const ORIGIN: Point = Point { x: 0.0, y: 0.0 };
+    pub const ORIGIN: Point = Point { x: NlFloat::new(0.0), y: NlFloat::new(0.0) };
 
     pub fn round_to_int(self) -> PointInt {
         PointInt { x: self.x.round() as CoordInt, y: self.y.round() as CoordInt }
+    }
+
+    pub fn mir_initialize_from_local(
+        builder: &mut mir::FunctionBuilder,
+        x: mir::LocalId,
+        y: mir::LocalId,
+    ) -> mir::LocalId {
+        // this will light up if we change the fields without updating the function.
+        // This helps us ensure that all fields are initialized
+        #[allow(dead_code)]
+        const {
+            let _ = |s: Point| {
+                let Point { x: _, y: _ } = s;
+            };
+        };
+
+        let result_local =
+            builder.create_local(mir::LocalDecl { debug_name: None, ty: Self::mir_type() });
+
+        builder.add_operation_with_dst(
+            result_local.into(),
+            mir::Operation::Operand(mir::PlaceOperand::Move(x)),
+        );
+        builder.add_operation_with_dst(
+            result_local.into(),
+            mir::Operation::Operand(mir::PlaceOperand::Move(y)),
+        );
+
+        result_local
     }
 }
 
@@ -58,7 +89,7 @@ impl fmt::Display for Point {
 
 impl From<PointInt> for Point {
     fn from(point: PointInt) -> Self {
-        Point { x: point.x as CoordFloat, y: point.y as CoordFloat }
+        Point { x: point.x.into(), y: point.y.into() }
     }
 }
 
@@ -129,12 +160,12 @@ impl Topology {
     pub fn new(spec: TopologySpec) -> Self {
         Self {
             spec,
-            min_x: spec.min_pxcor as CoordFloat - 0.5,
-            max_x: (spec.min_pxcor + spec.patches_width) as CoordFloat - 0.5,
-            world_width: (spec.patches_width + 1) as CoordFloat,
-            min_y: (spec.max_pycor - spec.patches_height) as CoordFloat + 0.5,
-            max_y: spec.max_pycor as CoordFloat + 0.5,
-            world_height: (spec.patches_height + 1) as CoordFloat,
+            min_x: NlFloat::from(spec.min_pxcor) - NlFloat::from(0.5),
+            max_x: NlFloat::from(spec.min_pxcor + spec.patches_width) - NlFloat::from(0.5),
+            world_width: NlFloat::from(spec.patches_width + 1),
+            min_y: NlFloat::from(spec.max_pycor - spec.patches_height) + NlFloat::from(0.5),
+            max_y: NlFloat::from(spec.max_pycor) + NlFloat::from(0.5),
+            world_height: NlFloat::from(spec.patches_height + 1),
         }
     }
 
@@ -218,6 +249,16 @@ impl Topology {
         self.world_height
     }
 
+    /// Derives `max-pxcor` from a `Topology`.
+    pub fn mir_project_max_pxcor(topology: mir::Place) -> mir::Place {
+        topology.proj_field(offset_of!(Topology, max_x))
+    }
+
+    /// Derives `max-pycor` from a `Topology`.
+    pub fn mir_project_max_pycor(topology: mir::Place) -> mir::Place {
+        topology.proj_field(offset_of!(Topology, max_y))
+    }
+
     /// Returns the `PatchId` of the patch at the given position. Assumes that
     /// the position is inside the world boundaries without having to wrap,
     /// otherwise the PatchId returned will be nonsense.
@@ -256,8 +297,8 @@ impl Topology {
         distance: value::NlFloat,
     ) -> Option<Point> {
         let (dx, dy) = heading.dx_and_dy();
-        let new_x = point.x + dx * distance.get();
-        let new_y = point.y + dy * distance.get();
+        let new_x = point.x + dx * distance;
+        let new_y = point.y + dy * distance;
         self.wrap_point(Point { x: new_x, y: new_y })
     }
 }
@@ -265,9 +306,10 @@ impl Topology {
 fn wrap_coordinate(coord: CoordFloat, min: CoordFloat, len: CoordFloat) -> CoordFloat {
     // the remainder has an absolute value less than `len`, and is positive if
     // coord > min and negative if coord < min
-    let remainder = (coord - min) % len;
+    let len = len.get();
+    let remainder = (coord - min).get() % len;
     let offset_from_min = if remainder < 0.0 { len + remainder } else { remainder };
-    min + offset_from_min
+    NlFloat::new(*min + offset_from_min)
 }
 
 pub fn euclidean_distance_no_wrap(a: Point, b: Point) -> value::NlFloat {

@@ -4,7 +4,20 @@ use std::fmt;
 
 use pretty_print::PrettyPrinter;
 
-use crate::hir::{Expr, ExprKind, NameContext, NlAbstractTy};
+use crate::{
+    hir::{
+        Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy,
+        build_mir::{self, translate_expr},
+    },
+    mir,
+    sim::{
+        patch::PatchId,
+        topology::{Point, Topology},
+        world::World,
+    },
+    util::reflection::Reflect,
+    workspace::Workspace,
+};
 
 #[derive(Debug, Clone)]
 pub struct OffsetDistanceByHeading {
@@ -88,6 +101,25 @@ impl Expr for PatchAt {
     }
 }
 
+impl PatchAt {
+    pub fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
+        let Self { workspace, x, y } = self;
+        let workspace = translate_expr(builder, workspace)?;
+        let x = translate_expr(builder, x)?;
+        let y = translate_expr(builder, y)?;
+
+        let operation = mir::Operation::CallHostFunction {
+            function: &patch_at::FN_INFO,
+            args: vec![
+                mir::PlaceOperand::Copy(workspace.place()),
+                mir::PlaceOperand::Move(x),
+                mir::PlaceOperand::Move(y),
+            ],
+        };
+        Some(builder.mir.add_operation(None, operation))
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct MaxPxcor {
     pub workspace: Box<ExprKind>,
@@ -119,6 +151,22 @@ impl Expr for MaxPxcor {
     }
 }
 
+impl MaxPxcor {
+    pub fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
+        let ptr_to_workspace = translate_expr(builder, &self.workspace)?.place();
+        let workspace = ptr_to_workspace.proj_deref();
+        let world = Workspace::mir_project_world(workspace);
+        let topology = World::mir_project_topology(world);
+        let max_pxcor = Topology::mir_project_max_pxcor(topology);
+        let max_pxcor_ty = builder.mir.type_of_place(&max_pxcor);
+        Some(build_mir::clone_to_new(
+            builder.mir,
+            max_pxcor,
+            &max_pxcor_ty.static_ty.as_ref().unwrap().clone,
+        ))
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct MaxPycor {
     pub workspace: Box<ExprKind>,
@@ -147,6 +195,22 @@ impl Expr for MaxPycor {
             p.add_fn_arg_with(|p| workspace.pretty_print(p, names))?;
             Ok(())
         })
+    }
+}
+
+impl MaxPycor {
+    pub fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
+        let ptr_to_workspace = translate_expr(builder, &self.workspace)?.place();
+        let workspace = ptr_to_workspace.proj_deref();
+        let world = Workspace::mir_project_world(workspace);
+        let topology = World::mir_project_topology(world);
+        let max_pycor = Topology::mir_project_max_pycor(topology);
+        let max_pycor_ty = builder.mir.type_of_place(&max_pycor);
+        Some(build_mir::clone_to_new(
+            builder.mir,
+            max_pycor,
+            &max_pycor_ty.static_ty.as_ref().unwrap().clone,
+        ))
     }
 }
 
@@ -217,5 +281,24 @@ impl Expr for PointConstructor {
             p.add_fn_arg_with(|p| y.pretty_print(p, names))?;
             Ok(())
         })
+    }
+}
+
+mod patch_at {
+    use crate::mir::HostFunctionInfo;
+
+    use super::*;
+
+    pub static FN_INFO: HostFunctionInfo = HostFunctionInfo {
+        debug_name: "patch_at",
+        parameter_types: &[<&mut Workspace>::TYPE, Point::TYPE],
+        return_type: PatchId::TYPE,
+        link_name: "patch_at",
+        link_addr: call as *const u8,
+    };
+
+    pub fn call(workspace: &mut Workspace, point: Point) -> PatchId {
+        let point_int = point.round_to_int();
+        workspace.world.topology.patch_at(point_int)
     }
 }

@@ -5,7 +5,6 @@ use engine::{
     sim::{
         patch::PatchVarDesc,
         turtle::{TurtleBreedId, TurtleVarDesc},
-        value::UnpackedAny,
     },
 };
 
@@ -29,13 +28,13 @@ impl GlobalScope {
 
     pub fn add_builtins(&mut self, default_turtle_breed: TurtleBreedId) {
         self.constants.extend([
-            ("RED", (ExprKind::from(expr::Constant { value: Some(UnpackedAny::Float(15.0)) }))),
-            ("ORANGE", ExprKind::from(expr::Constant { value: Some(UnpackedAny::Float(25.0)) })),
-            ("GREEN", ExprKind::from(expr::Constant { value: Some(UnpackedAny::Float(55.0)) })),
-            ("CYAN", ExprKind::from(expr::Constant { value: Some(UnpackedAny::Float(85.0)) })),
-            ("SKY", ExprKind::from(expr::Constant { value: Some(UnpackedAny::Float(95.0)) })),
-            ("BLUE", ExprKind::from(expr::Constant { value: Some(UnpackedAny::Float(105.0)) })),
-            ("VIOLET", ExprKind::from(expr::Constant { value: Some(UnpackedAny::Float(115.0)) })),
+            ("RED", (ExprKind::from(expr::NumberLiteral { value: 15.0 }))),
+            ("ORANGE", ExprKind::from(expr::NumberLiteral { value: 25.0 })),
+            ("GREEN", ExprKind::from(expr::NumberLiteral { value: 55.0 })),
+            ("CYAN", ExprKind::from(expr::NumberLiteral { value: 85.0 })),
+            ("SKY", ExprKind::from(expr::NumberLiteral { value: 95.0 })),
+            ("BLUE", ExprKind::from(expr::NumberLiteral { value: 105.0 })),
+            ("VIOLET", ExprKind::from(expr::NumberLiteral { value: 115.0 })),
         ]);
         self.patch_vars.extend([(Arc::from("PCOLOR"), PatchVarDesc::Pcolor)]);
         self.turtle_vars.extend([

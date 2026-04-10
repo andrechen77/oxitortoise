@@ -9,7 +9,7 @@ use engine::{
     sim::{
         patch::PatchVarDesc,
         turtle::{TurtleBreed, TurtleBreedId, TurtleVarDesc},
-        value::{BoxedAny, NlString, UnpackedAny},
+        value::NlString,
     },
 };
 use tracing::trace;
@@ -378,7 +378,7 @@ fn translate_node(ctx: &mut FnBodyBuilderCtx, ast_node: ast::Node) -> (ExprKind,
             let target = ctx.fn_body_label.expect("stop call should have a block to break from");
             ExprKind::from(expr::Break {
                 target,
-                value: Box::new(ExprKind::from(expr::Constant { value: None })),
+                value: Box::new(ExprKind::from(expr::UnitLiteral {})),
             })
         }
         N::CommandCall(C::ClearAll([])) => {
@@ -500,7 +500,7 @@ fn translate_node(ctx: &mut FnBodyBuilderCtx, ast_node: ast::Node) -> (ExprKind,
             breaking_node &= diverges;
             let (then_block, diverges) = translate_node_with_new_scope(ctx, *then_block);
             breaking_node &= diverges;
-            let else_block = ExprKind::from(expr::Constant { value: None });
+            let else_block = ExprKind::from(expr::UnitLiteral {});
             ExprKind::from(expr::IfElse {
                 condition: Box::new(condition),
                 then: Box::new(then_block),
@@ -558,12 +558,10 @@ fn translate_node(ctx: &mut FnBodyBuilderCtx, ast_node: ast::Node) -> (ExprKind,
             let local_id = ctx.local_scope.as_ref().unwrap().lookup_name(&name).unwrap();
             ExprKind::from(expr::GetLocalVar { local_id })
         }
-        N::Number { value } => ExprKind::from(expr::Constant {
-            value: Some(UnpackedAny::Float(value.as_f64().unwrap())),
-        }),
-        N::String { value } => ExprKind::from(expr::Constant {
-            value: Some(UnpackedAny::Other(BoxedAny::new(NlString::new(&value)))),
-        }),
+        N::Number { value } => {
+            ExprKind::from(expr::NumberLiteral { value: value.as_f64().unwrap() })
+        }
+        N::String { value } => ExprKind::from(expr::StringLiteral { value: NlString::new(&value) }),
         N::List { items } => {
             let items = items
                 .into_iter()
@@ -575,7 +573,7 @@ fn translate_node(ctx: &mut FnBodyBuilderCtx, ast_node: ast::Node) -> (ExprKind,
                 .collect();
             ExprKind::from(expr::ListLiteral { items })
         }
-        N::Nobody => ExprKind::from(expr::Constant { value: Some(UnpackedAny::Nobody) }),
+        N::Nobody => ExprKind::from(expr::NobodyLiteral {}),
         N::GlobalVar { name } => {
             if let Some(&var_idx) = ctx.hir.global_names.global_vars.get(&name) {
                 ExprKind::from(expr::GetGlobalVar {
@@ -861,7 +859,7 @@ fn translate_statement_block(ctx: &mut FnBodyBuilderCtx, block: ast::CommandBloc
     if falls_through {
         let break_expr = ExprKind::from(expr::Break {
             target: label,
-            value: Box::new(ExprKind::from(expr::Constant { value: None })),
+            value: Box::new(ExprKind::from(expr::UnitLiteral {})),
         });
         statements.push(break_expr);
     }

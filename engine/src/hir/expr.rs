@@ -38,7 +38,7 @@ mod user_fn;
 /// expression is evaluated in different instances (e.g. as part of a loop or in
 /// different function calls).
 #[delegatable_trait]
-pub trait Expr {
+pub trait Expr: Sized + Into<ExprKind> {
     fn output_type(&self, names: NameContext) -> NlAbstractTy;
 
     fn visit_children(&self, visitor: impl FnMut(&ExprKind));
@@ -70,7 +70,10 @@ pub enum ExprKind {
     CanMove(CanMove),
     ClearAll(ClearAll),
     Closure(Closure),
-    Constant(Constant),
+    UnitLiteral(UnitLiteral),
+    NumberLiteral(NumberLiteral),
+    StringLiteral(StringLiteral),
+    NobodyLiteral(NobodyLiteral),
     CreateTurtles(CreateTurtles),
     Diffuse(Diffuse),
     Distancexy(Distancexy),

@@ -251,7 +251,7 @@ impl Patches {
             for i in 0..*patches_width {
                 let x = min_pxcor + i;
                 let y = max_pycor - j;
-                let position = Point { x: x as CoordFloat, y: y as CoordFloat };
+                let position = Point { x: x.into(), y: y.into() };
                 // topology_spec.patch_at(position) should just return an
                 // increasing index anyway but this is more robust (even though
                 // it's literally the same thing just requiring more

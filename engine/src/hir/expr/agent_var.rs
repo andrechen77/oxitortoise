@@ -194,7 +194,7 @@ impl SetTurtleVar {
     }
 }
 
-fn turtle_var_place(
+pub fn turtle_var_place(
     builder: &mut HirToMirFnBuilder,
     ptr_to_workspace: mir::Place,
     turtle_id: mir::Place,

@@ -4,7 +4,13 @@ use std::fmt::{self, Write};
 
 use pretty_print::PrettyPrinter;
 
-use crate::hir::{Expr, ExprKind, NameContext, NlAbstractTy};
+use crate::{
+    hir::{Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy, build_mir::translate_expr},
+    mir,
+    sim::{turtle::TurtleId, value::NlFloat},
+    util::reflection::Reflect,
+    workspace::Workspace,
+};
 
 fn pretty_print_patch_loc_relation<W: fmt::Write>(
     rel: &PatchLocRelation,
@@ -72,6 +78,25 @@ impl Expr for TurtleRotate {
     }
 }
 
+impl TurtleRotate {
+    pub fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
+        let Self { workspace, turtle, angle } = self;
+        let workspace = translate_expr(builder, workspace)?;
+        let turtle = translate_expr(builder, turtle)?;
+        let angle = translate_expr(builder, angle)?;
+
+        let operation = mir::Operation::CallHostFunction {
+            function: &turtle_rotate::FN_INFO,
+            args: vec![
+                mir::PlaceOperand::Copy(workspace.place()),
+                mir::PlaceOperand::Move(turtle),
+                mir::PlaceOperand::Move(angle),
+            ],
+        };
+        Some(builder.mir.add_operation(None, operation))
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct TurtleForward {
     pub workspace: Box<ExprKind>,
@@ -111,6 +136,25 @@ impl Expr for TurtleForward {
     }
 }
 
+impl TurtleForward {
+    pub fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
+        let Self { workspace, turtle, distance } = self;
+        let workspace = translate_expr(builder, workspace)?;
+        let turtle = translate_expr(builder, turtle)?;
+        let distance = translate_expr(builder, distance)?;
+
+        let operation = mir::Operation::CallHostFunction {
+            function: &turtle_forward::FN_INFO,
+            args: vec![
+                mir::PlaceOperand::Copy(workspace.place()),
+                mir::PlaceOperand::Move(turtle),
+                mir::PlaceOperand::Move(distance),
+            ],
+        };
+        Some(builder.mir.add_operation(None, operation))
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct CanMove {
     pub workspace: Box<ExprKind>,
@@ -147,6 +191,50 @@ impl Expr for CanMove {
             p.add_fn_arg_with(|p| distance.pretty_print(p, names))?;
             Ok(())
         })
+    }
+}
+
+mod turtle_rotate {
+    use crate::mir::HostFunctionInfo;
+
+    use super::*;
+
+    pub static FN_INFO: HostFunctionInfo = HostFunctionInfo {
+        debug_name: "turtle_rotate",
+        parameter_types: &[<&mut Workspace>::TYPE, TurtleId::TYPE, NlFloat::TYPE],
+        return_type: <()>::TYPE,
+        link_name: "turtle_rotate",
+        link_addr: call as *const u8,
+    };
+
+    pub fn call(workspace: &mut Workspace, turtle_id: TurtleId, angle: NlFloat) {
+        if let Some(heading) = workspace.world.turtles.get_turtle_heading_mut(turtle_id) {
+            *heading += angle;
+        }
+    }
+}
+
+mod turtle_forward {
+    use crate::mir::HostFunctionInfo;
+
+    use super::*;
+
+    pub static FN_INFO: HostFunctionInfo = HostFunctionInfo {
+        debug_name: "turtle_forward",
+        parameter_types: &[<&mut Workspace>::TYPE, TurtleId::TYPE, NlFloat::TYPE],
+        return_type: <()>::TYPE,
+        link_name: "turtle_forward",
+        link_addr: call as *const u8,
+    };
+
+    pub fn call(workspace: &mut Workspace, turtle_id: TurtleId, distance: NlFloat) {
+        let world = &mut workspace.world;
+        let heading = world.turtles.get_turtle_heading(turtle_id).unwrap();
+        let position = world.turtles.get_turtle_position(turtle_id).unwrap();
+        let new_pos = world.topology.offset_distance_by_heading(*position, *heading, distance);
+        if let Some(new_pos) = new_pos {
+            *world.turtles.get_turtle_position_mut(turtle_id).unwrap() = new_pos;
+        }
     }
 }
 

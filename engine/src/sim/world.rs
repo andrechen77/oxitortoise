@@ -64,6 +64,11 @@ impl World {
         world.proj_field(offset_of!(World, patches))
     }
 
+    /// Derives a `Topology` from a `World`.
+    pub fn mir_project_topology(world: mir::Place) -> mir::Place {
+        world.proj_field(offset_of!(World, topology))
+    }
+
     pub fn mir_type_from_schemas(
         globals_schema: &GlobalsSchema,
         turtle_schema: &TurtleSchema,

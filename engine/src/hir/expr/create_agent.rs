@@ -123,7 +123,7 @@ mod create_turtles {
         let new_turtles = workspace.world.turtles.create_turtles(
             breed,
             count.to_u64_round_to_zero(),
-            Point { x: 0.0, y: 0.0 },
+            Point { x: NlFloat::new(0.0), y: NlFloat::new(0.0) },
             rng,
         );
 

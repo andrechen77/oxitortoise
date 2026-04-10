@@ -4,7 +4,17 @@ use std::fmt;
 
 use pretty_print::PrettyPrinter;
 
-use crate::hir::{Expr, ExprKind, NameContext, NlAbstractTy};
+use crate::{
+    hir::{
+        Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy, build_mir::translate_expr,
+    },
+    mir,
+    sim::value::{NlBox, NlList, PackedAny},
+    util::{
+        reflection::Reflect,
+        rng::{CanonRng, Rng as _},
+    },
+};
 
 #[derive(Debug, Clone)]
 pub struct OneOf {
@@ -43,5 +53,41 @@ impl Expr for OneOf {
             p.add_fn_arg_with(|p| operand.pretty_print(p, names))?;
             Ok(())
         })
+    }
+}
+
+impl OneOf {
+    pub fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
+        let OneOf { rng, operand } = self;
+        let rng = translate_expr(builder, rng)?;
+        let operand = translate_expr(builder, operand)?;
+
+        let operation = match self.operand.output_type(builder.hir_names) {
+            NlAbstractTy::List { .. } => mir::Operation::CallHostFunction {
+                function: &one_of_list::FN_INFO,
+                args: vec![mir::PlaceOperand::Copy(rng.place()), mir::PlaceOperand::Move(operand)],
+            },
+            x => todo!("TODO(mvp) OneOf unsupported operand type: {:?}", x),
+        };
+        Some(builder.mir.add_operation(None, operation))
+    }
+}
+
+mod one_of_list {
+    use crate::mir::HostFunctionInfo;
+
+    use super::*;
+
+    pub static FN_INFO: HostFunctionInfo = HostFunctionInfo {
+        debug_name: "one_of_list",
+        parameter_types: &[<&mut CanonRng>::TYPE, NlBox::<NlList>::TYPE],
+        return_type: PackedAny::TYPE,
+        link_name: "one_of_list",
+        link_addr: call as *const u8,
+    };
+
+    pub fn call(rng: &mut CanonRng, mut list: NlBox<NlList>) -> PackedAny {
+        let index = rng.next_int(list.len() as i64) as usize; // TODO casts okay?
+        list.swap_remove(index)
     }
 }
