@@ -636,13 +636,15 @@ unsafe impl HasDynPtr for RowBuffer {
             .map(|field| (field.offset, (field.r#type.make_mir_type)()))
             .collect();
 
-        MirTypeInfo::with_field(
+        MirTypeInfo::struct_with_some_fields(
             Layout::new::<Self>(),
-            offset_of!(Self, bytes),
-            MirTypeInfo::ptr_to(MirTypeInfo::array_of(
-                MirTypeInfo::with_fields(schema.layout, fields),
-                None,
-            )),
+            vec![(
+                offset_of!(Self, bytes),
+                MirTypeInfo::ptr_to(MirTypeInfo::array_of(
+                    MirTypeInfo::struct_with_some_fields(schema.layout, fields),
+                    None,
+                )),
+            )],
         )
     }
 }

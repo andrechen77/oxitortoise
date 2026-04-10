@@ -3,10 +3,12 @@ use std::{collections::BTreeMap, sync::Arc};
 use crate::{
     mir::{
         self, ElementaryStatement, Function, FunctionId, Label, LocalId, MirType, MirTypeContents,
-        MirTypeInfo, Operation, Place, PlaceOperand, Statement,
+        MirTypeInfo, Operation, Place, PlaceOperand, Statement, builder::init_tracker::InitTracker,
     },
     util::reflection::ReflectComponents as _,
 };
+
+mod init_tracker;
 
 #[derive(Default)]
 pub struct ProgramBuilder {
@@ -53,6 +55,7 @@ pub struct FunctionBuilder<'a> {
     fn_id: FunctionId,
     parameters: Vec<LocalId>,
     locals: BTreeMap<LocalId, mir::LocalDecl>,
+    init_tracker: InitTracker,
     return_local: Option<LocalId>,
     statements_out: Vec<Statement>,
     unit_local: Option<LocalId>,
@@ -65,6 +68,7 @@ impl<'a> FunctionBuilder<'a> {
             program_builder,
             fn_id,
             locals: BTreeMap::new(),
+            init_tracker: InitTracker::new(),
             parameters: Vec::new(),
             return_local: None,
             statements_out: Vec::new(),
@@ -121,18 +125,12 @@ impl<'a> FunctionBuilder<'a> {
         self.locals.get_mut(&id).expect("local must be declared")
     }
 
-    pub fn is_init(&self, local: LocalId) -> bool {
-        let _ = local;
-        todo!("TODO implement is_init")
+    pub fn place_is_init(&self, place: &Place) -> bool {
+        self.init_tracker.is_init(place)
     }
 
     pub fn type_of_place(&self, place: &Place) -> mir::MirType {
-        let local_ty = &self.locals[&place.local].ty;
-        place
-            .projections
-            .iter()
-            .fold(local_ty, |ty, &projection| ty.contents.project(projection))
-            .clone()
+        type_of_place(&self.locals, place)
     }
 
     pub fn type_of_op(&self, op: &Operation) -> MirType {
@@ -144,7 +142,7 @@ impl<'a> FunctionBuilder<'a> {
                     let place_ty = self.type_of_place(place);
                     Arc::new(MirTypeInfo {
                         static_ty: None,
-                        contents: MirTypeContents::IsPointerTo(place_ty),
+                        contents: MirTypeContents::Ptr(place_ty),
                     })
                 }
             },
@@ -179,7 +177,7 @@ impl<'a> FunctionBuilder<'a> {
             "type of operation must match type of destination place"
         );
 
-        self.statements_out.push(Statement::Elementary(ElementaryStatement::Assign { dst, op }));
+        self.add_statement(Statement::Elementary(ElementaryStatement::Assign { dst, op }));
     }
 
     pub fn add_operation_with_decl(
@@ -205,7 +203,33 @@ impl<'a> FunctionBuilder<'a> {
     /// If the statement is an assignment from an operation, consider using
     /// [`FunctionBuilder::add_operation`] instead.
     pub fn add_statement(&mut self, stmt: Statement) {
+        self.process_init_state_effects(&stmt);
+
         self.statements_out.push(stmt);
+    }
+
+    fn process_init_state_effects(&mut self, stmt: &Statement) {
+        match &stmt {
+            Statement::Elementary(ElementaryStatement::Drop { src }) => {
+                // deinit the source place
+                self.init_tracker
+                    .mark_deinit(src.clone(), |place| type_of_place(&self.locals, place));
+            }
+            Statement::Elementary(ElementaryStatement::Assign { dst, op }) => {
+                // init the destination place
+                self.init_tracker
+                    .mark_init(dst.clone(), |place| type_of_place(&self.locals, place));
+
+                // deinit any places moved from
+                for operand in op.operands() {
+                    if let PlaceOperand::Move(local) = operand {
+                        self.init_tracker
+                            .mark_deinit(local.place(), |place| type_of_place(&self.locals, place));
+                    }
+                }
+            }
+            _ => {} // no effect on initialization state
+        }
     }
 
     pub fn with_inner_statement_seq<T>(
@@ -217,4 +241,13 @@ impl<'a> FunctionBuilder<'a> {
         let stmts = std::mem::replace(&mut self.statements_out, old);
         (stmts, result)
     }
+}
+
+fn type_of_place(locals: &BTreeMap<LocalId, mir::LocalDecl>, place: &Place) -> mir::MirType {
+    let local_ty = &locals[&place.local].ty;
+    place
+        .projections
+        .iter()
+        .fold(local_ty, |ty, &projection| ty.contents.project(projection))
+        .clone()
 }

@@ -19,7 +19,7 @@ use crate::{
     sim::{
         agent_schema::{AgentFieldDescriptor, AgentSchemaField, AgentSchemaFieldGroup},
         color::Color,
-        topology::{CoordFloat, PointInt, TopologySpec},
+        topology::{PointInt, TopologySpec},
         value::{BoxedAny, NlFloat, NlList, NlString, PackedAny},
     },
     util::{
@@ -348,7 +348,7 @@ impl Patches {
             })
             .collect();
 
-        mir::MirTypeInfo::with_fields(Layout::new::<Self>(), fields)
+        mir::MirTypeInfo::struct_with_some_fields(Layout::new::<Self>(), fields)
     }
 }
 

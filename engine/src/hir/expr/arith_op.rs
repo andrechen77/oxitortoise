@@ -58,7 +58,7 @@ static BINARY_ARITH_OPCODE_TYPE_INFO: TypeInfo = TypeInfo {
     make_mir_type: || {
         Arc::new(mir::MirTypeInfo {
             static_ty: Some(&BINARY_ARITH_OPCODE_TYPE_INFO),
-            contents: mir::MirTypeContents::IsPrimitive(lir::ValType::I8),
+            contents: mir::MirTypeContents::Prim(lir::ValType::I8),
         })
     },
 };
@@ -76,7 +76,7 @@ static BINARY_CMP_OPCODE_TYPE_INFO: TypeInfo = TypeInfo {
     make_mir_type: || {
         Arc::new(mir::MirTypeInfo {
             static_ty: Some(&BINARY_CMP_OPCODE_TYPE_INFO),
-            contents: mir::MirTypeContents::IsPrimitive(lir::ValType::I8),
+            contents: mir::MirTypeContents::Prim(lir::ValType::I8),
         })
     },
 };
@@ -94,7 +94,7 @@ static BINARY_BOOL_OPCODE_TYPE_INFO: TypeInfo = TypeInfo {
     make_mir_type: || {
         Arc::new(mir::MirTypeInfo {
             static_ty: Some(&BINARY_BOOL_OPCODE_TYPE_INFO),
-            contents: mir::MirTypeContents::IsPrimitive(lir::ValType::I8),
+            contents: mir::MirTypeContents::Prim(lir::ValType::I8),
         })
     },
 };

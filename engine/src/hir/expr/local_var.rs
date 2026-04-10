@@ -40,9 +40,8 @@ impl GetLocalVar {
     pub fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
         let place = builder.translator.locals.get(&self.local_id).unwrap();
         if place.projections.is_empty() {
-            let local = place.unwrap_local();
-            assert!(builder.mir.is_init(local));
-            Some(local)
+            assert!(builder.mir.place_is_init(place));
+            Some(place.unwrap_local())
         } else {
             let ty = builder.mir.type_of_place(place);
             let clone_kind = &ty.static_ty.expect("local variable cannot be loaded out from a place if it doesn't have a statically known type").clone;
@@ -88,13 +87,13 @@ impl Expr for SetLocalVar {
 impl SetLocalVar {
     pub fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
         let value = translate_expr(builder, &self.value)?;
-        let dst = builder.translator.locals.get(&self.local_id).unwrap().unwrap_local();
+        let dst = builder.translator.locals.get(&self.local_id).unwrap().clone();
 
-        if builder.mir.is_init(dst) {
-            build_mir::move_to_init(builder.mir, dst.place(), value);
+        if builder.mir.place_is_init(&dst) {
+            build_mir::move_to_init(builder.mir, dst, value);
         } else {
             builder.mir.add_operation_with_dst(
-                dst.place(),
+                dst,
                 mir::Operation::Operand(mir::PlaceOperand::Move(value)),
             );
         }

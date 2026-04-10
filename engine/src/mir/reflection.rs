@@ -23,17 +23,16 @@ pub struct MirTypeInfo {
 /// be accessed.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum MirTypeContents {
-    /// Asserts that the value is a pointer to a type that satisfies the given assertion.
-    IsPointerTo(MirType),
-    /// Asserts that the value has fields at the specified byte offsets which
-    /// each satisfy their respective assertions.
-    HasFields { fields: Vec<(usize, MirType)>, overall: Layout },
-    /// Asserts that the value is a array having an element type that satisfies
-    /// the given assertion. If the length is specified, then the array has
-    /// exactly that many elements, otherwise it has a statically unknown length.
-    IsArrayOf { element: MirType, length: Option<usize> },
-    /// Asserts that the value is a primitive type.
-    IsPrimitive(lir::ValType),
+    /// The value is a pointer to a type that satisfies the given assertion.
+    Ptr(MirType),
+    /// The value is a struct that has fields at the specified byte offsets.
+    Struct { fields: Vec<(usize, MirType)>, overall: Layout, fields_are_complete: bool },
+    /// The value is a array having an element type that satisfies the given
+    /// assertion. If the length is specified, then the array has exactly that
+    /// many elements, otherwise it has a statically unknown length.
+    Array { element: MirType, length: Option<usize> },
+    /// The value is a primitive type.
+    Prim(lir::ValType),
     /// No assertion.
     #[default]
     None,
@@ -47,15 +46,17 @@ impl MirTypeInfo {
             return layout;
         }
         match &self.contents {
-            MirTypeContents::IsPointerTo(_) => Layout::new::<*const u8>(),
-            MirTypeContents::HasFields { fields: _, overall } => *overall,
-            MirTypeContents::IsArrayOf { .. } => {
+            MirTypeContents::Ptr(_) => Layout::new::<*const u8>(),
+            MirTypeContents::Struct { overall, .. } => *overall,
+            MirTypeContents::Array { .. } => {
                 unimplemented!(
                     "would use the Layout::repeat function on the element layout to get the layout of the whole array"
                 )
             }
-            MirTypeContents::IsPrimitive(_ty) => todo!("TODO get the layout of a primitive type"),
-            MirTypeContents::None => panic!("Cannot get layout"),
+            MirTypeContents::Prim(_ty) => todo!("TODO get the layout of a primitive type"),
+            MirTypeContents::None => {
+                panic!("Cannot get layout")
+            }
         }
     }
 
@@ -75,15 +76,15 @@ impl MirTypeContents {
     pub fn project(&self, projection: Projection) -> &MirType {
         use MirTypeContents as M;
         match (self, projection) {
-            (M::IsPointerTo(pointee), Projection::Deref) => pointee,
-            (M::HasFields { fields, overall: _ }, Projection::Field { byte_offset }) => {
+            (M::Ptr(pointee), Projection::Deref) => pointee,
+            (M::Struct { fields, .. }, Projection::Field { byte_offset }) => {
                 let Some((_, field)) = fields.iter().find(|(offset, _)| *offset == byte_offset)
                 else {
                     panic!("Field at byte offset {} not found", byte_offset);
                 };
                 field
             }
-            (M::IsArrayOf { element, length: _ }, Projection::DynamicIndex(_index)) => element,
+            (M::Array { element, length: _ }, Projection::DynamicIndex(_index)) => element,
             (desc, projection) => {
                 panic!(
                     "Cannot project memory descriptor {:?} with projection: {:?}",
@@ -94,7 +95,7 @@ impl MirTypeContents {
     }
 
     pub fn proj_deref(&self) -> &MirType {
-        if let MirTypeContents::IsPointerTo(pointee) = self {
+        if let MirTypeContents::Ptr(pointee) = self {
             pointee
         } else {
             panic!("Cannot project type {:?} with a deref projection", self);
@@ -102,7 +103,7 @@ impl MirTypeContents {
     }
 
     pub fn proj_field(&self, byte_offset: usize) -> &MirType {
-        if let MirTypeContents::HasFields { fields, overall: _ } = self {
+        if let MirTypeContents::Struct { fields, .. } = self {
             let Some((_, field)) = fields.iter().find(|(offset, _)| *offset == byte_offset) else {
                 panic!("Field at byte offset {} not found", byte_offset);
             };
@@ -116,7 +117,7 @@ impl MirTypeContents {
     }
 
     pub fn proj_static_index(&self, index: usize) -> &MirType {
-        if let MirTypeContents::IsArrayOf { element, length } = self {
+        if let MirTypeContents::Array { element, length } = self {
             if let Some(length) = length
                 && index >= *length
             {
@@ -129,7 +130,7 @@ impl MirTypeContents {
     }
 
     pub fn proj_dynamic_index(&self) -> &MirType {
-        if let MirTypeContents::IsArrayOf { element, length: _ } = self {
+        if let MirTypeContents::Array { element, length: _ } = self {
             element
         } else {
             panic!("Cannot project type {:?} with a dynamic index projection", self);
@@ -139,30 +140,35 @@ impl MirTypeContents {
 
 impl MirTypeInfo {
     pub fn ptr_to(pointee: MirType) -> MirType {
-        Arc::new(MirTypeInfo { static_ty: None, contents: MirTypeContents::IsPointerTo(pointee) })
+        Arc::new(MirTypeInfo { static_ty: None, contents: MirTypeContents::Ptr(pointee) })
     }
 
     pub fn array_of(element: MirType, length: Option<usize>) -> MirType {
         Arc::new(MirTypeInfo {
             static_ty: None,
-            contents: MirTypeContents::IsArrayOf { element, length },
+            contents: MirTypeContents::Array { element, length },
         })
     }
 
-    pub fn with_field(layout: Layout, byte_offset: usize, field: MirType) -> MirType {
+    pub fn struct_with_some_fields(layout: Layout, fields: Vec<(usize, MirType)>) -> MirType {
         Arc::new(MirTypeInfo {
             static_ty: None,
-            contents: MirTypeContents::HasFields {
-                fields: vec![(byte_offset, field)],
+            contents: MirTypeContents::Struct {
+                fields,
                 overall: layout,
+                fields_are_complete: false,
             },
         })
     }
 
-    pub fn with_fields(layout: Layout, fields: Vec<(usize, MirType)>) -> MirType {
+    pub fn struct_with_all_fields(layout: Layout, fields: Vec<(usize, MirType)>) -> MirType {
         Arc::new(MirTypeInfo {
             static_ty: None,
-            contents: MirTypeContents::HasFields { fields, overall: layout },
+            contents: MirTypeContents::Struct {
+                fields,
+                overall: layout,
+                fields_are_complete: true,
+            },
         })
     }
 }

@@ -100,7 +100,7 @@ pub fn derive_impl_components(input: proc_macro2::TokenStream) -> proc_macro2::T
                 fn mir_type() -> crate::mir::MirType {
                     std::sync::Arc::new(crate::mir::MirTypeInfo {
                         static_ty: Some(<Self as crate::util::reflection::Reflect>::TYPE),
-                        contents: crate::mir::MirTypeContents::IsPointerTo(<Self as crate::util::reflection::ReflectComponents>::mir_type()),
+                        contents: crate::mir::MirTypeContents::Ptr(<Self as crate::util::reflection::ReflectComponents>::mir_type()),
                     })
                 }
             };

@@ -350,7 +350,7 @@ impl Turtles {
             })
             .collect();
 
-        mir::MirTypeInfo::with_fields(Layout::new::<Self>(), fields)
+        mir::MirTypeInfo::struct_with_some_fields(Layout::new::<Self>(), fields)
     }
 }
 

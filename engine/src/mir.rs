@@ -91,7 +91,7 @@ pub struct Loop {
     pub body: Box<Statement>,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub struct Place {
     /// The local variable that the place is in.
     pub local: LocalId,
@@ -121,9 +121,24 @@ impl Place {
     pub fn proj_static_index(self, index: usize) -> Self {
         self.proj(Projection::StaticIndex(index))
     }
+
+    pub fn contains(&self, other: &Place) -> bool {
+        if self.local != other.local {
+            return false;
+        }
+        if self.projections.len() > other.projections.len() {
+            return false;
+        }
+        for (a, b) in self.projections.iter().zip(other.projections.iter()) {
+            if a != b {
+                return false;
+            }
+        }
+        true
+    }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub enum Projection {
     /// With the place having a pointer value, dereferences the pointer and
     /// produces the place of the dereferenced value.
@@ -140,7 +155,7 @@ pub enum Projection {
     StaticIndex(usize),
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum PlaceOperand {
     /// Produces an operand by moving out of the place. This is a destructive
     /// move, and the source place is considered deinitialized afterward.
@@ -213,6 +228,20 @@ impl Place {
 impl Function {
     fn return_ty(&self) -> &MirType {
         &self.local_decls[&self.return_local].ty
+    }
+}
+
+impl Operation {
+    pub fn operands(&self) -> Vec<&PlaceOperand> {
+        match self {
+            Operation::Operand(opd) => vec![opd],
+            Operation::Const { .. } => vec![],
+            Operation::FunctionPtr { .. } => vec![],
+            Operation::BinaryOp { lhs, rhs, .. } => vec![lhs, rhs],
+            Operation::UnaryOp { operand, .. } => vec![operand],
+            Operation::CallUserFunction { args, .. } => args.iter().collect(),
+            Operation::CallHostFunction { args, .. } => args.iter().collect(),
+        }
     }
 }
 

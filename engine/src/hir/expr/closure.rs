@@ -155,7 +155,7 @@ fn mir_create_anon_struct(
     }
 
     // now put it all together to create a definition of the struct type
-    let struct_ty = mir::MirTypeInfo::with_fields(total_layout, fields.clone());
+    let struct_ty = mir::MirTypeInfo::struct_with_all_fields(total_layout, fields.clone());
 
     // define a function that will drop all the values in the struct
     let drop_fn = {

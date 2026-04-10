@@ -34,7 +34,10 @@ impl Workspace {
         patch_schema: &PatchSchema,
     ) -> mir::MirType {
         let world_ty = World::mir_type_from_schemas(globals_schema, turtle_schema, patch_schema);
-        mir::MirTypeInfo::with_field(Layout::new::<Self>(), offset_of!(Self, world), world_ty)
+        mir::MirTypeInfo::struct_with_some_fields(
+            Layout::new::<Self>(),
+            vec![(offset_of!(Self, world), world_ty)],
+        )
     }
 }
 
