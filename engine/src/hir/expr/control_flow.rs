@@ -65,19 +65,20 @@ impl Scope {
             builder.with_locals(&self.locals, |builder| translate_expr(builder, &self.inner));
 
         for local_id in self.locals.keys() {
-            let mir_place = builder.translator.locals[local_id].clone();
-            assert!(mir_place.projections.is_empty());
-            let ty = builder.mir.type_of_place(&mir_place);
+            let mir_local = builder.translator.locals[local_id].clone().unwrap_local();
+            let ty = builder.mir.type_of_place(&mir_local.place());
 
-            // only insert a drop instruction if the local has an associated
-            // statically known type, because it if doesn't have a statically
-            // known type then it probably doesn't have a destructor
-            if let Some(static_ty) = ty.static_ty
-                && static_ty.drop_fn.is_some()
-            {
-                builder.mir.add_statement(mir::Statement::Elementary(
-                    mir::ElementaryStatement::Drop { src: mir_place },
-                ));
+            if builder.mir.is_init(mir_local) {
+                // only insert a drop instruction if the local has an associated
+                // statically known type, because it if doesn't have a statically
+                // known type then it probably doesn't have a destructor
+                if let Some(static_ty) = ty.static_ty
+                    && static_ty.drop_fn.is_some()
+                {
+                    builder.mir.add_statement(mir::Statement::Elementary(
+                        mir::ElementaryStatement::Drop { src: mir_local.place() },
+                    ));
+                }
             }
         }
 

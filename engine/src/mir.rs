@@ -204,7 +204,7 @@ impl From<LocalId> for Place {
 }
 
 impl Place {
-    pub fn unwrap_local(self) -> LocalId {
+    pub fn unwrap_local(&self) -> LocalId {
         assert!(self.projections.is_empty(), "place must not have projections");
         self.local
     }

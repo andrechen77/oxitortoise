@@ -121,6 +121,11 @@ impl<'a> FunctionBuilder<'a> {
         self.locals.get_mut(&id).expect("local must be declared")
     }
 
+    pub fn is_init(&self, local: LocalId) -> bool {
+        let _ = local;
+        todo!("TODO implement is_init")
+    }
+
     pub fn type_of_place(&self, place: &Place) -> mir::MirType {
         let local_ty = &self.locals[&place.local].ty;
         place

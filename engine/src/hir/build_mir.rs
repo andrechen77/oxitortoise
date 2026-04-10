@@ -139,6 +139,11 @@ pub fn translate_expr(
         E::Break(break_expr) => break_expr.write_mir_execution(builder),
         E::IfElse(if_else) => if_else.write_mir_execution(builder),
 
+        // local variables
+        E::Scope(scope) => scope.write_mir_execution(builder),
+        E::GetLocalVar(get_local_var) => get_local_var.write_mir_execution(builder),
+        E::SetLocalVar(_set_local_var) => todo!(),
+
         // agent variables
         E::GetGlobalVar(get_global_var) => get_global_var.write_mir_execution(builder),
         E::GetTurtleVar(get_turtle_var) => get_turtle_var.write_mir_execution(builder),
@@ -177,16 +182,13 @@ pub fn translate_expr(
         E::Agentset(_agentset) => todo!(),
         E::CallUserFn(_call_user_fn) => todo!(),
         E::CanMove(_can_move) => todo!(),
-        E::GetLocalVar(_get_local_var) => todo!(),
         E::StringLiteral(_string_literal) => todo!(),
         E::NobodyLiteral(_nobody_literal) => todo!(),
         E::Of(_of) => todo!(),
         E::OffsetDistanceByHeading(_offset_distance_by_heading) => todo!(),
         E::PatchRelative(_patch_relative) => todo!(),
         E::RandomInt(_random_int) => todo!(),
-        E::Scope(_scope) => todo!(),
         E::SetDefaultShape(_set_default_shape) => todo!(),
-        E::SetLocalVar(_set_local_var) => todo!(),
 
         E::Closure(_closure) => todo!("TODO implement standalone closure"),
         E::EuclideanDistanceNoWrap(_euclidean_distance_no_wrap) => unimplemented!(),

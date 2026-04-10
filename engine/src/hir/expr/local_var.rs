@@ -4,7 +4,13 @@ use std::fmt::{self, Write};
 
 use pretty_print::PrettyPrinter;
 
-use crate::hir::{Expr, ExprKind, LocalId, NameContext, NlAbstractTy};
+use crate::{
+    hir::{
+        Expr, ExprKind, HirToMirFnBuilder, LocalId, NameContext, NlAbstractTy,
+        build_mir::{self, translate_expr},
+    },
+    mir,
+};
 
 #[derive(Debug, Clone)]
 pub struct GetLocalVar {
@@ -27,6 +33,22 @@ impl Expr for GetLocalVar {
             p.add_fn_arg_with(|p| pretty_print_local(p, self.local_id, names))?;
             Ok(())
         })
+    }
+}
+
+impl GetLocalVar {
+    pub fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
+        let place = builder.translator.locals.get(&self.local_id).unwrap();
+        if place.projections.is_empty() {
+            let local = place.unwrap_local();
+            assert!(builder.mir.is_init(local));
+            Some(local)
+        } else {
+            let ty = builder.mir.type_of_place(place);
+            let clone_kind = &ty.static_ty.expect("local variable cannot be loaded out from a place if it doesn't have a statically known type").clone;
+            let local = build_mir::clone_to_new(builder.mir, place.clone(), &clone_kind);
+            Some(local)
+        }
     }
 }
 
@@ -60,6 +82,24 @@ impl Expr for SetLocalVar {
             p.add_fn_arg_with(|p| value.pretty_print(p, names))?;
             Ok(())
         })
+    }
+}
+
+impl SetLocalVar {
+    pub fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
+        let value = translate_expr(builder, &self.value)?;
+        let dst = builder.translator.locals.get(&self.local_id).unwrap().unwrap_local();
+
+        if builder.mir.is_init(dst) {
+            build_mir::move_to_init(builder.mir, dst.place(), value);
+        } else {
+            builder.mir.add_operation_with_dst(
+                dst.place(),
+                mir::Operation::Operand(mir::PlaceOperand::Move(value)),
+            );
+        }
+
+        Some(builder.mir.unit_local())
     }
 }
 
