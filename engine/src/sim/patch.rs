@@ -261,7 +261,7 @@ impl Patches {
                 // initialize base data
                 let base_data = PatchBaseData {
                     position,
-                    plabel: String::new(),
+                    plabel: NlString::new(),
                     plabel_color: Color::BLACK, // FIXME use a more sensible default
                 };
                 self.data[0].as_mut().unwrap().row_mut(id.0 as usize).set(0, base_data);
@@ -422,8 +422,11 @@ fn pretty_print_patch(
 
 #[derive(Debug, Clone, ReflectComponents)]
 pub struct PatchBaseData {
+    #[mir_accessible]
     pub position: Point,
-    pub plabel: String, // FIXME consider using the netlogo version of string for this
+    #[mir_accessible]
+    pub plabel: NlString,
+    #[mir_accessible]
     pub plabel_color: Color,
     // TODO add some way of tracking what turtles are on this patch.
 }

@@ -561,7 +561,9 @@ fn translate_node(ctx: &mut FnBodyBuilderCtx, ast_node: ast::Node) -> (ExprKind,
         N::Number { value } => {
             ExprKind::from(expr::NumberLiteral { value: value.as_f64().unwrap() })
         }
-        N::String { value } => ExprKind::from(expr::StringLiteral { value: NlString::new(&value) }),
+        N::String { value } => {
+            ExprKind::from(expr::StringLiteral { value: NlString::from_str(&value) })
+        }
         N::List { items } => {
             let items = items
                 .into_iter()

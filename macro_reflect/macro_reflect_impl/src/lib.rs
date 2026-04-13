@@ -81,18 +81,35 @@ pub fn derive_impl_components(input: proc_macro2::TokenStream) -> proc_macro2::T
 
     let (make_mir_type_fn, make_mir_type_ref_fn) = match &input.data {
         Data::Struct(data) => {
-            // for future use
-            let _fields = match &data.fields {
+            // mark fields that have the attribute #[mir_accessible]
+            let fields = match &data.fields {
                 Fields::Unit => vec![],
                 Fields::Named(n) => n.named.iter().collect(),
                 Fields::Unnamed(u) => u.unnamed.iter().collect(),
             };
+            let mut mir_accessible_field_entries = Vec::new();
+            let mut _is_exhaustive = true; // can use this if deciding whether the struct is complete
+            for field in fields {
+                if field.attrs.iter().any(|attr| attr.meta.path().is_ident("mir_accessible")) {
+                    let ident = field.ident.as_ref().unwrap();
+                    let ty = &field.ty;
+                    let field_entry = quote! {
+                        (::std::mem::offset_of!(Self, #ident), <#ty as crate::util::reflection::ReflectComponents>::mir_type())
+                    };
+                    mir_accessible_field_entries.push(field_entry);
+                } else {
+                    _is_exhaustive = false;
+                }
+            }
 
             let make_mir_type_fn = quote! {
                 fn mir_type() -> crate::mir::MirType {
                     std::sync::Arc::new(crate::mir::MirTypeInfo {
                         static_ty: Some(<Self as crate::util::reflection::Reflect>::TYPE),
-                        contents: std::default::Default::default(),
+                        contents: crate::mir::MirTypeContents::HasFields {
+                            fields: vec![#(#mir_accessible_field_entries),*],
+                            overall: ::std::alloc::Layout::new::<Self>(),
+                        },
                     })
                 }
             };

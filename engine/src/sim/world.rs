@@ -149,12 +149,12 @@ impl World {
             // doesn't handle dead turtles
             p.add_field_with("turtles", |p| p.add_map(
                 self.turtles.turtle_ids().map(|id| (id, ())),
-                |p, id| write!(p, "{:.0}", self.turtles.get_turtle_base_data(id).expect("turtle id from iter should be valid").who.0),
+                |p, id| write!(p, "{:.0}", self.turtles.get_turtle_base_data(id).expect("turtle id from iter should be valid").who.get()),
                 |p, (id, _)| p.add_struct("", |p| {
                     let base = self.turtles.get_turtle_base_data(id).expect("turtle id from iter should be valid");
                     let heading = self.turtles.get_turtle_heading(id).expect("turtle id from iter should be valid");
                     let position = self.turtles.get_turtle_position(id).expect("turtle id from iter should be valid");
-                    p.add_field_with("WHO", |p| write!(p, "{:.0}", base.who.0))?;
+                    p.add_field_with("WHO", |p| write!(p, "{:.0}", base.who.get()))?;
                     p.add_field_with("BREED", |p| write!(p, "\"{}\"", self.turtles.breeds()[&base.breed].name))?;
                     p.add_field_with("COLOR", |p| write!(p, "{}", base.color.to_float().get()))?;
                     p.add_field_with("HEADING", |p| write!(p, "{}", heading.to_float().get()))?;

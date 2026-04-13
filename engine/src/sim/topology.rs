@@ -34,10 +34,11 @@ impl fmt::Display for PointInt {
 // points and if so, make Points non-nullable and use a different type
 // OptionPoint which allows NaN to be used for None.
 #[derive(Debug, Clone, Copy, PartialEq, Default, ReflectComponents)]
-// TODO reflection contents
 #[repr(C)]
 pub struct Point {
+    #[mir_accessible]
     pub x: CoordFloat,
+    #[mir_accessible]
     pub y: CoordFloat,
 }
 

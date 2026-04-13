@@ -5,7 +5,11 @@ use macro_reflect::{ReflectComponents, reflect};
 pub struct NlString(String);
 
 impl NlString {
-    pub fn new(value: &str) -> Self {
+    pub fn new() -> Self {
+        Self(String::new())
+    }
+
+    pub fn from_str(value: &str) -> Self {
         Self(value.to_string())
     }
 }

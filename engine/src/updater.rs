@@ -7,7 +7,6 @@ use crate::sim::{
     patch::PatchId,
     tick::Tick,
     topology::{Heading, Point, TopologySpec},
-    turtle::TurtleWho,
     value::NlFloat,
 };
 
@@ -117,7 +116,7 @@ pub struct DirtyAggregator {
     /// to accomodate all patches
     patches: Vec<FlagSet<PatchProp>>,
     /// Contains the who numbers of all the turtles that have died in the upcoming update.
-    _dead_turtles: Vec<TurtleWho>,
+    _dead_turtles: Vec<NlFloat>,
 }
 
 impl DirtyAggregator {
@@ -168,8 +167,8 @@ impl Default for DirtyAggregator {
 pub struct UpdateContent {
     pub world: Option<WorldSettingsUpdate>,
     pub tick: Tick,
-    pub turtles: Vec<(TurtleWho, TurtleUpdate)>,
-    pub dead_turtles: Vec<TurtleWho>,
+    pub turtles: Vec<(NlFloat, TurtleUpdate)>,
+    pub dead_turtles: Vec<NlFloat>,
     pub patches: Vec<(PatchId, PatchUpdate)>,
 }
 

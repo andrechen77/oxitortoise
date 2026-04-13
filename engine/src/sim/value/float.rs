@@ -4,7 +4,7 @@ use derive_more::{
 };
 use macro_reflect::{ReflectComponents, reflect};
 
-use crate::sim::{color::Color, topology::CoordInt, turtle::TurtleWho};
+use crate::sim::{color::Color, topology::CoordInt};
 
 /// A double-precision floating-point number which is guaranteed to be finite
 /// (not Infinity or NaN).
@@ -41,12 +41,6 @@ impl From<CoordInt> for NlFloat {
 impl From<Color> for NlFloat {
     fn from(value: Color) -> Self {
         value.to_float()
-    }
-}
-
-impl From<TurtleWho> for NlFloat {
-    fn from(value: TurtleWho) -> Self {
-        NlFloat(value.0)
     }
 }
 

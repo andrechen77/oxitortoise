@@ -36,25 +36,6 @@ use crate::{
 
 pub const DEFAULT_BREED_NAME: &str = "TURTLES";
 
-/// The who number of a turtle.
-#[derive(Debug, Copy, Clone, PartialEq, Default, PartialOrd)]
-#[repr(transparent)]
-pub struct TurtleWho(pub f64);
-
-impl TurtleWho {
-    fn take_next(&mut self) -> Self {
-        let who = *self;
-        self.0 += 1.0;
-        who
-    }
-}
-
-impl fmt::Display for TurtleWho {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "(turtle {})", self.0)
-    }
-}
-
 /// An ID for a turtle. When passing through FFI, this should be converted to a
 /// `u64` first to prevent it from being represented as a pointer.
 #[derive(
@@ -84,7 +65,7 @@ impl TurtleId {
 pub struct Turtles {
     /// The who number to be given to the next turtle; also how many turtles
     /// have been created since the last `clear-turtles`.
-    next_who: TurtleWho,
+    next_who: NlFloat,
     /// Tracks which slots of the row buffers are occupied by turtles.
     slot_tracker: GenSlotTracker,
     /// The buffers that store the data for the turtle. Each turtle is
@@ -105,7 +86,7 @@ pub struct Turtles {
 impl Turtles {
     pub fn new(turtle_schema: TurtleSchema, breeds: BTreeMap<TurtleBreedId, TurtleBreed>) -> Self {
         Self {
-            next_who: TurtleWho::default(),
+            next_who: NlFloat::new(0.0),
             slot_tracker: GenSlotTracker::new(),
             // TODO(wishlist) we should avoid having to remake the row schemas
             // if we can; we should reuse the ones from the compilation process
@@ -126,7 +107,7 @@ impl Turtles {
         &self.breeds
     }
 
-    pub fn translate_who(&self, _who: TurtleWho) -> TurtleId {
+    pub fn translate_who(&self, _who: NlFloat) -> TurtleId {
         todo!("TODO(mvp) use a lookup table to translate")
     }
 
@@ -145,17 +126,18 @@ impl Turtles {
         for _ in 0..count {
             let idx = self.slot_tracker.allocate();
             let id = TurtleId(idx);
-            let who = self.next_who.take_next();
+            let who = self.next_who;
+            self.next_who += NlFloat::new(1.0);
             let color = Color::random(next_int);
             let heading = Heading::random(next_int);
-            let shape_name = "default".to_owned(); // FIXME look up and use the breed's default shape
+            let shape_name = NlString::from_str("default"); // FIXME look up and use the breed's default shape
 
             // initialize base data
             let base_data = TurtleBaseData {
                 who,
                 breed,
                 color,
-                label: String::new(),
+                label: NlString::new(),
                 label_color: color, // FIXME use a default label color
                 hidden: false,
                 size: value::NlFloat::new(1.0),
@@ -289,7 +271,7 @@ impl Turtles {
 
     pub fn clear(&mut self) {
         self.slot_tracker.clear();
-        self.next_who = TurtleWho::default();
+        self.next_who = NlFloat::new(0.0);
         self.fallback_custom_fields.clear();
         for buffer in self.data.iter_mut().filter_map(|b| b.as_mut()) {
             buffer.clear();
@@ -437,15 +419,23 @@ fn pretty_print_turtle(
 #[derive(Debug, Clone, ReflectComponents)]
 #[repr(C)]
 pub struct TurtleBaseData {
-    pub who: TurtleWho,
+    #[mir_accessible]
+    pub who: NlFloat,
+    #[mir_accessible]
     pub breed: TurtleBreedId,
     /// The shape of this turtle due to its breed. This may or may not be the
     /// default shape of the turtle's breed.
-    pub shape_name: String, // FIXME consider using the netlogo version of string for this
+    #[mir_accessible]
+    pub shape_name: NlString,
+    #[mir_accessible]
     pub color: Color,
-    pub label: String, // FIXME consider using the netlogo version of string for this
+    #[mir_accessible]
+    pub label: NlString,
+    #[mir_accessible]
     pub label_color: Color,
+    #[mir_accessible]
     pub hidden: bool,
+    #[mir_accessible]
     pub size: value::NlFloat,
 }
 
