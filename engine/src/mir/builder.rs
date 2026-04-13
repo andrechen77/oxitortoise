@@ -10,7 +10,8 @@ use crate::{
         self, ElementaryStatement, Function, FunctionId, Label, LocalId, MirType, MirTypeContents,
         MirTypeInfo, Operation, Place, PlaceOperand, Statement,
     },
-    util::reflection::{CloneKind, ReflectComponents as _},
+    sim::value::NlFloat,
+    util::reflection::{CloneKind, Reflect},
 };
 
 #[derive(Default)]
@@ -190,12 +191,18 @@ impl<'a> FunctionBuilder<'a> {
                 .unwrap_or_else(|| {
                     self.program_builder.function_stub(*function).unwrap().return_ty.clone()
                 }),
-            Operation::BinaryOp { .. } => {
-                unimplemented!("hardcoded binary ops will be sunsetted in favor of host fn calls")
-            }
-            Operation::UnaryOp { .. } => {
-                unimplemented!("hardcoded unary ops will be sunsetted in favor of host fn calls")
-            }
+            Operation::BinaryOp { opcode, lhs: _, rhs: _ } => match opcode {
+                lir::BinaryOpcode::FAdd
+                | lir::BinaryOpcode::FSub
+                | lir::BinaryOpcode::FMul
+                | lir::BinaryOpcode::FDiv => NlFloat::mir_type(),
+                _ => panic!("unsupported binary opcode: {:?}", opcode),
+            },
+            Operation::UnaryOp { opcode, operand: _ } => match opcode {
+                lir::UnaryOpcode::Not => bool::mir_type(),
+                lir::UnaryOpcode::FNeg => NlFloat::mir_type(),
+                lir::UnaryOpcode::I64ToI32 => u32::mir_type(),
+            },
         }
     }
 
