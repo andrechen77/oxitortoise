@@ -31,7 +31,7 @@ impl Expr for OffsetDistanceByHeading {
         NlAbstractTy::Point
     }
 
-    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
+    fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
         visitor(&self.workspace);
         visitor(&self.position);
         visitor(&self.amt);
@@ -73,7 +73,7 @@ impl Expr for PatchAt {
         NlAbstractTy::Patch
     }
 
-    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
+    fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
         visitor(&self.workspace);
         visitor(&self.x);
         visitor(&self.y);
@@ -129,7 +129,7 @@ impl Expr for MaxPxcor {
         NlAbstractTy::Float
     }
 
-    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
+    fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
         visitor(&self.workspace);
     }
 
@@ -171,7 +171,7 @@ impl Expr for MaxPycor {
         NlAbstractTy::Float
     }
 
-    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
+    fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
         visitor(&self.workspace);
     }
 
@@ -214,7 +214,7 @@ impl Expr for EuclideanDistanceNoWrap {
         NlAbstractTy::Float
     }
 
-    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
+    fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
         visitor(&self.a);
         visitor(&self.b);
     }
@@ -249,7 +249,7 @@ impl Expr for PointConstructor {
         NlAbstractTy::Point
     }
 
-    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
+    fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
         visitor(&self.x);
         visitor(&self.y);
     }

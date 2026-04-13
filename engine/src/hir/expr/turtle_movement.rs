@@ -51,7 +51,7 @@ impl Expr for TurtleRotate {
         NlAbstractTy::Unit
     }
 
-    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
+    fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
         visitor(&self.workspace);
         visitor(&self.turtle);
         visitor(&self.angle);
@@ -109,7 +109,7 @@ impl Expr for TurtleForward {
         NlAbstractTy::Unit
     }
 
-    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
+    fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
         visitor(&self.workspace);
         visitor(&self.turtle);
         visitor(&self.distance);
@@ -167,7 +167,7 @@ impl Expr for CanMove {
         NlAbstractTy::Boolean
     }
 
-    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
+    fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
         visitor(&self.workspace);
         visitor(&self.turtle);
         visitor(&self.distance);
@@ -251,7 +251,7 @@ impl Expr for PatchRelative {
         NlAbstractTy::Patch
     }
 
-    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
+    fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
         match &self.relative_loc {
             PatchLocRelation::Ahead => {}
             PatchLocRelation::LeftAhead(heading) | PatchLocRelation::RightAhead(heading) => {

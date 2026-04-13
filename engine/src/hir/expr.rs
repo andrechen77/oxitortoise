@@ -41,7 +41,7 @@ mod user_fn;
 pub trait Expr: Sized + Into<ExprKind> {
     fn output_type(&self, names: NameContext) -> NlAbstractTy;
 
-    fn visit_children(&self, visitor: impl FnMut(&ExprKind));
+    fn visit_children<'a>(&'a self, visitor: impl FnMut(&'a ExprKind));
 
     /// Like [`visit_children`](Expr::visit_children), but allows mutating each
     /// child expression in place.

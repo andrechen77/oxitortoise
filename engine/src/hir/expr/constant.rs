@@ -21,7 +21,7 @@ impl Expr for UnitLiteral {
         NlAbstractTy::Unit
     }
 
-    fn visit_children(&self, _visitor: impl FnMut(&ExprKind)) {
+    fn visit_children<'a>(&'a self, _visitor: impl FnMut(&'a ExprKind)) {
         // no children
     }
 
@@ -52,7 +52,7 @@ impl Expr for NumberLiteral {
         NlAbstractTy::Float
     }
 
-    fn visit_children(&self, _visitor: impl FnMut(&ExprKind)) {}
+    fn visit_children<'a>(&'a self, _visitor: impl FnMut(&'a ExprKind)) {}
 
     fn visit_children_mut(&mut self, _visitor: impl FnMut(&mut ExprKind)) {}
 
@@ -89,7 +89,7 @@ impl Expr for StringLiteral {
         NlAbstractTy::String
     }
 
-    fn visit_children(&self, _visitor: impl FnMut(&ExprKind)) {}
+    fn visit_children<'a>(&'a self, _visitor: impl FnMut(&'a ExprKind)) {}
 
     fn visit_children_mut(&mut self, _visitor: impl FnMut(&mut ExprKind)) {}
 
@@ -113,7 +113,7 @@ impl Expr for NobodyLiteral {
         NlAbstractTy::Nobody
     }
 
-    fn visit_children(&self, _visitor: impl FnMut(&ExprKind)) {}
+    fn visit_children<'a>(&'a self, _visitor: impl FnMut(&'a ExprKind)) {}
 
     fn visit_children_mut(&mut self, _visitor: impl FnMut(&mut ExprKind)) {}
 
@@ -140,7 +140,7 @@ impl Expr for ListLiteral {
         NlAbstractTy::List { element_ty: Box::new(ty) }
     }
 
-    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
+    fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
         for item in &self.items {
             visitor(item);
         }

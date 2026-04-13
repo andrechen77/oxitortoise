@@ -117,7 +117,7 @@ impl Expr for BinaryArith {
         NlAbstractTy::Float
     }
 
-    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
+    fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
         visitor(&self.lhs);
         visitor(&self.rhs);
     }
@@ -182,7 +182,7 @@ impl Expr for BinaryCmp {
         NlAbstractTy::Boolean
     }
 
-    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
+    fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
         visitor(&self.lhs);
         visitor(&self.rhs);
     }
@@ -325,7 +325,7 @@ impl Expr for BinaryBool {
         NlAbstractTy::Boolean
     }
 
-    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
+    fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
         visitor(&self.lhs);
         visitor(&self.rhs);
     }
@@ -384,7 +384,7 @@ impl Expr for LogicalNot {
         NlAbstractTy::Boolean
     }
 
-    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
+    fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
         visitor(&self.operand);
     }
 
@@ -426,7 +426,7 @@ impl Expr for Negate {
         NlAbstractTy::Float
     }
 
-    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
+    fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
         visitor(&self.operand);
     }
 

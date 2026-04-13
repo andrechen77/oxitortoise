@@ -24,7 +24,7 @@ impl Expr for ResetTicks {
         NlAbstractTy::Unit
     }
 
-    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
+    fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
         visitor(&self.workspace);
     }
 
@@ -86,7 +86,7 @@ impl Expr for AdvanceTick {
         NlAbstractTy::Unit
     }
 
-    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
+    fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
         visitor(&self.workspace);
     }
 
@@ -149,7 +149,7 @@ impl Expr for GetTick {
         NlAbstractTy::Float
     }
 
-    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
+    fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
         visitor(&self.workspace);
     }
 

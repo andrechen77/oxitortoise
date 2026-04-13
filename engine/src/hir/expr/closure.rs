@@ -40,7 +40,7 @@ impl Expr for Closure {
         })
     }
 
-    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
+    fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
         visitor(&self.body);
     }
 

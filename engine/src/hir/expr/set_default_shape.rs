@@ -23,7 +23,7 @@ impl Expr for SetDefaultShape {
         NlAbstractTy::Unit
     }
 
-    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
+    fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
         visitor(&self.workspace);
         visitor(&self.shape);
     }

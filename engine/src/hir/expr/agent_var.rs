@@ -32,7 +32,7 @@ impl Expr for GetGlobalVar {
         var.ty.clone()
     }
 
-    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
+    fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
         visitor(&self.workspace);
     }
 
@@ -87,7 +87,7 @@ impl Expr for GetTurtleVar {
         }
     }
 
-    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
+    fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
         visitor(&self.workspace);
         visitor(&self.turtle);
     }
@@ -143,7 +143,7 @@ impl Expr for SetTurtleVar {
         NlAbstractTy::Unit
     }
 
-    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
+    fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
         visitor(&self.workspace);
         visitor(&self.turtle);
         visitor(&self.value);
@@ -221,7 +221,7 @@ impl Expr for GetPatchVar {
         }
     }
 
-    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
+    fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
         visitor(&self.workspace);
         visitor(&self.patch);
     }
@@ -277,7 +277,7 @@ impl Expr for SetPatchVar {
         NlAbstractTy::Unit
     }
 
-    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
+    fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
         visitor(&self.workspace);
         visitor(&self.patch);
         visitor(&self.value);

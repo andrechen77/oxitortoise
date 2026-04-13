@@ -32,7 +32,7 @@ impl Expr for Distancexy {
         NlAbstractTy::Float
     }
 
-    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
+    fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
         visitor(&self.workspace);
         visitor(&self.agent);
         visitor(&self.x);

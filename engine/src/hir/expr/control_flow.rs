@@ -29,7 +29,7 @@ impl Expr for Scope {
         self.inner.output_type(names)
     }
 
-    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
+    fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
         visitor(&self.inner);
     }
 
@@ -113,7 +113,7 @@ impl Expr for Block {
         output_type.unwrap()
     }
 
-    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
+    fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
         for stmt in &self.statements {
             visitor(stmt);
         }
@@ -192,7 +192,7 @@ impl Expr for IfElse {
         then_ty.join(else_ty)
     }
 
-    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
+    fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
         visitor(&self.condition);
         visitor(&self.then);
         visitor(&self.r#else);
@@ -274,7 +274,7 @@ impl Expr for Break {
         NlAbstractTy::Bottom
     }
 
-    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
+    fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
         visitor(self.value.as_ref());
     }
 

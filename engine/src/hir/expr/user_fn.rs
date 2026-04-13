@@ -25,7 +25,7 @@ impl Expr for CallUserFn {
         names.functions()[&self.target].return_ty.clone()
     }
 
-    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
+    fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
         for arg in &self.args {
             visitor(arg);
         }

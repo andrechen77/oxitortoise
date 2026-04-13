@@ -5,7 +5,9 @@ use std::fmt;
 use pretty_print::PrettyPrinter;
 
 use crate::{
-    hir::{Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy, build_mir::translate_expr},
+    hir::{
+        Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy, build_mir::translate_expr,
+    },
     mir,
     sim::{color, value::NlFloat},
     util::reflection::Reflect,
@@ -25,7 +27,7 @@ impl Expr for ScaleColor {
         NlAbstractTy::Color
     }
 
-    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
+    fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
         visitor(&self.color);
         visitor(&self.number);
         visitor(&self.range1);
@@ -89,12 +91,7 @@ mod scale_color {
         link_addr: call as *const u8,
     };
 
-    pub fn call(
-        color: Color,
-        number: NlFloat,
-        range_start: NlFloat,
-        range_end: NlFloat,
-    ) -> Color {
+    pub fn call(color: Color, number: NlFloat, range_start: NlFloat, range_end: NlFloat) -> Color {
         color::scale_color(color, number, range_start, range_end)
     }
 }

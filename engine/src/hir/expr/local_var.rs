@@ -22,7 +22,7 @@ impl Expr for GetLocalVar {
         names.lookup_local_var(self.local_id).unwrap().ty.clone()
     }
 
-    fn visit_children(&self, _visitor: impl FnMut(&ExprKind)) {
+    fn visit_children<'a>(&'a self, _visitor: impl FnMut(&'a ExprKind)) {
         // no children
     }
 
@@ -60,7 +60,7 @@ impl Expr for SetLocalVar {
         NlAbstractTy::Unit
     }
 
-    fn visit_children(&self, mut visitor: impl FnMut(&ExprKind)) {
+    fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
         visitor(&self.value);
     }
 

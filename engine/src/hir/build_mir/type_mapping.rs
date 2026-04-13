@@ -82,20 +82,28 @@ pub fn make_type_mapping(hir: &hir::Program) -> TypeMapping {
     // stores the types of function returns
     let mut function_return_tys = BTreeMap::new();
 
+    // stores all function parameters, including closure parameters, so they can
+    // all be mapped at the end
+    let mut function_params = Vec::new();
+
     for (fn_id, function) in &hir.functions {
         let return_ty = mir_repr_simple(&function.return_ty);
         function_return_tys.insert(*fn_id, return_ty);
+        for (param_id, param_decl) in &function.parameters {
+            function_params.push((*param_id, param_decl));
+        }
     }
 
     // iterate through the program and collect information about how each
     // variable is used
     for function_body in hir.function_bodies.values() {
         // visit the function body
-        visit_expr(function_body, &mut patch_diffused, &mut local_var_tys);
-        fn visit_expr(
-            expr_kind: &ExprKind,
+        visit_expr(function_body, &mut patch_diffused, &mut local_var_tys, &mut function_params);
+        fn visit_expr<'a>(
+            expr_kind: &'a ExprKind,
             patch_diffused: &mut BTreeSet<PatchVarDesc>,
             local_var_tys: &mut BTreeMap<hir::LocalId, LocalVarMapping>,
+            function_params: &mut Vec<(hir::LocalId, &'a hir::LocalDecl)>,
         ) {
             match expr_kind {
                 ExprKind::Diffuse(expr::Diffuse { variable, .. }) => {
@@ -111,7 +119,7 @@ pub fn make_type_mapping(hir: &hir::Program) -> TypeMapping {
                         local_var_tys.insert(*local_id, mapping);
                     }
                 }
-                ExprKind::Closure(expr::Closure { captures, .. }) => {
+                ExprKind::Closure(expr::Closure { captures, parameters, .. }) => {
                     for capture in captures {
                         let mapping = local_var_tys.get_mut(capture).expect(
                             "captured variable must have been previously defined by a scope",
@@ -122,11 +130,15 @@ pub fn make_type_mapping(hir: &hir::Program) -> TypeMapping {
                         // more precise by actually checking how the closure is used
                         mapping.heap = true;
                     }
+
+                    for (param_id, param_decl) in parameters {
+                        function_params.push((*param_id, param_decl));
+                    }
                 }
                 _ => {} // do nothing
             }
             expr_kind.visit_children(|child_expr_kind| {
-                visit_expr(child_expr_kind, patch_diffused, local_var_tys)
+                visit_expr(child_expr_kind, patch_diffused, local_var_tys, function_params)
             });
         }
     }
@@ -185,16 +197,14 @@ pub fn make_type_mapping(hir: &hir::Program) -> TypeMapping {
 
     let workspace_ptr_ty = make_workspace_ptr_type(&globals_schema, &turtle_schema, &patch_schema);
 
-    for (_, function) in &hir.functions {
-        for (param_id, param_decl) in &function.parameters {
-            let ty = if param_decl.ty == NlAbstractTy::Workspace {
-                workspace_ptr_ty.clone()
-            } else {
-                mir_repr_simple(&param_decl.ty)
-            };
-            let mapping = LocalVarMapping { ty, heap: false, captured: false };
-            local_var_tys.insert(*param_id, mapping);
-        }
+    for (param_id, param_decl) in function_params {
+        let ty = if param_decl.ty == NlAbstractTy::Workspace {
+            workspace_ptr_ty.clone()
+        } else {
+            mir_repr_simple(&param_decl.ty)
+        };
+        let mapping = LocalVarMapping { ty, heap: false, captured: false };
+        local_var_tys.insert(param_id, mapping);
     }
 
     TypeMapping {

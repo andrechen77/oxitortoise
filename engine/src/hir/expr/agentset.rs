@@ -22,12 +22,8 @@ impl Expr for Agentset {
         NlAbstractTy::Agentset { agent_type: Box::new(typ) }
     }
 
-    fn visit_children(&self, _visitor: impl FnMut(&crate::hir::ExprKind)) {
+    fn visit_children<'a>(&'a self, _visitor: impl FnMut(&'a crate::hir::ExprKind)) {
         // nothing to do lolz
-        match self {
-            Agentset::AllTurtles => {}
-            Agentset::AllPatches => {}
-        }
     }
 
     fn visit_children_mut(&mut self, _visitor: impl FnMut(&mut ExprKind)) {
