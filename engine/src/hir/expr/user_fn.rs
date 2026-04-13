@@ -4,7 +4,13 @@ use std::fmt::{self, Write};
 
 use pretty_print::PrettyPrinter;
 
-use crate::hir::{Expr, ExprKind, FunctionId, NameContext, NlAbstractTy};
+use crate::{
+    hir::{
+        Expr, ExprKind, FunctionId, HirToMirFnBuilder, NameContext, NlAbstractTy,
+        build_mir::translate_expr,
+    },
+    mir,
+};
 
 #[derive(Debug, Clone)]
 pub struct CallUserFn {
@@ -47,5 +53,20 @@ impl Expr for CallUserFn {
             }
             Ok(())
         })
+    }
+}
+
+impl CallUserFn {
+    pub fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
+        let mut args = Vec::new();
+        for arg in &self.args {
+            let local_id = translate_expr(builder, arg)?;
+            args.push(mir::PlaceOperand::Move(local_id));
+        }
+        let target_mir_id = builder.user_fn_translator[&self.target];
+
+        let operation = mir::Operation::CallUserFunction { function: target_mir_id, args };
+
+        Some(builder.mir.add_operation(None, operation))
     }
 }

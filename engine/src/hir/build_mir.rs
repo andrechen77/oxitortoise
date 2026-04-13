@@ -14,7 +14,8 @@ pub struct HirToMirFnBuilder<'a, 'b> {
     // pub hir: &'a hir::Program,
     pub type_mapping: &'a TypeMapping,
     pub mir: &'a mut mir::FunctionBuilder<'b>,
-    pub translator: &'a mut HirToMirFnTranslator,
+    pub local_translator: &'a mut HirToMirFnTranslator,
+    pub user_fn_translator: &'a BTreeMap<hir::FunctionId, mir::FunctionId>,
 }
 
 #[derive(Debug, Default)]
@@ -40,7 +41,8 @@ impl<'a, 'b> HirToMirFnBuilder<'a, 'b> {
                 hir_names: self.hir_names,
                 type_mapping: self.type_mapping,
                 mir,
-                translator: self.translator,
+                local_translator: self.local_translator,
+                user_fn_translator: self.user_fn_translator,
             };
             f(&mut builder)
         })
@@ -55,7 +57,8 @@ impl<'a, 'b> HirToMirFnBuilder<'a, 'b> {
             hir_names: self.hir_names.with_locals(local_vars),
             type_mapping: self.type_mapping,
             mir: self.mir,
-            translator: self.translator,
+            local_translator: self.local_translator,
+            user_fn_translator: self.user_fn_translator,
         })
     }
 }
@@ -65,20 +68,29 @@ pub fn hir_to_mir(hir: &hir::Program) -> mir::Program {
 
     let mut builder = mir::ProgramBuilder::new();
 
+    let mut user_fn_translator = BTreeMap::new();
+    // for each HIR function, allocate a MIR function id
+    for &hir_fn_id in hir.functions.keys() {
+        let mir_fn_id = builder.next_function_id();
+        user_fn_translator.insert(hir_fn_id, mir_fn_id);
+    }
+
     // iterate through each function and convert it to an MIR function
     for (hir_fn_id, hir_fn) in &hir.functions {
+        let mir_fn_id = user_fn_translator[hir_fn_id];
         let hir_fn_body = &hir.function_bodies[hir_fn_id];
 
         let name_context = NameContext::from_program(hir);
-        let mut mir_fn_builder = builder.create_function();
-        let mut translator = HirToMirFnTranslator::default();
+        let mut mir_fn_builder = builder.create_function(mir_fn_id);
+        let mut local_translator = HirToMirFnTranslator::default();
         let hir::Function { debug_name, parameters, return_ty, is_entrypoint } = hir_fn;
 
         translate_function(
             name_context,
             &type_mapping,
             &mut mir_fn_builder,
-            &mut translator,
+            &mut local_translator,
+            &user_fn_translator,
             &parameters,
             hir_fn_body,
         );
@@ -93,7 +105,8 @@ pub fn translate_function(
     hir_names: NameContext,
     type_mapping: &TypeMapping,
     mir_fn_builder: &mut mir::FunctionBuilder,
-    translator: &mut HirToMirFnTranslator,
+    local_translator: &mut HirToMirFnTranslator,
+    user_fn_translator: &BTreeMap<hir::FunctionId, mir::FunctionId>,
     parameters: &BTreeMap<hir::LocalId, hir::LocalDecl>,
     body: &hir::ExprKind,
 ) {
@@ -101,7 +114,8 @@ pub fn translate_function(
         hir_names,
         type_mapping: &type_mapping,
         mir: mir_fn_builder,
-        translator,
+        local_translator,
+        user_fn_translator,
     };
 
     // add all the function parameters to the function builder
@@ -111,7 +125,7 @@ pub fn translate_function(
             debug_name: Some(param_decl.debug_name.clone()),
             ty,
         });
-        builder.translator.locals.insert(*hir_param_id, mir_param_id.place());
+        builder.local_translator.locals.insert(*hir_param_id, mir_param_id.place());
     }
 
     // add all the nodes to the function body
@@ -176,10 +190,10 @@ pub fn translate_expr(
         E::ListLiteral(list_literal) => list_literal.write_mir_execution(builder),
         E::NumberLiteral(number_literal) => number_literal.write_mir_execution(builder),
         E::UnitLiteral(unit_literal) => Some(unit_literal.write_mir_execution(builder)),
+        E::CallUserFn(call_user_fn) => call_user_fn.write_mir_execution(builder),
 
         // TODO fill all other match arms
         E::Agentset(_agentset) => todo!(),
-        E::CallUserFn(_call_user_fn) => todo!(),
         E::CanMove(_can_move) => todo!(),
         E::StringLiteral(_string_literal) => todo!(),
         E::NobodyLiteral(_nobody_literal) => todo!(),

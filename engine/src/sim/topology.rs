@@ -77,6 +77,7 @@ impl Point {
             mir::Operation::Operand(mir::PlaceOperand::Move(y)),
         );
 
+        builder.set_as_init(result_local);
         result_local
     }
 }

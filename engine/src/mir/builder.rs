@@ -28,19 +28,19 @@ impl ProgramBuilder {
         &self.functions[&id]
     }
 
-    pub fn create_function(&mut self) -> FunctionBuilder<'_> {
-        FunctionBuilder::new(self)
+    pub fn create_function(&mut self, id: FunctionId) -> FunctionBuilder<'_> {
+        FunctionBuilder::new(self, id)
+    }
+
+    pub fn next_function_id(&mut self) -> FunctionId {
+        let id = FunctionId(self.next_function_id);
+        self.next_function_id += 1;
+        id
     }
 
     fn next_local_id(&mut self) -> LocalId {
         let id = LocalId(self.next_local_id);
         self.next_local_id += 1;
-        id
-    }
-
-    fn next_function_id(&mut self) -> FunctionId {
-        let id = FunctionId(self.next_function_id);
-        self.next_function_id += 1;
         id
     }
 
@@ -57,7 +57,8 @@ pub struct FunctionBuilder<'a> {
     parameters: Vec<LocalId>,
     locals: BTreeMap<LocalId, mir::LocalDecl>,
     // TODO(wishlist) consider replacing this with a more granular data structure
-    // that can track moves in and out of iniividual fields
+    // that can track moves in and out of iniividual fields. then we would also
+    // not need to manually assert when a local is fully initialized.
     currently_init_locals: BTreeSet<LocalId>,
     return_local: Option<LocalId>,
     statements_out: Vec<Statement>,
@@ -65,8 +66,7 @@ pub struct FunctionBuilder<'a> {
 }
 
 impl<'a> FunctionBuilder<'a> {
-    fn new(program_builder: &'a mut ProgramBuilder) -> Self {
-        let fn_id = program_builder.next_function_id();
+    fn new(program_builder: &'a mut ProgramBuilder, fn_id: FunctionId) -> Self {
         let mut new = Self {
             program_builder,
             fn_id,
@@ -83,7 +83,8 @@ impl<'a> FunctionBuilder<'a> {
     }
 
     pub fn create_another_function(&mut self) -> FunctionBuilder<'_> {
-        FunctionBuilder::new(self.program_builder)
+        let fn_id = self.program_builder.next_function_id();
+        FunctionBuilder::new(self.program_builder, fn_id)
     }
 
     /// Finishes the function builder and adds the function to the program builder.
@@ -115,6 +116,7 @@ impl<'a> FunctionBuilder<'a> {
     pub fn create_parameter(&mut self, decl: mir::LocalDecl) -> LocalId {
         let id = self.create_local(decl);
         self.parameters.push(id);
+        self.set_as_init(id);
         id
     }
 
@@ -130,6 +132,10 @@ impl<'a> FunctionBuilder<'a> {
 
     pub fn is_init(&self, local: LocalId) -> bool {
         self.currently_init_locals.contains(&local)
+    }
+
+    pub fn set_as_init(&mut self, local: LocalId) {
+        self.currently_init_locals.insert(local);
     }
 
     pub fn type_of_place(&self, place: &Place) -> mir::MirType {

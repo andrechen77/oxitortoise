@@ -55,7 +55,7 @@ impl Scope {
             let mir_local_id = builder
                 .mir
                 .create_local(mir::LocalDecl { debug_name: Some(decl.debug_name.clone()), ty });
-            builder.translator.locals.insert(*local_id, mir_local_id.place());
+            builder.local_translator.locals.insert(*local_id, mir_local_id.place());
         }
         // the scope does not remove the locals from the translator after the inner expression is
         // evaluated. At the time this code was written, this did not seem to be
@@ -65,7 +65,7 @@ impl Scope {
             builder.with_locals(&self.locals, |builder| translate_expr(builder, &self.inner));
 
         for local_id in self.locals.keys() {
-            let mir_local = builder.translator.locals[local_id].clone().unwrap_local();
+            let mir_local = builder.local_translator.locals[local_id].clone().unwrap_local();
             let ty = builder.mir.type_of_place(&mir_local.place());
 
             if builder.mir.is_init(mir_local) {
@@ -145,7 +145,7 @@ impl Block {
         let label = builder.mir.create_label();
 
         // make this label visible to child expressions
-        builder.translator.ctrl_flow_constructs.insert(self.label, (label, None));
+        builder.local_translator.ctrl_flow_constructs.insert(self.label, (label, None));
 
         // translate the statements in the block
         let (statements, _) = builder.with_inner_statement_seq(|builder| {
@@ -171,7 +171,7 @@ impl Block {
         builder.mir.add_statement(block);
 
         // get the return place of the statement
-        let (_, return_place) = builder.translator.ctrl_flow_constructs[&self.label];
+        let (_, return_place) = builder.local_translator.ctrl_flow_constructs[&self.label];
         return_place
     }
 }
@@ -297,7 +297,7 @@ impl Break {
         let value = translate_expr(builder, &self.value)?;
 
         let (target_label, target_local_out) =
-            builder.translator.ctrl_flow_constructs.get_mut(&self.target).unwrap();
+            builder.local_translator.ctrl_flow_constructs.get_mut(&self.target).unwrap();
         let target_local_out = *target_local_out.get_or_insert_with(|| {
             let ty = builder.mir.type_of_place(&value.place());
             builder.mir.create_local(mir::LocalDecl { debug_name: None, ty })

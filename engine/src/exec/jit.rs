@@ -176,7 +176,8 @@ where
             mir::Operation::Operand(mir::PlaceOperand::Move(drop_fn)),
         );
 
-        todo!()
+        builder.mir.set_as_init(result_local);
+        result_local
     }
 }
 

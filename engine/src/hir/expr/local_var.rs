@@ -38,7 +38,7 @@ impl Expr for GetLocalVar {
 
 impl GetLocalVar {
     pub fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
-        let place = builder.translator.locals.get(&self.local_id).unwrap();
+        let place = builder.local_translator.locals.get(&self.local_id).unwrap();
         if place.projections.is_empty() {
             let local = place.unwrap_local();
             assert!(builder.mir.is_init(local));
@@ -85,7 +85,7 @@ impl Expr for SetLocalVar {
 impl SetLocalVar {
     pub fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
         let value = translate_expr(builder, &self.value)?;
-        let dst = builder.translator.locals.get(&self.local_id).unwrap().unwrap_local();
+        let dst = builder.local_translator.locals.get(&self.local_id).unwrap().unwrap_local();
 
         if builder.mir.is_init(dst) {
             builder.mir.move_to_init(dst.place(), value);

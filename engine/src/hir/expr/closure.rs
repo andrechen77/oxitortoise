@@ -94,8 +94,11 @@ impl Closure {
             (env, env_ty)
         } else {
             // create an anonymous struct with the captures, and update
-            let captured_places: Vec<mir::Place> =
-                self.captures.iter().map(|cap| builder.translator.locals[cap].clone()).collect();
+            let captured_places: Vec<mir::Place> = self
+                .captures
+                .iter()
+                .map(|cap| builder.local_translator.locals[cap].clone())
+                .collect();
             let (env, env_ty) = mir_create_anon_struct(builder, &captured_places);
             (env, env_ty)
         };
@@ -107,6 +110,7 @@ impl Closure {
                 builder.type_mapping,
                 &mut mir_fn_builder,
                 &mut inner_translator,
+                builder.user_fn_translator,
                 &self.parameters,
                 &self.body,
             );
