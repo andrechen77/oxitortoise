@@ -3,7 +3,7 @@ use std::{
     sync::Arc,
 };
 
-use tracing::trace;
+use tracing::{trace, warn};
 
 use crate::{
     mir::{
@@ -261,7 +261,10 @@ impl<'a> FunctionBuilder<'a> {
             Statement::Elementary(ElementaryStatement::Drop { src }) => {
                 if src.projections.is_empty() {
                     let old_exists = self.currently_init_locals.remove(&src.unwrap_local());
-                    assert!(old_exists, "local must be initialized to drop it");
+
+                    if !old_exists {
+                        warn!("dropping uninitialized local: {:?}", src);
+                    }
                 }
             }
             _ => {}
