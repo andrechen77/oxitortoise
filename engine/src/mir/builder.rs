@@ -5,7 +5,7 @@ use crate::{
         self, ElementaryStatement, Function, FunctionId, Label, LocalId, MirType, MirTypeContents,
         MirTypeInfo, Operation, Place, PlaceOperand, Statement,
     },
-    util::reflection::ReflectComponents as _,
+    util::reflection::{CloneKind, ReflectComponents as _},
 };
 
 #[derive(Default)]
@@ -206,6 +206,50 @@ impl<'a> FunctionBuilder<'a> {
     /// [`FunctionBuilder::add_operation`] instead.
     pub fn add_statement(&mut self, stmt: Statement) {
         self.statements_out.push(stmt);
+    }
+
+    /// Moves a value from one place to another. This may potentially destroy the
+    /// source place if it is not Copy. The destination place is considered
+    /// initialized and will be deinitialized before the value is moved in.
+    pub fn move_to_init(&mut self, dst_init: Place, src: LocalId) {
+        // deinitialize the destination place
+        self.add_statement(mir::Statement::Elementary(mir::ElementaryStatement::Drop {
+            src: dst_init.clone(),
+        }));
+
+        // move the value into the place
+        self.add_operation_with_dst(
+            dst_init,
+            mir::Operation::Operand(mir::PlaceOperand::Move(src)),
+        );
+    }
+
+    pub fn clone_to_uninit(&mut self, src: Place, dst: Place) {
+        let clone_kind = &self.type_of_place(&src).static_ty.unwrap().clone;
+        match clone_kind {
+            CloneKind::Copy => self
+                .add_operation_with_dst(dst, mir::Operation::Operand(mir::PlaceOperand::Copy(src))),
+            CloneKind::Dynamic { clone_fn_info, .. } => self.add_operation_with_dst(
+                dst,
+                mir::Operation::CallHostFunction {
+                    function: clone_fn_info,
+                    args: vec![mir::PlaceOperand::Borrow(src)],
+                },
+            ),
+            CloneKind::None => {
+                panic!("Cannot clone a value that is neither Copy nor Clone");
+            }
+        }
+    }
+
+    /// Moves a value from one place to another. The source place is not
+    /// deinitialized. The destination place will not be deinitialized (i.e. it is
+    /// assumed to be uninitialized). Useful for loading variables from memory.
+    pub fn clone_to_new(&mut self, src: Place) -> LocalId {
+        let dst =
+            self.create_local(mir::LocalDecl { debug_name: None, ty: self.type_of_place(&src) });
+        self.clone_to_uninit(src, dst.place());
+        dst
     }
 
     pub fn with_inner_statement_seq<T>(

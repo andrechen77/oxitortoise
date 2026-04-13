@@ -199,11 +199,9 @@ fn mir_create_anon_struct(
     );
 
     // initialize the fields of the struct with clones of the values
-    for (src_place, (offset, ty)) in values.iter().zip(fields.iter()) {
+    for (src_place, (offset, _ty)) in values.iter().zip(fields.iter()) {
         let dst = erased_rc.place().proj_deref().proj_field(*offset);
-        let clone_kind =
-            &ty.static_ty.expect("the field must be cloneable to be initialized").clone;
-        build_mir::clone_to_uninit(builder.mir, src_place.clone(), dst, clone_kind);
+        builder.mir.clone_to_uninit(src_place.clone(), dst);
     }
 
     (erased_rc, struct_ty)

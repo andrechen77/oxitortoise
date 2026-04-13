@@ -6,8 +6,7 @@ use pretty_print::PrettyPrinter;
 
 use crate::{
     hir::{
-        Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy,
-        build_mir::{self, translate_expr},
+        Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy, build_mir::translate_expr,
     },
     mir,
     sim::{
@@ -59,8 +58,7 @@ impl GetGlobalVar {
         let globals = World::mir_project_globals(world);
         let var =
             Globals::mir_project_global_var(builder.mir, builder.type_mapping, self.index, globals);
-        let var_ty = builder.mir.type_of_place(&var);
-        Some(build_mir::clone_to_new(builder.mir, var, &var_ty.static_ty.as_ref().unwrap().clone))
+        Some(builder.mir.clone_to_new(var))
     }
 }
 
@@ -123,10 +121,9 @@ impl GetTurtleVar {
 
         // project the turtle variable
         let var = turtle_var_place(builder, ptr_to_workspace, turtle_id, self.var);
-        let var_ty = builder.mir.type_of_place(&var);
 
         // perform load
-        Some(build_mir::clone_to_new(builder.mir, var, &var_ty.static_ty.as_ref().unwrap().clone))
+        Some(builder.mir.clone_to_new(var))
     }
 }
 
@@ -188,7 +185,7 @@ impl SetTurtleVar {
         let var = turtle_var_place(builder, ptr_to_workspace, turtle_id, self.var);
 
         // perform store
-        build_mir::move_to_init(builder.mir, var, value);
+        builder.mir.move_to_init(var, value);
 
         Some(builder.mir.unit_local())
     }
@@ -258,10 +255,9 @@ impl GetPatchVar {
 
         // project the patch variable
         let var = patch_var_place(builder, ptr_to_workspace, patch_id, self.var);
-        let var_ty = builder.mir.type_of_place(&var);
 
         // perform load
-        Some(build_mir::clone_to_new(builder.mir, var, &var_ty.static_ty.unwrap().clone))
+        Some(builder.mir.clone_to_new(var))
     }
 }
 
@@ -323,7 +319,7 @@ impl SetPatchVar {
         let var = patch_var_place(builder, ptr_to_workspace, patch_id, self.var);
 
         // perform store
-        build_mir::move_to_init(builder.mir, var, value);
+        builder.mir.move_to_init(var, value);
 
         Some(builder.mir.unit_local())
     }

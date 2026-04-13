@@ -3,7 +3,6 @@ use std::collections::BTreeMap;
 use crate::{
     hir::{self, NameContext},
     mir,
-    util::reflection::CloneKind,
 };
 
 mod type_mapping;
@@ -194,53 +193,4 @@ pub fn translate_expr(
         E::EuclideanDistanceNoWrap(_euclidean_distance_no_wrap) => unimplemented!(),
         E::PointConstructor(_point_constructor) => unimplemented!(),
     }
-}
-
-/// Moves a value from one place to another. The source place is not
-/// deinitialized. The destination place will not be deinitialized (i.e. it is
-/// assumed to be uninitialized). Useful for loading variables from memory.
-pub fn clone_to_new(
-    builder: &mut mir::FunctionBuilder,
-    src: mir::Place,
-    clone_kind: &CloneKind,
-) -> mir::LocalId {
-    let dst =
-        builder.create_local(mir::LocalDecl { debug_name: None, ty: builder.type_of_place(&src) });
-    clone_to_uninit(builder, src, dst.place(), clone_kind);
-    dst
-}
-
-pub fn clone_to_uninit(
-    builder: &mut mir::FunctionBuilder,
-    src: mir::Place,
-    dst: mir::Place,
-    clone_kind: &CloneKind,
-) {
-    match clone_kind {
-        CloneKind::Copy => builder
-            .add_operation_with_dst(dst, mir::Operation::Operand(mir::PlaceOperand::Copy(src))),
-        CloneKind::Dynamic { clone_fn_info, .. } => builder.add_operation_with_dst(
-            dst,
-            mir::Operation::CallHostFunction {
-                function: clone_fn_info,
-                args: vec![mir::PlaceOperand::Borrow(src)],
-            },
-        ),
-        CloneKind::None => {
-            panic!("Cannot clone a value that is neither Copy nor Clone");
-        }
-    }
-}
-
-/// Moves a value from one place to another. This may potentially destroy the
-/// source place if it is not Copy. The destination place is considered
-/// initialized and will be deinitialized before the value is moved in.
-pub fn move_to_init(builder: &mut mir::FunctionBuilder, dst_init: mir::Place, src: mir::LocalId) {
-    // deinitialize the destination place
-    builder.add_statement(mir::Statement::Elementary(mir::ElementaryStatement::Drop {
-        src: dst_init.clone(),
-    }));
-
-    // move the value into the place
-    builder.add_operation_with_dst(dst_init, mir::Operation::Operand(mir::PlaceOperand::Move(src)));
 }

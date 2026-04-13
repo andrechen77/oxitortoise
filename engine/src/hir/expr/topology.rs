@@ -6,8 +6,7 @@ use pretty_print::PrettyPrinter;
 
 use crate::{
     hir::{
-        Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy,
-        build_mir::{self, translate_expr},
+        Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy, build_mir::translate_expr,
     },
     mir,
     sim::{
@@ -158,12 +157,7 @@ impl MaxPxcor {
         let world = Workspace::mir_project_world(workspace);
         let topology = World::mir_project_topology(world);
         let max_pxcor = Topology::mir_project_max_pxcor(topology);
-        let max_pxcor_ty = builder.mir.type_of_place(&max_pxcor);
-        Some(build_mir::clone_to_new(
-            builder.mir,
-            max_pxcor,
-            &max_pxcor_ty.static_ty.as_ref().unwrap().clone,
-        ))
+        Some(builder.mir.clone_to_new(max_pxcor))
     }
 }
 
@@ -205,12 +199,7 @@ impl MaxPycor {
         let world = Workspace::mir_project_world(workspace);
         let topology = World::mir_project_topology(world);
         let max_pycor = Topology::mir_project_max_pycor(topology);
-        let max_pycor_ty = builder.mir.type_of_place(&max_pycor);
-        Some(build_mir::clone_to_new(
-            builder.mir,
-            max_pycor,
-            &max_pycor_ty.static_ty.as_ref().unwrap().clone,
-        ))
+        Some(builder.mir.clone_to_new(max_pycor))
     }
 }
 

@@ -7,7 +7,7 @@ use pretty_print::PrettyPrinter;
 use crate::{
     hir::{
         Expr, ExprKind, HirToMirFnBuilder, LocalId, NameContext, NlAbstractTy,
-        build_mir::{self, translate_expr},
+        build_mir::translate_expr,
     },
     mir,
 };
@@ -44,10 +44,7 @@ impl GetLocalVar {
             assert!(builder.mir.is_init(local));
             Some(local)
         } else {
-            let ty = builder.mir.type_of_place(place);
-            let clone_kind = &ty.static_ty.expect("local variable cannot be loaded out from a place if it doesn't have a statically known type").clone;
-            let local = build_mir::clone_to_new(builder.mir, place.clone(), &clone_kind);
-            Some(local)
+            Some(builder.mir.clone_to_new(place.clone()))
         }
     }
 }
@@ -91,7 +88,7 @@ impl SetLocalVar {
         let dst = builder.translator.locals.get(&self.local_id).unwrap().unwrap_local();
 
         if builder.mir.is_init(dst) {
-            build_mir::move_to_init(builder.mir, dst.place(), value);
+            builder.mir.move_to_init(dst.place(), value);
         } else {
             builder.mir.add_operation_with_dst(
                 dst.place(),
