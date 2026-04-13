@@ -307,13 +307,9 @@ impl Turtles {
 
         let (field_desc, offset) = type_mapping.turtle_schema().field_desc_and_offset(var);
 
-        // turtles.data[field_desc.buffer_idx]
         let offset_of_buffer = offset_of!(Self, data)
             + usize::from(field_desc.buffer_idx) * size_of::<Option<RowBuffer>>();
         let buffer_pl = turtles.proj(mir::Projection::Field { byte_offset: offset_of_buffer });
-        // turtles.data[field_desc.buffer_idx].ptr
-        let ptr_to_buffer = RowBuffer::write_mir_get_data_ptr(builder, buffer_pl);
-        // turtles.data[field_desc.buffer_idx].ptr[turtle_id.index]
         let turtle_idx = builder.add_operation(
             Some("turtle_idx".into()),
             mir::Operation::UnaryOp {
@@ -321,9 +317,12 @@ impl Turtles {
                 operand: mir::PlaceOperand::Copy(turtle_id),
             },
         );
-        let ptr_to_row = ptr_to_buffer.proj_deref().proj_dynamic_index(turtle_idx);
-        // turtles.data[field_desc.buffer_idx].ptr[turtle_id.index].var
-        let var_pl = ptr_to_row.proj_field(field_desc.field_idx as usize);
+        let var_pl = RowBuffer::mir_project_field(
+            builder,
+            buffer_pl,
+            turtle_idx,
+            field_desc.field_idx as usize,
+        );
         if let Some(offset) = offset { var_pl.proj_field(offset) } else { var_pl }
     }
 

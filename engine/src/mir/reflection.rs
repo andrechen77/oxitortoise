@@ -1,4 +1,4 @@
-use std::{alloc::Layout, sync::Arc};
+use std::{alloc::Layout, fmt, sync::Arc};
 
 use crate::{
     mir::{Place, Projection, builder::FunctionBuilder},
@@ -10,7 +10,7 @@ use crate::{
 
 pub type MirType = Arc<MirTypeInfo>;
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Clone, Default, PartialEq, Eq)]
 pub struct MirTypeInfo {
     /// If it exists, the static type that this MirType represents.
     pub static_ty: Option<Type>,
@@ -68,6 +68,35 @@ impl MirTypeInfo {
     /// not.
     pub fn assert_is<T: Reflect>(&self) {
         assert!(self.is::<T>(), "Expected type {:?} but got {:?}", T::TYPE, self);
+    }
+}
+
+impl fmt::Debug for MirTypeInfo {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let MirTypeInfo { static_ty, contents } = self;
+        if let Some(static_ty) = static_ty {
+            write!(f, "{} ", static_ty.debug_name)?;
+        }
+        match contents {
+            MirTypeContents::IsPointerTo(pointee) => write!(f, "&{:?}", pointee),
+            MirTypeContents::HasFields { fields, overall: _ } => {
+                write!(f, "{{")?;
+                for (offset, field) in fields {
+                    write!(f, " {}: {:?},", offset, field)?;
+                }
+                write!(f, " }}")?;
+                Ok(())
+            }
+            MirTypeContents::IsArrayOf { element, length } => {
+                if let Some(length) = length {
+                    write!(f, "[{:?}; {}]", element, length)
+                } else {
+                    write!(f, "[{:?}; ?]", element)
+                }
+            }
+            MirTypeContents::IsPrimitive(ty) => write!(f, "{:?}", ty),
+            MirTypeContents::None => write!(f, "<no assertion>"),
+        }
     }
 }
 

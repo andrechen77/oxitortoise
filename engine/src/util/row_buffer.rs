@@ -13,7 +13,7 @@ use std::{
 };
 
 use crate::{
-    mir::{self, DynPtr, DynPtrMut, HasDynPtr, MirType, MirTypeInfo},
+    mir::{self, DynPtr, DynPtrMut, HasDynPtr, MirType, MirTypeContents, MirTypeInfo},
     util::{
         lifetime_ptr::{LifetimePtr, LifetimePtrMut},
         reflection::{Reflect, Type},
@@ -580,6 +580,22 @@ impl RowBuffer {
             // are always present, so we can drop all fields
             unsafe { row.drop_all_fields() };
         }
+    }
+
+    pub fn mir_project_field(
+        builder: &mut mir::FunctionBuilder,
+        self_pl: mir::Place,
+        row_idx: mir::LocalId,
+        field_idx: usize,
+    ) -> mir::Place {
+        let ptr_to_buffer = RowBuffer::write_mir_get_data_ptr(builder, self_pl);
+        let ptr_to_row = ptr_to_buffer.proj_deref().proj_dynamic_index(row_idx);
+        let row_ty = builder.type_of_place(&ptr_to_row);
+        let MirTypeContents::HasFields { fields, .. } = &row_ty.contents else {
+            panic!("expected a type with fields, got {:?}", row_ty);
+        };
+        let field_offset = fields[field_idx].0;
+        ptr_to_row.proj_field(field_offset)
     }
 }
 

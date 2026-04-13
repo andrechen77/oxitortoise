@@ -312,16 +312,16 @@ impl Patches {
 
         let (field_desc, offset) = type_mapping.patch_schema().field_desc_and_offset(var);
 
-        // patches.data[field_desc.buffer_idx]
         let offset_of_buffer = offset_of!(Self, data)
             + usize::from(field_desc.buffer_idx) * size_of::<Option<RowBuffer>>();
         let buffer_pl = patches.proj(mir::Projection::Field { byte_offset: offset_of_buffer });
-        // patches.data[field_desc.buffer_idx].ptr
-        let ptr_to_buffer = RowBuffer::write_mir_get_data_ptr(builder, buffer_pl);
-        // patches.data[field_desc.buffer_idx].ptr[patch_id.index]
-        let ptr_to_row = ptr_to_buffer.proj_deref().proj_dynamic_index(patch_id.unwrap_local());
-        // turtles.data[field_desc.buffer_idx].ptr[patch_id.index].var
-        let var_pl = ptr_to_row.proj_field(field_desc.field_idx as usize);
+        let var_pl = RowBuffer::mir_project_field(
+            builder,
+            buffer_pl,
+            patch_id.unwrap_local(),
+            field_desc.field_idx as usize,
+        );
+
         if let Some(offset) = offset { var_pl.proj_field(offset) } else { var_pl }
     }
 

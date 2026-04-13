@@ -3,6 +3,7 @@
 use std::fmt::{self, Write};
 
 use pretty_print::PrettyPrinter;
+use tracing::trace;
 
 use crate::{
     hir::{
@@ -174,6 +175,8 @@ impl Expr for SetTurtleVar {
 impl SetTurtleVar {
     pub fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
         let ptr_to_workspace = translate_expr(builder, &self.workspace)?.place();
+        let workspace_ty = builder.mir.type_of_place(&ptr_to_workspace);
+        trace!("workspace_ty: {:?}", workspace_ty);
 
         // calculate the value to store
         let value = translate_expr(builder, &self.value)?;
@@ -183,6 +186,8 @@ impl SetTurtleVar {
 
         // project the turtle variable
         let var = turtle_var_place(builder, ptr_to_workspace, turtle_id, self.var);
+
+        trace!("var: {:?}", var);
 
         // perform store
         builder.mir.move_to_init(var, value);
