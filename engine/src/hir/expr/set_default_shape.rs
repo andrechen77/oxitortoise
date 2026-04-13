@@ -4,7 +4,10 @@ use std::fmt::{self, Write};
 
 use pretty_print::PrettyPrinter;
 
-use crate::hir::{Expr, ExprKind, NameContext, NlAbstractTy, TurtleBreedId};
+use crate::{
+    hir::{Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy, TurtleBreedId},
+    mir,
+};
 
 #[derive(Debug, Clone)]
 pub struct SetDefaultShape {
@@ -48,5 +51,12 @@ impl Expr for SetDefaultShape {
             p.add_fn_arg_with(|p| shape.pretty_print(p, names))?;
             Ok(())
         })
+    }
+}
+
+impl SetDefaultShape {
+    pub fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
+        // TODO(mvp) write LIR code to set the default shape
+        Some(builder.mir.unit_local())
     }
 }

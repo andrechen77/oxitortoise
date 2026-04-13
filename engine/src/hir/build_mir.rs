@@ -199,6 +199,7 @@ pub fn translate_expr(
         E::NumberLiteral(number_literal) => number_literal.write_mir_execution(builder),
         E::UnitLiteral(unit_literal) => Some(unit_literal.write_mir_execution(builder)),
         E::CallUserFn(call_user_fn) => call_user_fn.write_mir_execution(builder),
+        E::SetDefaultShape(set_default_shape) => set_default_shape.write_mir_execution(builder),
 
         // TODO fill all other match arms
         E::Agentset(_agentset) => todo!(),
@@ -209,7 +210,6 @@ pub fn translate_expr(
         E::OffsetDistanceByHeading(_offset_distance_by_heading) => todo!(),
         E::PatchRelative(_patch_relative) => todo!(),
         E::RandomInt(_random_int) => todo!(),
-        E::SetDefaultShape(_set_default_shape) => todo!(),
 
         E::Closure(_closure) => todo!("TODO implement standalone closure"),
         E::EuclideanDistanceNoWrap(_euclidean_distance_no_wrap) => unimplemented!(),
