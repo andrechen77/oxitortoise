@@ -19,7 +19,7 @@ use crate::{
     sim::{
         agent_schema::{AgentFieldDescriptor, AgentSchemaField, AgentSchemaFieldGroup},
         color::Color,
-        topology::{CoordFloat, PointInt, TopologySpec},
+        topology::{PointInt, TopologySpec},
         value::{BoxedAny, NlFloat, NlList, NlString, PackedAny},
     },
     util::{
@@ -319,7 +319,7 @@ impl Patches {
         // patches.data[field_desc.buffer_idx].ptr
         let ptr_to_buffer = RowBuffer::write_mir_get_data_ptr(builder, buffer_pl);
         // patches.data[field_desc.buffer_idx].ptr[patch_id.index]
-        let ptr_to_row = ptr_to_buffer.proj_dynamic_index(patch_id.unwrap_local());
+        let ptr_to_row = ptr_to_buffer.proj_deref().proj_dynamic_index(patch_id.unwrap_local());
         // turtles.data[field_desc.buffer_idx].ptr[patch_id.index].var
         let var_pl = ptr_to_row.proj_field(field_desc.field_idx as usize);
         if let Some(offset) = offset { var_pl.proj_field(offset) } else { var_pl }

@@ -321,7 +321,7 @@ impl Turtles {
                 operand: mir::PlaceOperand::Copy(turtle_id),
             },
         );
-        let ptr_to_row = ptr_to_buffer.proj_dynamic_index(turtle_idx);
+        let ptr_to_row = ptr_to_buffer.proj_deref().proj_dynamic_index(turtle_idx);
         // turtles.data[field_desc.buffer_idx].ptr[turtle_id.index].var
         let var_pl = ptr_to_row.proj_field(field_desc.field_idx as usize);
         if let Some(offset) = offset { var_pl.proj_field(offset) } else { var_pl }
