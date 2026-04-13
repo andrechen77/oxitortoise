@@ -10,6 +10,7 @@ use crate::{
         build_mir::translate_expr,
     },
     mir,
+    sim::turtle::TurtleId,
 };
 
 #[derive(Debug, Clone)]
@@ -71,7 +72,12 @@ impl CreateTurtles {
         let workspace_local = translate_expr(builder, &self.workspace)?;
         let rng_local = translate_expr(builder, &self.rng)?;
         let num_turtles_local = translate_expr(builder, &self.num_turtles)?;
-        let body_local = translate_expr(builder, &self.body)?;
+
+        // it is statically known that the body is a closure taking turtles
+        let ExprKind::Closure(closure) = self.body.as_ref() else {
+            panic!("expected body to be a closure literal, got: {:?}", self.body);
+        };
+        let body_local = closure.write_mir_execution_with_static_types::<TurtleId, ()>(builder);
 
         let operation = mir::Operation::CallHostFunction {
             function: &create_turtles::FN_INFO,
