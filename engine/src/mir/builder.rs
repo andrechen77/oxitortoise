@@ -3,6 +3,8 @@ use std::{
     sync::Arc,
 };
 
+use tracing::trace;
+
 use crate::{
     mir::{
         self, ElementaryStatement, Function, FunctionId, Label, LocalId, MirType, MirTypeContents,
@@ -14,9 +16,14 @@ use crate::{
 #[derive(Default)]
 pub struct ProgramBuilder {
     functions: BTreeMap<FunctionId, Function>,
+    function_stubs: BTreeMap<FunctionId, FunctionStub>,
     next_function_id: u32,
     next_local_id: u32,
     next_label: u32,
+}
+
+pub struct FunctionStub {
+    pub return_ty: MirType,
 }
 
 impl ProgramBuilder {
@@ -24,8 +31,12 @@ impl ProgramBuilder {
         Default::default()
     }
 
-    pub fn function(&self, id: FunctionId) -> &Function {
-        &self.functions[&id]
+    pub fn completed_function(&self, id: FunctionId) -> Option<&Function> {
+        self.functions.get(&id)
+    }
+
+    pub fn function_stub(&self, fn_id: FunctionId) -> Option<&FunctionStub> {
+        self.function_stubs.get(&fn_id)
     }
 
     pub fn create_function(&mut self, id: FunctionId) -> FunctionBuilder<'_> {
@@ -36,6 +47,10 @@ impl ProgramBuilder {
         let id = FunctionId(self.next_function_id);
         self.next_function_id += 1;
         id
+    }
+
+    pub fn insert_function_stub(&mut self, fn_id: FunctionId, stub: FunctionStub) {
+        self.function_stubs.insert(fn_id, stub);
     }
 
     fn next_local_id(&mut self) -> LocalId {
@@ -101,6 +116,7 @@ impl<'a> FunctionBuilder<'a> {
             body,
         };
         self.program_builder.functions.insert(self.fn_id, function);
+        self.program_builder.function_stubs.remove(&self.fn_id);
         self.fn_id
     }
 
@@ -117,6 +133,7 @@ impl<'a> FunctionBuilder<'a> {
         let id = self.create_local(decl);
         self.parameters.push(id);
         self.set_as_init(id);
+        trace!("created parameter: {:?} {:?}", id, self.locals[&id]);
         id
     }
 
@@ -166,9 +183,13 @@ impl<'a> FunctionBuilder<'a> {
                 MirType::default()
             }
             Operation::CallHostFunction { function, .. } => (function.return_type.make_mir_type)(),
-            Operation::CallUserFunction { function, .. } => {
-                self.program_builder.function(*function).return_ty().clone()
-            }
+            Operation::CallUserFunction { function, .. } => self
+                .program_builder
+                .completed_function(*function)
+                .map(|f| f.return_ty().clone())
+                .unwrap_or_else(|| {
+                    self.program_builder.function_stub(*function).unwrap().return_ty.clone()
+                }),
             Operation::BinaryOp { .. } => {
                 unimplemented!("hardcoded binary ops will be sunsetted in favor of host fn calls")
             }
@@ -217,6 +238,8 @@ impl<'a> FunctionBuilder<'a> {
     /// If the statement is an assignment from an operation, consider using
     /// [`FunctionBuilder::add_operation`] instead.
     pub fn add_statement(&mut self, stmt: Statement) {
+        trace!("adding statement: {:?}", stmt);
+
         // process updates to the currently initialized locals
         match &stmt {
             Statement::Elementary(ElementaryStatement::Assign { dst, op }) => {
@@ -228,7 +251,10 @@ impl<'a> FunctionBuilder<'a> {
                     if let PlaceOperand::Move(local) = operand {
                         // move out of the local
                         let old_exists = self.currently_init_locals.remove(&local);
-                        assert!(old_exists, "local must be initialized to move out of it");
+                        assert!(
+                            old_exists || self.type_of_place(&local.place()).is::<()>(),
+                            "local must be initialized to move out of it"
+                        );
                     }
                 }
             }

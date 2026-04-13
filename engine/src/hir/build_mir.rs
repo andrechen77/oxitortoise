@@ -7,6 +7,7 @@ use crate::{
 
 mod type_mapping;
 
+use tracing::trace;
 pub use type_mapping::{TypeMapping, make_type_mapping};
 
 pub struct HirToMirFnBuilder<'a, 'b> {
@@ -73,10 +74,17 @@ pub fn hir_to_mir(hir: &hir::Program) -> mir::Program {
     for &hir_fn_id in hir.functions.keys() {
         let mir_fn_id = builder.next_function_id();
         user_fn_translator.insert(hir_fn_id, mir_fn_id);
+
+        // create the function stub so that other functions can refer to this
+        // function even if it has not been translated yet
+        let return_ty = type_mapping.function_return_ty(hir_fn_id);
+        builder.insert_function_stub(mir_fn_id, mir::FunctionStub { return_ty });
     }
 
     // iterate through each function and convert it to an MIR function
     for (hir_fn_id, hir_fn) in &hir.functions {
+        trace!("translating function {:?}", hir_fn_id);
+
         let mir_fn_id = user_fn_translator[hir_fn_id];
         let hir_fn_body = &hir.function_bodies[hir_fn_id];
 

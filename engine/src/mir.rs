@@ -5,7 +5,7 @@ use crate::{sim::value::BoxedAny, util::reflection::Type};
 mod builder;
 mod reflection;
 
-pub use builder::{FunctionBuilder, ProgramBuilder};
+pub use builder::{FunctionBuilder, FunctionStub, ProgramBuilder};
 pub use reflection::{DynPtr, DynPtrMut, HasDynPtr, MirType, MirTypeContents, MirTypeInfo};
 
 #[derive(Debug)]

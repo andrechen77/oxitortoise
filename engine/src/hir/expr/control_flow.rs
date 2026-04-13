@@ -14,6 +14,7 @@ use crate::{
 };
 
 use pretty_print::PrettyPrinter;
+use tracing::trace;
 
 /// An expression that defines a set of mutable local variables that can be
 /// written and read in the evaluation of an inner expression.
@@ -150,6 +151,7 @@ impl Block {
         // translate the statements in the block
         let (statements, _) = builder.with_inner_statement_seq(|builder| {
             for expr in &self.statements {
+                trace!("translating statement: {:?}", expr);
                 let result = translate_expr(builder, expr)?;
                 let ty = builder.mir.type_of_place(&result.place());
                 if let Some(static_ty) = ty.static_ty
