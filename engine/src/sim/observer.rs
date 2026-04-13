@@ -77,8 +77,8 @@ impl Globals {
         let data = globals.proj(mir::Projection::Field { byte_offset: offset_of!(Globals, data) });
         // globals.data.ptr
         let ptr = RowBuffer::write_mir_get_data_ptr(builder, data);
-        // globals.data.ptr.var
-        ptr.proj(mir::Projection::Field { byte_offset })
+        // (*globals.data.ptr.deref)[0].var
+        ptr.proj_deref().proj_static_index(0).proj_field(byte_offset)
     }
 
     pub fn mir_type_from_schema(schema: &GlobalsSchema) -> mir::MirType {

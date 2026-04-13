@@ -83,7 +83,10 @@ impl MirTypeContents {
                 };
                 field
             }
-            (M::IsArrayOf { element, length: _ }, Projection::DynamicIndex(_index)) => element,
+            (
+                M::IsArrayOf { element, length: _ },
+                Projection::DynamicIndex(_) | Projection::StaticIndex(_),
+            ) => element,
             (desc, projection) => {
                 panic!(
                     "Cannot project memory descriptor {:?} with projection: {:?}",
