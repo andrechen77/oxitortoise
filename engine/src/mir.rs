@@ -216,6 +216,20 @@ impl Function {
     }
 }
 
+impl Operation {
+    pub fn operands(&self) -> Vec<&PlaceOperand> {
+        match self {
+            Operation::Operand(opd) => vec![opd],
+            Operation::Const { .. } => vec![],
+            Operation::FunctionPtr { .. } => vec![],
+            Operation::BinaryOp { lhs, rhs, .. } => vec![lhs, rhs],
+            Operation::UnaryOp { operand, .. } => vec![operand],
+            Operation::CallUserFunction { args, .. } => args.iter().collect(),
+            Operation::CallHostFunction { args, .. } => args.iter().collect(),
+        }
+    }
+}
+
 /// Consolidates a sequence of statements into a single statement. If there is
 /// only one statement, it is returned as is. If there are multiple statements,
 /// a block is created with the statements.

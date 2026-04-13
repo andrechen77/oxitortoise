@@ -1,4 +1,7 @@
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 
 use crate::{
     mir::{
@@ -53,6 +56,9 @@ pub struct FunctionBuilder<'a> {
     fn_id: FunctionId,
     parameters: Vec<LocalId>,
     locals: BTreeMap<LocalId, mir::LocalDecl>,
+    // TODO(wishlist) consider replacing this with a more granular data structure
+    // that can track moves in and out of iniividual fields
+    currently_init_locals: BTreeSet<LocalId>,
     return_local: Option<LocalId>,
     statements_out: Vec<Statement>,
     unit_local: Option<LocalId>,
@@ -65,6 +71,7 @@ impl<'a> FunctionBuilder<'a> {
             program_builder,
             fn_id,
             locals: BTreeMap::new(),
+            currently_init_locals: BTreeSet::new(),
             parameters: Vec::new(),
             return_local: None,
             statements_out: Vec::new(),
@@ -122,8 +129,7 @@ impl<'a> FunctionBuilder<'a> {
     }
 
     pub fn is_init(&self, local: LocalId) -> bool {
-        let _ = local;
-        todo!("TODO implement is_init")
+        self.currently_init_locals.contains(&local)
     }
 
     pub fn type_of_place(&self, place: &Place) -> mir::MirType {
@@ -179,7 +185,7 @@ impl<'a> FunctionBuilder<'a> {
             "type of operation must match type of destination place"
         );
 
-        self.statements_out.push(Statement::Elementary(ElementaryStatement::Assign { dst, op }));
+        self.add_statement(Statement::Elementary(ElementaryStatement::Assign { dst, op }));
     }
 
     pub fn add_operation_with_decl(
@@ -205,6 +211,30 @@ impl<'a> FunctionBuilder<'a> {
     /// If the statement is an assignment from an operation, consider using
     /// [`FunctionBuilder::add_operation`] instead.
     pub fn add_statement(&mut self, stmt: Statement) {
+        // process updates to the currently initialized locals
+        match &stmt {
+            Statement::Elementary(ElementaryStatement::Assign { dst, op }) => {
+                if dst.projections.is_empty() {
+                    self.currently_init_locals.insert(dst.unwrap_local());
+                }
+
+                for operand in op.operands() {
+                    if let PlaceOperand::Move(local) = operand {
+                        // move out of the local
+                        let old_exists = self.currently_init_locals.remove(&local);
+                        assert!(old_exists, "local must be initialized to move out of it");
+                    }
+                }
+            }
+            Statement::Elementary(ElementaryStatement::Drop { src }) => {
+                if src.projections.is_empty() {
+                    let old_exists = self.currently_init_locals.remove(&src.unwrap_local());
+                    assert!(old_exists, "local must be initialized to drop it");
+                }
+            }
+            _ => {}
+        }
+
         self.statements_out.push(stmt);
     }
 
