@@ -6,9 +6,11 @@ mod builder;
 mod reflection;
 
 pub use builder::{FunctionBuilder, FunctionStub, ProgramBuilder};
+use derive_more::Display;
 pub use reflection::{DynPtr, DynPtrMut, HasDynPtr, MirType, MirTypeContents, MirTypeInfo};
 
-#[derive(Debug)]
+#[derive(Debug, Display)]
+#[display("{debug_name}")]
 pub struct HostFunctionInfo {
     pub debug_name: &'static str,
     pub parameter_types: &'static [Type],
@@ -23,13 +25,16 @@ pub struct HostFunctionInfo {
 // pointer, which is just a function pointer so it is safe to share.
 unsafe impl Sync for HostFunctionInfo {}
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy, Display)]
+#[display("F{_0}")]
 pub struct FunctionId(u32);
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy, Display)]
+#[display("V{_0}")]
 pub struct LocalId(u32);
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy, Display)]
+#[display("L{_0}")]
 pub struct Label(u32);
 
 #[derive(Debug, Default)]
@@ -123,20 +128,24 @@ impl Place {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Display)]
 pub enum Projection {
     /// With the place having a pointer value, dereferences the pointer and
     /// produces the place of the dereferenced value.
+    #[display(".deref")]
     Deref,
     /// With the place having a struct value, produces the place of the field
     /// at the given byte offset.
+    #[display(".({byte_offset})")]
     Field { byte_offset: usize },
     /// With the place having an array value, produces the place of the element
     /// at the index of the given local variable. This never moves from the
     /// source place since a value used for indexing is always Copy.
+    #[display(".[{_0}]")]
     DynamicIndex(LocalId),
     /// With the place having an array value, produces the place of the element
     /// at the given index.
+    #[display(".[{_0}]")]
     StaticIndex(usize),
 }
 
