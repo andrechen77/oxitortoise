@@ -217,12 +217,12 @@ impl<'a> FunctionBuilder<'a> {
         // make sure that the types match
         let dst_ty = self.type_of_place(&dst);
         let val_ty = self.type_of_op(&op);
-        assert!(
-            dst_ty.is_assignable_from(&val_ty),
-            "type of operation must match type of destination place: {:?} != {:?}",
-            dst_ty,
-            val_ty,
-        );
+        if dst_ty.is_assignable_from(&val_ty) {
+            warn!(
+                "type of operation does not match type of destination place: {:?} != {:?}",
+                dst_ty, val_ty
+            );
+        }
 
         self.add_statement(Statement::Elementary(ElementaryStatement::Assign { dst, op }));
     }
@@ -250,8 +250,6 @@ impl<'a> FunctionBuilder<'a> {
     /// If the statement is an assignment from an operation, consider using
     /// [`FunctionBuilder::add_operation`] instead.
     pub fn add_statement(&mut self, stmt: Statement) {
-        trace!("adding statement: {:?}", stmt);
-
         // process updates to the currently initialized locals
         match &stmt {
             Statement::Elementary(ElementaryStatement::Assign { dst, op }) => {
@@ -263,10 +261,9 @@ impl<'a> FunctionBuilder<'a> {
                     if let PlaceOperand::Move(local) = operand {
                         // move out of the local
                         let old_exists = self.currently_init_locals.remove(&local);
-                        assert!(
-                            old_exists || self.type_of_place(&local.place()).is::<()>(),
-                            "local must be initialized to move out of it"
-                        );
+                        if !old_exists && !self.type_of_place(&local.place()).is::<()>() {
+                            warn!("moving out of uninitialized local: {:?}", local);
+                        }
                     }
                 }
             }

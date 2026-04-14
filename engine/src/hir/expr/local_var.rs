@@ -3,6 +3,7 @@
 use std::fmt::{self, Write};
 
 use pretty_print::PrettyPrinter;
+use tracing::warn;
 
 use crate::{
     hir::{
@@ -41,7 +42,9 @@ impl GetLocalVar {
         let place = builder.local_translator.locals.get(&self.local_id).unwrap();
         if place.projections.is_empty() {
             let local = place.unwrap_local();
-            assert!(builder.mir.is_init(local));
+            if !builder.mir.is_init(local) {
+                warn!("getting uninitialized local: {:?}", local);
+            }
             Some(local)
         } else {
             Some(builder.mir.clone_to_new(place.clone()))
