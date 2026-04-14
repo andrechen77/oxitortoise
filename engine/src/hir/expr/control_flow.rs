@@ -167,13 +167,14 @@ impl Block {
 
         // create a block statement with the translated statements
         let block = mir::Statement::CtrlFlow(mir::CtrlFlowConstruct::Block(mir::Block {
-            label: Some(label),
+            label: label,
             statements,
         }));
         builder.mir.add_statement(block);
 
         // get the return place of the statement
-        let (_, return_place) = builder.local_translator.ctrl_flow_constructs[&self.label];
+        let (_, return_place) =
+            builder.local_translator.ctrl_flow_constructs.remove(&self.label).unwrap();
         return_place
     }
 }
@@ -223,7 +224,8 @@ impl IfElse {
         let (then_stmts, then_out) =
             builder.with_inner_statement_seq(|builder| translate_expr(builder, &self.then));
         let then_ty = then_out.as_ref().map(|t| builder.mir.type_of_place(&t.place()));
-        let then_stmt = Box::new(mir::consolidate_statements(then_stmts));
+        let then_stmt =
+            Box::new(mir::consolidate_statements(then_stmts, || builder.mir.create_label()));
 
         let (else_stmts, total_out) = builder.with_inner_statement_seq(|builder| {
             let else_out = translate_expr(builder, &self.r#else);
@@ -249,7 +251,8 @@ impl IfElse {
                 (None, None) => None,
             }
         });
-        let else_stmt = Box::new(mir::consolidate_statements(else_stmts));
+        let else_stmt =
+            Box::new(mir::consolidate_statements(else_stmts, || builder.mir.create_label()));
 
         let if_else = mir::Statement::CtrlFlow(mir::CtrlFlowConstruct::IfElse(mir::IfElse {
             condition,

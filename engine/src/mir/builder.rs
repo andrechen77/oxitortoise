@@ -83,6 +83,7 @@ pub struct FunctionBuilder<'a> {
 
 impl<'a> FunctionBuilder<'a> {
     fn new(program_builder: &'a mut ProgramBuilder, fn_id: FunctionId) -> Self {
+        trace!("new function builder for function {:?}", fn_id);
         let mut new = Self {
             program_builder,
             fn_id,
@@ -104,12 +105,9 @@ impl<'a> FunctionBuilder<'a> {
     }
 
     /// Finishes the function builder and adds the function to the program builder.
-    pub fn finish(mut self) -> FunctionId {
-        let body = if self.statements_out.len() == 1 {
-            self.statements_out.pop().expect("we checked that the length is 1")
-        } else {
-            todo!()
-        };
+    pub fn finish(self) -> FunctionId {
+        let body =
+            mir::consolidate_statements(self.statements_out, || self.program_builder.next_label());
         let function = mir::Function {
             parameters: self.parameters,
             local_decls: self.locals,
@@ -212,13 +210,13 @@ impl<'a> FunctionBuilder<'a> {
 
     pub fn add_operation_with_dst(&mut self, dst: mir::Place, op: Operation) {
         // make sure that the types match
-        let ty = self.type_of_op(&op);
-        assert_eq!(
-            ty,
-            self.type_of_place(&dst),
+        let dst_ty = self.type_of_place(&dst);
+        let val_ty = self.type_of_op(&op);
+        assert!(
+            dst_ty.is_assignable_from(&val_ty),
             "type of operation must match type of destination place: {:?} != {:?}",
-            ty,
-            self.type_of_place(&dst)
+            dst_ty,
+            val_ty,
         );
 
         self.add_statement(Statement::Elementary(ElementaryStatement::Assign { dst, op }));

@@ -90,11 +90,32 @@ pub fn derive_impl_components(input: proc_macro2::TokenStream) -> proc_macro2::T
             let mut mir_accessible_field_entries = Vec::new();
             let mut _is_exhaustive = true; // can use this if deciding whether the struct is complete
             for field in fields {
-                if field.attrs.iter().any(|attr| attr.meta.path().is_ident("mir_accessible")) {
+                if let Some(attr) =
+                    field.attrs.iter().find(|attr| attr.meta.path().is_ident("mir_accessible"))
+                {
+                    let unchecked = if let Meta::List(list) = &attr.meta {
+                        match list.parse_args::<Ident>() {
+                            Ok(ident) if ident == "unchecked_type" => {}
+                            Ok(_) => {
+                                return syn::Error::new_spanned(attr, "expected `unchecked_type`")
+                                    .to_compile_error();
+                            }
+                            Err(e) => return e.to_compile_error(),
+                        }
+                        true
+                    } else {
+                        false
+                    };
                     let ident = field.ident.as_ref().unwrap();
                     let ty = &field.ty;
-                    let field_entry = quote! {
-                        (::std::mem::offset_of!(Self, #ident), <#ty as crate::util::reflection::ReflectComponents>::mir_type())
+                    let field_entry = if unchecked {
+                        quote! {
+                            (::std::mem::offset_of!(Self, #ident), crate::mir::MirType::default())
+                        }
+                    } else {
+                        quote! {
+                            (::std::mem::offset_of!(Self, #ident), <#ty as crate::util::reflection::ReflectComponents>::mir_type())
+                        }
                     };
                     mir_accessible_field_entries.push(field_entry);
                 } else {

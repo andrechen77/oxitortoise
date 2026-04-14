@@ -119,10 +119,13 @@ impl Closure {
 
         let drop_fn = {
             let mut mir_fn_builder = builder.mir.create_another_function();
-            mir_fn_builder.create_parameter(mir::LocalDecl { debug_name: None, ty: env_ty });
+            let ptr_to_val =
+                mir_fn_builder.create_parameter(mir::LocalDecl { debug_name: None, ty: env_ty });
             if !self.captures.is_empty() {
+                let _ = ptr_to_val;
                 todo!("add statements to the function to drop the value")
             }
+            mir_fn_builder.set_return(mir_fn_builder.unit_local());
             mir_fn_builder.finish()
         };
 

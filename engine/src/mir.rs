@@ -74,7 +74,7 @@ pub enum CtrlFlowConstruct {
 
 #[derive(Debug)]
 pub struct Block {
-    pub label: Option<Label>,
+    pub label: Label,
     pub statements: Vec<Statement>,
 }
 
@@ -233,11 +233,15 @@ impl Operation {
 /// Consolidates a sequence of statements into a single statement. If there is
 /// only one statement, it is returned as is. If there are multiple statements,
 /// a block is created with the statements.
-pub fn consolidate_statements(statements: Vec<Statement>) -> Statement {
+pub fn consolidate_statements(
+    statements: Vec<Statement>,
+    generate_label: impl FnOnce() -> Label,
+) -> Statement {
     if statements.len() == 1 {
         let mut statements = statements;
         statements.pop().expect("we checked that the length is 1")
     } else {
-        Statement::CtrlFlow(CtrlFlowConstruct::Block(Block { label: None, statements }))
+        let label = generate_label();
+        Statement::CtrlFlow(CtrlFlowConstruct::Block(Block { label, statements }))
     }
 }

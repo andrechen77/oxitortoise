@@ -69,6 +69,15 @@ impl MirTypeInfo {
     pub fn assert_is<T: Reflect>(&self) {
         assert!(self.is::<T>(), "Expected type {:?} but got {:?}", T::TYPE, self);
     }
+
+    pub fn is_assignable_from(&self, other: &Self) -> bool {
+        let static_ty_matches = if let Some(static_ty) = self.static_ty {
+            other.static_ty == Some(static_ty)
+        } else {
+            true
+        };
+        static_ty_matches && self.contents.is_assignable_from(&other.contents)
+    }
 }
 
 impl fmt::Debug for MirTypeInfo {
@@ -94,13 +103,44 @@ impl fmt::Debug for MirTypeInfo {
                     write!(f, "[{:?}; ?]", element)
                 }
             }
-            MirTypeContents::IsPrimitive(ty) => write!(f, "{:?}", ty),
+            MirTypeContents::IsPrimitive(ty) => write!(f, "<prim {:?}>", ty),
             MirTypeContents::None => write!(f, "<no assertion>"),
         }
     }
 }
 
 impl MirTypeContents {
+    pub fn is_assignable_from(&self, other: &Self) -> bool {
+        match (self, other) {
+            (MirTypeContents::None, _) => true,
+            (_, MirTypeContents::None) => false,
+            (
+                MirTypeContents::IsPointerTo(pointee),
+                MirTypeContents::IsPointerTo(other_pointee),
+            ) => pointee.is_assignable_from(other_pointee),
+            (
+                MirTypeContents::HasFields { fields, overall },
+                MirTypeContents::HasFields { fields: other_fields, overall: other_overall },
+            ) => {
+                let overall_match = overall == other_overall;
+                let fields_match = fields.iter().zip(other_fields.iter()).all(
+                    |((my_offset, my_field), (other_offset, other_field))| {
+                        *my_offset == *other_offset && my_field.is_assignable_from(other_field)
+                    },
+                );
+                overall_match && fields_match
+            }
+            (
+                MirTypeContents::IsArrayOf { element, length },
+                MirTypeContents::IsArrayOf { element: other_element, length: other_length },
+            ) => length == other_length && element.is_assignable_from(other_element),
+            (MirTypeContents::IsPrimitive(my_ty), MirTypeContents::IsPrimitive(other_ty)) => {
+                my_ty == other_ty
+            }
+            _ => false,
+        }
+    }
+
     pub fn project(&self, projection: Projection) -> &MirType {
         use MirTypeContents as M;
         match (self, projection) {

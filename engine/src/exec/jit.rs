@@ -98,8 +98,11 @@ impl<'a> JitEntrypoint<'a> {
 #[derive(ReflectComponents)]
 #[repr(C)]
 pub struct JitCallback<'env, Arg, Ret> {
+    #[mir_accessible(unchecked_type)]
     env: *mut u8,
+    #[mir_accessible(unchecked_type)]
     call: unsafe extern "C" fn(*mut u8, &mut Workspace, &mut CanonRng, Arg) -> Ret,
+    #[mir_accessible(unchecked_type)]
     drop: unsafe extern "C" fn(*mut u8),
     _phantom: PhantomData<&'env mut ()>,
 }
