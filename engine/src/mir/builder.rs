@@ -194,6 +194,11 @@ impl<'a> FunctionBuilder<'a> {
                 | lir::BinaryOpcode::FSub
                 | lir::BinaryOpcode::FMul
                 | lir::BinaryOpcode::FDiv => NlFloat::mir_type(),
+                lir::BinaryOpcode::FLt
+                | lir::BinaryOpcode::FGt
+                | lir::BinaryOpcode::FLte
+                | lir::BinaryOpcode::FGte
+                | lir::BinaryOpcode::FEq => bool::mir_type(),
                 _ => panic!("unsupported binary opcode: {:?}", opcode),
             },
             Operation::UnaryOp { opcode, operand: _ } => match opcode {
