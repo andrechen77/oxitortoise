@@ -3,7 +3,6 @@ use std::{mem::offset_of, sync::Arc};
 use flagset::{FlagSet, flags};
 
 use crate::sim::{
-    color::Color,
     patch::PatchId,
     tick::Tick,
     topology::{Heading, Point, TopologySpec},
@@ -40,9 +39,9 @@ flags! {
 
 #[derive(Debug, Default)]
 pub struct PatchUpdate {
-    pub pcolor: Option<Color>,
+    pub pcolor: Option<NlFloat>,
     pub plabel: Option<String>,
-    pub plabel_color: Option<Color>,
+    pub plabel_color: Option<NlFloat>,
 }
 
 flags! {
@@ -70,9 +69,9 @@ pub enum TurtleUpdate {
 #[derive(Debug, Default)]
 pub struct AliveTurtleUpdate {
     pub breed_name: Option<Arc<str>>,
-    pub color: Option<Color>,
+    pub color: Option<NlFloat>,
     pub heading: Option<Heading>,
-    pub label_color: Option<Color>,
+    pub label_color: Option<NlFloat>,
     pub label: Option<String>,
     pub pen_mode_and_size: Option<(bool, f64)>,
     pub hidden: Option<bool>,

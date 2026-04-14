@@ -216,7 +216,9 @@ impl<'a> FunctionBuilder<'a> {
         assert_eq!(
             ty,
             self.type_of_place(&dst),
-            "type of operation must match type of destination place"
+            "type of operation must match type of destination place: {:?} != {:?}",
+            ty,
+            self.type_of_place(&dst)
         );
 
         self.add_statement(Statement::Elementary(ElementaryStatement::Assign { dst, op }));

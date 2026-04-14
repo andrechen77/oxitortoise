@@ -1,83 +1,66 @@
-use std::{
-    ops::{Add, AddAssign},
-    sync::OnceLock,
-};
+use crate::{mir, sim::value::NlFloat, util::rng::Rng};
 
-use macro_reflect::{ReflectComponents, reflect};
+pub const BLACK: NlFloat = NlFloat::new(0.0);
+pub const GRAY: NlFloat = NlFloat::new(5.0);
+pub const RED: NlFloat = NlFloat::new(15.0);
+pub const ORANGE: NlFloat = NlFloat::new(25.0);
+pub const BROWN: NlFloat = NlFloat::new(35.0);
+pub const YELLOW: NlFloat = NlFloat::new(45.0);
+pub const LIME: NlFloat = NlFloat::new(55.0);
+pub const GREEN: NlFloat = NlFloat::new(65.0);
+pub const TURQUOISE: NlFloat = NlFloat::new(75.0);
+pub const CYAN: NlFloat = NlFloat::new(85.0);
+pub const SKY: NlFloat = NlFloat::new(95.0);
+pub const BLUE: NlFloat = NlFloat::new(105.0);
+pub const VIOLET: NlFloat = NlFloat::new(115.0);
+pub const MAGENTA: NlFloat = NlFloat::new(125.0);
+pub const PINK: NlFloat = NlFloat::new(135.0);
 
-use crate::{sim::value::NlFloat, util::rng::Rng};
+const BASE_COLORS: [NlFloat; 14] = [
+    GRAY, RED, ORANGE, BROWN, YELLOW, LIME, GREEN, TURQUOISE, CYAN, SKY, BLUE, VIOLET, MAGENTA,
+    PINK,
+];
 
-/// A NetLogo color. This is a floating point value guaranteed to be in the
-/// range 0.0..140.0. Values with more than one decimal place of precision are
-/// remembered with that much precision, even though it doesn't matter for
-/// rendering.
-#[derive(Debug, Clone, Copy, PartialEq, Default, ReflectComponents)]
-// TODO reflection contents
-pub struct Color(f64);
-
-#[reflect(unsafe(is_zeroable), clone(copy))]
-impl Reflect for Color {}
-
-impl Color {
-    pub const BLACK: Color = Color(0.0);
-
-    pub const GRAY: Color = Color(5.0);
-    pub const RED: Color = Color(15.0);
-    pub const ORANGE: Color = Color(25.0);
-    pub const BROWN: Color = Color(35.0);
-    pub const YELLOW: Color = Color(45.0);
-    pub const LIME: Color = Color(55.0);
-    pub const GREEN: Color = Color(65.0);
-    pub const TURQUOISE: Color = Color(75.0);
-    pub const CYAN: Color = Color(85.0);
-    pub const SKY: Color = Color(95.0);
-    pub const BLUE: Color = Color(105.0);
-    pub const VIOLET: Color = Color(115.0);
-    pub const MAGENTA: Color = Color(125.0);
-    pub const PINK: Color = Color(135.0);
-
-    pub fn random(next_int: &mut dyn Rng) -> Color {
-        Color(next_int.next_int(base_colors().len() as i64) as f64)
-    }
-
-    pub fn to_darkest_shade(self) -> Color {
-        Color((self.0 / SHADE_RANGE).floor() * SHADE_RANGE)
-    }
-
-    pub fn to_float(self) -> NlFloat {
-        NlFloat::new(self.0)
-    }
+pub fn random(next_int: &mut dyn Rng) -> NlFloat {
+    NlFloat::new(next_int.next_int(BASE_COLORS.len() as i64) as f64)
 }
 
-impl From<NlFloat> for Color {
-    fn from(value: NlFloat) -> Self {
-        Color(value.get() % COLOR_MAX)
-    }
+pub fn to_darkest_shade(color: NlFloat) -> NlFloat {
+    NlFloat::new((color.get() / SHADE_RANGE).floor() * SHADE_RANGE)
 }
 
-impl Add<NlFloat> for Color {
-    type Output = Color;
-
-    fn add(self, rhs: NlFloat) -> Self::Output {
-        Color((self.0 + rhs.get()) % COLOR_MAX)
-    }
+pub fn wrap_color(float: NlFloat) -> NlFloat {
+    NlFloat::new(float.get() % COLOR_MAX)
 }
 
-impl AddAssign<NlFloat> for Color {
-    fn add_assign(&mut self, rhs: NlFloat) {
-        *self = *self + rhs;
+pub fn mir_wrap_color(builder: &mut mir::FunctionBuilder, color: mir::Place) -> mir::LocalId {
+    let operation = mir::Operation::CallHostFunction {
+        function: &wrap_color::FN_INFO,
+        args: vec![mir::PlaceOperand::Copy(color)],
+    };
+    builder.add_operation(None, operation)
+}
+
+mod wrap_color {
+    use super::*;
+
+    use crate::{mir::HostFunctionInfo, util::reflection::Reflect};
+
+    pub static FN_INFO: HostFunctionInfo = HostFunctionInfo {
+        debug_name: "wrap_color",
+        parameter_types: &[NlFloat::TYPE],
+        return_type: NlFloat::TYPE,
+        link_name: "wrap_color",
+        link_addr: call as *const u8,
+    };
+
+    pub fn call(color: NlFloat) -> NlFloat {
+        super::wrap_color(color)
     }
 }
 
 const COLOR_MAX: f64 = 140.0;
 const SHADE_RANGE: f64 = 10.0;
-
-pub fn base_colors() -> &'static [Color] {
-    static BASE_COLORS: OnceLock<Vec<Color>> = OnceLock::new();
-    BASE_COLORS.get_or_init(|| {
-        (0..((COLOR_MAX / 10.0) as i64)).map(|n| Color((n * 10 + 5) as f64)).collect()
-    })
-}
 
 /// see https://ccl.northwestern.edu/netlogo/docs/dictionary.html#scale-color
 // FIXME ensure this works for extreme values that might cause overflow
@@ -88,11 +71,11 @@ pub fn base_colors() -> &'static [Color] {
 // Let min-range be the minimum of range1 and range2. If number is less than or equal to min-range, then the result is the same as if number was equal to min-range. Let max-range be the maximum of range1 and range2. If number is greater than max-range, then the result is the same as if number was equal to max-range.
 // Note: for color shade is irrelevant, e.g. green and green + 2 are equivalent, and the same spectrum of colors will be used.
 pub fn scale_color(
-    color: Color,
+    color: NlFloat,
     number: NlFloat,
     range_start: NlFloat,
     range_end: NlFloat,
-) -> Color {
+) -> NlFloat {
     let range_start = range_start.get();
     let range_end = range_end.get();
     let number = number.get();
@@ -112,6 +95,7 @@ pub fn scale_color(
     let color_shade_offset = color_shade_offset.clamp(0.0, SHADE_RANGE - 0.0001);
 
     // add the offset to the darkest shade of the color to get the correct shade
-    let color_value = color.to_darkest_shade().0 + color_shade_offset;
-    Color(color_value)
+    let color_value = to_darkest_shade(color) + NlFloat::new(color_shade_offset);
+
+    color_value
 }

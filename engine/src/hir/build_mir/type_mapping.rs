@@ -4,7 +4,6 @@ use crate::{
     hir::{self, Expr, ExprKind, NlAbstractTy, expr},
     mir::{MirType, MirTypeInfo},
     sim::{
-        color::Color,
         observer::GlobalsSchema,
         patch::{
             OptionPatchId, PatchFieldGroup, PatchFieldGroupElement, PatchSchema, PatchVarDesc,
@@ -238,7 +237,7 @@ pub fn mir_repr_simple(abstract_ty: &NlAbstractTy) -> MirType {
         NlAbstractTy::Unit => <()>::mir_type(),
         NlAbstractTy::NlTop => PackedAny::mir_type(),
         NlAbstractTy::Bottom => unimplemented!("bottom type has no concrete representation"),
-        NlAbstractTy::Color => Color::mir_type(),
+        NlAbstractTy::Color => NlFloat::mir_type(),
         NlAbstractTy::Float => NlFloat::mir_type(),
         NlAbstractTy::Boolean => bool::mir_type(),
         NlAbstractTy::String => todo!(),

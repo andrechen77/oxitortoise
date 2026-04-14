@@ -18,7 +18,7 @@ use crate::{
     mir::{self, HasDynPtr as _},
     sim::{
         agent_schema::{AgentFieldDescriptor, AgentSchemaField, AgentSchemaFieldGroup},
-        color::Color,
+        color,
         topology::{PointInt, TopologySpec},
         value::{BoxedAny, NlFloat, NlList, NlString, PackedAny},
     },
@@ -161,7 +161,7 @@ impl Patches {
             .map(|either| either.expect_left("base data should always exist in the row buffer"))
     }
 
-    pub fn get_patch_pcolor(&self, id: PatchId) -> Option<&Color> {
+    pub fn get_patch_pcolor(&self, id: PatchId) -> Option<&NlFloat> {
         self.get_patch_field(id, self.patch_schema.pcolor())
             .map(|either| either.expect_left("pcolor should always exist in the row buffer"))
     }
@@ -195,7 +195,7 @@ impl Patches {
             .map(|either| either.expect_left("base data should always exist in the row buffer"))
     }
 
-    pub fn get_patch_pcolor_mut(&mut self, id: PatchId) -> Option<&mut Color> {
+    pub fn get_patch_pcolor_mut(&mut self, id: PatchId) -> Option<&mut NlFloat> {
         self.get_patch_field_mut(id, self.patch_schema.pcolor())
             .map(|either| either.expect_left("pcolor should always exist in the row buffer"))
     }
@@ -262,7 +262,7 @@ impl Patches {
                 let base_data = PatchBaseData {
                     position,
                     plabel: NlString::new(),
-                    plabel_color: Color::BLACK, // FIXME use a more sensible default
+                    plabel_color: color::BLACK, // FIXME use a more sensible default
                 };
                 self.data[0].as_mut().unwrap().row_mut(id.0 as usize).set(0, base_data);
 
@@ -427,7 +427,7 @@ pub struct PatchBaseData {
     #[mir_accessible]
     pub plabel: NlString,
     #[mir_accessible]
-    pub plabel_color: Color,
+    pub plabel_color: NlFloat,
     // TODO add some way of tracking what turtles are on this patch.
 }
 
@@ -506,7 +506,9 @@ impl PatchSchema {
                             panic!("pcolor cannot be included more than once");
                         }
                         pcolor = Some(current_field_desc);
-                        agent_schema_field_group.fields.push(AgentSchemaField::Other(Color::TYPE));
+                        agent_schema_field_group
+                            .fields
+                            .push(AgentSchemaField::Other(NlFloat::TYPE));
                     }
                     PatchFieldGroupElement::Custom { name, ty } => {
                         custom_fields.push((name, current_field_desc));
@@ -572,7 +574,7 @@ impl Index<AgentFieldDescriptor> for PatchSchema {
 
 pub fn patch_var_type(schema: &PatchSchema, var: PatchVarDesc) -> Type {
     match var {
-        PatchVarDesc::Pcolor => Color::TYPE,
+        PatchVarDesc::Pcolor => NlFloat::TYPE,
         PatchVarDesc::Pos => Point::TYPE,
         PatchVarDesc::Custom(field) => {
             let AgentSchemaField::Other(ty) = schema[schema.custom_fields()[field].1] else {

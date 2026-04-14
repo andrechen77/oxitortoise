@@ -18,11 +18,11 @@ use pretty_print::PrettyPrinter;
 
 use crate::hir::{CustomVarDecl, TypeMapping};
 use crate::mir::{self, HasDynPtr as _};
+use crate::sim::color;
 use crate::util::reflection::Reflect;
 use crate::{
     sim::{
         agent_schema::{AgentFieldDescriptor, AgentSchemaField, AgentSchemaFieldGroup},
-        color::Color,
         topology::{Heading, Point},
         value::{self, NlFloat, NlList, NlString, PackedAny, agentset::TurtleSet},
     },
@@ -128,7 +128,7 @@ impl Turtles {
             let id = TurtleId(idx);
             let who = self.next_who;
             self.next_who += NlFloat::new(1.0);
-            let color = Color::random(next_int);
+            let color = color::random(next_int);
             let heading = Heading::random(next_int);
             let shape_name = NlString::from_str("default"); // FIXME look up and use the breed's default shape
 
@@ -428,11 +428,11 @@ pub struct TurtleBaseData {
     #[mir_accessible]
     pub shape_name: NlString,
     #[mir_accessible]
-    pub color: Color,
+    pub color: NlFloat,
     #[mir_accessible]
     pub label: NlString,
     #[mir_accessible]
-    pub label_color: Color,
+    pub label_color: NlFloat,
     #[mir_accessible]
     pub hidden: bool,
     #[mir_accessible]
@@ -615,7 +615,7 @@ impl TurtleSchema {
     pub fn var_type(&self, var: TurtleVarDesc) -> Type {
         match var {
             TurtleVarDesc::Who => NlFloat::TYPE,
-            TurtleVarDesc::Color => Color::TYPE,
+            TurtleVarDesc::Color => NlFloat::TYPE,
             TurtleVarDesc::Size => NlFloat::TYPE,
             TurtleVarDesc::Pos => Point::TYPE,
             TurtleVarDesc::Xcor => NlFloat::TYPE,
@@ -655,7 +655,7 @@ impl Index<AgentFieldDescriptor> for TurtleSchema {
 pub fn turtle_var_type(schema: &TurtleSchema, var: TurtleVarDesc) -> Type {
     match var {
         TurtleVarDesc::Who => NlFloat::TYPE,
-        TurtleVarDesc::Color => Color::TYPE,
+        TurtleVarDesc::Color => NlFloat::TYPE,
         TurtleVarDesc::Size => NlFloat::TYPE,
         TurtleVarDesc::Pos => Point::TYPE,
         TurtleVarDesc::Xcor => NlFloat::TYPE,

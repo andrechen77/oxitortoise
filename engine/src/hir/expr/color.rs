@@ -79,19 +79,24 @@ impl ScaleColor {
 }
 
 mod scale_color {
-    use crate::{mir::HostFunctionInfo, sim::color::Color};
+    use crate::mir::HostFunctionInfo;
 
     use super::*;
 
     pub static FN_INFO: HostFunctionInfo = HostFunctionInfo {
         debug_name: "scale_color",
-        parameter_types: &[Color::TYPE, NlFloat::TYPE, NlFloat::TYPE, NlFloat::TYPE],
-        return_type: Color::TYPE,
+        parameter_types: &[NlFloat::TYPE, NlFloat::TYPE, NlFloat::TYPE, NlFloat::TYPE],
+        return_type: NlFloat::TYPE,
         link_name: "scale_color",
         link_addr: call as *const u8,
     };
 
-    pub fn call(color: Color, number: NlFloat, range_start: NlFloat, range_end: NlFloat) -> Color {
+    pub fn call(
+        color: NlFloat,
+        number: NlFloat,
+        range_start: NlFloat,
+        range_end: NlFloat,
+    ) -> NlFloat {
         color::scale_color(color, number, range_start, range_end)
     }
 }

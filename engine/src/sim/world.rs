@@ -135,10 +135,10 @@ impl World {
                 |p, id| write!(p, "{:?}", id.0),
                 |p, (id, _)| p.add_struct("", |p| {
                     p.add_field("WHO", id.0)?;
-                    p.add_field("PCOLOR", self.patches.get_patch_pcolor(id).expect("patch id from iter should be valid").to_float().get())?;
+                    p.add_field("PCOLOR", self.patches.get_patch_pcolor(id).expect("patch id from iter should be valid").get())?;
                     let base = self.patches.get_patch_base_data(id).expect("patch id from iter should be valid");
                     p.add_field("PLABEL", &base.plabel)?;
-                    p.add_field("\"PLABEL-COLOR\"", base.plabel_color.to_float().get())?;
+                    p.add_field("\"PLABEL-COLOR\"", base.plabel_color.get())?;
                     if first_time {
                         p.add_field("PXCOR", base.position.x)?;
                         p.add_field("PYCOR", base.position.y)?;
@@ -156,9 +156,9 @@ impl World {
                     let position = self.turtles.get_turtle_position(id).expect("turtle id from iter should be valid");
                     p.add_field_with("WHO", |p| write!(p, "{:.0}", base.who.get()))?;
                     p.add_field_with("BREED", |p| write!(p, "\"{}\"", self.turtles.breeds()[&base.breed].name))?;
-                    p.add_field_with("COLOR", |p| write!(p, "{}", base.color.to_float().get()))?;
+                    p.add_field_with("COLOR", |p| write!(p, "{}", base.color.get()))?;
                     p.add_field_with("HEADING", |p| write!(p, "{}", heading.to_float().get()))?;
-                    p.add_field_with("\"LABEL-COLOR\"", |p| write!(p, "{}", base.label_color.to_float().get()))?;
+                    p.add_field_with("\"LABEL-COLOR\"", |p| write!(p, "{}", base.label_color.get()))?;
                     p.add_field_with("\"HIDDEN?\"", |p| write!(p, "{}", base.hidden))?;
                     p.add_field_with("LABEL", |p| write!(p, "{:?}", base.label))?;
                     p.add_field_with("SHAPE", |p| write!(p, "{:?}", base.shape_name))?;

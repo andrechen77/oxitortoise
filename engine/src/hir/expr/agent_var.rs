@@ -3,7 +3,6 @@
 use std::fmt::{self, Write};
 
 use pretty_print::PrettyPrinter;
-use tracing::trace;
 
 use crate::{
     hir::{
@@ -11,6 +10,7 @@ use crate::{
     },
     mir,
     sim::{
+        color,
         observer::Globals,
         patch::{PatchVarDesc, Patches},
         turtle::{TurtleVarDesc, Turtles},
@@ -175,19 +175,22 @@ impl Expr for SetTurtleVar {
 impl SetTurtleVar {
     pub fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
         let ptr_to_workspace = translate_expr(builder, &self.workspace)?.place();
-        let workspace_ty = builder.mir.type_of_place(&ptr_to_workspace);
-        trace!("workspace_ty: {:?}", workspace_ty);
 
         // calculate the value to store
-        let value = translate_expr(builder, &self.value)?;
+        let raw_value = translate_expr(builder, &self.value)?;
+
+        // if the value is a color, make sure it is in bounds
+        let value = if self.var == TurtleVarDesc::Color {
+            color::mir_wrap_color(builder.mir, raw_value.place())
+        } else {
+            raw_value
+        };
 
         // calculate the turtle id
         let turtle_id = translate_expr(builder, &self.turtle)?.place();
 
         // project the turtle variable
         let var = turtle_var_place(builder, ptr_to_workspace, turtle_id, self.var);
-
-        trace!("var: {:?}", var);
 
         // perform store
         builder.mir.move_to_init(var, value);
@@ -315,7 +318,14 @@ impl SetPatchVar {
         let ptr_to_workspace = translate_expr(builder, &self.workspace)?.place();
 
         // calculate the value to store
-        let value = translate_expr(builder, &self.value)?;
+        let raw_value = translate_expr(builder, &self.value)?;
+
+        // if the value is a color, make sure it is in bounds
+        let value = if self.var == PatchVarDesc::Pcolor {
+            color::mir_wrap_color(builder.mir, raw_value.place())
+        } else {
+            raw_value
+        };
 
         // calculate the patch id
         let patch_id = translate_expr(builder, &self.patch)?.place();
