@@ -340,7 +340,7 @@ impl SetPatchVar {
     }
 }
 
-fn patch_var_place(
+pub fn patch_var_place(
     builder: &mut HirToMirFnBuilder,
     ptr_to_workspace: mir::Place,
     patch_id: mir::Place,

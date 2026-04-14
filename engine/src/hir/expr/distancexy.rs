@@ -8,10 +8,14 @@ use crate::{
     hir::{
         Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy,
         build_mir::translate_expr,
-        expr::{EuclideanDistanceNoWrap, GetTurtleVar, PointConstructor, turtle_var_place},
+        expr::{
+            EuclideanDistanceNoWrap, GetTurtleVar, PointConstructor, patch_var_place,
+            turtle_var_place,
+        },
     },
     mir,
     sim::{
+        patch::{PatchId, PatchVarDesc},
         topology::{self, Point},
         turtle::{TurtleId, TurtleVarDesc},
         value::NlFloat,
@@ -90,25 +94,25 @@ impl Distancexy {
 
         let agent_local = translate_expr(builder, agent)?;
         let agent_ty = builder.mir.type_of_place(&agent_local.place());
-        let operation = if agent_ty.is::<TurtleId>() {
+
+        let agent_position = if agent_ty.is::<TurtleId>() {
             let workspace = translate_expr(builder, workspace)?;
             // get the turtle location
-            let agent_position = turtle_var_place(
-                builder,
-                workspace.place(),
-                agent_local.place(),
-                TurtleVarDesc::Pos,
-            );
-
-            mir::Operation::CallHostFunction {
-                function: &euclidean_distance_no_wrap::FN_INFO,
-                args: vec![
-                    mir::PlaceOperand::Copy(agent_position),
-                    mir::PlaceOperand::Copy(reference_position.place()),
-                ],
-            }
+            turtle_var_place(builder, workspace.place(), agent_local.place(), TurtleVarDesc::Pos)
+        } else if agent_ty.is::<PatchId>() {
+            let workspace = translate_expr(builder, workspace)?;
+            // get the patch location
+            patch_var_place(builder, workspace.place(), agent_local.place(), PatchVarDesc::Pos)
         } else {
-            todo!("TODO(mvp) handle other agent types")
+            todo!("TODO(mvp) handle other agent types, namely {:?}", agent_ty);
+        };
+
+        let operation = mir::Operation::CallHostFunction {
+            function: &euclidean_distance_no_wrap::FN_INFO,
+            args: vec![
+                mir::PlaceOperand::Copy(agent_position),
+                mir::PlaceOperand::Copy(reference_position.place()),
+            ],
         };
 
         Some(builder.mir.add_operation(None, operation))
