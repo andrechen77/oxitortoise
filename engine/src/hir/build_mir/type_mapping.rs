@@ -5,9 +5,7 @@ use crate::{
     mir::{MirType, MirTypeInfo},
     sim::{
         observer::GlobalsSchema,
-        patch::{
-            OptionPatchId, PatchFieldGroup, PatchFieldGroupElement, PatchSchema, PatchVarDesc,
-        },
+        patch::{PatchFieldGroup, PatchFieldGroupElement, PatchId, PatchSchema, PatchVarDesc},
         topology::Point,
         turtle::{TurtleId, TurtleSchema},
         value::{NlBox, NlFloat, NlList, PackedAny},
@@ -243,7 +241,7 @@ pub fn mir_repr_simple(abstract_ty: &NlAbstractTy) -> MirType {
         NlAbstractTy::String => todo!(),
         NlAbstractTy::Point => Point::mir_type(),
         NlAbstractTy::Agent => PackedAny::mir_type(),
-        NlAbstractTy::Patch => OptionPatchId::mir_type(),
+        NlAbstractTy::Patch => PatchId::mir_type(),
         NlAbstractTy::Turtle => TurtleId::mir_type(),
         NlAbstractTy::Link => todo!(""),
         NlAbstractTy::Agentset { agent_type: _ } => todo!(""),
