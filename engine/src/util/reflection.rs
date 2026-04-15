@@ -2,19 +2,9 @@ use std::{alloc::Layout, ptr::NonNull};
 
 use macro_reflect::reflect;
 
-use crate::mir::{HostFunctionInfo, MirType, MirTypeContents};
+use crate::mir::HostFunctionInfo;
 
 // TODO what to do about lifetimes? could cause unsafety and sadness
-
-/// A trait to indicate how accesses into values of this type can be generated.
-///
-/// # Safety
-///
-/// Implementors must guarantee that the associated `mir_type` is correct, as
-/// the information will be used to generate and run unsafe code.
-pub unsafe trait ReflectComponents {
-    fn mir_type() -> MirType;
-}
 
 /// A trait to indicate that the compiler can generate code to manipulate values
 /// of this type.
@@ -25,10 +15,6 @@ pub unsafe trait ReflectComponents {
 /// the information will be used to generate and run unsafe code.
 pub unsafe trait Reflect {
     const TYPE: Type;
-
-    fn mir_type() -> MirType {
-        (Self::TYPE.make_mir_type)()
-    }
 }
 
 /// Information about a type that is used by the engine to generate code that
@@ -52,7 +38,6 @@ pub struct TypeInfo {
     /// The caller must guarantee that the passed pointer is a valid pointer to
     /// T that can be dropped, and that that value will never be used again.
     pub drop_fn: Option<unsafe fn(*mut u8)>,
-    pub make_mir_type: fn() -> MirType,
 }
 
 impl PartialEq for TypeInfo {
@@ -85,45 +70,20 @@ pub enum CloneKind {
     None,
 }
 
-macro_rules! impl_reflect_for_primitive {
-    ($ty:ty; unsafe(is_zeroable), unsafe(prim_contents($contents:expr))) => {
-        unsafe impl ReflectComponents for $ty
-        where
-            Self: Copy,
-        {
-            fn mir_type() -> MirType {
-                ::std::sync::Arc::new(crate::mir::MirTypeInfo {
-                    static_ty: Some(<$ty as Reflect>::TYPE),
-                    contents: $contents,
-                })
-            }
-        }
+#[reflect]
+impl Reflect for () {}
 
-        #[reflect(unsafe(is_zeroable))]
-        impl Reflect for $ty {}
-    };
+#[reflect]
+impl Reflect for bool {}
 
-    ($ty:ty; unsafe(prim_contents($contents:expr))) => {
-        unsafe impl ReflectComponents for $ty
-        where
-            Self: Copy,
-        {
-            fn mir_type() -> MirType {
-                ::std::sync::Arc::new(crate::mir::MirTypeInfo {
-                    static_ty: Some(<$ty as Reflect>::TYPE),
-                    contents: $contents,
-                })
-            }
-        }
+#[reflect]
+impl Reflect for u32 {}
 
-        #[reflect]
-        impl Reflect for $ty {}
-    };
-}
+#[reflect]
+impl Reflect for f64 {}
 
-impl_reflect_for_primitive!((); unsafe(is_zeroable), unsafe(prim_contents(MirTypeContents::None)));
-impl_reflect_for_primitive!(bool; unsafe(is_zeroable), unsafe(prim_contents(MirTypeContents::IsPrimitive(lir::ValType::I8))));
-impl_reflect_for_primitive!(u32; unsafe(is_zeroable), unsafe(prim_contents(MirTypeContents::IsPrimitive(lir::ValType::I32))));
-impl_reflect_for_primitive!(f64; unsafe(is_zeroable), unsafe(prim_contents(MirTypeContents::IsPrimitive(lir::ValType::F64))));
-impl_reflect_for_primitive!(fn(NonNull<u8>); unsafe(prim_contents(MirTypeContents::IsPrimitive(lir::ValType::FnPtr))));
-impl_reflect_for_primitive!(*mut u8; unsafe(is_zeroable), unsafe(prim_contents(MirTypeContents::IsPrimitive(lir::ValType::Ptr))));
+#[reflect]
+impl Reflect for fn(NonNull<u8>) {}
+
+#[reflect]
+impl Reflect for *mut u8 {}

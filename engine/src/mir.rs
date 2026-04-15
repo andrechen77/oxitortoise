@@ -7,7 +7,9 @@ mod reflection;
 
 pub use builder::{FunctionBuilder, FunctionStub, ProgramBuilder};
 use derive_more::Display;
-pub use reflection::{DynPtr, DynPtrMut, HasDynPtr, MirType, MirTypeContents, MirTypeInfo};
+pub use reflection::{
+    DynPtr, DynPtrMut, HasDynPtr, MirReflect, MirType, MirTypeArray, MirTypeStruct,
+};
 
 #[derive(Debug, Display)]
 #[display("{debug_name}")]

@@ -1,10 +1,10 @@
 use std::ops::{Index, IndexMut};
 
-use macro_reflect::{ReflectComponents, reflect};
+use macro_reflect::{MirReflect, reflect};
 
 use crate::sim::value::{NlFloat, PackedAny};
 
-#[derive(Default, Debug, Clone, ReflectComponents)]
+#[derive(Default, Debug, Clone, MirReflect)]
 pub struct NlList(Vec<PackedAny>);
 
 #[reflect(clone(dynamic))]

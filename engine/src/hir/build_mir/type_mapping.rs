@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
     hir::{self, Expr, ExprKind, NlAbstractTy, expr},
-    mir::{MirType, MirTypeInfo},
+    mir::{MirReflect, MirType},
     sim::{
         observer::GlobalsSchema,
         patch::{PatchFieldGroup, PatchFieldGroupElement, PatchId, PatchSchema, PatchVarDesc},
@@ -10,7 +10,7 @@ use crate::{
         turtle::{TurtleId, TurtleSchema},
         value::{NlBox, NlFloat, NlList, PackedAny},
     },
-    util::{reflection::Reflect, rng::CanonRng},
+    util::rng::CanonRng,
     workspace::Workspace,
 };
 
@@ -147,7 +147,7 @@ pub fn make_type_mapping(hir: &hir::Program) -> TypeMapping {
         .map(|var| {
             let concrete_ty = mir_repr_simple(&var.ty);
             let concrete_ty = concrete_ty
-                .static_ty
+                .static_ty()
                 .expect("we cannot handled dynamically defined types in globals (yet)");
             (var.name.clone(), concrete_ty)
         })
@@ -177,7 +177,7 @@ pub fn make_type_mapping(hir: &hir::Program) -> TypeMapping {
 
         let ty = mir_repr_simple(&var.ty);
         let ty =
-            ty.static_ty.expect("we cannot handled dynamically defined types in globals (yet)");
+            ty.static_ty().expect("we cannot handled dynamically defined types in globals (yet)");
 
         if patch_diffused.contains(&var_desc) {
             patch_field_groups.push(PatchFieldGroup {
@@ -219,11 +219,7 @@ fn make_workspace_ptr_type(
     turtle_schema: &TurtleSchema,
     patch_schema: &PatchSchema,
 ) -> MirType {
-    MirTypeInfo::ptr_to(Workspace::mir_type_from_schemas(
-        globals_schema,
-        turtle_schema,
-        patch_schema,
-    ))
+    MirType::ref_to(Workspace::mir_type_from_schemas(globals_schema, turtle_schema, patch_schema))
 }
 
 pub fn mir_repr_simple(abstract_ty: &NlAbstractTy) -> MirType {
@@ -231,7 +227,7 @@ pub fn mir_repr_simple(abstract_ty: &NlAbstractTy) -> MirType {
         NlAbstractTy::Workspace => {
             unimplemented!("workspace type cannot be lowered in a simple manner")
         }
-        NlAbstractTy::Rng => MirTypeInfo::ptr_to(CanonRng::mir_type()),
+        NlAbstractTy::Rng => MirType::ref_to(CanonRng::mir_type()),
         NlAbstractTy::Unit => <()>::mir_type(),
         NlAbstractTy::NlTop => PackedAny::mir_type(),
         NlAbstractTy::Bottom => unimplemented!("bottom type has no concrete representation"),

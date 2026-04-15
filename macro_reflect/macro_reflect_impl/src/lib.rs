@@ -69,7 +69,7 @@ impl Parse for ReflectArgs {
     }
 }
 
-pub fn derive_impl_components(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
+pub fn derive_impl_mir_reflect(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
     let input = match parse2::<DeriveInput>(input) {
         Ok(parsed) => parsed,
         Err(e) => return e.to_compile_error(),
@@ -79,7 +79,7 @@ pub fn derive_impl_components(input: proc_macro2::TokenStream) -> proc_macro2::T
 
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
 
-    let (make_mir_type_fn, make_mir_type_ref_fn) = match &input.data {
+    let make_mir_type_fn = match &input.data {
         Data::Struct(data) => {
             // mark fields that have the attribute #[mir_accessible]
             let fields = match &data.fields {
@@ -114,7 +114,7 @@ pub fn derive_impl_components(input: proc_macro2::TokenStream) -> proc_macro2::T
                         }
                     } else {
                         quote! {
-                            (::std::mem::offset_of!(Self, #ident), <#ty as crate::util::reflection::ReflectComponents>::mir_type())
+                            (::std::mem::offset_of!(Self, #ident), <#ty as crate::mir::MirReflect>::mir_type())
                         }
                     };
                     mir_accessible_field_entries.push(field_entry);
@@ -123,26 +123,13 @@ pub fn derive_impl_components(input: proc_macro2::TokenStream) -> proc_macro2::T
                 }
             }
 
-            let make_mir_type_fn = quote! {
+            quote! {
                 fn mir_type() -> crate::mir::MirType {
-                    std::sync::Arc::new(crate::mir::MirTypeInfo {
-                        static_ty: Some(<Self as crate::util::reflection::Reflect>::TYPE),
-                        contents: crate::mir::MirTypeContents::HasFields {
-                            fields: vec![#(#mir_accessible_field_entries),*],
-                            overall: ::std::alloc::Layout::new::<Self>(),
-                        },
-                    })
+                    crate::mir::MirType::new_struct_with_static_type::<Self>(
+                        vec![#(#mir_accessible_field_entries),*],
+                    )
                 }
-            };
-            let make_mir_type_ref_fn = quote! {
-                fn mir_type() -> crate::mir::MirType {
-                    std::sync::Arc::new(crate::mir::MirTypeInfo {
-                        static_ty: Some(<Self as crate::util::reflection::Reflect>::TYPE),
-                        contents: crate::mir::MirTypeContents::IsPointerTo(<Self as crate::util::reflection::ReflectComponents>::mir_type()),
-                    })
-                }
-            };
-            (make_mir_type_fn, make_mir_type_ref_fn)
+            }
         }
         _ => {
             return syn::Error::new_spanned(
@@ -166,18 +153,8 @@ pub fn derive_impl_components(input: proc_macro2::TokenStream) -> proc_macro2::T
 
     quote! {
         #[automatically_derived]
-        unsafe impl #impl_generics crate::util::reflection::ReflectComponents for #name #ty_generics #where_clause {
+        unsafe impl #impl_generics crate::mir::MirReflect for #name #ty_generics #where_clause {
             #make_mir_type_fn
-        }
-
-        #[automatically_derived]
-        unsafe impl #impl_generics crate::util::reflection::ReflectComponents for &#name #ty_generics #where_clause {
-            #make_mir_type_ref_fn
-        }
-
-        #[automatically_derived]
-        unsafe impl #impl_generics crate::util::reflection::ReflectComponents for &mut #name #ty_generics #where_clause {
-            #make_mir_type_ref_fn
         }
     }
 }
@@ -263,7 +240,6 @@ pub fn attribute_impl_reflect(args: TokenStream, input: TokenStream) -> TokenStr
             is_zeroable: #is_zeroable,
             clone: #clone_fn,
             drop_fn: #drop_fn,
-            make_mir_type: <#self_ty as crate::util::reflection::ReflectComponents>::mir_type,
         };
     };
 
@@ -321,7 +297,7 @@ mod tests {
                 b: u32,
             }
         };
-        let output = derive_impl_components(input);
+        let output = derive_impl_mir_reflect(input);
         println!("output: {}", output.to_string());
         let _ = syn::parse2::<syn::File>(output.clone())
             .expect("generated code should parse successfully");

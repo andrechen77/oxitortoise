@@ -85,10 +85,9 @@ impl Globals {
         let row_schema = schema.make_row_schema();
         let row_buffer_pointee_ty = RowBuffer::self_mir_type_from_metadata(&row_schema);
 
-        mir::MirTypeInfo::with_field(
+        mir::MirType::new_struct(
             Layout::new::<Self>(),
-            offset_of!(Self, data),
-            row_buffer_pointee_ty,
+            vec![(offset_of!(Self, data), row_buffer_pointee_ty)],
         )
     }
 }

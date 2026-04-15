@@ -1,6 +1,6 @@
 use std::{ops::Deref, sync::Mutex};
 
-use macro_reflect::{ReflectComponents, reflect};
+use macro_reflect::{MirReflect, reflect};
 
 mod mersenne_twister;
 
@@ -19,7 +19,7 @@ where
     }
 }
 
-#[derive(Debug, ReflectComponents)]
+#[derive(Debug, MirReflect)]
 pub struct CanonRng(mersenne_twister::MersenneTwister);
 
 #[reflect]

@@ -1,4 +1,4 @@
-use macro_reflect::{ReflectComponents, reflect};
+use macro_reflect::{MirReflect, reflect};
 
 use crate::util::{
     reflection::{Reflect, Type},
@@ -38,7 +38,7 @@ pub enum AgentSchemaField {
     Other(Type),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, ReflectComponents)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, MirReflect)]
 #[repr(C)]
 pub struct AgentFieldDescriptor {
     /// The index of the buffer that stores the data for this field.

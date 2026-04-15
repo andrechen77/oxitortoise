@@ -73,9 +73,7 @@ impl Scope {
                 // only insert a drop instruction if the local has an associated
                 // statically known type, because it if doesn't have a statically
                 // known type then it probably doesn't have a destructor
-                if let Some(static_ty) = ty.static_ty
-                    && static_ty.drop_fn.is_some()
-                {
+                if ty.has_drop_fn() {
                     builder.mir.add_statement(mir::Statement::Elementary(
                         mir::ElementaryStatement::Drop { src: mir_local.place() },
                     ));
@@ -154,9 +152,7 @@ impl Block {
                 trace!("translating statement: {:?}", expr);
                 let result = translate_expr(builder, expr)?;
                 let ty = builder.mir.type_of_place(&result.place());
-                if let Some(static_ty) = ty.static_ty
-                    && static_ty.drop_fn.is_some()
-                {
+                if ty.has_drop_fn() {
                     builder.mir.add_statement(mir::Statement::Elementary(
                         mir::ElementaryStatement::Drop { src: result.place() },
                     ));

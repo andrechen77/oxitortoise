@@ -1,6 +1,6 @@
-use macro_reflect::{ReflectComponents, reflect};
+use macro_reflect::{MirReflect, reflect};
 
-#[derive(Default, Debug, Clone, ReflectComponents)]
+#[derive(Default, Debug, Clone, MirReflect)]
 #[allow(dead_code)] // strings will be used eventually, just not at this stage of development
 pub struct NlString(String);
 

@@ -13,7 +13,7 @@ use std::{
 };
 
 use crate::{
-    mir::{self, DynPtr, DynPtrMut, HasDynPtr, MirType, MirTypeContents, MirTypeInfo},
+    mir::{self, DynPtr, DynPtrMut, HasDynPtr, MirType},
     util::{
         lifetime_ptr::{LifetimePtr, LifetimePtrMut},
         reflection::{Reflect, Type},
@@ -591,10 +591,10 @@ impl RowBuffer {
         let ptr_to_buffer = RowBuffer::write_mir_get_data_ptr(builder, self_pl);
         let ptr_to_row = ptr_to_buffer.proj_deref().proj_dynamic_index(row_idx);
         let row_ty = builder.type_of_place(&ptr_to_row);
-        let MirTypeContents::HasFields { fields, .. } = &row_ty.contents else {
+        let MirType::Struct(struct_def) = &row_ty else {
             panic!("expected a type with fields, got {:?}", row_ty);
         };
-        let field_offset = fields[field_idx].0;
+        let (field_offset, _) = struct_def.fields[field_idx];
         ptr_to_row.proj_field(field_offset)
     }
 }
@@ -649,16 +649,18 @@ unsafe impl HasDynPtr for RowBuffer {
         let fields = schema
             .fields
             .iter()
-            .map(|field| (field.offset, (field.r#type.make_mir_type)()))
+            .map(|field| (field.offset, MirType::from_static_type(field.r#type)))
             .collect();
 
-        MirTypeInfo::with_field(
+        MirType::new_struct(
             Layout::new::<Self>(),
-            offset_of!(Self, bytes),
-            MirTypeInfo::ptr_to(MirTypeInfo::array_of(
-                MirTypeInfo::with_fields(schema.layout, fields),
-                None,
-            )),
+            vec![(
+                offset_of!(Self, bytes),
+                MirType::ref_to(MirType::array_of(
+                    MirType::new_struct(schema.layout, fields),
+                    None,
+                )),
+            )],
         )
     }
 }
@@ -717,11 +719,11 @@ impl<T: Copy> std::ops::IndexMut<usize> for Array<T> {
 
 #[cfg(test)]
 mod tests {
-    use macro_reflect::{ReflectComponents, reflect};
+    use macro_reflect::{MirReflect, reflect};
 
     use super::*;
 
-    #[derive(Debug, Clone, ReflectComponents, PartialEq)]
+    #[derive(Debug, Clone, MirReflect, PartialEq)]
     struct TestStr(std::string::String);
     #[reflect]
     impl Reflect for TestStr {}

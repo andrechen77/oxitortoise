@@ -1,6 +1,6 @@
 use std::ptr::NonNull;
 
-use macro_reflect::{ReflectComponents, reflect};
+use macro_reflect::{MirReflect, reflect};
 
 use crate::util::reflection::Type;
 
@@ -30,7 +30,7 @@ use super::{BoxedAny, UnpackedAny};
 /// | --- | --- |
 /// | 0 | false |
 /// | 1 | true |
-#[derive(Clone, ReflectComponents)]
+#[derive(Clone, MirReflect)]
 // TODO specify that the contents are a f64 to the reflect macro
 #[repr(transparent)]
 pub struct PackedAny(f64);

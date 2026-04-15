@@ -15,7 +15,7 @@ use crate::{
         NlAbstractTy,
         build_mir::{self, HirToMirFnTranslator},
     },
-    mir,
+    mir::{self, MirReflect},
     sim::value::BoxedAny,
     util::{rc::create_erased_rc, reflection::Reflect},
 };
@@ -162,14 +162,14 @@ fn mir_create_anon_struct(
     }
 
     // now put it all together to create a definition of the struct type
-    let struct_ty = mir::MirTypeInfo::with_fields(total_layout, fields.clone());
+    let struct_ty = mir::MirType::new_struct(total_layout, fields.clone());
 
     // define a function that will drop all the values in the struct
     let drop_fn = {
         let mut drop_fn_builder = builder.mir.create_another_function();
 
         // add the parameter: a pointer to the struct being dropped
-        let param_ty = mir::MirTypeInfo::ptr_to(struct_ty.clone());
+        let param_ty = mir::MirType::ref_to(struct_ty.clone());
         let param =
             drop_fn_builder.create_parameter(mir::LocalDecl { debug_name: None, ty: param_ty });
 

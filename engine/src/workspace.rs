@@ -4,7 +4,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use macro_reflect::{ReflectComponents, reflect};
+use macro_reflect::{MirReflect, reflect};
 
 use crate::{
     mir,
@@ -12,7 +12,7 @@ use crate::{
     util::rng::CanonRng,
 };
 
-#[derive(Debug, ReflectComponents)]
+#[derive(Debug, MirReflect)]
 #[repr(C)]
 pub struct Workspace {
     pub world: World,
@@ -34,7 +34,7 @@ impl Workspace {
         patch_schema: &PatchSchema,
     ) -> mir::MirType {
         let world_ty = World::mir_type_from_schemas(globals_schema, turtle_schema, patch_schema);
-        mir::MirTypeInfo::with_field(Layout::new::<Self>(), offset_of!(Self, world), world_ty)
+        mir::MirType::new_struct(Layout::new::<Self>(), vec![(offset_of!(Self, world), world_ty)])
     }
 }
 

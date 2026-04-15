@@ -2,12 +2,12 @@ use std::{marker::PhantomData, mem::offset_of};
 
 use crate::{
     hir::HirToMirFnBuilder,
-    mir,
+    mir::{self, MirReflect},
     sim::value::PackedAny,
     util::{reflection::Reflect, rng::CanonRng},
     workspace::Workspace,
 };
-use macro_reflect::{ReflectComponents, reflect};
+use macro_reflect::{MirReflect, reflect};
 
 pub enum InstallLirError {
     /// Installer state was corrupted and cannot be used to install new
@@ -95,7 +95,7 @@ impl<'a> JitEntrypoint<'a> {
 }
 
 /// A callback that can be called multiple times. Equivalent to FnMut.
-#[derive(ReflectComponents)]
+#[derive(MirReflect)]
 #[repr(C)]
 pub struct JitCallback<'env, Arg, Ret> {
     #[mir_accessible(unchecked_type)]

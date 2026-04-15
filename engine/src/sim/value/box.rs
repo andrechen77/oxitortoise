@@ -1,9 +1,9 @@
 use derive_more::derive::{Deref, DerefMut};
-use macro_reflect::{ReflectComponents, reflect};
+use macro_reflect::{MirReflect, reflect};
 
 use crate::sim::value::NlList;
 
-#[derive(Deref, DerefMut, Clone, ReflectComponents)]
+#[derive(Deref, DerefMut, Clone, MirReflect)]
 #[repr(transparent)]
 pub struct NlBox<T: Sized>(Box<T>);
 

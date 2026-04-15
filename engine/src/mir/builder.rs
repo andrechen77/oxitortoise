@@ -7,11 +7,11 @@ use tracing::{trace, warn};
 
 use crate::{
     mir::{
-        self, ElementaryStatement, Function, FunctionId, Label, LocalId, MirType, MirTypeContents,
-        MirTypeInfo, Operation, Place, PlaceOperand, Statement,
+        self, ElementaryStatement, Function, FunctionId, Label, LocalId, MirReflect, MirType,
+        Operation, Place, PlaceOperand, Statement,
     },
     sim::value::NlFloat,
-    util::reflection::{CloneKind, Reflect},
+    util::reflection::CloneKind,
 };
 
 #[derive(Default)]
@@ -156,11 +156,7 @@ impl<'a> FunctionBuilder<'a> {
 
     pub fn type_of_place(&self, place: &Place) -> mir::MirType {
         let local_ty = &self.locals[&place.local].ty;
-        place
-            .projections
-            .iter()
-            .fold(local_ty, |ty, &projection| ty.contents.project(projection))
-            .clone()
+        place.projections.iter().fold(local_ty, |ty, &projection| ty.project(projection)).clone()
     }
 
     pub fn type_of_op(&self, op: &Operation) -> MirType {
@@ -168,20 +164,16 @@ impl<'a> FunctionBuilder<'a> {
             Operation::Operand(operand) => match operand {
                 PlaceOperand::Copy(place) => self.type_of_place(place),
                 PlaceOperand::Move(local) => self.type_of_place(&local.place()),
-                PlaceOperand::Borrow(place) => {
-                    let place_ty = self.type_of_place(place);
-                    Arc::new(MirTypeInfo {
-                        static_ty: None,
-                        contents: MirTypeContents::IsPointerTo(place_ty),
-                    })
-                }
+                PlaceOperand::Borrow(place) => MirType::ref_to(self.type_of_place(place)),
             },
-            Operation::Const { value } => (value.ty().make_mir_type)(),
+            Operation::Const { value } => MirType::from_static_type(value.ty()),
             Operation::FunctionPtr { function: _ } => {
                 // we can probably get away with making no assertions about the type
                 MirType::default()
             }
-            Operation::CallHostFunction { function, .. } => (function.return_type.make_mir_type)(),
+            Operation::CallHostFunction { function, .. } => {
+                MirType::from_static_type(function.return_type)
+            }
             Operation::CallUserFunction { function, .. } => self
                 .program_builder
                 .completed_function(*function)
@@ -217,7 +209,7 @@ impl<'a> FunctionBuilder<'a> {
         // make sure that the types match
         let dst_ty = self.type_of_place(&dst);
         let val_ty = self.type_of_op(&op);
-        if dst_ty.is_assignable_from(&val_ty) {
+        if dst_ty.is_supertype_of(&val_ty) {
             warn!(
                 "type of operation does not match type of destination place: {:?} != {:?}",
                 dst_ty, val_ty
@@ -299,8 +291,7 @@ impl<'a> FunctionBuilder<'a> {
     }
 
     pub fn clone_to_uninit(&mut self, src: Place, dst: Place) {
-        let clone_kind = &self.type_of_place(&src).static_ty.unwrap().clone;
-        match clone_kind {
+        match self.type_of_place(&src).clone_kind() {
             CloneKind::Copy => self
                 .add_operation_with_dst(dst, mir::Operation::Operand(mir::PlaceOperand::Copy(src))),
             CloneKind::Dynamic { clone_fn_info, .. } => self.add_operation_with_dst(

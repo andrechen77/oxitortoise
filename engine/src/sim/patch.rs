@@ -9,7 +9,7 @@ use std::{
 
 use derive_more::derive::From;
 use either::Either;
-use macro_reflect::{ReflectComponents, reflect};
+use macro_reflect::{MirReflect, reflect};
 use pretty_print::PrettyPrinter;
 
 use super::topology::Point;
@@ -37,7 +37,7 @@ use crate::{
 /// Unlike turtles or links, which only have the fields corresponding to their
 /// current breed, patches do not have the concept of breeds so all fields are
 /// always active.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, From, ReflectComponents)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, From, MirReflect)]
 // TODO reflection contents
 #[repr(transparent)]
 pub struct PatchId(pub u32);
@@ -53,7 +53,7 @@ impl Default for PatchId {
 
 /// Exactly the same as [`PatchId`], but it can represent "nobody" at the -1
 /// value.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, From, ReflectComponents)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, From, MirReflect)]
 // TODO reflection contents
 #[repr(transparent)]
 pub struct OptionPatchId(pub u32);
@@ -348,7 +348,7 @@ impl Patches {
             })
             .collect();
 
-        mir::MirTypeInfo::with_fields(Layout::new::<Self>(), fields)
+        mir::MirType::new_struct(Layout::new::<Self>(), fields)
     }
 }
 
@@ -420,7 +420,7 @@ fn pretty_print_patch(
     })
 }
 
-#[derive(Debug, Clone, ReflectComponents)]
+#[derive(Debug, Clone, MirReflect)]
 pub struct PatchBaseData {
     #[mir_accessible]
     pub position: Point,

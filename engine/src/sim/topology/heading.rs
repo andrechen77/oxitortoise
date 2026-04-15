@@ -1,6 +1,6 @@
 use std::ops::{Add, AddAssign};
 
-use macro_reflect::{ReflectComponents, reflect};
+use macro_reflect::{MirReflect, reflect};
 
 use super::CoordFloat;
 use crate::{
@@ -13,7 +13,7 @@ use crate::{
 /// a heading of north, and the heading increases clockwise. This is different
 /// from the more popular convention of 0 meaning east, and angles increasing
 /// counterclockwise.
-#[derive(Debug, Clone, Copy, PartialEq, Default, ReflectComponents)]
+#[derive(Debug, Clone, Copy, PartialEq, Default, MirReflect)]
 // TODO reflection contents
 #[repr(transparent)]
 pub struct Heading(f64);

@@ -1,7 +1,7 @@
 //! Nodes to represent basic arithmetic operations that should not be host
 //! function calls.
 
-use std::{alloc::Layout, fmt, sync::Arc};
+use std::{alloc::Layout, fmt};
 
 use derive_more::derive::TryFrom;
 use pretty_print::PrettyPrinter;
@@ -55,12 +55,6 @@ static BINARY_ARITH_OPCODE_TYPE_INFO: TypeInfo = TypeInfo {
     is_zeroable: false,
     clone: CloneKind::Copy,
     drop_fn: None,
-    make_mir_type: || {
-        Arc::new(mir::MirTypeInfo {
-            static_ty: Some(&BINARY_ARITH_OPCODE_TYPE_INFO),
-            contents: mir::MirTypeContents::IsPrimitive(lir::ValType::I8),
-        })
-    },
 };
 
 unsafe impl Reflect for BinaryArithOpcode {
@@ -73,12 +67,6 @@ static BINARY_CMP_OPCODE_TYPE_INFO: TypeInfo = TypeInfo {
     is_zeroable: false,
     clone: CloneKind::Copy,
     drop_fn: None,
-    make_mir_type: || {
-        Arc::new(mir::MirTypeInfo {
-            static_ty: Some(&BINARY_CMP_OPCODE_TYPE_INFO),
-            contents: mir::MirTypeContents::IsPrimitive(lir::ValType::I8),
-        })
-    },
 };
 
 unsafe impl Reflect for BinaryCmpOpcode {
@@ -91,12 +79,6 @@ static BINARY_BOOL_OPCODE_TYPE_INFO: TypeInfo = TypeInfo {
     is_zeroable: false,
     clone: CloneKind::Copy,
     drop_fn: None,
-    make_mir_type: || {
-        Arc::new(mir::MirTypeInfo {
-            static_ty: Some(&BINARY_BOOL_OPCODE_TYPE_INFO),
-            contents: mir::MirTypeContents::IsPrimitive(lir::ValType::I8),
-        })
-    },
 };
 
 unsafe impl Reflect for BinaryBoolOpcode {

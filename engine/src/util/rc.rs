@@ -5,12 +5,12 @@ use std::{
     ptr::{NonNull, drop_in_place},
 };
 
-use macro_reflect::{ReflectComponents, reflect};
+use macro_reflect::{MirReflect, reflect};
 
 use crate::util::reflection::Reflect;
 
 #[repr(transparent)]
-#[derive(ReflectComponents)]
+#[derive(MirReflect)]
 pub struct ErasedRc {
     /// Points to some unknown value. Before the location pointed to by this
     /// pointer is the metadata prefix.

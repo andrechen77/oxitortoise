@@ -78,7 +78,7 @@ impl World {
         let turtles_ty = Turtles::mir_type_from_schema(turtle_schema);
         let patches_ty = Patches::mir_type_from_schema(patch_schema);
 
-        mir::MirTypeInfo::with_fields(
+        mir::MirType::new_struct(
             Layout::new::<Self>(),
             vec![
                 (offset_of!(Self, globals), globals_ty),

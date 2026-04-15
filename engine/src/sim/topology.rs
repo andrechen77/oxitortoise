@@ -1,6 +1,6 @@
 use std::{fmt, mem::offset_of};
 
-use crate::{mir, util::reflection::Reflect as _};
+use crate::mir::{self, MirReflect};
 
 use super::{patch::PatchId, value, value::NlFloat};
 
@@ -8,7 +8,7 @@ pub mod diffuse;
 mod heading;
 
 pub use heading::Heading;
-use macro_reflect::{ReflectComponents, reflect};
+use macro_reflect::{MirReflect, reflect};
 
 /// The type used to refer to integer patch coordinates.
 pub type CoordInt = i32;
@@ -33,7 +33,7 @@ impl fmt::Display for PointInt {
 // exist. (i.e. None). Consider if the codebase would benefit from non-nullable
 // points and if so, make Points non-nullable and use a different type
 // OptionPoint which allows NaN to be used for None.
-#[derive(Debug, Clone, Copy, PartialEq, Default, ReflectComponents)]
+#[derive(Debug, Clone, Copy, PartialEq, Default, MirReflect)]
 #[repr(C)]
 pub struct Point {
     #[mir_accessible]

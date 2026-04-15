@@ -13,7 +13,7 @@ use std::sync::Arc;
 use derive_more::Display;
 use derive_more::derive::{From, Into};
 use either::Either;
-use macro_reflect::{ReflectComponents, reflect};
+use macro_reflect::{MirReflect, reflect};
 use pretty_print::PrettyPrinter;
 
 use crate::hir::{CustomVarDecl, TypeMapping};
@@ -39,7 +39,7 @@ pub const DEFAULT_BREED_NAME: &str = "TURTLES";
 /// An ID for a turtle. When passing through FFI, this should be converted to a
 /// `u64` first to prevent it from being represented as a pointer.
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, From, Into, Default, ReflectComponents,
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, From, Into, Default, MirReflect,
 )]
 // TODO specify to reflect that its contents are a u32
 #[repr(transparent)]
@@ -331,7 +331,7 @@ impl Turtles {
             })
             .collect();
 
-        mir::MirTypeInfo::with_fields(Layout::new::<Self>(), fields)
+        mir::MirType::new_struct(Layout::new::<Self>(), fields)
     }
 }
 
@@ -416,7 +416,7 @@ fn pretty_print_turtle(
     })
 }
 
-#[derive(Debug, Clone, ReflectComponents)]
+#[derive(Debug, Clone, MirReflect)]
 #[repr(C)]
 pub struct TurtleBaseData {
     #[mir_accessible]
@@ -442,7 +442,7 @@ pub struct TurtleBaseData {
 #[reflect]
 impl Reflect for TurtleBaseData {}
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Display, PartialOrd, Ord, ReflectComponents)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Display, PartialOrd, Ord, MirReflect)]
 #[display("{_0}")]
 pub struct TurtleBreedId(pub u32);
 
