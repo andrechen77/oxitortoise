@@ -1,11 +1,16 @@
+use macro_reflect::{MirReflect, reflect};
+
 use crate::sim::value;
 
 /// The current tick number of an NetLogo simulation instance. The tick counter
 /// can be a zero/positive value, or NaN (representing a tick counter that
 /// hasn't started).
-#[derive(Debug, Copy, Clone, PartialEq, PartialOrd)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, MirReflect)]
 #[repr(transparent)]
 pub struct Tick(f64);
+
+#[reflect(clone(copy))]
+impl Reflect for Tick {}
 
 impl Default for Tick {
     fn default() -> Self {

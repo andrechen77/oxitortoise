@@ -4,7 +4,7 @@ use std::{alloc::Layout, fmt::Write, mem::offset_of};
 
 use super::shapes::Shapes;
 use crate::{
-    mir,
+    mir::{self, MirReflect as _},
     sim::{
         observer::{Globals, GlobalsSchema},
         patch::{PatchSchema, Patches},
@@ -84,6 +84,8 @@ impl World {
                 (offset_of!(Self, globals), globals_ty),
                 (offset_of!(Self, turtles), turtles_ty),
                 (offset_of!(Self, patches), patches_ty),
+                (offset_of!(Self, topology), Topology::mir_type()),
+                (offset_of!(Self, tick_counter), Tick::mir_type()),
             ],
         )
     }

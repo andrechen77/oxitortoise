@@ -143,20 +143,29 @@ impl TopologySpec {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, MirReflect)]
 pub struct Topology {
     pub spec: TopologySpec,
     // QUESTION the max coordinates currently go all the way to the edge of the
     // border patches (e.g. 16.5 instead of 16.0), but the max-pxcor and
     // max-pycor reporters only report the center. See if this needs to be
     // changed based on which version is used more often.
+    #[mir_accessible]
     pub min_x: CoordFloat,
+    #[mir_accessible]
     pub max_x: CoordFloat,
+    #[mir_accessible]
     pub world_width: CoordFloat,
+    #[mir_accessible]
     pub min_y: CoordFloat,
+    #[mir_accessible]
     pub max_y: CoordFloat,
+    #[mir_accessible]
     pub world_height: CoordFloat,
 }
+
+#[reflect(special_mir_type)]
+impl Reflect for Topology {}
 
 impl Topology {
     pub fn new(spec: TopologySpec) -> Self {
