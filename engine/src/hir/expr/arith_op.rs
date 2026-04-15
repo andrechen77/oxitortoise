@@ -127,9 +127,9 @@ impl Expr for BinaryArith {
 impl BinaryArith {
     pub fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
         let lhs_local = translate_expr(builder, &self.lhs)?;
-        let lhs_ty = builder.mir.type_of_place(&lhs_local.place());
+        let lhs_ty = builder.mir.type_of_place(&lhs_local.place()).clone();
         let rhs_local = translate_expr(builder, &self.rhs)?;
-        let rhs_ty = builder.mir.type_of_place(&rhs_local.place());
+        let rhs_ty = builder.mir.type_of_place(&rhs_local.place()).clone();
 
         let operation = if lhs_ty.is::<NlFloat>() && rhs_ty.is::<NlFloat>() {
             let opcode = match self.op {
@@ -217,7 +217,7 @@ impl BinaryCmp {
             // find the operand that is not statically known to be nobody
             let operand = if lhs_ty == NlAbstractTy::Nobody { &self.rhs } else { &self.lhs };
             let operand_pl = translate_expr(builder, operand)?.place();
-            let operand_ty = builder.mir.type_of_place(&operand_pl);
+            let operand_ty = builder.mir.type_of_place(&operand_pl).clone();
             if operand_ty.is::<OptionPatchId>() {
                 // FIXME this is not quite right if agents can die, because then
                 // a dead agent is counted as nobody. we need to take a workspace
@@ -229,9 +229,9 @@ impl BinaryCmp {
         }
 
         let lhs_local = translate_expr(builder, &self.lhs)?;
-        let lhs_ty = builder.mir.type_of_place(&lhs_local.place());
+        let lhs_ty = builder.mir.type_of_place(&lhs_local.place()).clone();
         let rhs_local = translate_expr(builder, &self.rhs)?;
-        let rhs_ty = builder.mir.type_of_place(&rhs_local.place());
+        let rhs_ty = builder.mir.type_of_place(&rhs_local.place()).clone();
 
         use BinaryCmpOpcode as Op;
 
@@ -335,9 +335,9 @@ impl Expr for BinaryBool {
 impl BinaryBool {
     pub fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
         let lhs_local = translate_expr(builder, &self.lhs)?;
-        let lhs_ty = builder.mir.type_of_place(&lhs_local.place());
+        let lhs_ty = builder.mir.type_of_place(&lhs_local.place()).clone();
         let rhs_local = translate_expr(builder, &self.rhs)?;
-        let rhs_ty = builder.mir.type_of_place(&rhs_local.place());
+        let rhs_ty = builder.mir.type_of_place(&rhs_local.place()).clone();
 
         let operation = if lhs_ty.is::<bool>() && rhs_ty.is::<bool>() {
             let opcode = match self.op {

@@ -1,6 +1,6 @@
 use std::{alloc::Layout, fmt, ptr::NonNull, sync::Arc};
 
-use tracing::trace;
+use tracing::{trace, warn};
 
 use crate::{
     mir::{Place, Projection, builder::FunctionBuilder},
@@ -191,7 +191,7 @@ impl fmt::Debug for MirType {
 }
 
 impl MirType {
-    pub fn project(&self, projection: Projection) -> &MirType {
+    pub fn project(&self, projection: Projection) -> Result<&MirType, ProjectionError> {
         match projection {
             Projection::Deref => self.proj_deref(),
             Projection::Field { byte_offset } => self.proj_field(byte_offset),
@@ -200,49 +200,54 @@ impl MirType {
         }
     }
 
-    pub fn proj_deref(&self) -> &MirType {
+    pub fn proj_deref(&self) -> Result<&MirType, ProjectionError> {
         if let MirType::Ref(pointee) = self {
-            pointee
+            Ok(pointee)
         } else {
-            panic!("Cannot project type {:?} with a deref projection", self);
+            warn!("Cannot project type {:?} with a deref projection", self);
+            Err(ProjectionError)
         }
     }
 
-    pub fn proj_field(&self, byte_offset: usize) -> &MirType {
+    pub fn proj_field(&self, byte_offset: usize) -> Result<&MirType, ProjectionError> {
         if let MirType::Struct(struct_def) = self {
             let MirTypeStruct { fields, overall: _ } = struct_def.as_ref();
             let Some((_, field)) = fields.iter().find(|(offset, _)| *offset == byte_offset) else {
-                panic!("Field at byte offset {} not found in type {:?}", byte_offset, self);
+                warn!("Field at byte offset {} not found in type {:?}", byte_offset, self);
+                return Err(ProjectionError);
             };
-            field
+            Ok(field)
         } else {
-            panic!(
+            warn!(
                 "Cannot project type {:?} with a field projection of byte offset {}",
                 self, byte_offset
             );
+            Err(ProjectionError)
         }
     }
 
-    pub fn proj_static_index(&self, index: usize) -> &MirType {
+    pub fn proj_static_index(&self, index: usize) -> Result<&MirType, ProjectionError> {
         if let MirType::Array(array) = self {
             let MirTypeArray { element, length } = array.as_ref();
             if let Some(length) = length
                 && index >= *length
             {
-                panic!("Index {} is out of bounds for array of length {}", index, length);
+                warn!("Index {} is out of bounds for array of length {}", index, length);
             }
-            element
+            Ok(element)
         } else {
-            panic!("Cannot project type {:?} with an index projection", self);
+            warn!("Cannot project type {:?} with an index projection", self);
+            Err(ProjectionError)
         }
     }
 
-    pub fn proj_dynamic_index(&self) -> &MirType {
+    pub fn proj_dynamic_index(&self) -> Result<&MirType, ProjectionError> {
         if let MirType::Array(array) = self {
             let MirTypeArray { element, length: _ } = array.as_ref();
-            element
+            Ok(element)
         } else {
-            panic!("Cannot project type {:?} with a dynamic index projection", self);
+            warn!("Cannot project type {:?} with a dynamic index projection", self);
+            Err(ProjectionError)
         }
     }
 }
@@ -261,9 +266,9 @@ impl<'a> DynPtr<'a> {
         Self { ptr, pointee_ty }
     }
 
-    pub fn proj_deref(self) -> Self {
+    pub fn proj_deref(self) -> Result<Self, ProjectionError> {
         // this checks that the pointee is itself a pointer
-        let pointee_ty = self.pointee_ty.proj_deref().clone();
+        let pointee_ty = self.pointee_ty.proj_deref()?.clone();
 
         // SAFETY: since we checked that the deref projection is valid,
         // the value must itself be a pointer, so we can cast it as
@@ -272,31 +277,31 @@ impl<'a> DynPtr<'a> {
         // transmutation.
         let ptr = *unsafe { self.ptr.cast::<LifetimePtr<'a>>() };
 
-        Self { ptr, pointee_ty }
+        Ok(Self { ptr, pointee_ty })
     }
 
-    pub fn proj_field(self, byte_offset: usize) -> Self {
+    pub fn proj_field(self, byte_offset: usize) -> Result<Self, ProjectionError> {
         // this checks that the pointee has a field at the given byte offset
-        let pointee_ty = self.pointee_ty.proj_field(byte_offset).clone();
+        let pointee_ty = self.pointee_ty.proj_field(byte_offset)?.clone();
 
         // SAFETY: the pointer is valid for the lifetime `'a` and the
         // byte offset is within the bounds of the pointee type because
         // we checked with the type descriptor
         let ptr = unsafe { self.ptr.map(|ptr| ptr.byte_add(byte_offset)) };
 
-        Self { ptr, pointee_ty }
+        Ok(Self { ptr, pointee_ty })
     }
 
-    pub fn proj_index(self, index: usize) -> Self {
+    pub fn proj_index(self, index: usize) -> Result<Self, ProjectionError> {
         // this checks that the pointee is an array and that the index is within
         // bounds
-        let pointee_ty = self.pointee_ty.proj_static_index(index).clone();
+        let pointee_ty = self.pointee_ty.proj_static_index(index)?.clone();
 
         // SAFETY: the pointer is valid for the lifetime `'a` and we checked
         // that the index is within bounds.
         let ptr = unsafe { self.ptr.map(|ptr| ptr.byte_add(index * pointee_ty.layout().size())) };
 
-        Self { ptr, pointee_ty }
+        Ok(Self { ptr, pointee_ty })
     }
 
     pub fn cast<T: Reflect>(self) -> &'a T {
@@ -324,9 +329,9 @@ impl<'a> DynPtrMut<'a> {
         Self { ptr, pointee_ty }
     }
 
-    pub fn proj_deref(self) -> Self {
+    pub fn proj_deref(self) -> Result<Self, ProjectionError> {
         // this checks that the pointee is itself a pointer
-        let pointee_ty = self.pointee_ty.proj_deref().clone();
+        let pointee_ty = self.pointee_ty.proj_deref()?.clone();
 
         // SAFETY: since we checked that the deref projection is valid,
         // the value must itself be a pointer, so we can cast it as
@@ -335,31 +340,31 @@ impl<'a> DynPtrMut<'a> {
         // transmutation.
         let ptr = *unsafe { self.ptr.cast::<LifetimePtrMut<'a>>() };
 
-        Self { ptr, pointee_ty }
+        Ok(Self { ptr, pointee_ty })
     }
 
-    pub fn proj_field(self, byte_offset: usize) -> Self {
+    pub fn proj_field(self, byte_offset: usize) -> Result<Self, ProjectionError> {
         // this checks that the pointee has a field at the given byte offset
-        let pointee_ty = self.pointee_ty.proj_field(byte_offset).clone();
+        let pointee_ty = self.pointee_ty.proj_field(byte_offset)?.clone();
 
         // SAFETY: the pointer is valid for the lifetime `'a` and the
         // byte offset is within the bounds of the pointee type because
         // we checked with the type descriptor
         let ptr = unsafe { self.ptr.map(|ptr| ptr.byte_add(byte_offset)) };
 
-        Self { ptr, pointee_ty }
+        Ok(Self { ptr, pointee_ty })
     }
 
-    pub fn proj_index(self, index: usize) -> Self {
+    pub fn proj_index(self, index: usize) -> Result<Self, ProjectionError> {
         // this checks that the pointee is an array and that the index is within
         // bounds
-        let pointee_ty = self.pointee_ty.proj_static_index(index).clone();
+        let pointee_ty = self.pointee_ty.proj_static_index(index)?.clone();
 
         // SAFETY: the pointer is valid for the lifetime `'a` and we checked
         // that the index is within bounds.
         let ptr = unsafe { self.ptr.map(|ptr| ptr.byte_add(index * pointee_ty.layout().size())) };
 
-        Self { ptr, pointee_ty }
+        Ok(Self { ptr, pointee_ty })
     }
 
     pub fn cast<T: Reflect>(self) -> &'a mut T {
@@ -398,6 +403,8 @@ pub unsafe trait HasDynPtr {
     /// Returns a mutable pointer to the dynamically typed data.
     fn dyn_ptr_mut(&mut self) -> DynPtrMut<'_>;
 }
+
+pub struct ProjectionError;
 
 unsafe impl MirReflect for () {
     fn mir_type() -> MirType {

@@ -152,7 +152,7 @@ fn mir_create_anon_struct(
     let mut total_layout = Layout::new::<()>();
     let mut fields = Vec::new();
     for value in values {
-        let field_ty = builder.mir.type_of_place(&value);
+        let field_ty = builder.mir.type_of_place(&value).clone();
         let field_layout = field_ty.layout();
         let (new_layout, offset) = total_layout
             .extend(field_layout)

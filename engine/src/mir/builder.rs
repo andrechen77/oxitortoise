@@ -8,7 +8,7 @@ use tracing::{trace, warn};
 use crate::{
     mir::{
         self, ElementaryStatement, Function, FunctionId, Label, LocalId, MirReflect, MirType,
-        Operation, Place, PlaceOperand, Statement,
+        Operation, Place, PlaceOperand, Statement, reflection::ProjectionError,
     },
     sim::value::NlFloat,
     util::reflection::CloneKind,
@@ -154,17 +154,26 @@ impl<'a> FunctionBuilder<'a> {
         self.currently_init_locals.insert(local);
     }
 
-    pub fn type_of_place(&self, place: &Place) -> mir::MirType {
+    pub fn type_of_place(&self, place: &Place) -> &mir::MirType {
         let local_ty = &self.locals[&place.local].ty;
-        place.projections.iter().fold(local_ty, |ty, &projection| ty.project(projection)).clone()
+        let result = place
+            .projections
+            .iter()
+            .fold(Ok(local_ty), |ty, &projection| ty.and_then(|ty| ty.project(projection)));
+        match result {
+            Ok(ty) => ty,
+            Err(ProjectionError) => {
+                panic!("projection error: place {} does not exist in type {:?}", place, local_ty);
+            }
+        }
     }
 
     pub fn type_of_op(&self, op: &Operation) -> MirType {
         match op {
             Operation::Operand(operand) => match operand {
-                PlaceOperand::Copy(place) => self.type_of_place(place),
-                PlaceOperand::Move(local) => self.type_of_place(&local.place()),
-                PlaceOperand::Borrow(place) => MirType::ref_to(self.type_of_place(place)),
+                PlaceOperand::Copy(place) => self.type_of_place(place).clone(),
+                PlaceOperand::Move(local) => self.type_of_place(&local.place()).clone(),
+                PlaceOperand::Borrow(place) => MirType::ref_to(self.type_of_place(place).clone()),
             },
             Operation::Const { value } => MirType::from_static_type(value.ty()),
             Operation::FunctionPtr { function: _ } => {
@@ -209,9 +218,9 @@ impl<'a> FunctionBuilder<'a> {
         // make sure that the types match
         let dst_ty = self.type_of_place(&dst);
         let val_ty = self.type_of_op(&op);
-        if dst_ty.is_supertype_of(&val_ty) {
+        if !dst_ty.is_supertype_of(&val_ty) {
             warn!(
-                "type of operation does not match type of destination place: {:?} != {:?}",
+                "type of operation does not match type of destination place: {:?} := {:?}",
                 dst_ty, val_ty
             );
         }
@@ -225,12 +234,19 @@ impl<'a> FunctionBuilder<'a> {
         op: Operation,
     ) -> LocalId {
         // make sure that the types match
-        let ty = self.type_of_op(&op);
-        assert_eq!(ty, local_decl.ty, "type of operation must match type of local declaration");
+        let val_ty = self.type_of_op(&op);
+        if !local_decl.ty.is_supertype_of(&val_ty) {
+            warn!(
+                "type of operation does not match type of local declaration: {:?} := {:?}",
+                local_decl.ty, local_decl.ty
+            );
+        }
 
         let dst = self.create_local(local_decl);
-        self.add_operation_with_dst(dst.into(), op);
-        // TODO could do something with the type assertion here
+        self.add_statement(Statement::Elementary(ElementaryStatement::Assign {
+            dst: dst.place(),
+            op,
+        }));
         dst
     }
 
@@ -311,8 +327,10 @@ impl<'a> FunctionBuilder<'a> {
     /// deinitialized. The destination place will not be deinitialized (i.e. it is
     /// assumed to be uninitialized). Useful for loading variables from memory.
     pub fn clone_to_new(&mut self, src: Place) -> LocalId {
-        let dst =
-            self.create_local(mir::LocalDecl { debug_name: None, ty: self.type_of_place(&src) });
+        let dst = self.create_local(mir::LocalDecl {
+            debug_name: None,
+            ty: self.type_of_place(&src).clone(),
+        });
         self.clone_to_uninit(src, dst.place());
         dst
     }

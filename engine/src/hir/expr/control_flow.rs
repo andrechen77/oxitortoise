@@ -67,7 +67,7 @@ impl Scope {
 
         for local_id in self.locals.keys() {
             let mir_local = builder.local_translator.locals[local_id].clone().unwrap_local();
-            let ty = builder.mir.type_of_place(&mir_local.place());
+            let ty = builder.mir.type_of_place(&mir_local.place()).clone();
 
             if builder.mir.is_init(mir_local) {
                 // only insert a drop instruction if the local has an associated
@@ -151,7 +151,7 @@ impl Block {
             for expr in &self.statements {
                 trace!("translating statement: {:?}", expr);
                 let result = translate_expr(builder, expr)?;
-                let ty = builder.mir.type_of_place(&result.place());
+                let ty = builder.mir.type_of_place(&result.place()).clone();
                 if ty.has_drop_fn() {
                     builder.mir.add_statement(mir::Statement::Elementary(
                         mir::ElementaryStatement::Drop { src: result.place() },
@@ -219,13 +219,13 @@ impl IfElse {
 
         let (then_stmts, then_out) =
             builder.with_inner_statement_seq(|builder| translate_expr(builder, &self.then));
-        let then_ty = then_out.as_ref().map(|t| builder.mir.type_of_place(&t.place()));
+        let then_ty = then_out.as_ref().map(|t| builder.mir.type_of_place(&t.place()).clone());
         let then_stmt =
             Box::new(mir::consolidate_statements(then_stmts, || builder.mir.create_label()));
 
         let (else_stmts, total_out) = builder.with_inner_statement_seq(|builder| {
             let else_out = translate_expr(builder, &self.r#else);
-            let else_ty = else_out.as_ref().map(|t| builder.mir.type_of_place(&t.place()));
+            let else_ty = else_out.as_ref().map(|t| builder.mir.type_of_place(&t.place()).clone());
             assert!(
                 then_ty.is_none() || else_ty.is_none() || then_ty == else_ty,
                 "then and else branches must have compatible types"
@@ -300,7 +300,7 @@ impl Break {
         let (target_label, target_local_out) =
             builder.local_translator.ctrl_flow_constructs.get_mut(&self.target).unwrap();
         let target_local_out = *target_local_out.get_or_insert_with(|| {
-            let ty = builder.mir.type_of_place(&value.place());
+            let ty = builder.mir.type_of_place(&value.place()).clone();
             builder.mir.create_local(mir::LocalDecl { debug_name: None, ty })
         });
 
