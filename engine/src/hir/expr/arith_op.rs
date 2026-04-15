@@ -55,6 +55,7 @@ static BINARY_ARITH_OPCODE_TYPE_INFO: TypeInfo = TypeInfo {
     is_zeroable: false,
     clone: CloneKind::Copy,
     drop_fn: None,
+    mir_type: None,
 };
 
 unsafe impl Reflect for BinaryArithOpcode {
@@ -67,6 +68,7 @@ static BINARY_CMP_OPCODE_TYPE_INFO: TypeInfo = TypeInfo {
     is_zeroable: false,
     clone: CloneKind::Copy,
     drop_fn: None,
+    mir_type: None,
 };
 
 unsafe impl Reflect for BinaryCmpOpcode {
@@ -79,6 +81,7 @@ static BINARY_BOOL_OPCODE_TYPE_INFO: TypeInfo = TypeInfo {
     is_zeroable: false,
     clone: CloneKind::Copy,
     drop_fn: None,
+    mir_type: None,
 };
 
 unsafe impl Reflect for BinaryBoolOpcode {

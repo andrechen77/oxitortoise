@@ -10,6 +10,7 @@ struct ReflectArgs {
     is_zeroable: bool,
     no_drop: bool,
     clone_kind: CloneKind,
+    special_mir_type: bool,
 }
 
 enum CloneKind {
@@ -20,7 +21,12 @@ enum CloneKind {
 
 impl Default for ReflectArgs {
     fn default() -> Self {
-        Self { is_zeroable: false, clone_kind: CloneKind::None, no_drop: false }
+        Self {
+            is_zeroable: false,
+            clone_kind: CloneKind::None,
+            no_drop: false,
+            special_mir_type: false,
+        }
     }
 }
 
@@ -62,7 +68,12 @@ impl Parse for ReflectArgs {
                 Meta::Path(p) if p.is_ident("no_drop") => {
                     out.no_drop = true;
                 }
-                _ => {}
+                Meta::Path(p) if p.is_ident("special_mir_type") => {
+                    out.special_mir_type = true;
+                }
+                other => {
+                    return Err(syn::Error::new_spanned(other, "unexpected attribute"));
+                }
             }
         }
         Ok(out)
@@ -233,6 +244,16 @@ pub fn attribute_impl_reflect(args: TokenStream, input: TokenStream) -> TokenStr
 
     let is_zeroable = attrs.is_zeroable;
 
+    let mir_type_fn = if attrs.special_mir_type {
+        quote! {
+            Some(<#self_ty as crate::mir::MirReflect>::mir_type)
+        }
+    } else {
+        quote! {
+            None
+        }
+    };
+
     let type_info_def = quote! {
         static TYPE_INFO: crate::util::reflection::TypeInfo = crate::util::reflection::TypeInfo {
             debug_name: stringify!(#self_ty),
@@ -240,6 +261,7 @@ pub fn attribute_impl_reflect(args: TokenStream, input: TokenStream) -> TokenStr
             is_zeroable: #is_zeroable,
             clone: #clone_fn,
             drop_fn: #drop_fn,
+            mir_type: #mir_type_fn
         };
     };
 

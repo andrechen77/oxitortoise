@@ -436,10 +436,10 @@ pub struct TurtleBaseData {
     #[mir_accessible]
     pub hidden: bool,
     #[mir_accessible]
-    pub size: value::NlFloat,
+    pub size: NlFloat,
 }
 
-#[reflect]
+#[reflect(special_mir_type)]
 impl Reflect for TurtleBaseData {}
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Display, PartialOrd, Ord, MirReflect)]

@@ -2,7 +2,7 @@ use std::{alloc::Layout, ptr::NonNull};
 
 use macro_reflect::reflect;
 
-use crate::mir::HostFunctionInfo;
+use crate::mir::{HostFunctionInfo, MirType};
 
 // TODO what to do about lifetimes? could cause unsafety and sadness
 
@@ -38,6 +38,9 @@ pub struct TypeInfo {
     /// The caller must guarantee that the passed pointer is a valid pointer to
     /// T that can be dropped, and that that value will never be used again.
     pub drop_fn: Option<unsafe fn(*mut u8)>,
+    /// If this type has a special MIR type, with additional information such as
+    /// subfields, this function will construct it.
+    pub mir_type: Option<fn() -> MirType>,
 }
 
 impl PartialEq for TypeInfo {

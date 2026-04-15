@@ -137,9 +137,15 @@ impl MirType {
     }
 
     pub fn from_static_type(ty: Type) -> Self {
-        // even if it's not actually a struct, a struct with inaccessible fields
-        // is a good representation of the type
-        Self::StaticStruct(Arc::new(MirTypeStaticStruct { static_ty: ty, fields: Vec::new() }))
+        if let Some(mir_type_fn) = ty.mir_type {
+            let mir_type = mir_type_fn();
+            debug_assert_eq!(mir_type.static_ty(), Some(ty), "static_ty mismatch");
+            mir_type
+        } else {
+            // even if it's not actually a struct, a struct with inaccessible fields
+            // is a good representation of the type
+            Self::StaticStruct(Arc::new(MirTypeStaticStruct { static_ty: ty, fields: Vec::new() }))
+        }
     }
 
     pub fn ref_to(pointee: MirType) -> Self {
@@ -175,7 +181,7 @@ impl fmt::Debug for MirType {
             // MirType::Primitive(ty) => write!(f, "<prim {:?}>", ty),
             MirType::StaticStruct(struct_def) => {
                 let MirTypeStaticStruct { static_ty, fields } = struct_def.as_ref();
-                write!(f, "{:?}", static_ty.debug_name)?;
+                write!(f, "{}", static_ty.debug_name)?;
                 if !fields.is_empty() {
                     write!(f, " + {{")?;
                     for (offset, field) in fields {
@@ -210,20 +216,22 @@ impl MirType {
     }
 
     pub fn proj_field(&self, byte_offset: usize) -> Result<&MirType, ProjectionError> {
-        if let MirType::Struct(struct_def) = self {
-            let MirTypeStruct { fields, overall: _ } = struct_def.as_ref();
-            let Some((_, field)) = fields.iter().find(|(offset, _)| *offset == byte_offset) else {
-                warn!("Field at byte offset {} not found in type {:?}", byte_offset, self);
+        let fields = match self {
+            MirType::Struct(struct_def) => &struct_def.fields,
+            MirType::StaticStruct(struct_def) => &struct_def.fields,
+            _ => {
+                warn!(
+                    "Cannot project type {:?} with a field projection of byte offset {}",
+                    self, byte_offset
+                );
                 return Err(ProjectionError);
-            };
-            Ok(field)
-        } else {
-            warn!(
-                "Cannot project type {:?} with a field projection of byte offset {}",
-                self, byte_offset
-            );
-            Err(ProjectionError)
-        }
+            }
+        };
+        let Some((_, ty)) = fields.iter().find(|(offset, _)| *offset == byte_offset) else {
+            warn!("Field at byte offset {} not found in type {:?}", byte_offset, self);
+            return Err(ProjectionError);
+        };
+        Ok(ty)
     }
 
     pub fn proj_static_index(&self, index: usize) -> Result<&MirType, ProjectionError> {

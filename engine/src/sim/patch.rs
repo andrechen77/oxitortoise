@@ -431,7 +431,7 @@ pub struct PatchBaseData {
     // TODO add some way of tracking what turtles are on this patch.
 }
 
-#[reflect]
+#[reflect(special_mir_type)]
 impl Reflect for PatchBaseData {}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
