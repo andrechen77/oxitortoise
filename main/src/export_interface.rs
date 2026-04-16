@@ -16,44 +16,6 @@ use engine::{
 // signatures of the actual host functions (probably done from the main crate
 // rather than the engine crate).
 
-pub static RANDOM_INT_INFO: HostFunctionInfo = HostFunctionInfo {
-    name: "oxitortoise_random_int",
-    parameter_types: &[Ptr, F64],
-    return_type: &[F64],
-    addr: oxitortoise_random_int as *const u8,
-};
-#[unsafe(no_mangle)]
-pub extern "C" fn oxitortoise_random_int(rng: &mut CanonRng, max: f64) -> f64 {
-    // TODO move the casting logic to the engine, not in this shim
-    rng.next_int(max as i64) as f64
-}
-
-// TODO: Write function definition for patch_ahead
-pub static PATCH_AHEAD_INFO: HostFunctionInfo = HostFunctionInfo {
-    name: "oxitortoise_patch_ahead",
-    parameter_types: &[Ptr, I64, F64],
-    return_type: &[I32],
-    addr: oxitortoise_patch_ahead as *const u8,
-};
-#[unsafe(no_mangle)]
-pub extern "C" fn oxitortoise_patch_ahead(
-    workspace: &mut Workspace,
-    turtle_id: u64,
-    distance: NlFloat,
-) -> OptionPatchId {
-    // TODO: this is a lot of logic. it should be in the engine
-    let world = &mut workspace.world;
-    let turtle_id = TurtleId::from_ffi(turtle_id);
-    let heading = world.turtles.get_turtle_heading(turtle_id).unwrap();
-    let position = world.turtles.get_turtle_position(turtle_id).unwrap();
-    let pos_ahead = world.topology.offset_distance_by_heading(*position, *heading, distance);
-    if let Some(pos_ahead) = pos_ahead {
-        world.topology.patch_at(pos_ahead.round_to_int()).into()
-    } else {
-        OptionPatchId::NOBODY
-    }
-}
-
 pub static PATCH_RIGHT_AND_AHEAD_INFO: HostFunctionInfo = HostFunctionInfo {
     name: "oxitortoise_patch_right_and_ahead",
     parameter_types: &[Ptr, I64, F64, F64],

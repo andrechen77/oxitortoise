@@ -5,9 +5,11 @@ use std::fmt::{self, Write};
 use pretty_print::PrettyPrinter;
 
 use crate::{
-    hir::{Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy, build_mir::translate_expr},
+    hir::{
+        Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy, build_mir::translate_expr,
+    },
     mir,
-    sim::{turtle::TurtleId, value::NlFloat},
+    sim::{patch::OptionPatchId, turtle::TurtleId, value::NlFloat},
     util::reflection::Reflect,
     workspace::Workspace,
 };
@@ -191,6 +193,61 @@ impl Expr for CanMove {
             p.add_fn_arg_with(|p| distance.pretty_print(p, names))?;
             Ok(())
         })
+    }
+}
+
+impl CanMove {
+    pub fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
+        let Self { workspace, turtle, distance } = self;
+
+        let workspace = translate_expr(builder, workspace)?;
+        let turtle = translate_expr(builder, turtle)?;
+        let distance = translate_expr(builder, distance)?;
+
+        let patch_ahead = builder.mir.add_operation(
+            None,
+            mir::Operation::CallHostFunction {
+                function: &patch_ahead::FN_INFO,
+                args: vec![
+                    mir::PlaceOperand::Copy(workspace.place()),
+                    mir::PlaceOperand::Copy(turtle.place()),
+                    mir::PlaceOperand::Copy(distance.place()),
+                ],
+            },
+        );
+
+        let can_move = OptionPatchId::write_check_nobody(builder, true, patch_ahead.place());
+        Some(can_move)
+    }
+}
+
+mod patch_ahead {
+    use crate::{mir::HostFunctionInfo, sim::patch::OptionPatchId};
+
+    use super::*;
+
+    pub static FN_INFO: HostFunctionInfo = HostFunctionInfo {
+        debug_name: "patch_ahead",
+        parameter_types: &[<&mut Workspace>::TYPE, TurtleId::TYPE, NlFloat::TYPE],
+        return_type: <OptionPatchId>::TYPE,
+        link_name: "patch_ahead",
+        link_addr: call as *const u8,
+    };
+
+    pub fn call(
+        workspace: &mut Workspace,
+        turtle_id: TurtleId,
+        distance: NlFloat,
+    ) -> OptionPatchId {
+        let world = &mut workspace.world;
+        let heading = world.turtles.get_turtle_heading(turtle_id).unwrap();
+        let position = world.turtles.get_turtle_position(turtle_id).unwrap();
+        let pos_ahead = world.topology.offset_distance_by_heading(*position, *heading, distance);
+        if let Some(pos_ahead) = pos_ahead {
+            world.topology.patch_at(pos_ahead.round_to_int()).into()
+        } else {
+            OptionPatchId::NOBODY
+        }
     }
 }
 
