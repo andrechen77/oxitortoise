@@ -1,47 +1,14 @@
 use engine::{
     lir::{
         HostFunctionInfo,
-        ValType::{F64, I32, I64, Ptr},
+        ValType::{F64, I32},
     },
-    sim::{
-        patch::OptionPatchId,
-        turtle::TurtleId,
-        value::{NlFloat, PackedAny},
-    },
-    util::rng::{CanonRng, Rng as _},
-    workspace::Workspace,
+    sim::value::PackedAny,
 };
 
 // TODO(mvp) the HostFunctionInfo should be automatically generated from the
 // signatures of the actual host functions (probably done from the main crate
 // rather than the engine crate).
-
-pub static PATCH_RIGHT_AND_AHEAD_INFO: HostFunctionInfo = HostFunctionInfo {
-    name: "oxitortoise_patch_right_and_ahead",
-    parameter_types: &[Ptr, I64, F64, F64],
-    return_type: &[I32],
-    addr: oxitortoise_patch_right_and_ahead as *const u8,
-};
-#[unsafe(no_mangle)]
-pub extern "C" fn oxitortoise_patch_right_and_ahead(
-    workspace: &mut Workspace,
-    turtle_id: u64,
-    angle: NlFloat,
-    distance: NlFloat,
-) -> OptionPatchId {
-    // TODO: this is a lot of logic. it should be in the engine
-    let world = &mut workspace.world;
-    let turtle_id = TurtleId::from_ffi(turtle_id);
-    let heading = world.turtles.get_turtle_heading(turtle_id).unwrap();
-    let heading_right = *heading + angle;
-    let position = world.turtles.get_turtle_position(turtle_id).unwrap();
-    let pos_ahead = world.topology.offset_distance_by_heading(*position, heading_right, distance);
-    if let Some(pos_ahead) = pos_ahead {
-        world.topology.patch_at(pos_ahead.round_to_int()).into()
-    } else {
-        OptionPatchId::NOBODY
-    }
-}
 
 // TODO: Write function definition for any_binary_op
 pub static ANY_BINARY_OP_INFO: HostFunctionInfo = HostFunctionInfo {

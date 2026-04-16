@@ -199,7 +199,9 @@ impl<'a> FunctionBuilder<'a> {
                 | lir::BinaryOpcode::FGt
                 | lir::BinaryOpcode::FLte
                 | lir::BinaryOpcode::FGte
-                | lir::BinaryOpcode::FEq => bool::mir_type(),
+                | lir::BinaryOpcode::FEq
+                | lir::BinaryOpcode::IEq
+                | lir::BinaryOpcode::INeq => bool::mir_type(),
                 lir::BinaryOpcode::And | lir::BinaryOpcode::Or => bool::mir_type(),
                 _ => panic!("unsupported binary opcode: {:?}", opcode),
             },

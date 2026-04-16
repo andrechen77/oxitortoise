@@ -221,6 +221,143 @@ impl CanMove {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct PatchRelative {
+    pub workspace: Box<ExprKind>,
+    pub relative_loc: PatchLocRelation,
+    pub turtle: Box<ExprKind>,
+    pub distance: Box<ExprKind>,
+}
+
+impl Expr for PatchRelative {
+    fn output_type(&self, _names: NameContext) -> NlAbstractTy {
+        NlAbstractTy::Patch
+    }
+
+    fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
+        match &self.relative_loc {
+            PatchLocRelation::Ahead => {}
+            PatchLocRelation::LeftAhead(heading) | PatchLocRelation::RightAhead(heading) => {
+                visitor(heading)
+            }
+        }
+        visitor(&self.turtle);
+        visitor(&self.distance);
+    }
+
+    fn visit_children_mut(&mut self, mut visitor: impl FnMut(&mut ExprKind)) {
+        match &mut self.relative_loc {
+            PatchLocRelation::Ahead => {}
+            PatchLocRelation::LeftAhead(heading) | PatchLocRelation::RightAhead(heading) => {
+                visitor(heading.as_mut());
+            }
+        }
+        visitor(self.turtle.as_mut());
+        visitor(self.distance.as_mut());
+    }
+
+    fn pretty_print<W: fmt::Write>(
+        &self,
+        p: &mut PrettyPrinter<W>,
+        names: NameContext,
+    ) -> fmt::Result {
+        let PatchRelative { workspace, relative_loc, turtle, distance } = self;
+        p.add_fn_call("patch_relative", |p| {
+            p.add_fn_arg_with(|p| workspace.pretty_print(p, names))?;
+            p.add_fn_arg_with(|p| pretty_print_patch_loc_relation(relative_loc, p, names))?;
+            p.add_fn_arg_with(|p| turtle.pretty_print(p, names))?;
+            p.add_fn_arg_with(|p| distance.pretty_print(p, names))?;
+            Ok(())
+        })
+    }
+}
+
+impl PatchRelative {
+    pub fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
+        let Self { workspace, relative_loc, turtle, distance } = self;
+        let workspace = translate_expr(builder, workspace)?;
+        let turtle = translate_expr(builder, turtle)?;
+        let distance = translate_expr(builder, distance)?;
+
+        let operation = match relative_loc {
+            PatchLocRelation::Ahead => mir::Operation::CallHostFunction {
+                function: &patch_ahead::FN_INFO,
+                args: vec![
+                    mir::PlaceOperand::Copy(workspace.place()),
+                    mir::PlaceOperand::Copy(turtle.place()),
+                    mir::PlaceOperand::Copy(distance.place()),
+                ],
+            },
+            PatchLocRelation::LeftAhead(heading) => {
+                let distance_negated = builder.mir.add_operation(
+                    None,
+                    mir::Operation::UnaryOp {
+                        opcode: lir::UnaryOpcode::FNeg,
+                        operand: mir::PlaceOperand::Copy(distance.place()),
+                    },
+                );
+                let heading = translate_expr(builder, heading)?;
+                mir::Operation::CallHostFunction {
+                    function: &patch_right_and_ahead::FN_INFO,
+                    args: vec![
+                        mir::PlaceOperand::Copy(workspace.place()),
+                        mir::PlaceOperand::Copy(turtle.place()),
+                        mir::PlaceOperand::Copy(heading.place()),
+                        mir::PlaceOperand::Copy(distance_negated.place()),
+                    ],
+                }
+            }
+            PatchLocRelation::RightAhead(heading) => {
+                let heading = translate_expr(builder, heading)?;
+                mir::Operation::CallHostFunction {
+                    function: &patch_right_and_ahead::FN_INFO,
+                    args: vec![
+                        mir::PlaceOperand::Copy(workspace.place()),
+                        mir::PlaceOperand::Copy(turtle.place()),
+                        mir::PlaceOperand::Copy(heading.place()),
+                        mir::PlaceOperand::Copy(distance.place()),
+                    ],
+                }
+            }
+        };
+
+        Some(builder.mir.add_operation(None, operation))
+    }
+}
+
+mod patch_right_and_ahead {
+    use crate::mir::HostFunctionInfo;
+
+    use super::*;
+
+    pub static FN_INFO: HostFunctionInfo = HostFunctionInfo {
+        debug_name: "patch_right_and_ahead",
+        parameter_types: &[<&mut Workspace>::TYPE, TurtleId::TYPE, NlFloat::TYPE, NlFloat::TYPE],
+        return_type: <OptionPatchId>::TYPE,
+        link_name: "patch_right_and_ahead",
+        link_addr: call as *const u8,
+    };
+
+    pub fn call(
+        workspace: &mut Workspace,
+        turtle_id: TurtleId,
+        angle: NlFloat,
+        distance: NlFloat,
+    ) -> OptionPatchId {
+        let world = &mut workspace.world;
+        let heading = world.turtles.get_turtle_heading(turtle_id).unwrap();
+        let heading_right = *heading + angle;
+        let position = world.turtles.get_turtle_position(turtle_id).unwrap();
+        let pos_ahead =
+            world.topology.offset_distance_by_heading(*position, heading_right, distance);
+        if let Some(pos_ahead) = pos_ahead {
+            world.topology.patch_at(pos_ahead.round_to_int()).into()
+        } else {
+            OptionPatchId::NOBODY
+        }
+    }
+}
+
 mod patch_ahead {
     use crate::{mir::HostFunctionInfo, sim::patch::OptionPatchId};
 
@@ -292,56 +429,5 @@ mod turtle_forward {
         if let Some(new_pos) = new_pos {
             *world.turtles.get_turtle_position_mut(turtle_id).unwrap() = new_pos;
         }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct PatchRelative {
-    pub workspace: Box<ExprKind>,
-    pub relative_loc: PatchLocRelation,
-    pub turtle: Box<ExprKind>,
-    pub distance: Box<ExprKind>,
-}
-
-impl Expr for PatchRelative {
-    fn output_type(&self, _names: NameContext) -> NlAbstractTy {
-        NlAbstractTy::Patch
-    }
-
-    fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
-        match &self.relative_loc {
-            PatchLocRelation::Ahead => {}
-            PatchLocRelation::LeftAhead(heading) | PatchLocRelation::RightAhead(heading) => {
-                visitor(heading)
-            }
-        }
-        visitor(&self.turtle);
-        visitor(&self.distance);
-    }
-
-    fn visit_children_mut(&mut self, mut visitor: impl FnMut(&mut ExprKind)) {
-        match &mut self.relative_loc {
-            PatchLocRelation::Ahead => {}
-            PatchLocRelation::LeftAhead(heading) | PatchLocRelation::RightAhead(heading) => {
-                visitor(heading.as_mut());
-            }
-        }
-        visitor(self.turtle.as_mut());
-        visitor(self.distance.as_mut());
-    }
-
-    fn pretty_print<W: fmt::Write>(
-        &self,
-        p: &mut PrettyPrinter<W>,
-        names: NameContext,
-    ) -> fmt::Result {
-        let PatchRelative { workspace, relative_loc, turtle, distance } = self;
-        p.add_fn_call("patch_relative", |p| {
-            p.add_fn_arg_with(|p| workspace.pretty_print(p, names))?;
-            p.add_fn_arg_with(|p| pretty_print_patch_loc_relation(relative_loc, p, names))?;
-            p.add_fn_arg_with(|p| turtle.pretty_print(p, names))?;
-            p.add_fn_arg_with(|p| distance.pretty_print(p, names))?;
-            Ok(())
-        })
     }
 }
