@@ -172,22 +172,19 @@ pub fn make_type_mapping(hir: &hir::Program) -> TypeMapping {
     } else {
         patch_field_groups[0].fields.push(PatchFieldGroupElement::Pcolor);
     }
-    for (var_id, var) in hir.custom_patch_vars.iter().enumerate() {
-        let var_desc = PatchVarDesc::Custom(var_id);
+    for (var_idx, var) in hir.custom_patch_vars.iter().enumerate() {
+        let var_desc = PatchVarDesc::Custom(var_idx);
 
         let ty = mir_repr_simple(&var.ty);
         let ty =
             ty.static_ty().expect("we cannot handled dynamically defined types in globals (yet)");
 
+        let field = PatchFieldGroupElement::Custom { var_idx, name: var.name.clone(), ty };
         if patch_diffused.contains(&var_desc) {
-            patch_field_groups.push(PatchFieldGroup {
-                avoid_occupancy_bitfield: true,
-                fields: vec![PatchFieldGroupElement::Custom { name: var.name.clone(), ty }],
-            });
+            patch_field_groups
+                .push(PatchFieldGroup { avoid_occupancy_bitfield: true, fields: vec![field] });
         } else {
-            patch_field_groups[0]
-                .fields
-                .push(PatchFieldGroupElement::Custom { name: var.name.clone(), ty });
+            patch_field_groups[0].fields.push(field);
         }
     }
     let patch_schema = PatchSchema::new_with_field_groups(patch_field_groups);

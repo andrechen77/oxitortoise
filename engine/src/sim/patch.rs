@@ -1,6 +1,6 @@
 use std::{
     alloc::Layout,
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     fmt::{self, Write},
     mem::offset_of,
     ops::Index,
@@ -468,7 +468,7 @@ pub struct PatchSchema {
 pub enum PatchFieldGroupElement {
     BaseData,
     Pcolor,
-    Custom { name: Arc<str>, ty: Type },
+    Custom { var_idx: usize, name: Arc<str>, ty: Type },
 }
 
 pub struct PatchFieldGroup {
@@ -481,7 +481,7 @@ impl PatchSchema {
         let mut base_data = None;
         let mut pcolor = None;
         let mut field_groups = Vec::new();
-        let mut custom_fields = Vec::new();
+        let mut custom_fields_by_idx = BTreeMap::new();
 
         for (buffer_idx, PatchFieldGroup { avoid_occupancy_bitfield, fields }) in
             field_groups_spec.into_iter().enumerate()
@@ -510,13 +510,24 @@ impl PatchSchema {
                             .fields
                             .push(AgentSchemaField::Other(NlFloat::TYPE));
                     }
-                    PatchFieldGroupElement::Custom { name, ty } => {
-                        custom_fields.push((name, current_field_desc));
+                    PatchFieldGroupElement::Custom { var_idx, name, ty } => {
+                        custom_fields_by_idx.insert(var_idx, (name, current_field_desc));
                         agent_schema_field_group.fields.push(AgentSchemaField::Other(ty));
                     }
                 };
             }
             field_groups.push(agent_schema_field_group);
+        }
+
+        let mut custom_fields = Vec::new();
+        for (var_idx, (name, field_desc)) in custom_fields_by_idx.into_iter() {
+            assert_eq!(
+                var_idx,
+                custom_fields.len(),
+                "missing custom field at index {:?}",
+                custom_fields.len(),
+            );
+            custom_fields.push((name, field_desc));
         }
 
         Self {
