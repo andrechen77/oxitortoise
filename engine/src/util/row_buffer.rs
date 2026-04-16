@@ -649,7 +649,7 @@ unsafe impl HasDynPtr for RowBuffer {
         let fields = schema
             .fields
             .iter()
-            .map(|field| (field.offset, MirType::from_static_type(field.r#type)))
+            .map(|field| (field.offset, (*field.r#type.mir_type).clone()))
             .collect();
 
         MirType::new_struct(

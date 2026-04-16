@@ -1,6 +1,6 @@
 use std::{fmt, mem::offset_of};
 
-use crate::mir::{self, MirReflect};
+use crate::{mir, util::reflection::Reflect};
 
 use super::{patch::PatchId, value, value::NlFloat};
 

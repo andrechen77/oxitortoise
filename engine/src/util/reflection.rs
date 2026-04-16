@@ -1,4 +1,4 @@
-use std::{alloc::Layout, ptr::NonNull};
+use std::{alloc::Layout, ptr::NonNull, sync::LazyLock};
 
 use macro_reflect::reflect;
 
@@ -15,6 +15,12 @@ use crate::mir::{HostFunctionInfo, MirType};
 /// the information will be used to generate and run unsafe code.
 pub unsafe trait Reflect {
     const TYPE: Type;
+
+    const MIR_TYPE: &LazyLock<MirType>;
+
+    fn mir_type() -> MirType {
+        (*Self::MIR_TYPE).clone()
+    }
 }
 
 /// Information about a type that is used by the engine to generate code that
@@ -38,9 +44,7 @@ pub struct TypeInfo {
     /// The caller must guarantee that the passed pointer is a valid pointer to
     /// T that can be dropped, and that that value will never be used again.
     pub drop_fn: Option<unsafe fn(*mut u8)>,
-    /// If this type has a special MIR type, with additional information such as
-    /// subfields, this function will construct it.
-    pub mir_type: Option<fn() -> MirType>,
+    pub mir_type: &'static LazyLock<MirType>,
 }
 
 impl PartialEq for TypeInfo {

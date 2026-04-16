@@ -4,7 +4,7 @@ use std::{alloc::Layout, fmt::Write, mem::offset_of};
 
 use super::shapes::Shapes;
 use crate::{
-    mir::{self, MirReflect as _},
+    mir,
     sim::{
         observer::{Globals, GlobalsSchema},
         patch::{PatchSchema, Patches},
@@ -13,6 +13,7 @@ use crate::{
         turtle::{TurtleSchema, Turtles},
         value::NlFloat,
     },
+    util::reflection::Reflect,
 };
 
 #[derive(Debug)]

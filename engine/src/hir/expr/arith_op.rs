@@ -1,7 +1,7 @@
 //! Nodes to represent basic arithmetic operations that should not be host
 //! function calls.
 
-use std::{alloc::Layout, fmt};
+use std::{alloc::Layout, fmt, sync::LazyLock};
 
 use derive_more::derive::TryFrom;
 use pretty_print::PrettyPrinter;
@@ -11,7 +11,7 @@ use crate::{
         Expr, ExprKind, NameContext, NlAbstractTy,
         build_mir::{HirToMirFnBuilder, translate_expr},
     },
-    mir,
+    mir::{self, MirType},
     sim::{
         patch::OptionPatchId,
         value::{BoxedAny, NlFloat, PackedAny},
@@ -55,11 +55,16 @@ static BINARY_ARITH_OPCODE_TYPE_INFO: TypeInfo = TypeInfo {
     is_zeroable: false,
     clone: CloneKind::Copy,
     drop_fn: None,
-    mir_type: None,
+    mir_type: &BINARY_ARITH_OPCODE_MIR_TYPE,
 };
+
+static BINARY_ARITH_OPCODE_MIR_TYPE: LazyLock<MirType> =
+    LazyLock::new(|| MirType::new_struct_with_static_type::<BinaryArithOpcode>(vec![]));
 
 unsafe impl Reflect for BinaryArithOpcode {
     const TYPE: Type = &BINARY_ARITH_OPCODE_TYPE_INFO;
+
+    const MIR_TYPE: &LazyLock<MirType> = &BINARY_ARITH_OPCODE_MIR_TYPE;
 }
 
 static BINARY_CMP_OPCODE_TYPE_INFO: TypeInfo = TypeInfo {
@@ -68,11 +73,16 @@ static BINARY_CMP_OPCODE_TYPE_INFO: TypeInfo = TypeInfo {
     is_zeroable: false,
     clone: CloneKind::Copy,
     drop_fn: None,
-    mir_type: None,
+    mir_type: &BINARY_CMP_OPCODE_MIR_TYPE,
 };
+
+static BINARY_CMP_OPCODE_MIR_TYPE: LazyLock<MirType> =
+    LazyLock::new(|| MirType::new_struct_with_static_type::<BinaryCmpOpcode>(vec![]));
 
 unsafe impl Reflect for BinaryCmpOpcode {
     const TYPE: Type = &BINARY_CMP_OPCODE_TYPE_INFO;
+
+    const MIR_TYPE: &LazyLock<MirType> = &BINARY_CMP_OPCODE_MIR_TYPE;
 }
 
 static BINARY_BOOL_OPCODE_TYPE_INFO: TypeInfo = TypeInfo {
@@ -81,11 +91,16 @@ static BINARY_BOOL_OPCODE_TYPE_INFO: TypeInfo = TypeInfo {
     is_zeroable: false,
     clone: CloneKind::Copy,
     drop_fn: None,
-    mir_type: None,
+    mir_type: &BINARY_BOOL_OPCODE_MIR_TYPE,
 };
+
+static BINARY_BOOL_OPCODE_MIR_TYPE: LazyLock<MirType> =
+    LazyLock::new(|| MirType::new_struct_with_static_type::<BinaryBoolOpcode>(vec![]));
 
 unsafe impl Reflect for BinaryBoolOpcode {
     const TYPE: Type = &BINARY_BOOL_OPCODE_TYPE_INFO;
+
+    const MIR_TYPE: &LazyLock<MirType> = &BINARY_BOOL_OPCODE_MIR_TYPE;
 }
 
 #[derive(Debug, Clone)]
@@ -147,7 +162,10 @@ impl BinaryArith {
                 rhs: mir::PlaceOperand::Copy(rhs_local.place()),
             }
         } else {
-            panic!("unsupported operand types: {:?} and {:?}", lhs_ty, rhs_ty);
+            panic!(
+                "unsupported operand types for operation {:?}: {:?} and {:?}",
+                self.op, lhs_ty, rhs_ty
+            );
         };
         Some(builder.mir.add_operation(None, operation))
     }

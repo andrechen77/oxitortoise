@@ -15,7 +15,7 @@ use crate::{
         NlAbstractTy,
         build_mir::{self, HirToMirFnTranslator},
     },
-    mir::{self, MirReflect},
+    mir,
     sim::value::BoxedAny,
     util::{rc::create_erased_rc, reflection::Reflect},
 };

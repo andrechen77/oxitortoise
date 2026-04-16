@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
     hir::{self, Expr, ExprKind, NlAbstractTy, expr},
-    mir::{MirReflect, MirType},
+    mir::MirType,
     sim::{
         observer::GlobalsSchema,
         patch::{PatchFieldGroup, PatchFieldGroupElement, PatchId, PatchSchema, PatchVarDesc},
@@ -10,7 +10,7 @@ use crate::{
         turtle::{TurtleId, TurtleSchema},
         value::{NlBox, NlFloat, NlList, PackedAny},
     },
-    util::rng::CanonRng,
+    util::{reflection::Reflect, rng::CanonRng},
     workspace::Workspace,
 };
 

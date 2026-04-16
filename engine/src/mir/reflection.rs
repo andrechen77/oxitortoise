@@ -17,7 +17,9 @@ use crate::{
 /// Implementors must guarantee that the associated `mir_type` is correct, as
 /// the information will be used to generate and run unsafe code.
 pub unsafe trait MirReflect {
-    fn mir_type() -> MirType;
+    /// This should only be called once, and stored for future queries about the
+    /// same type.
+    fn create_mir_type() -> MirType;
 }
 
 #[derive(Clone, Default, PartialEq, Eq)]
@@ -134,18 +136,6 @@ impl MirType {
 
     pub fn new_struct_with_static_type<T: Reflect>(fields: Vec<(usize, MirType)>) -> Self {
         Self::StaticStruct(Arc::new(MirTypeStaticStruct { static_ty: T::TYPE, fields }))
-    }
-
-    pub fn from_static_type(ty: Type) -> Self {
-        if let Some(mir_type_fn) = ty.mir_type {
-            let mir_type = mir_type_fn();
-            debug_assert_eq!(mir_type.static_ty(), Some(ty), "static_ty mismatch");
-            mir_type
-        } else {
-            // even if it's not actually a struct, a struct with inaccessible fields
-            // is a good representation of the type
-            Self::StaticStruct(Arc::new(MirTypeStaticStruct { static_ty: ty, fields: Vec::new() }))
-        }
     }
 
     pub fn ref_to(pointee: MirType) -> Self {
@@ -414,8 +404,26 @@ pub unsafe trait HasDynPtr {
 
 pub struct ProjectionError;
 
+unsafe impl<T> MirReflect for &mut T
+where
+    T: Reflect,
+{
+    fn create_mir_type() -> MirType {
+        MirType::ref_to(T::mir_type())
+    }
+}
+
+unsafe impl<T> MirReflect for &T
+where
+    T: Reflect,
+{
+    fn create_mir_type() -> MirType {
+        MirType::ref_to(T::mir_type())
+    }
+}
+
 unsafe impl MirReflect for () {
-    fn mir_type() -> MirType {
+    fn create_mir_type() -> MirType {
         MirType::None
     }
 }
@@ -426,8 +434,10 @@ macro_rules! impl_reflect_for_primitive {
         where
             Self: Copy,
         {
-            fn mir_type() -> MirType {
-                MirType::from_static_type(<$ty>::TYPE)
+            fn create_mir_type() -> MirType {
+                // even if it's not actually a struct, a struct with
+                // inaccessible fields is a good representation of the type
+                MirType::new_struct_with_static_type::<Self>(vec![])
             }
         }
     };

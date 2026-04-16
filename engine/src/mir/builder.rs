@@ -7,11 +7,11 @@ use tracing::{trace, warn};
 
 use crate::{
     mir::{
-        self, ElementaryStatement, Function, FunctionId, Label, LocalId, MirReflect, MirType,
-        Operation, Place, PlaceOperand, Statement, reflection::ProjectionError,
+        self, ElementaryStatement, Function, FunctionId, Label, LocalId, MirType, Operation, Place,
+        PlaceOperand, Statement, reflection::ProjectionError,
     },
     sim::value::NlFloat,
-    util::reflection::CloneKind,
+    util::reflection::{CloneKind, Reflect},
 };
 
 #[derive(Default)]
@@ -175,13 +175,13 @@ impl<'a> FunctionBuilder<'a> {
                 PlaceOperand::Move(local) => self.type_of_place(&local.place()).clone(),
                 PlaceOperand::Borrow(place) => MirType::ref_to(self.type_of_place(place).clone()),
             },
-            Operation::Const { value } => MirType::from_static_type(value.ty()),
+            Operation::Const { value } => (*value.ty().mir_type).clone(),
             Operation::FunctionPtr { function: _ } => {
                 // we can probably get away with making no assertions about the type
                 MirType::default()
             }
             Operation::CallHostFunction { function, .. } => {
-                MirType::from_static_type(function.return_type)
+                (*function.return_type.mir_type).clone()
             }
             Operation::CallUserFunction { function, .. } => self
                 .program_builder

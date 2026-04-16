@@ -125,7 +125,7 @@ pub fn derive_impl_mir_reflect(input: proc_macro2::TokenStream) -> proc_macro2::
                         }
                     } else {
                         quote! {
-                            (::std::mem::offset_of!(Self, #ident), <#ty as crate::mir::MirReflect>::mir_type())
+                            (::std::mem::offset_of!(Self, #ident), <#ty as crate::util::reflection::Reflect>::mir_type())
                         }
                     };
                     mir_accessible_field_entries.push(field_entry);
@@ -135,7 +135,7 @@ pub fn derive_impl_mir_reflect(input: proc_macro2::TokenStream) -> proc_macro2::
             }
 
             quote! {
-                fn mir_type() -> crate::mir::MirType {
+                fn create_mir_type() -> crate::mir::MirType {
                     crate::mir::MirType::new_struct_with_static_type::<Self>(
                         vec![#(#mir_accessible_field_entries),*],
                     )
@@ -244,14 +244,10 @@ pub fn attribute_impl_reflect(args: TokenStream, input: TokenStream) -> TokenStr
 
     let is_zeroable = attrs.is_zeroable;
 
-    let mir_type_fn = if attrs.special_mir_type {
-        quote! {
-            Some(<#self_ty as crate::mir::MirReflect>::mir_type)
-        }
-    } else {
-        quote! {
-            None
-        }
+    let mir_type_static = quote! {
+        static MIR_TYPE: ::std::sync::LazyLock<crate::mir::MirType> = ::std::sync::LazyLock::new(|| {
+            <#self_ty as crate::mir::MirReflect>::create_mir_type()
+        });
     };
 
     let type_info_def = quote! {
@@ -261,7 +257,7 @@ pub fn attribute_impl_reflect(args: TokenStream, input: TokenStream) -> TokenStr
             is_zeroable: #is_zeroable,
             clone: #clone_fn,
             drop_fn: #drop_fn,
-            mir_type: #mir_type_fn
+            mir_type: &MIR_TYPE,
         };
     };
 
@@ -270,12 +266,16 @@ pub fn attribute_impl_reflect(args: TokenStream, input: TokenStream) -> TokenStr
         mod #mod_name {
             use super::*;
 
+            #mir_type_static
+
             #type_info_def
 
             #clone_fn_info_def
 
             unsafe impl crate::util::reflection::Reflect for #self_ty {
                 const TYPE: crate::util::reflection::Type = &TYPE_INFO;
+
+                const MIR_TYPE: &'static ::std::sync::LazyLock<crate::mir::MirType> = &MIR_TYPE;
             }
         }
     }
