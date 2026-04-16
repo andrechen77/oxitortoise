@@ -163,7 +163,7 @@ pub fn translate_expr(
         // local variables
         E::Scope(scope) => scope.write_mir_execution(builder),
         E::GetLocalVar(get_local_var) => get_local_var.write_mir_execution(builder),
-        E::SetLocalVar(_set_local_var) => todo!(),
+        E::SetLocalVar(set_local_var) => set_local_var.write_mir_execution(builder),
 
         // agent variables
         E::GetGlobalVar(get_global_var) => get_global_var.write_mir_execution(builder),

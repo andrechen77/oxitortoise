@@ -200,6 +200,7 @@ impl<'a> FunctionBuilder<'a> {
                 | lir::BinaryOpcode::FLte
                 | lir::BinaryOpcode::FGte
                 | lir::BinaryOpcode::FEq => bool::mir_type(),
+                lir::BinaryOpcode::And | lir::BinaryOpcode::Or => bool::mir_type(),
                 _ => panic!("unsupported binary opcode: {:?}", opcode),
             },
             Operation::UnaryOp { opcode, operand: _ } => match opcode {
