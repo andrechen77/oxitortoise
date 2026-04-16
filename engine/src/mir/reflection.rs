@@ -125,7 +125,9 @@ impl MirType {
             (MirType::Array(_), MirType::Array(_)) => {
                 unimplemented!("assigning entire arrays is almost surely a bug")
             }
-            // (MirType::Primitive(my_ty), MirType::Primitive(other_ty)) => my_ty == other_ty,
+            (MirType::StaticStruct(my_struct_def), MirType::StaticStruct(other_struct_def)) => {
+                Arc::ptr_eq(my_struct_def, other_struct_def)
+            }
             _ => false,
         }
     }
