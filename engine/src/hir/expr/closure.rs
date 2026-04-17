@@ -8,13 +8,14 @@ use std::{
 };
 
 use pretty_print::PrettyPrinter;
+use tracing::{trace, warn};
 
 use crate::{
     exec::jit::JitCallback,
     hir::{
         ClosureType, Expr, ExprKind, HirToMirFnBuilder, LocalDecl, LocalId, NameContext,
         NlAbstractTy,
-        build_mir::{self, HirToMirFnTranslator},
+        build_mir::{self, HirToMirFnTranslator, translate_expr},
         ty::NlAbstractTyAtom,
     },
     mir,
@@ -69,7 +70,7 @@ impl Expr for Closure {
             })?;
             p.add_field_with("parameters", |p| {
                 p.add_list(parameters.iter(), |p, (local_id, decl)| {
-                    write!(p, "{}#{}: {}", local_id.0, decl.debug_name, decl.ty)
+                    write!(p, "{}#{}: {:?}", local_id.0, decl.debug_name, decl.ty)
                 })
             })?;
             p.add_field_with("body", |p| body.pretty_print(p, names.with_locals(parameters)))?;
@@ -103,6 +104,7 @@ impl Closure {
                 .map(|cap| builder.local_translator.locals[cap].clone())
                 .collect();
             let (env, env_ty) = mir_create_anon_struct(builder, &captured_places);
+            // TODO update the translator to map the captures to the new place
             (env, env_ty)
         };
 
@@ -139,6 +141,48 @@ impl Closure {
             call_fn,
             drop_fn,
         );
+        result
+    }
+
+    /// Calls the closure in place with the provided arguments.
+    pub fn write_mir_inline_call(
+        &self,
+        builder: &mut HirToMirFnBuilder,
+        args: &[mir::Place],
+    ) -> Option<mir::LocalId> {
+        let Self { captures, parameters, body } = self;
+
+        let mut inner_translator = HirToMirFnTranslator::default();
+        for &captured_local_id in captures {
+            let outer_fn_place = builder.local_translator.locals[&captured_local_id].clone();
+            inner_translator.locals.insert(captured_local_id, outer_fn_place);
+        }
+        assert!(parameters.len() == args.len(), "number of parameters and arguments must match");
+        for ((param_id, param_decl), arg_place) in parameters.iter().zip(args.iter()) {
+            // assert that the parameter type matches
+            let arg_ty = builder.mir.type_of_place(arg_place);
+            let param_ty = builder.type_mapping.local_var_ty(*param_id);
+            if !param_ty.is_supertype_of(arg_ty) {
+                warn!(
+                    "parameter {:?} has type {:?} but argument has type {:?}",
+                    *param_id, param_ty, arg_ty
+                );
+            }
+
+            trace!(
+                "inserting parameter {:?} with type {:?} into inner translator",
+                *param_id, param_decl.ty
+            );
+            inner_translator.locals.insert(*param_id, arg_place.clone());
+        }
+
+        trace!("inner translator: {:?}", inner_translator);
+
+        let result = builder
+            .with_local_translator(&mut inner_translator, |builder| translate_expr(builder, body));
+
+        // TODO how to drop the arguments
+
         result
     }
 }

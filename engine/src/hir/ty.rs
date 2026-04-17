@@ -1,26 +1,27 @@
 use std::{fmt, sync::Arc};
 
-use derive_more::Display;
+use derive_more::Debug;
 use smallvec::{SmallVec, smallvec};
 
 /// A representation of an element of the lattice making up all NetLogo types.
-#[derive(PartialEq, Debug, Clone, Eq, Hash, Display)]
+#[derive(PartialEq, Debug, Clone, Eq, Hash)]
 pub enum NlAbstractTy {
     // An independent type used to model a reference to the workspace itself.
     Workspace,
     // An independent type used to model a reference to the random number
     // generator itself.
     Rng,
+    #[debug("{_0:?}")]
     Union(Union),
 }
 
-#[derive(PartialEq, Debug, Clone, Eq, Hash)]
+#[derive(PartialEq, Clone, Eq, Hash)]
 pub struct Union {
     /// None if literally any type is possible.
     variants: Option<SmallVec<[NlAbstractTyAtom; 1]>>,
 }
 
-#[derive(PartialEq, Debug, Clone, Eq, Hash, Display)]
+#[derive(PartialEq, Debug, Clone, Eq, Hash)]
 pub enum NlAbstractTyAtom {
     Unit,
     Float,
@@ -46,6 +47,12 @@ impl Default for NlAbstractTy {
 impl From<NlAbstractTyAtom> for NlAbstractTy {
     fn from(atom: NlAbstractTyAtom) -> Self {
         Self::Union(Union { variants: Some(smallvec![atom]) })
+    }
+}
+
+impl FromIterator<NlAbstractTyAtom> for NlAbstractTy {
+    fn from_iter<T: IntoIterator<Item = NlAbstractTyAtom>>(iter: T) -> Self {
+        Self::Union(Union { variants: Some(iter.into_iter().collect()) })
     }
 }
 
@@ -198,14 +205,13 @@ impl Union {
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Eq, Hash, Display)]
-#[display("({}) -> {}", arg_tys.iter().map(|ty| ty.to_string()).collect::<Vec<String>>().join(", "), return_ty)]
+#[derive(PartialEq, Clone, Eq, Hash)]
 pub struct ClosureType {
     pub arg_tys: Vec<NlAbstractTy>,
     pub return_ty: Arc<NlAbstractTy>,
 }
 
-impl fmt::Display for Union {
+impl fmt::Debug for Union {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some(variants) = &self.variants {
             if variants.is_empty() {
@@ -215,12 +221,25 @@ impl fmt::Display for Union {
                     if i > 0 {
                         write!(f, " | ")?;
                     }
-                    write!(f, "{}", ty)?;
+                    write!(f, "{:?}", ty)?;
                 }
                 Ok(())
             }
         } else {
             write!(f, "top")
         }
+    }
+}
+
+impl fmt::Debug for ClosureType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "(")?;
+        for (i, ty) in self.arg_tys.iter().enumerate() {
+            if i > 0 {
+                write!(f, ", ")?;
+            }
+            write!(f, "{:?}", ty)?;
+        }
+        write!(f, ") -> {:?}", self.return_ty)
     }
 }

@@ -377,7 +377,7 @@ fn narrow_types_specific<K: Debug + Copy, T>(
 
         if actual_ty.meet(new_ty) {
             changed = true;
-            trace!("type inference: variable {:?} type narrowed to {}", id, actual_ty);
+            trace!("type inference: variable {:?} type narrowed to {:?}", id, actual_ty);
         }
     }
     changed

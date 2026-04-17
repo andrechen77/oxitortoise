@@ -62,6 +62,20 @@ impl<'a, 'b> HirToMirFnBuilder<'a, 'b> {
             user_fn_translator: self.user_fn_translator,
         })
     }
+
+    pub fn with_local_translator<T>(
+        &mut self,
+        local_translator: &mut HirToMirFnTranslator,
+        f: impl FnOnce(&mut HirToMirFnBuilder) -> T,
+    ) -> T {
+        f(&mut HirToMirFnBuilder {
+            hir_names: self.hir_names,
+            type_mapping: self.type_mapping,
+            mir: self.mir,
+            local_translator,
+            user_fn_translator: self.user_fn_translator,
+        })
+    }
 }
 
 pub fn hir_to_mir(hir: &hir::Program) -> mir::Program {
@@ -106,7 +120,7 @@ pub fn hir_to_mir(hir: &hir::Program) -> mir::Program {
         mir_fn_builder.finish();
     }
 
-    todo!()
+    builder.finish()
 }
 
 pub fn translate_function(
@@ -181,6 +195,7 @@ pub fn translate_expr(
 
         // other
         E::Ask(ask) => ask.write_mir_execution(builder),
+        E::Of(of) => of.write_mir_execution(builder),
         E::CreateTurtles(create_turtles) => create_turtles.write_mir_execution(builder),
         E::ClearAll(clear_all) => clear_all.write_mir_execution(builder),
         E::Distancexy(distancexy) => distancexy.write_mir_execution(builder),
@@ -208,8 +223,8 @@ pub fn translate_expr(
         E::Agentset(_agentset) => todo!(),
         E::StringLiteral(_string_literal) => todo!(),
         E::NobodyLiteral(_nobody_literal) => todo!(),
-        E::Of(_of) => todo!(),
         E::OffsetDistanceByHeading(_offset_distance_by_heading) => todo!(),
+        E::Nop(_nop) => None,
 
         E::Closure(_closure) => todo!("TODO implement standalone closure"),
         E::EuclideanDistanceNoWrap(_euclidean_distance_no_wrap) => unimplemented!(),

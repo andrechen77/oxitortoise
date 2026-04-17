@@ -10,7 +10,10 @@ use crate::{
         expr::Agentset, ty::NlAbstractTyAtom,
     },
     mir,
-    sim::{patch::PatchId, turtle::TurtleId},
+    sim::{
+        patch::{OptionPatchId, PatchId},
+        turtle::TurtleId,
+    },
     util::reflection::Reflect,
 };
 
@@ -230,5 +233,36 @@ impl Expr for Of {
             p.add_fn_arg_with(|p| body.pretty_print(p, names))?;
             Ok(())
         })
+    }
+}
+
+impl Of {
+    pub fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
+        let Self { workspace, rng, recipients, body } = self;
+
+        let workspace_local = translate_expr(builder, workspace)?;
+        let rng_local = translate_expr(builder, rng)?;
+
+        match recipients.as_ref() {
+            ExprKind::Agentset(Agentset::AllTurtles) => todo!(),
+            ExprKind::Agentset(Agentset::AllPatches) => todo!(),
+            other => {
+                let recipients_local = translate_expr(builder, recipients)?;
+                let recipients_ty = builder.mir.type_of_place(&recipients_local.place());
+                if recipients_ty.is::<PatchId>() || recipients_ty.is::<OptionPatchId>() {
+                    // FIXME option shouldn't be here, this is just to make it compile for now
+                    let ExprKind::Closure(closure) = body.as_ref() else {
+                        panic!("expected of body to be a closure literal, got: {:?}", body);
+                    };
+
+                    closure.write_mir_inline_call(
+                        builder,
+                        &[workspace_local.place(), rng_local.place(), recipients_local.place()],
+                    )
+                } else {
+                    todo!("TODO(mvp) handle other recipient types, namely {:?}", recipients_ty);
+                }
+            }
+        }
     }
 }

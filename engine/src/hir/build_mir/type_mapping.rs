@@ -242,15 +242,7 @@ pub fn mir_repr_simple(abstract_ty: &NlAbstractTy) -> MirType {
             NlAbstractTyAtom::Turtle => TurtleId::mir_type(),
             NlAbstractTyAtom::Link => todo!(""),
             NlAbstractTyAtom::Agentset { agent_type: _ } => todo!(""),
-            // If a type is just "nobody", then it is inhabited by only one
-            // value and therefore holds no data. Operations that take the
-            // nobody value as an operand typically see it as an inhabitant of
-            // some other type, e.g. nobody as a patch id, or nobody as a turtle
-            // id. This is why "nobody" just by itself has no concrete
-            // representation.
-            NlAbstractTyAtom::Nobody => {
-                unimplemented!("nobody type has no concrete representation")
-            }
+            NlAbstractTyAtom::Nobody => <()>::mir_type(),
             NlAbstractTyAtom::Closure(_) => todo!(),
             // could add other specializations for lists here
             NlAbstractTyAtom::List { .. } => <NlBox<NlList>>::mir_type(),

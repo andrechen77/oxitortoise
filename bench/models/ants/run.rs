@@ -1,7 +1,10 @@
 use std::io;
 
 use ast_to_hir::{HirResult, serde_json};
-use engine::hir::{self, make_type_mapping};
+use engine::{
+    hir::{self, hir_to_mir, make_type_mapping},
+    mir,
+};
 use tracing::{Level, info};
 use tracing_subscriber::{
     Layer as _, filter::Targets, fmt::MakeWriter, layer::SubscriberExt as _,
@@ -128,6 +131,20 @@ fn main() {
     let type_mapping = make_type_mapping(&program);
     let type_mapping_str = format!("{:#?}", type_mapping);
     write_to_file("type_mapping.txt", type_mapping_str.as_bytes());
+
+    let mir_program = hir_to_mir(&program);
+    tracing::trace!("done!");
+    let mir::Program { functions } = mir_program;
+    for (function_id, function) in functions {
+        tracing::trace!("function {:?}", function_id);
+        let mir::Function { parameters, local_decls, return_local, body } = function;
+        tracing::trace!("parameters: {:?}", parameters);
+        tracing::trace!("local_decls: {:?}", local_decls);
+        tracing::trace!("return_local: {:?}", return_local);
+        tracing::trace!("body: {:?}", body);
+    }
+    // write_to_file("before.mir", format!("{:#?}", mir_program));
+    tracing::trace!("done printing!");
 
     // let (lir_program, hir_to_lir_fns) = hir_to_lir::<LirInstaller>(&program);
     // let lir_str = lir_program.pretty_print();

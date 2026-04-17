@@ -39,7 +39,12 @@ impl Expr for GetLocalVar {
 
 impl GetLocalVar {
     pub fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
-        let place = builder.local_translator.locals.get(&self.local_id).unwrap();
+        let Some(place) = builder.local_translator.locals.get(&self.local_id) else {
+            panic!(
+                "local variable {:?} not found in translator: {:?}",
+                self.local_id, builder.local_translator.locals
+            );
+        };
         if place.projections.is_empty() {
             let local = place.unwrap_local();
             if !builder.mir.is_init(local) {

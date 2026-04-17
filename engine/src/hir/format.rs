@@ -20,7 +20,7 @@ impl Program {
         let _ = printer.add_struct("Program", |p| {
             p.add_field_with("global_vars", |p| {
                 p.add_list(global_vars.iter().enumerate(), |p, (index, global)| {
-                    write!(p, "{}#{}: {}", index, global.name, global.ty)
+                    write!(p, "{}#{}: {:?}", index, global.name, global.ty)
                 })
             })?;
             p.add_field_with("turtle_breeds", |p| {
@@ -32,12 +32,12 @@ impl Program {
             })?;
             p.add_field_with("custom_turtle_vars", |p| {
                 p.add_list(custom_turtle_vars.iter().enumerate(), |p, (index, var)| {
-                    write!(p, "{}#{}: {}", index, var.name, var.ty)
+                    write!(p, "{}#{}: {:?}", index, var.name, var.ty)
                 })
             })?;
             p.add_field_with("custom_patch_vars", |p| {
                 p.add_list(custom_patch_vars.iter().enumerate(), |p, (index, var)| {
-                    write!(p, "{}#{}: {}", index, var.name, var.ty)
+                    write!(p, "{}#{}: {:?}", index, var.name, var.ty)
                 })
             })?;
             p.add_field_with("functions", |p| {
@@ -54,10 +54,10 @@ impl Program {
                             p.add_field("is_entrypoint", is_entrypoint)?;
                             p.add_field_with("parameters", |p| {
                                 p.add_list(parameters.iter(), |p, (local_id, decl)| {
-                                    write!(p, "{}#{}: {}", local_id.0, decl.debug_name, decl.ty)
+                                    write!(p, "{}#{}: {:?}", local_id.0, decl.debug_name, decl.ty)
                                 })
                             })?;
-                            p.add_field_with("return_ty", |p| write!(p, "{}", return_ty))?;
+                            p.add_field_with("return_ty", |p| write!(p, "{:?}", return_ty))?;
                             p.add_field_with("body", |p| {
                                 function_bodies[fn_id].pretty_print(
                                     p,

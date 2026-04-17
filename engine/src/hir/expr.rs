@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::hir::{NameContext, NlAbstractTy};
+use crate::hir::{NameContext, NlAbstractTy, NlAbstractTyAtom};
 
 use ambassador::{Delegate, delegatable_trait};
 use derive_more::{From, TryInto};
@@ -89,6 +89,7 @@ pub enum ExprKind {
     MaxPxcor(MaxPxcor),
     MaxPycor(MaxPycor),
     Negate(Negate),
+    Nop(Nop),
     Of(Of),
     OffsetDistanceByHeading(OffsetDistanceByHeading),
     OneOf(OneOf),
@@ -106,4 +107,35 @@ pub enum ExprKind {
     SetTurtleVar(SetTurtleVar),
     TurtleForward(TurtleForward),
     TurtleRotate(TurtleRotate),
+}
+
+impl Default for ExprKind {
+    fn default() -> Self {
+        Self::Nop(Nop)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Nop;
+
+impl Expr for Nop {
+    fn output_type(&self, names: NameContext) -> NlAbstractTy {
+        NlAbstractTyAtom::Unit.into()
+    }
+
+    fn visit_children<'a>(&'a self, _visitor: impl FnMut(&'a ExprKind)) {
+        // no children
+    }
+
+    fn visit_children_mut(&mut self, _visitor: impl FnMut(&mut ExprKind)) {
+        // no children
+    }
+
+    fn pretty_print<W: fmt::Write>(
+        &self,
+        printer: &mut PrettyPrinter<W>,
+        names: NameContext,
+    ) -> fmt::Result {
+        printer.add_fn_call("nop", |_| Ok(()))
+    }
 }

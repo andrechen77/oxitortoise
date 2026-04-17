@@ -41,7 +41,7 @@ impl Expr for Scope {
         let Scope { locals, inner } = self;
         write!(p, "with ")?;
         p.add_list(locals.iter(), |p, (local_id, decl)| {
-            write!(p, "{}#{}: {}", local_id.0, decl.debug_name, decl.ty)
+            write!(p, "{}#{}: {:?}", local_id.0, decl.debug_name, decl.ty)
         })?;
         write!(p, " do ")?;
         inner.pretty_print(p, names.with_locals(&self.locals))?;
@@ -125,7 +125,7 @@ impl Expr for Block {
 
     fn pretty_print<W: Write>(&self, p: &mut PrettyPrinter<W>, names: NameContext) -> fmt::Result {
         let Block { label, statements } = self;
-        write!(p, "{}: {{", label)?;
+        write!(p, "{:?}: {{", label)?;
         p.indented(|p| {
             for statement in statements {
                 p.line()?;
@@ -288,7 +288,7 @@ impl Expr for Break {
         names: NameContext,
     ) -> fmt::Result {
         let Break { target, value } = self;
-        write!(p, "break {} ", target)?;
+        write!(p, "break {:?} ", target)?;
         value.pretty_print(p, names)?;
         Ok(())
     }

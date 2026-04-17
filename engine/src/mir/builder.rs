@@ -32,6 +32,18 @@ impl ProgramBuilder {
         Default::default()
     }
 
+    pub fn finish(self) -> mir::Program {
+        let Self {
+            functions,
+            function_stubs,
+            next_function_id: _,
+            next_local_id: _,
+            next_label: _,
+        } = self;
+        assert!(function_stubs.is_empty(), "function stubs must be finished");
+        mir::Program { functions }
+    }
+
     pub fn completed_function(&self, id: FunctionId) -> Option<&Function> {
         self.functions.get(&id)
     }
@@ -163,7 +175,7 @@ impl<'a> FunctionBuilder<'a> {
         match result {
             Ok(ty) => ty,
             Err(ProjectionError) => {
-                panic!("projection error: place {} does not exist in type {:?}", place, local_ty);
+                panic!("projection error: place {:?} does not exist in type {:?}", place, local_ty);
             }
         }
     }

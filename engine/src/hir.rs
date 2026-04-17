@@ -2,7 +2,7 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
-use derive_more::derive::Display;
+use derive_more::derive::Debug;
 
 use crate::sim::turtle::{TurtleBreed, TurtleBreedId};
 
@@ -18,11 +18,11 @@ pub use ty::{ClosureType, NlAbstractTy, NlAbstractTyAtom};
 pub use build_mir::{HirToMirFnBuilder, TypeMapping, hir_to_mir, make_type_mapping};
 pub use type_inference::narrow_types;
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Display, PartialOrd, Ord)]
-#[display("{_0}")]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, PartialOrd, Ord)]
+#[debug("F{_0}")]
 pub struct FunctionId(pub u32);
 
-#[derive(derive_more::Debug)]
+#[derive(Debug)]
 pub struct Program {
     pub global_vars: Box<[CustomVarDecl]>,
     pub turtle_breeds: BTreeMap<TurtleBreedId, TurtleBreed>,
@@ -61,12 +61,12 @@ pub struct LocalDecl {
     pub ty: NlAbstractTy,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Display)]
-#[display("L{_0}")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[debug("L{_0}")]
 pub struct Label(pub u32);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Display)]
-#[display("V{_0}")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[debug("V{_0}")]
 pub struct LocalId(pub u32);
 
 #[derive(Debug, Clone, Copy)]
