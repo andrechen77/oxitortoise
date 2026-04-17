@@ -3,6 +3,7 @@ use std::{collections::BTreeMap, fmt, sync::Arc};
 use crate::{sim::value::BoxedAny, util::reflection::Type};
 
 mod builder;
+mod format;
 mod reflection;
 
 pub use builder::{FunctionBuilder, FunctionStub, ProgramBuilder};
@@ -172,7 +173,6 @@ pub enum ElementaryStatement {
     Assign { dst: Place, op: Operation },
 }
 
-#[derive(Debug)]
 pub enum Operation {
     /// Directly produces the operand.
     Operand(PlaceOperand),
