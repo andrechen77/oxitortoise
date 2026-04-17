@@ -71,7 +71,7 @@ pub struct PatchAt {
 
 impl Expr for PatchAt {
     fn output_type(&self, _names: NameContext) -> NlAbstractTy {
-        NlAbstractTyAtom::Patch.into()
+        NlAbstractTy::from_iter([NlAbstractTyAtom::Patch, NlAbstractTyAtom::Nobody])
     }
 
     fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
