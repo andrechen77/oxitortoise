@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, sync::Arc};
+use std::{collections::BTreeMap, fmt, sync::Arc};
 
 use crate::{sim::value::BoxedAny, util::reflection::Type};
 
@@ -254,5 +254,16 @@ pub fn consolidate_statements(
     } else {
         let label = generate_label();
         Statement::CtrlFlow(CtrlFlowConstruct::Block(Block { label, statements }))
+    }
+}
+
+impl fmt::Display for Place {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let Place { local, projections } = self;
+        write!(f, "{local}")?;
+        for projection in projections {
+            write!(f, "{projection}")?;
+        }
+        Ok(())
     }
 }
