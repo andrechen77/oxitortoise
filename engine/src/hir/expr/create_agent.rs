@@ -6,8 +6,8 @@ use pretty_print::PrettyPrinter;
 
 use crate::{
     hir::{
-        Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy, TurtleBreedId,
-        build_mir::translate_expr,
+        Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy, NlAbstractTyAtom,
+        TurtleBreedId, build_mir::translate_expr,
     },
     mir,
     sim::turtle::TurtleId,
@@ -27,7 +27,7 @@ pub struct CreateTurtles {
 
 impl Expr for CreateTurtles {
     fn output_type(&self, _names: NameContext) -> NlAbstractTy {
-        NlAbstractTy::Unit
+        NlAbstractTyAtom::Unit.into()
     }
 
     fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {

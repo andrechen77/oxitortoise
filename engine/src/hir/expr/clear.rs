@@ -5,6 +5,7 @@ use std::fmt;
 use pretty_print::PrettyPrinter;
 
 use crate::hir::build_mir::translate_expr;
+use crate::hir::ty::NlAbstractTyAtom;
 use crate::hir::{Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy};
 use crate::mir;
 
@@ -15,7 +16,7 @@ pub struct ClearAll {
 
 impl Expr for ClearAll {
     fn output_type(&self, _names: NameContext) -> NlAbstractTy {
-        NlAbstractTy::Unit
+        NlAbstractTyAtom::Unit.into()
     }
 
     fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {

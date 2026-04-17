@@ -1,12 +1,16 @@
 //! Nodes that represent constant/literal values.
 
-use std::fmt::{self, Write};
+use std::{
+    fmt::{self, Write},
+    sync::Arc,
+};
 
 use pretty_print::PrettyPrinter;
 
 use crate::{
     hir::{
-        Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy, build_mir::translate_expr,
+        Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy, NlAbstractTyAtom,
+        build_mir::translate_expr,
     },
     mir,
     sim::value::{NlBox, NlFloat, NlList, NlString, PackedAny},
@@ -18,7 +22,7 @@ pub struct UnitLiteral;
 
 impl Expr for UnitLiteral {
     fn output_type(&self, _names: NameContext) -> NlAbstractTy {
-        NlAbstractTy::Unit
+        NlAbstractTyAtom::Unit.into()
     }
 
     fn visit_children<'a>(&'a self, _visitor: impl FnMut(&'a ExprKind)) {
@@ -49,7 +53,7 @@ pub struct NumberLiteral {
 
 impl Expr for NumberLiteral {
     fn output_type(&self, _names: NameContext) -> NlAbstractTy {
-        NlAbstractTy::Float
+        NlAbstractTyAtom::Float.into()
     }
 
     fn visit_children<'a>(&'a self, _visitor: impl FnMut(&'a ExprKind)) {}
@@ -86,7 +90,7 @@ pub struct StringLiteral {
 
 impl Expr for StringLiteral {
     fn output_type(&self, _names: NameContext) -> NlAbstractTy {
-        NlAbstractTy::String
+        NlAbstractTyAtom::String.into()
     }
 
     fn visit_children<'a>(&'a self, _visitor: impl FnMut(&'a ExprKind)) {}
@@ -110,7 +114,7 @@ pub struct NobodyLiteral;
 
 impl Expr for NobodyLiteral {
     fn output_type(&self, _names: NameContext) -> NlAbstractTy {
-        NlAbstractTy::Nobody
+        NlAbstractTyAtom::Nobody.into()
     }
 
     fn visit_children<'a>(&'a self, _visitor: impl FnMut(&'a ExprKind)) {}
@@ -133,11 +137,11 @@ pub struct ListLiteral {
 
 impl Expr for ListLiteral {
     fn output_type(&self, names: NameContext) -> NlAbstractTy {
-        let mut ty = NlAbstractTy::Bottom;
+        let mut ty = NlAbstractTy::bottom();
         for item in &self.items {
-            ty = ty.join(item.output_type(names));
+            ty.join(item.output_type(names));
         }
-        NlAbstractTy::List { element_ty: Box::new(ty) }
+        NlAbstractTyAtom::List { element_ty: Arc::new(ty) }.into()
     }
 
     fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {

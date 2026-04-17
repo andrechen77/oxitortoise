@@ -6,7 +6,8 @@ use pretty_print::PrettyPrinter;
 
 use crate::{
     hir::{
-        Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy, build_mir::translate_expr,
+        Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy, NlAbstractTyAtom,
+        build_mir::translate_expr,
     },
     mir,
     sim::{patch::OptionPatchId, turtle::TurtleId, value::NlFloat},
@@ -50,7 +51,7 @@ pub struct TurtleRotate {
 
 impl Expr for TurtleRotate {
     fn output_type(&self, _names: NameContext) -> NlAbstractTy {
-        NlAbstractTy::Unit
+        NlAbstractTyAtom::Unit.into()
     }
 
     fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
@@ -108,7 +109,7 @@ pub struct TurtleForward {
 
 impl Expr for TurtleForward {
     fn output_type(&self, _names: NameContext) -> NlAbstractTy {
-        NlAbstractTy::Unit
+        NlAbstractTyAtom::Unit.into()
     }
 
     fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
@@ -166,7 +167,7 @@ pub struct CanMove {
 
 impl Expr for CanMove {
     fn output_type(&self, _names: NameContext) -> NlAbstractTy {
-        NlAbstractTy::Boolean
+        NlAbstractTyAtom::Boolean.into()
     }
 
     fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
@@ -231,7 +232,7 @@ pub struct PatchRelative {
 
 impl Expr for PatchRelative {
     fn output_type(&self, _names: NameContext) -> NlAbstractTy {
-        NlAbstractTy::Patch
+        NlAbstractTyAtom::Patch.into()
     }
 
     fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {

@@ -4,6 +4,7 @@ use std::{
     alloc::Layout,
     collections::BTreeMap,
     fmt::{self, Write},
+    sync::Arc,
 };
 
 use pretty_print::PrettyPrinter;
@@ -14,6 +15,7 @@ use crate::{
         ClosureType, Expr, ExprKind, HirToMirFnBuilder, LocalDecl, LocalId, NameContext,
         NlAbstractTy,
         build_mir::{self, HirToMirFnTranslator},
+        ty::NlAbstractTyAtom,
     },
     mir,
     sim::value::BoxedAny,
@@ -34,10 +36,11 @@ impl Expr for Closure {
     fn output_type(&self, names: NameContext) -> NlAbstractTy {
         let return_ty = self.body.output_type(names);
 
-        NlAbstractTy::Closure(ClosureType {
+        NlAbstractTyAtom::Closure(ClosureType {
             arg_tys: self.parameters.values().map(|decl| decl.ty.clone()).collect(),
-            return_ty: Box::new(return_ty),
+            return_ty: Arc::new(return_ty),
         })
+        .into()
     }
 
     fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {

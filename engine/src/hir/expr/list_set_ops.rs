@@ -6,7 +6,8 @@ use pretty_print::PrettyPrinter;
 
 use crate::{
     hir::{
-        Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy, build_mir::translate_expr,
+        Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy, NlAbstractTyAtom,
+        build_mir::translate_expr,
     },
     mir,
     sim::value::{NlBox, NlList, PackedAny},
@@ -25,9 +26,10 @@ pub struct OneOf {
 impl Expr for OneOf {
     fn output_type(&self, names: NameContext) -> NlAbstractTy {
         let operand_ty = self.operand.output_type(names);
-        match operand_ty {
-            NlAbstractTy::Agentset { agent_type } => *agent_type,
-            NlAbstractTy::List { element_ty } => *element_ty,
+        match operand_ty.get_atom() {
+            Some(NlAbstractTyAtom::Agentset { agent_type }) => agent_type.as_ref().clone(),
+            Some(NlAbstractTyAtom::List { element_ty }) => element_ty.as_ref().clone(),
+            None => todo!("TODO(mvp) OneOf unsupported operand type: {:?}", operand_ty),
             x => todo!("TODO(mvp) OneOf unsupported operand type: {:?}", x),
         }
     }
@@ -62,12 +64,13 @@ impl OneOf {
         let rng = translate_expr(builder, rng)?;
         let operand = translate_expr(builder, operand)?;
 
-        let operation = match self.operand.output_type(builder.hir_names) {
-            NlAbstractTy::List { .. } => mir::Operation::CallHostFunction {
+        let output_type = self.operand.output_type(builder.hir_names);
+        let operation = match output_type.get_atom() {
+            Some(NlAbstractTyAtom::List { .. }) => mir::Operation::CallHostFunction {
                 function: &one_of_list::FN_INFO,
                 args: vec![mir::PlaceOperand::Copy(rng.place()), mir::PlaceOperand::Move(operand)],
             },
-            x => todo!("TODO(mvp) OneOf unsupported operand type: {:?}", x),
+            _ => todo!("TODO(mvp) OneOf unsupported operand type: {:?}", output_type),
         };
         Some(builder.mir.add_operation(None, operation))
     }

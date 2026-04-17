@@ -99,16 +99,16 @@ impl Expr for Block {
         // This does not really need to be an option but since we move out of it
         // for a split second to do the join, the compiler requires it.
         // Logically it is never None.
-        let mut output_type = Some(NlAbstractTy::Bottom);
+        let mut output_type = NlAbstractTy::bottom();
         self.visit_children(|expr| {
             if let ExprKind::Break(Break { target, value }) = expr
                 && *target == self.label
             {
                 let break_ty = value.output_type(names);
-                output_type = Some(output_type.take().unwrap().join(break_ty));
+                output_type.join(break_ty);
             }
         });
-        output_type.unwrap()
+        output_type
     }
 
     fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
@@ -184,9 +184,10 @@ pub struct IfElse {
 
 impl Expr for IfElse {
     fn output_type(&self, names: NameContext) -> NlAbstractTy {
-        let then_ty = self.then.output_type(names);
+        let mut then_ty = self.then.output_type(names);
         let else_ty = self.r#else.output_type(names);
-        then_ty.join(else_ty)
+        then_ty.join(else_ty);
+        then_ty
     }
 
     fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
@@ -270,7 +271,7 @@ pub struct Break {
 impl Expr for Break {
     fn output_type(&self, _names: NameContext) -> NlAbstractTy {
         // a break diverges, it never returns
-        NlAbstractTy::Bottom
+        NlAbstractTy::bottom()
     }
 
     fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {

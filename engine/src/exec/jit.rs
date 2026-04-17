@@ -2,7 +2,7 @@ use std::{marker::PhantomData, mem::offset_of};
 
 use crate::{
     hir::HirToMirFnBuilder,
-    mir::{self, MirReflect},
+    mir,
     sim::value::PackedAny,
     util::{reflection::Reflect, rng::CanonRng},
     workspace::Workspace,

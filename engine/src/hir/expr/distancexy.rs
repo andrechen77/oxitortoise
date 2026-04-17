@@ -6,7 +6,7 @@ use pretty_print::PrettyPrinter;
 
 use crate::{
     hir::{
-        Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy,
+        Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy, NlAbstractTyAtom,
         build_mir::translate_expr,
         expr::{
             EuclideanDistanceNoWrap, GetTurtleVar, PointConstructor, patch_var_place,
@@ -33,7 +33,7 @@ pub struct Distancexy {
 
 impl Expr for Distancexy {
     fn output_type(&self, _names: NameContext) -> NlAbstractTy {
-        NlAbstractTy::Float
+        NlAbstractTyAtom::Float.into()
     }
 
     fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
@@ -71,7 +71,7 @@ impl Distancexy {
         let Self { workspace, agent, x, y } = self;
 
         let agent_type = agent.output_type(names);
-        if agent_type == NlAbstractTy::Turtle {
+        if agent_type.is_only(&NlAbstractTyAtom::Turtle) {
             ExprKind::from(EuclideanDistanceNoWrap {
                 a: Box::new(ExprKind::from(GetTurtleVar {
                     workspace,

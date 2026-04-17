@@ -6,7 +6,8 @@ use pretty_print::PrettyPrinter;
 
 use crate::{
     hir::{
-        Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy, build_mir::translate_expr,
+        Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy, NlAbstractTyAtom,
+        build_mir::translate_expr,
     },
     mir,
     sim::value::NlFloat,
@@ -21,7 +22,7 @@ pub struct ResetTicks {
 
 impl Expr for ResetTicks {
     fn output_type(&self, _names: NameContext) -> NlAbstractTy {
-        NlAbstractTy::Unit
+        NlAbstractTyAtom::Unit.into()
     }
 
     fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
@@ -83,7 +84,7 @@ pub struct AdvanceTick {
 
 impl Expr for AdvanceTick {
     fn output_type(&self, _names: NameContext) -> NlAbstractTy {
-        NlAbstractTy::Unit
+        NlAbstractTyAtom::Unit.into()
     }
 
     fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
@@ -146,7 +147,7 @@ pub struct GetTick {
 
 impl Expr for GetTick {
     fn output_type(&self, _names: NameContext) -> NlAbstractTy {
-        NlAbstractTy::Float
+        NlAbstractTyAtom::Float.into()
     }
 
     fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {

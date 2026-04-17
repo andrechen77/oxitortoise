@@ -6,8 +6,8 @@ use pretty_print::PrettyPrinter;
 
 use crate::{
     hir::{
-        ClosureType, Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy,
-        build_mir::translate_expr, expr::Agentset,
+        Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy, build_mir::translate_expr,
+        expr::Agentset, ty::NlAbstractTyAtom,
     },
     mir,
     sim::{patch::PatchId, turtle::TurtleId},
@@ -26,7 +26,7 @@ pub struct Ask {
 
 impl Expr for Ask {
     fn output_type(&self, _names: NameContext) -> NlAbstractTy {
-        NlAbstractTy::Unit
+        NlAbstractTyAtom::Unit.into()
     }
 
     fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
@@ -196,10 +196,11 @@ pub struct Of {
 impl Expr for Of {
     fn output_type(&self, names: NameContext) -> NlAbstractTy {
         let body_ty = self.body.output_type(names);
-        let NlAbstractTy::Closure(ClosureType { return_ty, .. }) = body_ty else {
+        let NlAbstractTy::Union(un) = body_ty else {
             panic!("Of body must have closure type, got: {:?}", body_ty);
         };
-        *return_ty
+        let closure = un.get_closure().unwrap();
+        closure.return_ty.as_ref().clone()
     }
 
     fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {

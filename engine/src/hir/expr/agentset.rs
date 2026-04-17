@@ -1,10 +1,13 @@
 //! Nodes for representing agentsets.
 
-use std::fmt::{self, Write};
+use std::{
+    fmt::{self, Write},
+    sync::Arc,
+};
 
 use pretty_print::PrettyPrinter;
 
-use crate::hir::{Expr, ExprKind, NameContext, NlAbstractTy};
+use crate::hir::{Expr, ExprKind, NameContext, NlAbstractTy, ty::NlAbstractTyAtom};
 
 #[derive(Debug, Clone)]
 pub enum Agentset {
@@ -16,10 +19,10 @@ pub enum Agentset {
 impl Expr for Agentset {
     fn output_type(&self, _names: NameContext) -> NlAbstractTy {
         let typ = match self {
-            Agentset::AllTurtles => NlAbstractTy::Turtle,
-            Agentset::AllPatches => NlAbstractTy::Patch,
+            Agentset::AllTurtles => NlAbstractTyAtom::Turtle.into(),
+            Agentset::AllPatches => NlAbstractTyAtom::Patch.into(),
         };
-        NlAbstractTy::Agentset { agent_type: Box::new(typ) }
+        NlAbstractTyAtom::Agentset { agent_type: Arc::new(typ) }.into()
     }
 
     fn visit_children<'a>(&'a self, _visitor: impl FnMut(&'a crate::hir::ExprKind)) {

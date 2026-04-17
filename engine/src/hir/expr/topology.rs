@@ -6,7 +6,8 @@ use pretty_print::PrettyPrinter;
 
 use crate::{
     hir::{
-        Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy, build_mir::translate_expr,
+        Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy, NlAbstractTyAtom,
+        build_mir::translate_expr,
     },
     mir,
     sim::{
@@ -28,7 +29,7 @@ pub struct OffsetDistanceByHeading {
 
 impl Expr for OffsetDistanceByHeading {
     fn output_type(&self, _names: NameContext) -> NlAbstractTy {
-        NlAbstractTy::Point
+        NlAbstractTyAtom::Point.into()
     }
 
     fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
@@ -70,7 +71,7 @@ pub struct PatchAt {
 
 impl Expr for PatchAt {
     fn output_type(&self, _names: NameContext) -> NlAbstractTy {
-        NlAbstractTy::Patch
+        NlAbstractTyAtom::Patch.into()
     }
 
     fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
@@ -126,7 +127,7 @@ pub struct MaxPxcor {
 
 impl Expr for MaxPxcor {
     fn output_type(&self, _names: NameContext) -> NlAbstractTy {
-        NlAbstractTy::Float
+        NlAbstractTyAtom::Float.into()
     }
 
     fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
@@ -168,7 +169,7 @@ pub struct MaxPycor {
 
 impl Expr for MaxPycor {
     fn output_type(&self, _names: NameContext) -> NlAbstractTy {
-        NlAbstractTy::Float
+        NlAbstractTyAtom::Float.into()
     }
 
     fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
@@ -211,7 +212,7 @@ pub struct EuclideanDistanceNoWrap {
 
 impl Expr for EuclideanDistanceNoWrap {
     fn output_type(&self, _names: NameContext) -> NlAbstractTy {
-        NlAbstractTy::Float
+        NlAbstractTyAtom::Float.into()
     }
 
     fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
@@ -246,7 +247,7 @@ pub struct PointConstructor {
 
 impl Expr for PointConstructor {
     fn output_type(&self, _names: NameContext) -> NlAbstractTy {
-        NlAbstractTy::Point
+        NlAbstractTyAtom::Point.into()
     }
 
     fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {

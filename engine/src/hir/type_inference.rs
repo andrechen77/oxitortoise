@@ -1,11 +1,11 @@
-use std::{collections::BTreeMap, fmt::Debug, iter, mem};
+use std::{collections::BTreeMap, fmt::Debug, iter};
 
 use tracing::{trace, warn};
 
 use crate::{
     hir::{
-        self, Expr, ExprKind, Function, FunctionId, LocalId, NameContext, NlAbstractTy, Program,
-        expr,
+        self, Expr, ExprKind, Function, FunctionId, LocalId, NameContext, NlAbstractTy,
+        NlAbstractTyAtom, Program, expr,
     },
     sim::{patch::PatchVarDesc, turtle::TurtleVarDesc},
 };
@@ -69,7 +69,7 @@ impl ProgramTypes {
             // initialize the local variables to the "bottom" type so that
             // successive joins give the minimal type compatible with all
             // assignments
-            let old_ty = self.locals.insert(local_id, NlAbstractTy::Bottom);
+            let old_ty = self.locals.insert(local_id, NlAbstractTy::bottom());
             old_pairs.push((local_id, old_ty));
         }
 
@@ -128,7 +128,8 @@ fn narrow_types_once(program: &mut Program) -> bool {
             for local_id in fn_params.keys() {
                 // the minimal type covering all assignments to this variable
                 // inside the function body.
-                let local_assigns = types.locals.remove(local_id).unwrap_or(NlAbstractTy::Bottom);
+                let local_assigns =
+                    types.locals.remove(local_id).unwrap_or_else(NlAbstractTy::bottom);
                 join_type(&mut types.fn_params, (*fn_id, *local_id), local_assigns);
             }
         });
@@ -231,8 +232,10 @@ fn narrow_types_expr(types: &mut ProgramTypes, names: NameContext, expr: &mut Ex
             narrow_types_expr(types, names, recipients);
 
             let recipients_ty = recipients.output_type(names);
-            let closure_self_ty = if let NlAbstractTy::Agentset { agent_type } = recipients_ty {
-                *agent_type
+            let closure_self_ty = if let Some(NlAbstractTyAtom::Agentset { agent_type }) =
+                recipients_ty.get_union().unwrap().get_atom()
+            {
+                agent_type.as_ref().clone()
             } else {
                 recipients_ty
             };
@@ -346,10 +349,9 @@ fn narrow_types_in_closure(
         narrow_types_specific(
             parameters,
             |parameters, local_id| &mut parameters.get_mut(&local_id).unwrap().ty,
-            arg_restrictions.map(|(local_id, external_restriction)| {
-                let final_arg_ty =
-                    external_restriction.join(types.locals.remove(&local_id).unwrap());
-                (local_id, final_arg_ty)
+            arg_restrictions.map(|(local_id, mut external_restriction)| {
+                external_restriction.join(types.locals.remove(&local_id).unwrap());
+                (local_id, external_restriction)
             }),
         );
     });
@@ -372,14 +374,10 @@ fn narrow_types_specific<K: Debug + Copy, T>(
     let mut changed = false;
     for (id, new_ty) in new_types {
         let actual_ty = get_actual_ty(actual_types_storage, id);
-        let meet_ty = actual_ty.clone().meet(new_ty);
-        if *actual_ty != meet_ty {
+
+        if actual_ty.meet(new_ty) {
             changed = true;
-            trace!(
-                "type inference: variable {:?} type narrowed from {} to {}",
-                id, actual_ty, meet_ty
-            );
-            *actual_ty = meet_ty;
+            trace!("type inference: variable {:?} type narrowed to {}", id, actual_ty);
         }
     }
     changed
@@ -392,6 +390,6 @@ fn join_type<K: Copy + Ord>(
     var_id: K,
     incoming_ty: NlAbstractTy,
 ) {
-    let existing_ty = ty_map.entry(var_id).or_insert(NlAbstractTy::Bottom);
-    *existing_ty = mem::take(existing_ty).join(incoming_ty);
+    let existing_ty = ty_map.entry(var_id).or_insert_with(NlAbstractTy::bottom);
+    existing_ty.join(incoming_ty);
 }

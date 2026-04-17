@@ -3,7 +3,7 @@ use std::{collections::BTreeMap, iter, sync::Arc};
 use engine::{
     hir::{
         self, CustomVarDecl, ExprKind, Function, FunctionId, Label, LocalDecl, LocalId,
-        NlAbstractTy,
+        NlAbstractTy, NlAbstractTyAtom,
         expr::{self, PatchLocRelation},
     },
     sim::{
@@ -90,7 +90,7 @@ pub fn ast_to_hir(ast: Ast) -> anyhow::Result<HirResult> {
     let mut global_vars = Vec::new();
     for (var_idx, global_var_name) in global_var_names.into_iter().enumerate() {
         let global_var_name: Arc<str> = global_var_name.to_uppercase().into();
-        let decl = CustomVarDecl { name: global_var_name.clone(), ty: NlAbstractTy::NlTop };
+        let decl = CustomVarDecl { name: global_var_name.clone(), ty: NlAbstractTy::top() };
         global_vars.push(decl);
         hir_builder.global_names.global_vars.insert(global_var_name, var_idx);
     }
@@ -99,7 +99,7 @@ pub fn ast_to_hir(ast: Ast) -> anyhow::Result<HirResult> {
     let mut custom_turtle_vars = Vec::new();
     for (var_idx, turtle_var_name) in turtle_var_names.into_iter().enumerate() {
         let turtle_var_name: Arc<str> = turtle_var_name.to_uppercase().into();
-        let decl = CustomVarDecl { name: turtle_var_name.clone(), ty: NlAbstractTy::NlTop };
+        let decl = CustomVarDecl { name: turtle_var_name.clone(), ty: NlAbstractTy::top() };
         custom_turtle_vars.push(decl);
         hir_builder
             .global_names
@@ -126,7 +126,7 @@ pub fn ast_to_hir(ast: Ast) -> anyhow::Result<HirResult> {
     // create custom patch variables
     let mut custom_patch_vars = Vec::new();
     for (var_idx, patch_var_name) in patch_var_names.into_iter().enumerate() {
-        let decl = CustomVarDecl { name: patch_var_name.clone(), ty: NlAbstractTy::NlTop };
+        let decl = CustomVarDecl { name: patch_var_name.clone(), ty: NlAbstractTy::top() };
         custom_patch_vars.push(decl);
         hir_builder.global_names.patch_vars.insert(patch_var_name, PatchVarDesc::Custom(var_idx));
     }
@@ -147,7 +147,7 @@ pub fn ast_to_hir(ast: Ast) -> anyhow::Result<HirResult> {
                 let var_name: &str = var_name.as_ref();
                 let global_var_idx = hir_builder.global_names.global_vars[var_name];
 
-                global_vars[global_var_idx].ty = NlAbstractTy::Float;
+                global_vars[global_var_idx].ty = NlAbstractTyAtom::Float.into();
                 // TODO(mvp) handle the get_min, get_max, and get_step procedures
             }
             ast::Widget::Button { index, on_click } => {
@@ -278,8 +278,8 @@ fn translate_function(hir: &mut HirBuilder, function: FunctionToTranslate) -> (F
     let parameters = ctx.local_scope.unwrap().decls;
 
     let return_ty = match return_type {
-        ast::ReturnType::Unit => NlAbstractTy::Unit,
-        ast::ReturnType::Wildcard => NlAbstractTy::NlTop,
+        ast::ReturnType::Unit => NlAbstractTyAtom::Unit.into(),
+        ast::ReturnType::Wildcard => NlAbstractTy::top(),
     };
 
     // can make additional assertions based on return type and agent class here
@@ -342,7 +342,7 @@ fn translate_node(ctx: &mut FnBodyBuilderCtx, ast_node: ast::Node) -> (ExprKind,
         N::LetBinding { var_name, value } => {
             // create a new local variable
             let local_id = ctx.hir.next_local_id();
-            let local_decl = LocalDecl { debug_name: var_name.clone(), ty: NlAbstractTy::NlTop };
+            let local_decl = LocalDecl { debug_name: var_name.clone(), ty: NlAbstractTy::top() };
             ctx.local_scope.as_mut().unwrap().decls.insert(local_id, local_decl);
             ctx.local_scope.as_mut().unwrap().names.insert(var_name, local_id);
 
@@ -895,25 +895,25 @@ fn make_fn_ctx<'a>(
     let self_param = hir.next_local_id();
     let self_param_ty = match agent_class {
         ast::AgentClass { observer: true, turtle: false, patch: false, link: false } => {
-            NlAbstractTy::Unit
+            NlAbstractTyAtom::Unit.into()
         }
         ast::AgentClass { observer: false, turtle: true, patch: false, link: false } => {
-            NlAbstractTy::Turtle
+            NlAbstractTyAtom::Turtle.into()
         }
         ast::AgentClass { observer: false, turtle: false, patch: true, link: false } => {
-            NlAbstractTy::Patch
+            NlAbstractTyAtom::Patch.into()
         }
         ast::AgentClass { observer: false, turtle: false, patch: false, link: true } => {
-            NlAbstractTy::Link
+            NlAbstractTyAtom::Link.into()
         }
-        _ => NlAbstractTy::NlTop,
+        _ => NlAbstractTy::top(),
     };
     parameters.insert(self_param, LocalDecl { debug_name: "self".into(), ty: self_param_ty });
 
     // add user-defined parameters
     for arg_name in arg_names {
         let local_id = hir.next_local_id();
-        let local_decl = LocalDecl { debug_name: arg_name.clone(), ty: NlAbstractTy::NlTop };
+        let local_decl = LocalDecl { debug_name: arg_name.clone(), ty: NlAbstractTy::top() };
         parameters.insert(local_id, local_decl);
         names.insert(arg_name, local_id);
     }

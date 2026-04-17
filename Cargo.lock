@@ -548,6 +548,7 @@ dependencies = [
  "oxitortoise_lir",
  "pretty_print",
  "slotmap",
+ "smallvec",
  "tracing",
 ]
 

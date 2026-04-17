@@ -10,6 +10,7 @@ use crate::{
     hir::{
         Expr, ExprKind, NameContext, NlAbstractTy,
         build_mir::{HirToMirFnBuilder, translate_expr},
+        ty::NlAbstractTyAtom,
     },
     mir::{self, MirType},
     sim::{
@@ -114,7 +115,7 @@ pub struct BinaryArith {
 
 impl Expr for BinaryArith {
     fn output_type(&self, _names: NameContext) -> NlAbstractTy {
-        NlAbstractTy::Float
+        NlAbstractTyAtom::Float.into()
     }
 
     fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
@@ -182,7 +183,7 @@ pub struct BinaryCmp {
 
 impl Expr for BinaryCmp {
     fn output_type(&self, _names: NameContext) -> NlAbstractTy {
-        NlAbstractTy::Boolean
+        NlAbstractTyAtom::Boolean.into()
     }
 
     fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
@@ -217,7 +218,7 @@ impl BinaryCmp {
 
         // special case comparisons against nobody (both as the sole
         // inhabitant of the nobody type and as the inhabitant of agent id types).
-        if (lhs_ty == NlAbstractTy::Nobody || rhs_ty == NlAbstractTy::Nobody)
+        if (lhs_ty.is_only(&NlAbstractTyAtom::Nobody) || rhs_ty.is_only(&NlAbstractTyAtom::Nobody))
             && (self.op == BinaryCmpOpcode::Eq || self.op == BinaryCmpOpcode::Neq)
         {
             let negate = match self.op {
@@ -227,7 +228,9 @@ impl BinaryCmp {
             };
 
             // short circuit on nobody vs nobody comparison
-            if lhs_ty == NlAbstractTy::Nobody && rhs_ty == NlAbstractTy::Nobody {
+            if lhs_ty.is_only(&NlAbstractTyAtom::Nobody)
+                && rhs_ty.is_only(&NlAbstractTyAtom::Nobody)
+            {
                 let result = !negate;
                 let dst = builder
                     .mir
@@ -236,7 +239,8 @@ impl BinaryCmp {
             }
 
             // find the operand that is not statically known to be nobody
-            let operand = if lhs_ty == NlAbstractTy::Nobody { &self.rhs } else { &self.lhs };
+            let operand =
+                if lhs_ty.is_only(&NlAbstractTyAtom::Nobody) { &self.rhs } else { &self.lhs };
             let operand_pl = translate_expr(builder, operand)?.place();
             let operand_ty = builder.mir.type_of_place(&operand_pl).clone();
             if operand_ty.is::<OptionPatchId>() {
@@ -325,7 +329,7 @@ pub struct BinaryBool {
 
 impl Expr for BinaryBool {
     fn output_type(&self, _names: NameContext) -> NlAbstractTy {
-        NlAbstractTy::Boolean
+        NlAbstractTyAtom::Boolean.into()
     }
 
     fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
@@ -384,7 +388,7 @@ pub struct LogicalNot {
 
 impl Expr for LogicalNot {
     fn output_type(&self, _names: NameContext) -> NlAbstractTy {
-        NlAbstractTy::Boolean
+        NlAbstractTyAtom::Boolean.into()
     }
 
     fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
@@ -426,7 +430,7 @@ pub struct Negate {
 
 impl Expr for Negate {
     fn output_type(&self, _names: NameContext) -> NlAbstractTy {
-        NlAbstractTy::Float
+        NlAbstractTyAtom::Float.into()
     }
 
     fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {

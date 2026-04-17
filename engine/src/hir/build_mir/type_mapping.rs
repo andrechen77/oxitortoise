@@ -1,11 +1,14 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
-    hir::{self, Expr, ExprKind, NlAbstractTy, expr},
+    hir::{self, Expr, ExprKind, NlAbstractTy, NlAbstractTyAtom, expr},
     mir::MirType,
     sim::{
         observer::GlobalsSchema,
-        patch::{PatchFieldGroup, PatchFieldGroupElement, PatchId, PatchSchema, PatchVarDesc},
+        patch::{
+            OptionPatchId, PatchFieldGroup, PatchFieldGroupElement, PatchId, PatchSchema,
+            PatchVarDesc,
+        },
         topology::Point,
         turtle::{TurtleId, TurtleSchema},
         value::{NlBox, NlFloat, NlList, PackedAny},
@@ -220,35 +223,48 @@ fn make_workspace_ptr_type(
 }
 
 pub fn mir_repr_simple(abstract_ty: &NlAbstractTy) -> MirType {
-    match abstract_ty {
+    let un = match abstract_ty {
         NlAbstractTy::Workspace => {
             unimplemented!("workspace type cannot be lowered in a simple manner")
         }
-        NlAbstractTy::Rng => MirType::ref_to(CanonRng::mir_type()),
-        NlAbstractTy::Unit => <()>::mir_type(),
-        NlAbstractTy::NlTop => PackedAny::mir_type(),
-        NlAbstractTy::Bottom => unimplemented!("bottom type has no concrete representation"),
-        NlAbstractTy::Color => NlFloat::mir_type(),
-        NlAbstractTy::Float => NlFloat::mir_type(),
-        NlAbstractTy::Boolean => bool::mir_type(),
-        NlAbstractTy::String => todo!(),
-        NlAbstractTy::Point => Point::mir_type(),
-        NlAbstractTy::Agent => PackedAny::mir_type(),
-        NlAbstractTy::Patch => PatchId::mir_type(),
-        NlAbstractTy::Turtle => TurtleId::mir_type(),
-        NlAbstractTy::Link => todo!(""),
-        NlAbstractTy::Agentset { agent_type: _ } => todo!(""),
-        // If a type is just "nobody", then it is inhabited by only one
-        // value and therefore holds no data. Operations that take the
-        // nobody value as an operand typically see it as an inhabitant of
-        // some other type, e.g. nobody as a patch id, or nobody as a turtle
-        // id. This is why "nobody" just by itself has no concrete
-        // representation.
-        NlAbstractTy::Nobody => unimplemented!("nobody type has no concrete representation"),
-        NlAbstractTy::Closure(_) => todo!(),
-        NlAbstractTy::List { element_ty } if **element_ty == NlAbstractTy::NlTop => {
-            <NlBox<NlList>>::mir_type()
-        }
-        NlAbstractTy::List { element_ty: _ } => todo!(),
+        NlAbstractTy::Rng => return MirType::ref_to(CanonRng::mir_type()),
+        NlAbstractTy::Union(un) => un,
+    };
+
+    if let Some(atom) = un.get_atom() {
+        return match atom {
+            NlAbstractTyAtom::Unit => <()>::mir_type(),
+            NlAbstractTyAtom::Float => NlFloat::mir_type(),
+            NlAbstractTyAtom::Boolean => bool::mir_type(),
+            NlAbstractTyAtom::String => todo!(),
+            NlAbstractTyAtom::Point => Point::mir_type(),
+            NlAbstractTyAtom::Patch => PatchId::mir_type(),
+            NlAbstractTyAtom::Turtle => TurtleId::mir_type(),
+            NlAbstractTyAtom::Link => todo!(""),
+            NlAbstractTyAtom::Agentset { agent_type: _ } => todo!(""),
+            // If a type is just "nobody", then it is inhabited by only one
+            // value and therefore holds no data. Operations that take the
+            // nobody value as an operand typically see it as an inhabitant of
+            // some other type, e.g. nobody as a patch id, or nobody as a turtle
+            // id. This is why "nobody" just by itself has no concrete
+            // representation.
+            NlAbstractTyAtom::Nobody => {
+                unimplemented!("nobody type has no concrete representation")
+            }
+            NlAbstractTyAtom::Closure(_) => todo!(),
+            // could add other specializations for lists here
+            NlAbstractTyAtom::List { .. } => <NlBox<NlList>>::mir_type(),
+        };
     }
+
+    if un.is_empty() {
+        unimplemented!("bottom type has no concrete representation")
+    }
+
+    if un.is_only_2(&NlAbstractTyAtom::Nobody, &NlAbstractTyAtom::Patch) {
+        return OptionPatchId::mir_type();
+    }
+
+    // as a last resort, use an any type
+    PackedAny::mir_type()
 }

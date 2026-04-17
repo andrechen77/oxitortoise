@@ -5,7 +5,10 @@ use std::fmt::{self, Write};
 use pretty_print::PrettyPrinter;
 
 use crate::{
-    hir::{Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy, TurtleBreedId},
+    hir::{
+        Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy, NlAbstractTyAtom,
+        TurtleBreedId,
+    },
     mir,
 };
 
@@ -20,7 +23,7 @@ pub struct SetDefaultShape {
 
 impl Expr for SetDefaultShape {
     fn output_type(&self, _names: NameContext) -> NlAbstractTy {
-        NlAbstractTy::Unit
+        NlAbstractTyAtom::Unit.into()
     }
 
     fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {

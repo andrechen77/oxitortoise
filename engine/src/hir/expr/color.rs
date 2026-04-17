@@ -7,6 +7,7 @@ use pretty_print::PrettyPrinter;
 use crate::{
     hir::{
         Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy, build_mir::translate_expr,
+        ty::NlAbstractTyAtom,
     },
     mir,
     sim::{color, value::NlFloat},
@@ -24,7 +25,7 @@ pub struct ScaleColor {
 
 impl Expr for ScaleColor {
     fn output_type(&self, _names: NameContext) -> NlAbstractTy {
-        NlAbstractTy::Color
+        NlAbstractTyAtom::Float.into()
     }
 
     fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {

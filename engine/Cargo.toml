@@ -8,6 +8,7 @@ derive_more = { workspace = true }
 either = "1.15.0"
 flagset = "0.4.6"
 slotmap = { workspace = true }
+smallvec = { workspace = true }
 lir = { path = "../lir", package = "oxitortoise_lir" }
 tracing = { workspace = true }
 ambassador = "0.4.2"

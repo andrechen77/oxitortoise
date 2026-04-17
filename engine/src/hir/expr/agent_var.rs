@@ -7,6 +7,7 @@ use pretty_print::PrettyPrinter;
 use crate::{
     hir::{
         Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy, build_mir::translate_expr,
+        ty::NlAbstractTyAtom,
     },
     mir,
     sim::{
@@ -78,12 +79,12 @@ pub struct GetTurtleVar {
 impl Expr for GetTurtleVar {
     fn output_type(&self, names: NameContext) -> NlAbstractTy {
         match self.var {
-            TurtleVarDesc::Who => NlAbstractTy::Float,
-            TurtleVarDesc::Color => NlAbstractTy::Color,
-            TurtleVarDesc::Size => NlAbstractTy::Float,
-            TurtleVarDesc::Pos => NlAbstractTy::Point,
-            TurtleVarDesc::Xcor => NlAbstractTy::Float,
-            TurtleVarDesc::Ycor => NlAbstractTy::Float,
+            TurtleVarDesc::Who => NlAbstractTyAtom::Float.into(),
+            TurtleVarDesc::Color => NlAbstractTyAtom::Float.into(),
+            TurtleVarDesc::Size => NlAbstractTyAtom::Float.into(),
+            TurtleVarDesc::Pos => NlAbstractTyAtom::Point.into(),
+            TurtleVarDesc::Xcor => NlAbstractTyAtom::Float.into(),
+            TurtleVarDesc::Ycor => NlAbstractTyAtom::Float.into(),
             TurtleVarDesc::Custom(field) => names.custom_turtle_vars()[field].ty.clone(),
         }
     }
@@ -141,7 +142,7 @@ pub struct SetTurtleVar {
 
 impl Expr for SetTurtleVar {
     fn output_type(&self, _names: NameContext) -> NlAbstractTy {
-        NlAbstractTy::Unit
+        NlAbstractTyAtom::Unit.into()
     }
 
     fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {
@@ -223,8 +224,8 @@ pub struct GetPatchVar {
 impl Expr for GetPatchVar {
     fn output_type(&self, names: NameContext) -> NlAbstractTy {
         match self.var {
-            PatchVarDesc::Pcolor => NlAbstractTy::Color,
-            PatchVarDesc::Pos => NlAbstractTy::Point,
+            PatchVarDesc::Pcolor => NlAbstractTyAtom::Float.into(),
+            PatchVarDesc::Pos => NlAbstractTyAtom::Point.into(),
             PatchVarDesc::Custom(field) => names.custom_patch_vars()[field].ty.clone(),
         }
     }
@@ -282,7 +283,7 @@ pub struct SetPatchVar {
 
 impl Expr for SetPatchVar {
     fn output_type(&self, _names: NameContext) -> NlAbstractTy {
-        NlAbstractTy::Unit
+        NlAbstractTyAtom::Unit.into()
     }
 
     fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {

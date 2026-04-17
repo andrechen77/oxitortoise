@@ -7,7 +7,7 @@ use tracing::warn;
 
 use crate::{
     hir::{
-        Expr, ExprKind, HirToMirFnBuilder, LocalId, NameContext, NlAbstractTy,
+        Expr, ExprKind, HirToMirFnBuilder, LocalId, NameContext, NlAbstractTy, NlAbstractTyAtom,
         build_mir::translate_expr,
     },
     mir,
@@ -60,7 +60,7 @@ pub struct SetLocalVar {
 
 impl Expr for SetLocalVar {
     fn output_type(&self, _names: NameContext) -> NlAbstractTy {
-        NlAbstractTy::Unit
+        NlAbstractTyAtom::Unit.into()
     }
 
     fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {

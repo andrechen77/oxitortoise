@@ -6,7 +6,8 @@ use pretty_print::PrettyPrinter;
 
 use crate::{
     hir::{
-        Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy, build_mir::translate_expr,
+        Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy, NlAbstractTyAtom,
+        build_mir::translate_expr,
     },
     mir,
     sim::value::NlFloat,
@@ -22,7 +23,7 @@ pub struct RandomInt {
 impl Expr for RandomInt {
     fn output_type(&self, _names: NameContext) -> NlAbstractTy {
         // Despite the name, the current HIR uses `Float` as the abstract output type.
-        NlAbstractTy::Float
+        NlAbstractTyAtom::Float.into()
     }
 
     fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {

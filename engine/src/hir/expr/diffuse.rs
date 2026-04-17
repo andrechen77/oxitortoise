@@ -5,6 +5,7 @@ use std::fmt;
 use pretty_print::PrettyPrinter;
 
 use crate::{
+    hir::NlAbstractTyAtom,
     sim::{agent_schema::AgentFieldDescriptor, value::NlFloat},
     util::reflection::Reflect,
     workspace::Workspace,
@@ -29,7 +30,7 @@ pub struct Diffuse {
 
 impl Expr for Diffuse {
     fn output_type(&self, _names: NameContext) -> NlAbstractTy {
-        NlAbstractTy::Unit
+        NlAbstractTyAtom::Unit.into()
     }
 
     fn visit_children<'a>(&'a self, mut visitor: impl FnMut(&'a ExprKind)) {

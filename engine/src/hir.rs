@@ -13,7 +13,7 @@ mod ty;
 mod type_inference;
 
 pub use expr::{Expr, ExprKind};
-pub use ty::{ClosureType, NlAbstractTy};
+pub use ty::{ClosureType, NlAbstractTy, NlAbstractTyAtom};
 
 pub use build_mir::{HirToMirFnBuilder, TypeMapping, hir_to_mir, make_type_mapping};
 pub use type_inference::narrow_types;
