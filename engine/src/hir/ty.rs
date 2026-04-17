@@ -79,16 +79,15 @@ impl NlAbstractTy {
     /// Calculates the least upper bound of two types. Returns whether any
     /// modification was made.
     pub fn join(&mut self, other: NlAbstractTy) -> bool {
-        match (self, other) {
+        match (&mut *self, other) {
             (NlAbstractTy::Union(self_un), NlAbstractTy::Union(other_un)) => self_un.join(other_un),
-            (NlAbstractTy::Workspace, NlAbstractTy::Workspace) => {
-                // already is the join
-                false
+            (NlAbstractTy::Union(self_un), other) if self_un.is_empty() => {
+                *self = other;
+                true
             }
-            (NlAbstractTy::Rng, NlAbstractTy::Rng) => {
-                // already is the join
-                false
-            }
+            (_, NlAbstractTy::Union(other_un)) if other_un.is_empty() => false,
+            (NlAbstractTy::Rng, NlAbstractTy::Rng) => false,
+            (NlAbstractTy::Workspace, NlAbstractTy::Workspace) => false,
             (s, o) => panic!("Cannot join {:?} with {:?}", s, o),
         }
     }
