@@ -52,8 +52,12 @@ impl ProgramBuilder {
         self.function_stubs.get(&fn_id)
     }
 
-    pub fn create_function(&mut self, id: FunctionId) -> FunctionBuilder<'_> {
-        FunctionBuilder::new(self, id)
+    pub fn create_function(
+        &mut self,
+        id: FunctionId,
+        debug_name: Option<Arc<str>>,
+    ) -> FunctionBuilder<'_> {
+        FunctionBuilder::new(self, id, debug_name)
     }
 
     pub fn next_function_id(&mut self) -> FunctionId {
@@ -81,6 +85,7 @@ impl ProgramBuilder {
 
 pub struct FunctionBuilder<'a> {
     program_builder: &'a mut ProgramBuilder,
+    debug_name: Option<Arc<str>>,
     fn_id: FunctionId,
     parameters: Vec<LocalId>,
     locals: BTreeMap<LocalId, mir::LocalDecl>,
@@ -94,9 +99,14 @@ pub struct FunctionBuilder<'a> {
 }
 
 impl<'a> FunctionBuilder<'a> {
-    fn new(program_builder: &'a mut ProgramBuilder, fn_id: FunctionId) -> Self {
+    fn new(
+        program_builder: &'a mut ProgramBuilder,
+        fn_id: FunctionId,
+        debug_name: Option<Arc<str>>,
+    ) -> Self {
         trace!("new function builder for function {:?}", fn_id);
         let mut new = Self {
+            debug_name,
             program_builder,
             fn_id,
             locals: BTreeMap::new(),
@@ -113,7 +123,7 @@ impl<'a> FunctionBuilder<'a> {
 
     pub fn create_another_function(&mut self) -> FunctionBuilder<'_> {
         let fn_id = self.program_builder.next_function_id();
-        FunctionBuilder::new(self.program_builder, fn_id)
+        FunctionBuilder::new(self.program_builder, fn_id, None)
     }
 
     /// Finishes the function builder and adds the function to the program builder.
@@ -121,6 +131,7 @@ impl<'a> FunctionBuilder<'a> {
         let body =
             mir::consolidate_statements(self.statements_out, || self.program_builder.next_label());
         let function = mir::Function {
+            debug_name: self.debug_name,
             parameters: self.parameters,
             local_decls: self.locals,
             return_local: self.return_local.expect("return local must be set"),

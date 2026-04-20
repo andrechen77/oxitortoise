@@ -6,8 +6,8 @@ use std::{
 use pretty_print::PrettyPrinter;
 
 use crate::mir::{
-    Block, CtrlFlowConstruct, ElementaryStatement, Function, IfElse, LocalDecl, LocalId, Operation,
-    Program, Statement,
+    Block, CtrlFlowConstruct, ElementaryStatement, Function, FunctionId, IfElse, LocalDecl,
+    LocalId, Operation, Place, PlaceOperand, Program, Projection, Statement,
 };
 
 impl Program {
@@ -21,8 +21,14 @@ impl Program {
             p.add_field_with("functions", |p| {
                 p.add_map(
                     functions.iter(),
-                    |p, fn_id| write!(p, "{:?}", fn_id),
-                    |p, (_, function)| function.pretty_print(p),
+                    |p, fn_id| {
+                        if let Some(debug_name) = &functions[fn_id].debug_name {
+                            write!(p, "{:?}#{}", fn_id, debug_name)
+                        } else {
+                            write!(p, "{:?}", fn_id)
+                        }
+                    },
+                    |p, (_, function)| function.pretty_print(p, functions),
                 )
             })
         });
@@ -32,8 +38,12 @@ impl Program {
 }
 
 impl Function {
-    pub fn pretty_print(&self, p: &mut PrettyPrinter<impl Write>) -> fmt::Result {
-        let Function { parameters, local_decls, return_local, body } = self;
+    pub fn pretty_print(
+        &self,
+        p: &mut PrettyPrinter<impl Write>,
+        functions: &BTreeMap<FunctionId, Function>,
+    ) -> fmt::Result {
+        let Function { debug_name: _, parameters, local_decls, return_local, body } = self;
 
         p.add_struct("Function", |p| {
             let mut declared_locals = BTreeSet::new();
@@ -51,7 +61,7 @@ impl Function {
             }
 
             // body
-            body.pretty_print(p, &local_decls, &mut declared_locals)
+            body.pretty_print(p, &local_decls, &mut declared_locals, functions)
         })
     }
 }
@@ -60,8 +70,9 @@ impl Statement {
     pub fn pretty_print(
         &self,
         p: &mut PrettyPrinter<impl Write>,
-        locals_decls: &BTreeMap<LocalId, LocalDecl>,
+        local_decls: &BTreeMap<LocalId, LocalDecl>,
         declared_locals: &mut BTreeSet<LocalId>,
+        functions: &BTreeMap<FunctionId, Function>,
     ) -> fmt::Result {
         p.line()?;
         match self {
@@ -69,42 +80,58 @@ impl Statement {
                 write!(p, "{:?}: ", label)?;
                 p.add_struct("", |p| {
                     for statement in statements {
-                        statement.pretty_print(p, locals_decls, declared_locals)?;
+                        statement.pretty_print(p, local_decls, declared_locals, functions)?;
                     }
                     Ok(())
                 })
             }
             Statement::CtrlFlow(CtrlFlowConstruct::IfElse(IfElse { condition, then, r#else })) => {
-                write!(p, "if {:?} ", condition)?;
+                write!(p, "if ")?;
+                condition.pretty_print(p, local_decls)?;
+                write!(p, " ")?;
                 p.add_struct("", |p| {
-                    then.pretty_print(p, locals_decls, declared_locals)?;
+                    then.pretty_print(p, local_decls, declared_locals, functions)?;
                     Ok(())
                 })?;
                 write!(p, " else ")?;
                 p.add_struct("", |p| {
-                    r#else.pretty_print(p, locals_decls, declared_locals)?;
+                    r#else.pretty_print(p, local_decls, declared_locals, functions)?;
                     Ok(())
                 })
             }
             Statement::Elementary(ElementaryStatement::Drop { src }) => {
-                write!(p, "drop {:?};", src)
+                write!(p, "drop ")?;
+                src.pretty_print(p, local_decls)?;
+                write!(p, ";")
             }
             Statement::Elementary(ElementaryStatement::Assign { dst, op }) => {
                 let needs_declare = declared_locals.insert(dst.local);
                 if needs_declare {
-                    let local_ty = &locals_decls[&dst.local].ty;
+                    let local_ty = &local_decls[&dst.local].ty;
                     if dst.projections.is_empty() {
                         // use the "let local: ty = initializer;" form.
-                        write!(p, "let {:?}: {:?} = {:?},", dst, local_ty, op)
+                        write!(p, "let ")?;
+                        dst.pretty_print(p, local_decls)?;
+                        write!(p, ": {:?} = ", local_ty)?;
+                        op.pretty_print(p, local_decls, functions)?;
+                        write!(p, ";")
                     } else {
                         // use the "let local: ty; place = initializer" form
-                        write!(p, "let {:?} {:?};", dst.local, local_ty)?;
+                        write!(p, "let ")?;
+                        dst.pretty_print(p, local_decls)?;
+                        write!(p, ": {:?};", local_ty)?;
                         p.line()?;
-                        write!(p, "{:?} = {:?};", dst, op)
+                        dst.pretty_print(p, local_decls)?;
+                        write!(p, " = ")?;
+                        op.pretty_print(p, local_decls, functions)?;
+                        write!(p, ";")
                     }
                 } else {
                     // just do "place = initializer"
-                    write!(p, "{:?} = {:?};", dst, op)
+                    dst.pretty_print(p, local_decls)?;
+                    write!(p, " = ")?;
+                    op.pretty_print(p, local_decls, functions)?;
+                    write!(p, ";")
                 }
             }
             Statement::Elementary(ElementaryStatement::Break { target }) => {
@@ -121,7 +148,121 @@ fn write_local_decl(
     local_id: LocalId,
     decl: &LocalDecl,
 ) -> fmt::Result {
-    write!(p, "{} {:?}#{:?}: {:?};", prefix, local_id, decl.debug_name, decl.ty)
+    if let Some(debug_name) = &decl.debug_name {
+        write!(p, "{} {:?}#{}: {:?};", prefix, local_id, debug_name, decl.ty)
+    } else {
+        write!(p, "{} {:?}: {:?};", prefix, local_id, decl.ty)
+    }
+}
+
+impl LocalId {
+    pub fn pretty_print(
+        &self,
+        p: &mut PrettyPrinter<impl Write>,
+        local_decls: &BTreeMap<LocalId, LocalDecl>,
+    ) -> fmt::Result {
+        if let Some(debug_name) = &local_decls[self].debug_name {
+            write!(p, "{:?}#{}", self, debug_name)
+        } else {
+            write!(p, "{:?}", self)
+        }
+    }
+}
+
+impl Place {
+    pub fn pretty_print(
+        &self,
+        p: &mut PrettyPrinter<impl Write>,
+        local_decls: &BTreeMap<LocalId, LocalDecl>,
+    ) -> fmt::Result {
+        let Place { local, projections } = self;
+        local.pretty_print(p, local_decls)?;
+
+        for projection in projections {
+            match projection {
+                Projection::Deref => write!(p, ".deref")?,
+                Projection::Field { byte_offset } => write!(p, ".({})", byte_offset)?,
+                Projection::DynamicIndex(index) => write!(p, ".[{index:?}]")?,
+                Projection::StaticIndex(index) => write!(p, ".[{index}]")?,
+            }
+        }
+        Ok(())
+    }
+}
+
+impl PlaceOperand {
+    pub fn pretty_print(
+        &self,
+        p: &mut PrettyPrinter<impl Write>,
+        local_decls: &BTreeMap<LocalId, LocalDecl>,
+    ) -> fmt::Result {
+        match self {
+            PlaceOperand::Move(local) => {
+                write!(p, "move ")?;
+                local.pretty_print(p, local_decls)
+            }
+            PlaceOperand::Copy(place) => {
+                write!(p, "copy ")?;
+                place.pretty_print(p, local_decls)
+            }
+            PlaceOperand::Borrow(place) => {
+                write!(p, "borrow ")?;
+                place.pretty_print(p, local_decls)
+            }
+        }
+    }
+}
+
+impl Operation {
+    pub fn pretty_print(
+        &self,
+        p: &mut PrettyPrinter<impl Write>,
+        local_decls: &BTreeMap<LocalId, LocalDecl>,
+        functions: &BTreeMap<FunctionId, Function>,
+    ) -> fmt::Result {
+        match self {
+            Operation::Operand(operand) => operand.pretty_print(p, local_decls),
+            Operation::Const { value } => write!(p, "{:?}", value),
+            Operation::FunctionPtr { function } => {
+                if let Some(debug_name) = &functions[function].debug_name {
+                    write!(p, "{:?}#{}", function, debug_name)
+                } else {
+                    write!(p, "{:?}", function)
+                }
+            }
+            Operation::BinaryOp { opcode, lhs, rhs } => {
+                lhs.pretty_print(p, local_decls)?;
+                write!(p, " {opcode:?} ")?;
+                rhs.pretty_print(p, local_decls)
+            }
+            Operation::UnaryOp { opcode, operand } => {
+                write!(p, "{opcode:?} ")?;
+                operand.pretty_print(p, local_decls)
+            }
+            Operation::CallUserFunction { function, args } => {
+                if let Some(debug_name) = &functions[function].debug_name {
+                    write!(p, "{:?}#{}", function, debug_name)?;
+                } else {
+                    write!(p, "{:?}", function)?;
+                }
+                p.add_fn_call("", |p| {
+                    for arg in args {
+                        p.add_fn_arg_with(|p| arg.pretty_print(p, local_decls))?;
+                    }
+                    Ok(())
+                })
+            }
+            Operation::CallHostFunction { function, args } => {
+                write!(p, "{:?}", function)?;
+                p.add_fn_call("", |p| {
+                    for arg in args {
+                        p.add_fn_arg_with(|p| arg.pretty_print(p, local_decls))?;
+                    }
+                    Ok(())
+                })
+            }
+        }
+    }
 }
 
 impl fmt::Debug for Operation {

@@ -102,10 +102,11 @@ pub fn hir_to_mir(hir: &hir::Program) -> mir::Program {
         let mir_fn_id = user_fn_translator[hir_fn_id];
         let hir_fn_body = &hir.function_bodies[hir_fn_id];
 
-        let name_context = NameContext::from_program(hir);
-        let mut mir_fn_builder = builder.create_function(mir_fn_id);
-        let mut local_translator = HirToMirFnTranslator::default();
         let hir::Function { debug_name, parameters, return_ty, is_entrypoint } = hir_fn;
+
+        let name_context = NameContext::from_program(hir);
+        let mut mir_fn_builder = builder.create_function(mir_fn_id, Some(debug_name.clone()));
+        let mut local_translator = HirToMirFnTranslator::default();
 
         translate_function(
             name_context,

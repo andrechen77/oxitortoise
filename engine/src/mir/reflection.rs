@@ -426,7 +426,7 @@ where
 
 unsafe impl MirReflect for () {
     fn create_mir_type() -> MirType {
-        MirType::None
+        MirType::new_struct_with_static_type::<()>(vec![])
     }
 }
 

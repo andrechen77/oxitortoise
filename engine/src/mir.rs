@@ -47,6 +47,7 @@ pub struct Program {
 
 #[derive(Debug)]
 pub struct Function {
+    pub debug_name: Option<Arc<str>>,
     /// The parameters to the function.
     pub parameters: Vec<LocalId>,
     /// Holds every local variable used in the function body, including
