@@ -70,11 +70,11 @@ impl Point {
             builder.create_local(mir::LocalDecl { debug_name: None, ty: Self::mir_type() });
 
         builder.add_operation_with_dst(
-            result_local.into(),
+            result_local.place().proj_field(offset_of!(Self, x)),
             mir::Operation::Operand(mir::PlaceOperand::Move(x)),
         );
         builder.add_operation_with_dst(
-            result_local.into(),
+            result_local.place().proj_field(offset_of!(Self, y)),
             mir::Operation::Operand(mir::PlaceOperand::Move(y)),
         );
 
