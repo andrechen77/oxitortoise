@@ -118,7 +118,7 @@ impl Statement {
                     } else {
                         // use the "let local: ty; place = initializer" form
                         write!(p, "let ")?;
-                        dst.pretty_print(p, local_decls)?;
+                        dst.local.pretty_print(p, local_decls)?;
                         write!(p, ": {:?};", local_ty)?;
                         p.line()?;
                         dst.pretty_print(p, local_decls)?;
