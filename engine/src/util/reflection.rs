@@ -77,20 +77,20 @@ pub enum CloneKind {
     None,
 }
 
-#[reflect(clone(copy))]
+#[reflect(clone(copy), no_drop)]
 impl Reflect for () {}
 
-#[reflect(clone(copy))]
+#[reflect(clone(copy), no_drop)]
 impl Reflect for bool {}
 
-#[reflect(clone(copy))]
+#[reflect(clone(copy), no_drop)]
 impl Reflect for u32 {}
 
-#[reflect(clone(copy))]
+#[reflect(clone(copy), no_drop)]
 impl Reflect for f64 {}
 
-#[reflect(clone(copy))]
+#[reflect(clone(copy), no_drop)]
 impl Reflect for fn(NonNull<u8>) {}
 
-#[reflect(clone(copy))]
+#[reflect(clone(copy), no_drop)]
 impl Reflect for *mut u8 {}
