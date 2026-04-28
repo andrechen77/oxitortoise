@@ -5,6 +5,7 @@
 output
 
 *.hir
+*.mir
 *.wasm
 *.wat
 *.lir
