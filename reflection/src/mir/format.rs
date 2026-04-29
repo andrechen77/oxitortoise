@@ -7,7 +7,7 @@ use pretty_print::PrettyPrinter;
 
 use crate::mir::{
     Block, CtrlFlowConstruct, ElementaryStatement, Function, FunctionId, IfElse, LocalDecl,
-    LocalId, Operation, Place, PlaceOperand, Program, Projection, Statement,
+    LocalId, Operation, Place, PlaceOperand, PodValue, Program, Projection, Statement,
 };
 
 impl Program {
@@ -222,9 +222,7 @@ impl Operation {
     ) -> fmt::Result {
         match self {
             Operation::Operand(operand) => operand.pretty_print(p, local_decls),
-            Operation::Const(pod_value) => {
-                write!(p, "{:?} {:?}", pod_value.ty(), pod_value.bytes())
-            }
+            Operation::Const(pod_value) => write!(p, "{:?}", pod_value),
             Operation::FunctionPtr { function } => {
                 if let Some(debug_name) = &functions[function].debug_name {
                     write!(p, "{:?}#{}", function, debug_name)
@@ -271,9 +269,7 @@ impl fmt::Debug for Operation {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Operation::Operand(operand) => write!(f, "{:?}", operand),
-            Operation::Const(pod_value) => {
-                write!(f, "{:?} {:?}", pod_value.ty(), pod_value.bytes())
-            }
+            Operation::Const(pod_value) => write!(f, "{:?}", pod_value),
             Operation::FunctionPtr { function } => write!(f, "{:?}", function),
             Operation::BinaryOp { opcode, lhs, rhs } => write!(f, "{lhs:?} {opcode:?} {rhs:?}"),
             Operation::UnaryOp { opcode, operand } => write!(f, "{opcode:?} {operand:?}"),
@@ -292,5 +288,48 @@ impl fmt::Debug for Operation {
                 write!(f, ")")
             }
         }
+    }
+}
+
+impl fmt::Debug for PodValue {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let Self { ty, bytes } = self;
+        let prim = ty.static_ty().and_then(|ty| ty.primitive_type);
+        write!(
+            f,
+            "{:?} [{}]",
+            ty,
+            fmt::from_fn(|f| {
+                for byte in bytes.iter() {
+                    write!(f, "{:02x} ", byte)?;
+                }
+                Ok(())
+            })
+        )?;
+        if let Some(prim) = prim {
+            match prim {
+                lir::ValType::I8 => {
+                    assert_eq!(bytes.len(), 1);
+                    write!(f, " ({}i8)", bytes[0])?;
+                }
+                lir::ValType::I32 => {
+                    assert_eq!(bytes.len(), 4);
+                    write!(f, " ({}i32)", bytemuck::from_bytes::<u32>(&bytes))?;
+                }
+                lir::ValType::I64 => {
+                    assert_eq!(bytes.len(), 8);
+                    write!(f, " ({}i64)", bytemuck::from_bytes::<u64>(&bytes))?;
+                }
+                lir::ValType::F64 => {
+                    assert_eq!(bytes.len(), 8);
+                    write!(f, " ({:.1}f64)", bytemuck::from_bytes::<f64>(&bytes))?;
+                }
+                lir::ValType::FnPtr | lir::ValType::Ptr => {
+                    assert_eq!(bytes.len(), std::mem::size_of::<usize>());
+                    write!(f, " ({:x}ptr)", bytemuck::from_bytes::<usize>(&bytes))?;
+                }
+            }
+        }
+        Ok(())
     }
 }

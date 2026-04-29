@@ -4,6 +4,7 @@ use derive_more::{
     derive::{Add, AddAssign, Display, Div, DivAssign, From, Mul, MulAssign, Neg, Sub, SubAssign},
 };
 use macro_reflect::{MirReflect, reflect};
+use reflection::ValType;
 
 use crate::sim::topology::CoordInt;
 
@@ -21,7 +22,7 @@ use crate::sim::topology::CoordInt;
 #[repr(transparent)]
 pub struct NlFloat(f64);
 
-#[reflect(unsafe(is_zeroable), clone(copy))]
+#[reflect(unsafe(is_zeroable), clone(copy), unsafe(primitive(ValType::F64)))]
 impl Reflect for NlFloat {}
 
 impl NlFloat {
