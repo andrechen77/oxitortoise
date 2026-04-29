@@ -5,11 +5,9 @@ use std::{
     fmt::{self, Write},
 };
 
-use crate::{
-    hir::{
-        Expr, ExprKind, HirToMirFnBuilder, Label, LocalDecl, LocalId, NameContext, NlAbstractTy,
-        build_mir::translate_expr,
-    },
+use crate::hir::{
+    Expr, ExprKind, HirToMirFnBuilder, Label, LocalDecl, LocalId, NameContext, NlAbstractTy,
+    build_mir::translate_expr,
 };
 use reflection::mir;
 
@@ -238,7 +236,7 @@ impl IfElse {
                         // move the else value into the then place
                         builder.mir.add_operation_with_dst(
                             then_out.place(),
-                            mir::Operation::Operand(mir::PlaceOperand::Move(else_out)),
+                            mir::Operation::Operand(mir::PlaceOperand::Direct(else_out.place())),
                         )
                     }
                     Some(then_out)
@@ -308,7 +306,7 @@ impl Break {
         // assign the break's value to the target local instead
         builder.mir.add_operation_with_dst(
             target_local_out.place(),
-            mir::Operation::Operand(mir::PlaceOperand::Move(value)),
+            mir::Operation::Operand(mir::PlaceOperand::Direct(value.place())),
         );
 
         // and add the break statement

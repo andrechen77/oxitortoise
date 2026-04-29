@@ -68,10 +68,10 @@ impl ScaleColor {
         let operation = mir::Operation::CallHostFunction {
             function: &scale_color::FN_INFO,
             args: vec![
-                mir::PlaceOperand::Move(color),
-                mir::PlaceOperand::Move(number),
-                mir::PlaceOperand::Move(range1),
-                mir::PlaceOperand::Move(range2),
+                mir::PlaceOperand::Direct(color.place()),
+                mir::PlaceOperand::Direct(number.place()),
+                mir::PlaceOperand::Direct(range1.place()),
+                mir::PlaceOperand::Direct(range2.place()),
             ],
         };
         Some(builder.mir.add_operation(None, operation))

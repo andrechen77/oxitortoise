@@ -64,7 +64,10 @@ impl Diffuse {
 
         let operation = mir::Operation::CallHostFunction {
             function: &diffuse_8_single_variable_buffer::FN_INFO,
-            args: vec![mir::PlaceOperand::Copy(workspace.place()), mir::PlaceOperand::Move(amt)],
+            args: vec![
+                mir::PlaceOperand::Direct(workspace.place()),
+                mir::PlaceOperand::Direct(amt.place()),
+            ],
         };
         Some(builder.mir.add_operation(None, operation))
     }

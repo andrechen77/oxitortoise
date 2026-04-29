@@ -195,8 +195,7 @@ impl<'a> FunctionBuilder<'a> {
     pub fn type_of_op(&self, op: &Operation) -> DynType {
         match op {
             Operation::Operand(operand) => match operand {
-                PlaceOperand::Copy(place) => self.type_of_place(place).clone(),
-                PlaceOperand::Move(local) => self.type_of_place(&local.place()).clone(),
+                PlaceOperand::Direct(place) => self.type_of_place(place).clone(),
                 PlaceOperand::Borrow(place) => DynType::ref_to(self.type_of_place(place).clone()),
             },
             Operation::Const(pod_value) => pod_value.ty().clone(),
@@ -216,15 +215,13 @@ impl<'a> FunctionBuilder<'a> {
                 }),
             Operation::BinaryOp { opcode, lhs, rhs } => {
                 let lhs = match lhs {
-                    PlaceOperand::Copy(place) => place,
-                    PlaceOperand::Move(local) => &local.place(),
+                    PlaceOperand::Direct(place) => place,
                     PlaceOperand::Borrow(_) => {
                         panic!("borrowed place operand is not supported")
                     }
                 };
                 let rhs = match rhs {
-                    PlaceOperand::Copy(place) => place,
-                    PlaceOperand::Move(local) => &local.place(),
+                    PlaceOperand::Direct(place) => place,
                     PlaceOperand::Borrow(_) => {
                         panic!("borrowed place operand is not supported")
                     }
@@ -255,8 +252,7 @@ impl<'a> FunctionBuilder<'a> {
             }
             Operation::UnaryOp { opcode, operand } => {
                 let operand = match operand {
-                    PlaceOperand::Copy(place) => place,
-                    PlaceOperand::Move(local) => &local.place(),
+                    PlaceOperand::Direct(place) => place,
                     PlaceOperand::Borrow(_) => {
                         panic!("borrowed place operand is not supported")
                     }
@@ -323,11 +319,20 @@ impl<'a> FunctionBuilder<'a> {
                 }
 
                 for operand in op.operands() {
-                    if let PlaceOperand::Move(local) = operand {
-                        // move out of the local
-                        let old_exists = self.currently_init_locals.remove(&local);
-                        if !old_exists && !self.type_of_place(&local.place()).is::<()>() {
-                            warn!("moving out of uninitialized local: {:?}", local);
+                    if let PlaceOperand::Direct(place) = operand {
+                        let ty = self.type_of_place(place);
+
+                        // deinitialize the local if it is not Copy
+                        if ty
+                            .static_ty()
+                            .map(|ty| !matches!(ty.clone, CloneKind::Copy))
+                            .unwrap_or(true)
+                        {
+                            let local = place.unwrap_local();
+                            let old_exists = self.currently_init_locals.remove(&local);
+                            if !old_exists {
+                                warn!("moving out of uninitialized local: {:?}", local);
+                            }
                         }
                     }
                 }
@@ -357,13 +362,16 @@ impl<'a> FunctionBuilder<'a> {
         }));
 
         // move the value into the place
-        self.add_operation_with_dst(dst_init, Operation::Operand(PlaceOperand::Move(src)));
+        self.add_operation_with_dst(
+            dst_init,
+            Operation::Operand(PlaceOperand::Direct(src.place())),
+        );
     }
 
     pub fn clone_to_uninit(&mut self, src: Place, dst: Place) {
         match self.type_of_place(&src).clone_kind() {
             CloneKind::Copy => {
-                self.add_operation_with_dst(dst, Operation::Operand(PlaceOperand::Copy(src)))
+                self.add_operation_with_dst(dst, Operation::Operand(PlaceOperand::Direct(src)))
             }
             CloneKind::Dynamic { clone_fn_info, .. } => self.add_operation_with_dst(
                 dst,

@@ -82,10 +82,10 @@ impl CreateTurtles {
         let operation = mir::Operation::CallHostFunction {
             function: &create_turtles::FN_INFO,
             args: vec![
-                mir::PlaceOperand::Copy(workspace_local.place()),
-                mir::PlaceOperand::Copy(rng_local.place()),
-                mir::PlaceOperand::Copy(num_turtles_local.place()),
-                mir::PlaceOperand::Move(body_local),
+                mir::PlaceOperand::Direct(workspace_local.place()),
+                mir::PlaceOperand::Direct(rng_local.place()),
+                mir::PlaceOperand::Direct(num_turtles_local.place()),
+                mir::PlaceOperand::Direct(body_local.place()),
             ],
         };
         Some(builder.mir.add_operation(None, operation))

@@ -241,9 +241,9 @@ fn mir_create_anon_struct(
         mir::Operation::CallHostFunction {
             function: &create_erased_rc::FN_INFO,
             args: vec![
-                mir::PlaceOperand::Move(size),
-                mir::PlaceOperand::Move(align),
-                mir::PlaceOperand::Move(drop_fn),
+                mir::PlaceOperand::Direct(size.place()),
+                mir::PlaceOperand::Direct(align.place()),
+                mir::PlaceOperand::Direct(drop_fn.place()),
             ],
         },
     );

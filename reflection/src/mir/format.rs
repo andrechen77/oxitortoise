@@ -197,16 +197,9 @@ impl PlaceOperand {
         local_decls: &BTreeMap<LocalId, LocalDecl>,
     ) -> fmt::Result {
         match self {
-            PlaceOperand::Move(local) => {
-                write!(p, "move ")?;
-                local.pretty_print(p, local_decls)
-            }
-            PlaceOperand::Copy(place) => {
-                write!(p, "copy ")?;
-                place.pretty_print(p, local_decls)
-            }
+            PlaceOperand::Direct(place) => place.pretty_print(p, local_decls),
             PlaceOperand::Borrow(place) => {
-                write!(p, "borrow ")?;
+                write!(p, "&")?;
                 place.pretty_print(p, local_decls)
             }
         }

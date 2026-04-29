@@ -38,7 +38,7 @@ pub fn wrap_color(float: NlFloat) -> NlFloat {
 pub fn mir_wrap_color(builder: &mut mir::FunctionBuilder, color: mir::Place) -> mir::LocalId {
     let operation = mir::Operation::CallHostFunction {
         function: &wrap_color::FN_INFO,
-        args: vec![mir::PlaceOperand::Copy(color)],
+        args: vec![mir::PlaceOperand::Direct(color)],
     };
     builder.add_operation(None, operation)
 }

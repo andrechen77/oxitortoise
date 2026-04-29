@@ -4,11 +4,9 @@ use std::fmt::{self, Write};
 
 use pretty_print::PrettyPrinter;
 
-use crate::{
-    hir::{
-        Expr, ExprKind, FunctionId, HirToMirFnBuilder, NameContext, NlAbstractTy,
-        build_mir::translate_expr,
-    },
+use crate::hir::{
+    Expr, ExprKind, FunctionId, HirToMirFnBuilder, NameContext, NlAbstractTy,
+    build_mir::translate_expr,
 };
 use reflection::mir;
 
@@ -61,7 +59,7 @@ impl CallUserFn {
         let mut args = Vec::new();
         for arg in &self.args {
             let local_id = translate_expr(builder, arg)?;
-            args.push(mir::PlaceOperand::Move(local_id));
+            args.push(mir::PlaceOperand::Direct(local_id.place()));
         }
         let target_mir_id = builder.user_fn_translator[&self.target];
 

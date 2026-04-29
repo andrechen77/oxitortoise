@@ -57,7 +57,10 @@ impl RandomInt {
 
         let operation = mir::Operation::CallHostFunction {
             function: &random_int::FN_INFO,
-            args: vec![mir::PlaceOperand::Move(rng), mir::PlaceOperand::Move(bound)],
+            args: vec![
+                mir::PlaceOperand::Direct(rng.place()),
+                mir::PlaceOperand::Direct(bound.place()),
+            ],
         };
         Some(builder.mir.add_operation(None, operation))
     }

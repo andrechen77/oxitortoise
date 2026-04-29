@@ -77,8 +77,8 @@ impl OptionPatchId {
             None,
             mir::Operation::BinaryOp {
                 opcode,
-                lhs: mir::PlaceOperand::Copy(operand),
-                rhs: mir::PlaceOperand::Copy(sentinel_pl.place()),
+                lhs: mir::PlaceOperand::Direct(operand),
+                rhs: mir::PlaceOperand::Direct(sentinel_pl.place()),
             },
         );
         result

@@ -110,9 +110,9 @@ impl PatchAt {
         let operation = mir::Operation::CallHostFunction {
             function: &patch_at::FN_INFO,
             args: vec![
-                mir::PlaceOperand::Copy(workspace.place()),
-                mir::PlaceOperand::Move(x),
-                mir::PlaceOperand::Move(y),
+                mir::PlaceOperand::Direct(workspace.place()),
+                mir::PlaceOperand::Direct(x.place()),
+                mir::PlaceOperand::Direct(y.place()),
             ],
         };
         Some(builder.mir.add_operation(None, operation))

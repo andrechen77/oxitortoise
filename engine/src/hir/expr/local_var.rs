@@ -5,11 +5,9 @@ use std::fmt::{self, Write};
 use pretty_print::PrettyPrinter;
 use tracing::warn;
 
-use crate::{
-    hir::{
-        Expr, ExprKind, HirToMirFnBuilder, LocalId, NameContext, NlAbstractTy, NlAbstractTyAtom,
-        build_mir::translate_expr,
-    },
+use crate::hir::{
+    Expr, ExprKind, HirToMirFnBuilder, LocalId, NameContext, NlAbstractTy, NlAbstractTyAtom,
+    build_mir::translate_expr,
 };
 use reflection::mir;
 
@@ -100,7 +98,7 @@ impl SetLocalVar {
         } else {
             builder.mir.add_operation_with_dst(
                 dst.place(),
-                mir::Operation::Operand(mir::PlaceOperand::Move(value)),
+                mir::Operation::Operand(mir::PlaceOperand::Direct(value.place())),
             );
         }
 

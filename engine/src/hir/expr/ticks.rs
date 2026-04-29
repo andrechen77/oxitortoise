@@ -51,7 +51,7 @@ impl ResetTicks {
 
         let operation = mir::Operation::CallHostFunction {
             function: &reset_ticks::FN_INFO,
-            args: vec![mir::PlaceOperand::Copy(workspace_local.place())],
+            args: vec![mir::PlaceOperand::Direct(workspace_local.place())],
         };
 
         Some(builder.mir.add_operation(None, operation))
@@ -113,7 +113,7 @@ impl AdvanceTick {
 
         let operation = mir::Operation::CallHostFunction {
             function: &advance_tick::FN_INFO,
-            args: vec![mir::PlaceOperand::Copy(workspace_local.place())],
+            args: vec![mir::PlaceOperand::Direct(workspace_local.place())],
         };
 
         Some(builder.mir.add_operation(None, operation))
@@ -176,7 +176,7 @@ impl GetTick {
 
         let operation = mir::Operation::CallHostFunction {
             function: &get_tick::FN_INFO,
-            args: vec![mir::PlaceOperand::Copy(workspace_local.place())],
+            args: vec![mir::PlaceOperand::Direct(workspace_local.place())],
         };
 
         Some(builder.mir.add_operation(None, operation))

@@ -162,8 +162,8 @@ impl BinaryArith {
             };
             mir::Operation::BinaryOp {
                 opcode,
-                lhs: mir::PlaceOperand::Copy(lhs_local.place()),
-                rhs: mir::PlaceOperand::Copy(rhs_local.place()),
+                lhs: mir::PlaceOperand::Direct(lhs_local.place()),
+                rhs: mir::PlaceOperand::Direct(rhs_local.place()),
             }
         } else {
             panic!(
@@ -280,8 +280,8 @@ impl BinaryCmp {
             };
             mir::Operation::BinaryOp {
                 opcode,
-                lhs: mir::PlaceOperand::Copy(lhs_local.place()),
-                rhs: mir::PlaceOperand::Copy(rhs_local.place()),
+                lhs: mir::PlaceOperand::Direct(lhs_local.place()),
+                rhs: mir::PlaceOperand::Direct(rhs_local.place()),
             }
         } else if lhs_ty.is::<PackedAny>() && rhs_ty.is::<PackedAny>() {
             let opcode_pl = builder
@@ -291,9 +291,9 @@ impl BinaryCmp {
             mir::Operation::CallHostFunction {
                 function: &binary_cmp_any_bool::FN_INFO,
                 args: vec![
-                    mir::PlaceOperand::Move(lhs_local),
-                    mir::PlaceOperand::Move(rhs_local),
-                    mir::PlaceOperand::Copy(opcode_pl),
+                    mir::PlaceOperand::Direct(lhs_local.place()),
+                    mir::PlaceOperand::Direct(rhs_local.place()),
+                    mir::PlaceOperand::Direct(opcode_pl),
                 ],
             }
         } else {
@@ -375,8 +375,8 @@ impl BinaryBool {
             };
             mir::Operation::BinaryOp {
                 opcode,
-                lhs: mir::PlaceOperand::Copy(lhs_local.place()),
-                rhs: mir::PlaceOperand::Copy(rhs_local.place()),
+                lhs: mir::PlaceOperand::Direct(lhs_local.place()),
+                rhs: mir::PlaceOperand::Direct(rhs_local.place()),
             }
         } else {
             panic!("unsupported operand types: {:?} and {:?}", lhs_ty, rhs_ty);
@@ -421,7 +421,7 @@ impl LogicalNot {
         let operand_lcl = translate_expr(builder, &self.operand)?;
         let final_operation = mir::Operation::UnaryOp {
             opcode: mir::UnaryOpcode::Not,
-            operand: mir::PlaceOperand::Copy(operand_lcl.place()),
+            operand: mir::PlaceOperand::Direct(operand_lcl.place()),
         };
         Some(builder.mir.add_operation(None, final_operation))
     }
@@ -463,7 +463,7 @@ impl Negate {
         let operand_local = translate_expr(builder, &self.operand)?;
         let final_operation = mir::Operation::UnaryOp {
             opcode: mir::UnaryOpcode::FNeg,
-            operand: mir::PlaceOperand::Copy(operand_local.place()),
+            operand: mir::PlaceOperand::Direct(operand_local.place()),
         };
         Some(builder.mir.add_operation(None, final_operation))
     }

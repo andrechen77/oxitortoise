@@ -65,7 +65,10 @@ impl OneOf {
         let operation = match output_type.get_atom() {
             Some(NlAbstractTyAtom::List { .. }) => mir::Operation::CallHostFunction {
                 function: &one_of_list::FN_INFO,
-                args: vec![mir::PlaceOperand::Copy(rng.place()), mir::PlaceOperand::Move(operand)],
+                args: vec![
+                    mir::PlaceOperand::Direct(rng.place()),
+                    mir::PlaceOperand::Direct(operand.place()),
+                ],
             },
             _ => todo!("TODO(mvp) OneOf unsupported operand type: {:?}", output_type),
         };

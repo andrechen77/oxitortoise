@@ -90,9 +90,9 @@ impl TurtleRotate {
         let operation = mir::Operation::CallHostFunction {
             function: &turtle_rotate::FN_INFO,
             args: vec![
-                mir::PlaceOperand::Copy(workspace.place()),
-                mir::PlaceOperand::Move(turtle),
-                mir::PlaceOperand::Move(angle),
+                mir::PlaceOperand::Direct(workspace.place()),
+                mir::PlaceOperand::Direct(turtle.place()),
+                mir::PlaceOperand::Direct(angle.place()),
             ],
         };
         Some(builder.mir.add_operation(None, operation))
@@ -148,9 +148,9 @@ impl TurtleForward {
         let operation = mir::Operation::CallHostFunction {
             function: &turtle_forward::FN_INFO,
             args: vec![
-                mir::PlaceOperand::Copy(workspace.place()),
-                mir::PlaceOperand::Move(turtle),
-                mir::PlaceOperand::Move(distance),
+                mir::PlaceOperand::Direct(workspace.place()),
+                mir::PlaceOperand::Direct(turtle.place()),
+                mir::PlaceOperand::Direct(distance.place()),
             ],
         };
         Some(builder.mir.add_operation(None, operation))
@@ -209,9 +209,9 @@ impl CanMove {
             mir::Operation::CallHostFunction {
                 function: &patch_ahead::FN_INFO,
                 args: vec![
-                    mir::PlaceOperand::Copy(workspace.place()),
-                    mir::PlaceOperand::Copy(turtle.place()),
-                    mir::PlaceOperand::Copy(distance.place()),
+                    mir::PlaceOperand::Direct(workspace.place()),
+                    mir::PlaceOperand::Direct(turtle.place()),
+                    mir::PlaceOperand::Direct(distance.place()),
                 ],
             },
         );
@@ -283,9 +283,9 @@ impl PatchRelative {
             PatchLocRelation::Ahead => mir::Operation::CallHostFunction {
                 function: &patch_ahead::FN_INFO,
                 args: vec![
-                    mir::PlaceOperand::Copy(workspace.place()),
-                    mir::PlaceOperand::Copy(turtle.place()),
-                    mir::PlaceOperand::Copy(distance.place()),
+                    mir::PlaceOperand::Direct(workspace.place()),
+                    mir::PlaceOperand::Direct(turtle.place()),
+                    mir::PlaceOperand::Direct(distance.place()),
                 ],
             },
             PatchLocRelation::LeftAhead(heading) => {
@@ -293,17 +293,17 @@ impl PatchRelative {
                     None,
                     mir::Operation::UnaryOp {
                         opcode: mir::UnaryOpcode::FNeg,
-                        operand: mir::PlaceOperand::Copy(distance.place()),
+                        operand: mir::PlaceOperand::Direct(distance.place()),
                     },
                 );
                 let heading = translate_expr(builder, heading)?;
                 mir::Operation::CallHostFunction {
                     function: &patch_right_and_ahead::FN_INFO,
                     args: vec![
-                        mir::PlaceOperand::Copy(workspace.place()),
-                        mir::PlaceOperand::Copy(turtle.place()),
-                        mir::PlaceOperand::Copy(heading.place()),
-                        mir::PlaceOperand::Copy(distance_negated.place()),
+                        mir::PlaceOperand::Direct(workspace.place()),
+                        mir::PlaceOperand::Direct(turtle.place()),
+                        mir::PlaceOperand::Direct(heading.place()),
+                        mir::PlaceOperand::Direct(distance_negated.place()),
                     ],
                 }
             }
@@ -312,10 +312,10 @@ impl PatchRelative {
                 mir::Operation::CallHostFunction {
                     function: &patch_right_and_ahead::FN_INFO,
                     args: vec![
-                        mir::PlaceOperand::Copy(workspace.place()),
-                        mir::PlaceOperand::Copy(turtle.place()),
-                        mir::PlaceOperand::Copy(heading.place()),
-                        mir::PlaceOperand::Copy(distance.place()),
+                        mir::PlaceOperand::Direct(workspace.place()),
+                        mir::PlaceOperand::Direct(turtle.place()),
+                        mir::PlaceOperand::Direct(heading.place()),
+                        mir::PlaceOperand::Direct(distance.place()),
                     ],
                 }
             }

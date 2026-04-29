@@ -109,8 +109,8 @@ impl Distancexy {
         let operation = mir::Operation::CallHostFunction {
             function: &euclidean_distance_no_wrap::FN_INFO,
             args: vec![
-                mir::PlaceOperand::Copy(agent_position),
-                mir::PlaceOperand::Copy(reference_position.place()),
+                mir::PlaceOperand::Direct(agent_position),
+                mir::PlaceOperand::Direct(reference_position.place()),
             ],
         };
 

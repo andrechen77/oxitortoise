@@ -296,7 +296,7 @@ impl Turtles {
             Some("turtle_idx".into()),
             mir::Operation::UnaryOp {
                 opcode: mir::UnaryOpcode::I64ToI32,
-                operand: mir::PlaceOperand::Copy(turtle_id),
+                operand: mir::PlaceOperand::Direct(turtle_id),
             },
         );
         let var_pl = RowBuffer::mir_project_field(

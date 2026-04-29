@@ -46,7 +46,7 @@ impl ClearAll {
 
         let operation = mir::Operation::CallHostFunction {
             function: &clear_all::FN_INFO,
-            args: vec![mir::PlaceOperand::Copy(workspace_local.place())],
+            args: vec![mir::PlaceOperand::Direct(workspace_local.place())],
         };
         Some(builder.mir.add_operation(None, operation))
     }

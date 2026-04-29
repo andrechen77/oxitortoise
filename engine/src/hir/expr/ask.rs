@@ -77,9 +77,9 @@ impl Ask {
                 mir::Operation::CallHostFunction {
                     function: &ask_all_turtles::FN_INFO,
                     args: vec![
-                        mir::PlaceOperand::Copy(workspace_local.place()),
-                        mir::PlaceOperand::Copy(rng_local.place()),
-                        mir::PlaceOperand::Move(body_local),
+                        mir::PlaceOperand::Direct(workspace_local.place()),
+                        mir::PlaceOperand::Direct(rng_local.place()),
+                        mir::PlaceOperand::Direct(body_local.place()),
                     ],
                 }
             }
@@ -93,9 +93,9 @@ impl Ask {
                 mir::Operation::CallHostFunction {
                     function: &ask_all_patches::FN_INFO,
                     args: vec![
-                        mir::PlaceOperand::Copy(workspace_local.place()),
-                        mir::PlaceOperand::Copy(rng_local.place()),
-                        mir::PlaceOperand::Move(body_local),
+                        mir::PlaceOperand::Direct(workspace_local.place()),
+                        mir::PlaceOperand::Direct(rng_local.place()),
+                        mir::PlaceOperand::Direct(body_local.place()),
                     ],
                 }
             }

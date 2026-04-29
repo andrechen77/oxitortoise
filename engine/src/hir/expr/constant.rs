@@ -181,7 +181,10 @@ impl ListLiteral {
                 list.place(),
                 mir::Operation::CallHostFunction {
                     function: &list_push::FN_INFO,
-                    args: vec![mir::PlaceOperand::Move(list), mir::PlaceOperand::Move(item)],
+                    args: vec![
+                        mir::PlaceOperand::Direct(list.place()),
+                        mir::PlaceOperand::Direct(item.place()),
+                    ],
                 },
             );
         }

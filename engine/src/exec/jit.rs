@@ -134,15 +134,15 @@ where
 
         builder.mir.add_operation_with_dst(
             result_local.place().proj_field(offset_of!(Self, env)),
-            mir::Operation::Operand(mir::PlaceOperand::Copy(env)),
+            mir::Operation::Operand(mir::PlaceOperand::Direct(env)),
         );
         builder.mir.add_operation_with_dst(
             result_local.place().proj_field(offset_of!(Self, call)),
-            mir::Operation::Operand(mir::PlaceOperand::Move(call_fn)),
+            mir::Operation::Operand(mir::PlaceOperand::Direct(call_fn.place())),
         );
         builder.mir.add_operation_with_dst(
             result_local.place().proj_field(offset_of!(Self, drop)),
-            mir::Operation::Operand(mir::PlaceOperand::Move(drop_fn)),
+            mir::Operation::Operand(mir::PlaceOperand::Direct(drop_fn.place())),
         );
 
         builder.mir.set_as_init(result_local);
