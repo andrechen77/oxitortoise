@@ -28,6 +28,8 @@ pub struct StaticTypeInfo {
     /// T that can be dropped, and that that value will never be used again.
     pub drop_fn: Option<unsafe fn(*mut u8)>,
     pub dyn_type: &'static LazyLock<DynType>,
+    /// Primitive types that can fit in a register have this field set.
+    pub primitive_type: Option<lir::ValType>,
 }
 
 impl PartialEq for StaticTypeInfo {
@@ -63,17 +65,17 @@ pub enum CloneKind {
 #[reflect(clone(copy), no_drop)]
 impl Reflect for () {}
 
-#[reflect(clone(copy), no_drop)]
+#[reflect(clone(copy), no_drop, unsafe(primitive(lir::ValType::I8)))]
 impl Reflect for bool {}
 
-#[reflect(clone(copy), no_drop)]
+#[reflect(clone(copy), no_drop, unsafe(primitive(lir::ValType::I32)))]
 impl Reflect for u32 {}
 
-#[reflect(clone(copy), no_drop)]
+#[reflect(clone(copy), no_drop, unsafe(primitive(lir::ValType::F64)))]
 impl Reflect for f64 {}
 
-#[reflect(clone(copy), no_drop)]
+#[reflect(clone(copy), no_drop, unsafe(primitive(lir::ValType::FnPtr)))]
 impl Reflect for fn(NonNull<u8>) {}
 
-#[reflect(clone(copy), no_drop)]
+#[reflect(clone(copy), no_drop, unsafe(primitive(lir::ValType::Ptr)))]
 impl Reflect for *mut u8 {}

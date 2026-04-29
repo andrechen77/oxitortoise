@@ -43,6 +43,7 @@
 //! with the loop iteration values set to the values that were broken with.
 
 use std::{
+    alloc::Layout,
     collections::{HashMap, HashSet},
     fmt::Debug,
     sync::Arc,
@@ -410,6 +411,19 @@ pub enum ValType {
     F64,
     Ptr,
     FnPtr,
+}
+
+impl ValType {
+    pub fn layout(&self) -> Layout {
+        match self {
+            Self::I8 => Layout::new::<u8>(),
+            Self::I32 => Layout::new::<u32>(),
+            Self::I64 => Layout::new::<u64>(),
+            Self::F64 => Layout::new::<f64>(),
+            Self::Ptr => Layout::new::<*const u8>(),
+            Self::FnPtr => Layout::new::<*const u8>(),
+        }
+    }
 }
 
 pub trait LirVisitor {

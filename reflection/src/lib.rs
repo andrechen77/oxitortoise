@@ -1,5 +1,7 @@
 use std::sync::LazyLock;
 
+pub use lir::ValType;
+
 pub use dyn_ptr::{DynPtr, DynPtrMut, HasDynPtr};
 pub use dyn_type::{CreateDynType, DynType, DynTypeArray, DynTypeStruct};
 pub use lifetime_ptr::{LifetimePtr, LifetimePtrMut};

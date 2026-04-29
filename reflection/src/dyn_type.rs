@@ -38,7 +38,7 @@ pub enum DynType {
 pub struct DynTypeStruct {
     /// The fields of the type. This may not be a complete list.
     pub fields: Vec<(usize, DynType)>,
-    pub overall: Layout,
+    pub layout: Layout,
 }
 
 #[derive(PartialEq, Eq)]
@@ -58,7 +58,7 @@ impl DynType {
     pub fn layout(&self) -> Layout {
         match self {
             DynType::Ref(_) => Layout::new::<*const u8>(),
-            DynType::Struct(struct_def) => struct_def.overall,
+            DynType::Struct(struct_def) => struct_def.layout,
             DynType::Array(_) => {
                 unimplemented!(
                     "would use the Layout::repeat function on the element layout to get the layout of the whole array"
@@ -124,7 +124,7 @@ impl DynType {
     }
 
     pub fn new_struct(layout: Layout, fields: Vec<(usize, DynType)>) -> Self {
-        Self::Struct(Arc::new(DynTypeStruct { fields, overall: layout }))
+        Self::Struct(Arc::new(DynTypeStruct { fields, layout }))
     }
 
     pub fn new_struct_with_static_type<T: Reflect>(fields: Vec<(usize, DynType)>) -> Self {
@@ -145,7 +145,7 @@ impl fmt::Debug for DynType {
         match self {
             DynType::Ref(pointee) => write!(f, "&{:?}", pointee),
             DynType::Struct(struct_def) => {
-                let DynTypeStruct { fields, overall: _ } = struct_def.as_ref();
+                let DynTypeStruct { fields, layout: _ } = struct_def.as_ref();
                 write!(f, "{{")?;
                 for (offset, field) in fields {
                     write!(f, " {}: {:?},", offset, field)?;

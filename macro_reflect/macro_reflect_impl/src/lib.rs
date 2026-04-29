@@ -12,6 +12,7 @@ struct ReflectArgs {
     no_drop: bool,
     clone_kind: CloneKind,
     special_mir_type: bool,
+    primitive_type: Option<TokenStream>,
 }
 
 enum CloneKind {
@@ -27,6 +28,7 @@ impl Default for ReflectArgs {
             clone_kind: CloneKind::None,
             no_drop: false,
             special_mir_type: false,
+            primitive_type: None,
         }
     }
 }
@@ -44,6 +46,10 @@ impl Parse for ReflectArgs {
                                     && p.is_ident("is_zeroable")
                                 {
                                     out.is_zeroable = true;
+                                } else if let Meta::List(list) = &m
+                                    && list.path.is_ident("primitive")
+                                {
+                                    out.primitive_type = Some(list.tokens.clone());
                                 }
                             }
                         },
@@ -265,6 +271,12 @@ pub fn attribute_impl_reflect(args: TokenStream, input: TokenStream) -> TokenStr
         });
     };
 
+    let primitive_type = if let Some(primitive_type) = attrs.primitive_type {
+        quote! { Some(#primitive_type) }
+    } else {
+        quote! { None }
+    };
+
     let type_info_def = quote! {
         static TYPE_INFO: #reflection_crate_name::StaticTypeInfo = #reflection_crate_name::StaticTypeInfo {
             debug_name: stringify!(#self_ty),
@@ -273,6 +285,7 @@ pub fn attribute_impl_reflect(args: TokenStream, input: TokenStream) -> TokenStr
             clone: #clone_fn,
             drop_fn: #drop_fn,
             dyn_type: &DYN_TYPE,
+            primitive_type: #primitive_type
         };
     };
 

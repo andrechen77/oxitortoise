@@ -6,7 +6,7 @@ use std::{alloc::Layout, fmt, sync::LazyLock};
 use bytemuck::NoUninit;
 use derive_more::derive::TryFrom;
 use pretty_print::PrettyPrinter;
-use reflection::{CloneKind, DynType, Reflect, StaticType, StaticTypeInfo, mir};
+use reflection::{CloneKind, DynType, Reflect, StaticType, StaticTypeInfo, ValType, mir};
 
 use crate::{
     hir::{
@@ -57,6 +57,7 @@ static BINARY_ARITH_OPCODE_TYPE_INFO: StaticTypeInfo = StaticTypeInfo {
     clone: CloneKind::Copy,
     drop_fn: None,
     dyn_type: &BINARY_ARITH_OPCODE_DYN_TYPE,
+    primitive_type: Some(ValType::I8),
 };
 
 static BINARY_ARITH_OPCODE_DYN_TYPE: LazyLock<DynType> =
@@ -75,6 +76,7 @@ static BINARY_CMP_OPCODE_TYPE_INFO: StaticTypeInfo = StaticTypeInfo {
     clone: CloneKind::Copy,
     drop_fn: None,
     dyn_type: &BINARY_CMP_OPCODE_DYN_TYPE,
+    primitive_type: Some(ValType::I8),
 };
 
 static BINARY_CMP_OPCODE_DYN_TYPE: LazyLock<DynType> =
@@ -93,6 +95,7 @@ static BINARY_BOOL_OPCODE_TYPE_INFO: StaticTypeInfo = StaticTypeInfo {
     clone: CloneKind::Copy,
     drop_fn: None,
     dyn_type: &BINARY_BOOL_OPCODE_DYN_TYPE,
+    primitive_type: Some(ValType::I8),
 };
 
 static BINARY_BOOL_OPCODE_DYN_TYPE: LazyLock<DynType> =
