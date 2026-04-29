@@ -214,27 +214,60 @@ impl<'a> FunctionBuilder<'a> {
                 .unwrap_or_else(|| {
                     self.program_builder.function_stub(*function).unwrap().return_ty.clone()
                 }),
-            // Operation::BinaryOp { opcode, lhs: _, rhs: _ } => match opcode {
-            //     lir::BinaryOpcode::FAdd
-            //     | lir::BinaryOpcode::FSub
-            //     | lir::BinaryOpcode::FMul
-            //     | lir::BinaryOpcode::FDiv => NlFloat::mir_type(),
-            //     lir::BinaryOpcode::FLt
-            //     | lir::BinaryOpcode::FGt
-            //     | lir::BinaryOpcode::FLte
-            //     | lir::BinaryOpcode::FGte
-            //     | lir::BinaryOpcode::FEq
-            //     | lir::BinaryOpcode::IEq
-            //     | lir::BinaryOpcode::INeq => bool::mir_type(),
-            //     lir::BinaryOpcode::And | lir::BinaryOpcode::Or => bool::mir_type(),
-            //     _ => panic!("unsupported binary opcode: {:?}", opcode),
-            // },
-            // Operation::UnaryOp { opcode, operand: _ } => match opcode {
-            //     lir::UnaryOpcode::Not => bool::mir_type(),
-            //     lir::UnaryOpcode::FNeg => NlFloat::mir_type(),
-            //     lir::UnaryOpcode::I64ToI32 => u32::mir_type(),
-            // },
-            _ => todo!(),
+            Operation::BinaryOp { opcode, lhs, rhs } => {
+                let lhs = match lhs {
+                    PlaceOperand::Copy(place) => place,
+                    PlaceOperand::Move(local) => &local.place(),
+                    PlaceOperand::Borrow(_) => {
+                        panic!("borrowed place operand is not supported")
+                    }
+                };
+                let rhs = match rhs {
+                    PlaceOperand::Copy(place) => place,
+                    PlaceOperand::Move(local) => &local.place(),
+                    PlaceOperand::Borrow(_) => {
+                        panic!("borrowed place operand is not supported")
+                    }
+                };
+                let lhs_type = self.type_of_place(&lhs);
+                let rhs_type = self.type_of_place(&rhs);
+                if lhs_type != rhs_type {
+                    warn!(
+                        "mismatched operand types for operation: {:?} and {:?}",
+                        lhs_type, rhs_type
+                    );
+                }
+                match opcode {
+                    lir::BinaryOpcode::FAdd
+                    | lir::BinaryOpcode::FSub
+                    | lir::BinaryOpcode::FMul
+                    | lir::BinaryOpcode::FDiv => lhs_type.clone(),
+                    lir::BinaryOpcode::FLt
+                    | lir::BinaryOpcode::FGt
+                    | lir::BinaryOpcode::FLte
+                    | lir::BinaryOpcode::FGte
+                    | lir::BinaryOpcode::FEq
+                    | lir::BinaryOpcode::IEq
+                    | lir::BinaryOpcode::INeq => bool::dyn_type(),
+                    lir::BinaryOpcode::And | lir::BinaryOpcode::Or => bool::dyn_type(),
+                    _ => panic!("unsupported binary opcode: {:?}", opcode),
+                }
+            }
+            Operation::UnaryOp { opcode, operand } => {
+                let operand = match operand {
+                    PlaceOperand::Copy(place) => place,
+                    PlaceOperand::Move(local) => &local.place(),
+                    PlaceOperand::Borrow(_) => {
+                        panic!("borrowed place operand is not supported")
+                    }
+                };
+                let operand_type = self.type_of_place(&operand);
+                match opcode {
+                    lir::UnaryOpcode::Not => bool::dyn_type(),
+                    lir::UnaryOpcode::FNeg => operand_type.clone(),
+                    lir::UnaryOpcode::I64ToI32 => u32::dyn_type(),
+                }
+            }
         }
     }
 
