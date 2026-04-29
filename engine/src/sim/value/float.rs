@@ -1,3 +1,4 @@
+use bytemuck::NoUninit;
 use derive_more::{
     Deref,
     derive::{Add, AddAssign, Display, Div, DivAssign, From, Mul, MulAssign, Neg, Sub, SubAssign},
@@ -8,7 +9,9 @@ use crate::sim::topology::CoordInt;
 
 /// A double-precision floating-point number which is guaranteed to be finite
 /// (not Infinity or NaN).
-#[derive(Debug, Display, Default, Clone, Copy, From, PartialEq, PartialOrd, MirReflect)]
+#[derive(
+    Debug, Display, Default, Clone, Copy, From, PartialEq, PartialOrd, MirReflect, NoUninit,
+)]
 // TODO(mvp) implement Ord and Eq
 // FIXME these impls don't guarantee that the result is finite. add similar
 // changes to the compilation of arithmetic operations in the HIR

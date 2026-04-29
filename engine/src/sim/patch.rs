@@ -7,6 +7,7 @@ use std::{
     sync::Arc,
 };
 
+use bytemuck::NoUninit;
 use derive_more::derive::From;
 use either::Either;
 use macro_reflect::{MirReflect, reflect};
@@ -50,7 +51,7 @@ impl Default for PatchId {
 
 /// Exactly the same as [`PatchId`], but it can represent "nobody" at the -1
 /// value.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, From, MirReflect)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, From, MirReflect, NoUninit)]
 // TODO reflection contents
 #[repr(transparent)]
 pub struct OptionPatchId(pub u32);

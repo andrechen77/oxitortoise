@@ -27,8 +27,6 @@ pub enum DynType {
     /// the length is specified, then the array has exactly that many elements,
     /// otherwise it has a statically unknown length.
     Array(Arc<DynTypeArray>),
-    // /// A primitive type.
-    // Primitive(lir::ValType),
     /// A statically known type
     StaticStruct(Arc<DynTypeStaticStruct>),
     /// We know nothing about this type.
@@ -66,7 +64,6 @@ impl DynType {
                     "would use the Layout::repeat function on the element layout to get the layout of the whole array"
                 )
             }
-            // MirType::Primitive(_ty) => todo!("TODO get the layout of a primitive type"),
             DynType::StaticStruct(struct_def) => struct_def.static_ty.layout.unwrap(),
             DynType::None => panic!("Cannot get layout"),
         }
@@ -164,7 +161,6 @@ impl fmt::Debug for DynType {
                     write!(f, "[{:?}; ?]", element)
                 }
             }
-            // MirType::Primitive(ty) => write!(f, "<prim {:?}>", ty),
             DynType::StaticStruct(struct_def) => {
                 let DynTypeStaticStruct { static_ty, fields } = struct_def.as_ref();
                 write!(f, "{}", static_ty.debug_name)?;

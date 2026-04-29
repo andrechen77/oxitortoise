@@ -1,5 +1,6 @@
 use std::{collections::BTreeMap, fmt, sync::Arc};
 
+use bytemuck::NoUninit;
 use derive_more::Debug;
 pub use lir::{BinaryOpcode, UnaryOpcode};
 
@@ -205,9 +206,16 @@ pub struct PodValue {
 }
 
 impl PodValue {
-    pub fn new<T: Reflect + Copy>(_value: T) -> Self {
-        let _ty = T::dyn_type();
-        todo!("TODO implement this without UB somehow, probably by using the type info");
+    pub fn new<T: Reflect + Copy + NoUninit>(value: T) -> Self {
+        let ty = T::dyn_type();
+        let bytes = Arc::from(bytemuck::bytes_of(&value));
+        Self { ty, bytes }
+    }
+
+    pub fn new_nullptr() -> Self {
+        let ty = <*mut u8>::dyn_type();
+        let bytes = Arc::from([0u8; std::mem::size_of::<*mut u8>()]);
+        Self { ty, bytes }
     }
 
     pub fn ty(&self) -> &DynType {

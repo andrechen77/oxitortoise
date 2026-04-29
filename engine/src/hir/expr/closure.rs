@@ -89,11 +89,10 @@ impl Closure {
         let mut inner_translator = HirToMirFnTranslator::default();
 
         let (env, env_ty) = if self.captures.is_empty() {
+            let env = builder
+                .mir
+                .add_operation(None, mir::Operation::Const(mir::PodValue::new_nullptr()));
             let env_ty = <*mut u8>::dyn_type();
-            let env = builder.mir.add_operation_with_decl(
-                mir::LocalDecl { debug_name: None, ty: env_ty.clone() },
-                mir::Operation::Const(mir::PodValue::new(std::ptr::null_mut::<u8>())),
-            );
             (env, env_ty)
         } else {
             // create an anonymous struct with the captures, and update

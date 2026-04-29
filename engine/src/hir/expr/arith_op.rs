@@ -3,6 +3,7 @@
 
 use std::{alloc::Layout, fmt, sync::LazyLock};
 
+use bytemuck::NoUninit;
 use derive_more::derive::TryFrom;
 use pretty_print::PrettyPrinter;
 use reflection::{CloneKind, DynType, Reflect, StaticType, StaticTypeInfo, mir};
@@ -19,7 +20,7 @@ use crate::{
     },
 };
 
-#[derive(Debug, Clone, Copy, TryFrom, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, TryFrom, PartialEq, Eq, NoUninit)]
 #[try_from(repr)]
 #[repr(u8)]
 pub enum BinaryArithOpcode {
@@ -29,7 +30,7 @@ pub enum BinaryArithOpcode {
     Div,
 }
 
-#[derive(Debug, Clone, Copy, TryFrom, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, TryFrom, PartialEq, Eq, NoUninit)]
 #[try_from(repr)]
 #[repr(u8)]
 pub enum BinaryCmpOpcode {
@@ -41,7 +42,7 @@ pub enum BinaryCmpOpcode {
     Neq,
 }
 
-#[derive(Debug, Clone, Copy, TryFrom, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, TryFrom, PartialEq, Eq, NoUninit)]
 #[try_from(repr)]
 #[repr(u8)]
 pub enum BinaryBoolOpcode {
