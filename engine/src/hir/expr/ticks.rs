@@ -3,15 +3,14 @@
 use std::fmt;
 
 use pretty_print::PrettyPrinter;
+use reflection::{Reflect, mir};
 
 use crate::{
     hir::{
         Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy, NlAbstractTyAtom,
         build_mir::translate_expr,
     },
-    mir,
     sim::value::NlFloat,
-    util::reflection::Reflect,
     workspace::Workspace,
 };
 
@@ -60,14 +59,14 @@ impl ResetTicks {
 }
 
 mod reset_ticks {
-    use crate::mir::HostFunctionInfo;
+    use reflection::mir::HostFunctionInfo;
 
     use super::*;
 
     pub static FN_INFO: HostFunctionInfo = HostFunctionInfo {
         debug_name: "reset_ticks",
-        parameter_types: &[<&mut Workspace>::TYPE],
-        return_type: <()>::TYPE,
+        parameter_types: &[<&mut Workspace>::STATIC_TYPE],
+        return_type: <()>::STATIC_TYPE,
         link_name: "reset_ticks",
         link_addr: call as *const u8,
     };
@@ -122,14 +121,14 @@ impl AdvanceTick {
 }
 
 mod advance_tick {
-    use crate::mir::HostFunctionInfo;
+    use reflection::mir::HostFunctionInfo;
 
     use super::*;
 
     pub static FN_INFO: HostFunctionInfo = HostFunctionInfo {
         debug_name: "advance_tick",
-        parameter_types: &[<&mut Workspace>::TYPE],
-        return_type: <()>::TYPE,
+        parameter_types: &[<&mut Workspace>::STATIC_TYPE],
+        return_type: <()>::STATIC_TYPE,
         link_name: "advance_tick",
         link_addr: call as *const u8,
     };
@@ -185,14 +184,14 @@ impl GetTick {
 }
 
 mod get_tick {
-    use crate::mir::HostFunctionInfo;
+    use reflection::mir::HostFunctionInfo;
 
     use super::*;
 
     pub static FN_INFO: HostFunctionInfo = HostFunctionInfo {
         debug_name: "get_tick",
-        parameter_types: &[<&mut Workspace>::TYPE],
-        return_type: <NlFloat>::TYPE,
+        parameter_types: &[<&mut Workspace>::STATIC_TYPE],
+        return_type: <NlFloat>::STATIC_TYPE,
         link_name: "get_tick",
         link_addr: call as *const u8,
     };

@@ -1,13 +1,12 @@
-use crate::{
-    sim::{patch::PatchId, turtle::TurtleId, value::NlFloat},
-    util::reflection::{Reflect as _, Type},
-};
 use std::{
     cmp::Ordering,
     ops::{Add, Div, Mul, Sub},
 };
 
+use reflection::{Reflect as _, StaticType};
+
 use super::{BoxedAny, PackedAny};
+use crate::sim::{patch::PatchId, turtle::TurtleId, value::NlFloat};
 
 #[derive(Debug)]
 pub enum UnpackedAny {
@@ -21,13 +20,13 @@ pub enum UnpackedAny {
 }
 
 impl UnpackedAny {
-    pub fn ty(&self) -> Type {
+    pub fn ty(&self) -> StaticType {
         match self {
-            UnpackedAny::Bool(_) => bool::TYPE,
-            UnpackedAny::Float(_) => NlFloat::TYPE,
-            UnpackedAny::Nobody => bool::TYPE,
-            UnpackedAny::Turtle(_) => TurtleId::TYPE,
-            UnpackedAny::Patch(_) => PatchId::TYPE,
+            UnpackedAny::Bool(_) => bool::STATIC_TYPE,
+            UnpackedAny::Float(_) => NlFloat::STATIC_TYPE,
+            UnpackedAny::Nobody => bool::STATIC_TYPE,
+            UnpackedAny::Turtle(_) => TurtleId::STATIC_TYPE,
+            UnpackedAny::Patch(_) => PatchId::STATIC_TYPE,
             UnpackedAny::Link(_) => todo!("add link id"),
             UnpackedAny::Other(_) => todo!("match on the inner type"),
         }

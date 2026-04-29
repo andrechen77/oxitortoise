@@ -1,3 +1,4 @@
+use proc_macro_crate::{FoundCrate, crate_name};
 use proc_macro2::{Span, TokenStream};
 use quote::{ToTokens, quote};
 use syn::{
@@ -80,7 +81,19 @@ impl Parse for ReflectArgs {
     }
 }
 
+fn get_reflection_crate_name() -> proc_macro2::TokenStream {
+    match crate_name("oxitortoise_reflection").unwrap() {
+        FoundCrate::Itself => quote! { crate },
+        FoundCrate::Name(name) => {
+            let name = Ident::new(&name, Span::call_site());
+            quote! { ::#name }
+        }
+    }
+}
+
 pub fn derive_impl_mir_reflect(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
+    let reflection_crate_name = get_reflection_crate_name();
+
     let input = match parse2::<DeriveInput>(input) {
         Ok(parsed) => parsed,
         Err(e) => return e.to_compile_error(),
@@ -90,7 +103,7 @@ pub fn derive_impl_mir_reflect(input: proc_macro2::TokenStream) -> proc_macro2::
 
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
 
-    let make_mir_type_fn = match &input.data {
+    let make_dyn_type_fn = match &input.data {
         Data::Struct(data) => {
             // mark fields that have the attribute #[mir_accessible]
             let fields = match &data.fields {
@@ -121,11 +134,11 @@ pub fn derive_impl_mir_reflect(input: proc_macro2::TokenStream) -> proc_macro2::
                     let ty = &field.ty;
                     let field_entry = if unchecked {
                         quote! {
-                            (::std::mem::offset_of!(Self, #ident), crate::mir::MirType::default())
+                            (::std::mem::offset_of!(Self, #ident), #reflection_crate_name::DynType::default())
                         }
                     } else {
                         quote! {
-                            (::std::mem::offset_of!(Self, #ident), <#ty as crate::util::reflection::Reflect>::mir_type())
+                            (::std::mem::offset_of!(Self, #ident), <#ty as #reflection_crate_name::Reflect>::dyn_type())
                         }
                     };
                     mir_accessible_field_entries.push(field_entry);
@@ -135,8 +148,8 @@ pub fn derive_impl_mir_reflect(input: proc_macro2::TokenStream) -> proc_macro2::
             }
 
             quote! {
-                fn create_mir_type() -> crate::mir::MirType {
-                    crate::mir::MirType::new_struct_with_static_type::<Self>(
+                fn create_dyn_type() -> #reflection_crate_name::DynType {
+                    #reflection_crate_name::DynType::new_struct_with_static_type::<Self>(
                         vec![#(#mir_accessible_field_entries),*],
                     )
                 }
@@ -154,23 +167,25 @@ pub fn derive_impl_mir_reflect(input: proc_macro2::TokenStream) -> proc_macro2::
     // add a bound to the where clause that the type implements the Reflect trait
     let where_clause = if let Some(where_clause) = where_clause {
         quote! {
-            #where_clause, Self: crate::util::reflection::Reflect
+            #where_clause, Self: #reflection_crate_name::Reflect
         }
     } else {
         quote! {
-            where Self: crate::util::reflection::Reflect
+            where Self: #reflection_crate_name::Reflect
         }
     };
 
     quote! {
         #[automatically_derived]
-        unsafe impl #impl_generics crate::mir::MirReflect for #name #ty_generics #where_clause {
-            #make_mir_type_fn
+        unsafe impl #impl_generics #reflection_crate_name::CreateDynType for #name #ty_generics #where_clause {
+            #make_dyn_type_fn
         }
     }
 }
 
 pub fn attribute_impl_reflect(args: TokenStream, input: TokenStream) -> TokenStream {
+    let reflection_crate_name = get_reflection_crate_name();
+
     let input: ItemImpl = match parse2(input) {
         Ok(parsed) => parsed,
         Err(e) => return e.to_compile_error(),
@@ -204,14 +219,14 @@ pub fn attribute_impl_reflect(args: TokenStream, input: TokenStream) -> TokenStr
     let mut clone_fn_info_def = None;
     let clone_fn = match attrs.clone_kind {
         CloneKind::Copy => quote! {
-            crate::util::reflection::CloneKind::Copy
+            #reflection_crate_name::CloneKind::Copy
         },
         CloneKind::Dynamic => {
             let clone_fn_name = format!("{}::clone", self_ty.to_token_stream().to_string());
             clone_fn_info_def = Some(quote! {
-                static CLONE_HOST_FN_INFO: crate::mir::HostFunctionInfo = crate::mir::HostFunctionInfo {
+                static CLONE_HOST_FN_INFO: #reflection_crate_name::mir::HostFunctionInfo = #reflection_crate_name::mir::HostFunctionInfo {
                     debug_name: #clone_fn_name,
-                    parameter_types: &[&<&#self_ty as crate::util::reflection::Reflect>::TYPE],
+                    parameter_types: &[&<&#self_ty as #reflection_crate_name::Reflect>::STATIC_TYPE],
                     return_type: &TYPE_INFO,
                     link_name: #clone_fn_name,
                     link_addr: clone as *const u8,
@@ -223,13 +238,13 @@ pub fn attribute_impl_reflect(args: TokenStream, input: TokenStream) -> TokenStr
                 }
             });
             quote! {
-                crate::util::reflection::CloneKind::Dynamic {
+                #reflection_crate_name::CloneKind::Dynamic {
                     clone_fn_info: &CLONE_HOST_FN_INFO,
                 }
             }
         }
         CloneKind::None => quote! {
-            crate::util::reflection::CloneKind::None
+            #reflection_crate_name::CloneKind::None
         },
     };
 
@@ -244,20 +259,20 @@ pub fn attribute_impl_reflect(args: TokenStream, input: TokenStream) -> TokenStr
 
     let is_zeroable = attrs.is_zeroable;
 
-    let mir_type_static = quote! {
-        static MIR_TYPE: ::std::sync::LazyLock<crate::mir::MirType> = ::std::sync::LazyLock::new(|| {
-            <#self_ty as crate::mir::MirReflect>::create_mir_type()
+    let dyn_type_static_var = quote! {
+        static DYN_TYPE: ::std::sync::LazyLock<#reflection_crate_name::DynType> = ::std::sync::LazyLock::new(|| {
+            <#self_ty as #reflection_crate_name::CreateDynType>::create_dyn_type()
         });
     };
 
     let type_info_def = quote! {
-        static TYPE_INFO: crate::util::reflection::TypeInfo = crate::util::reflection::TypeInfo {
+        static TYPE_INFO: #reflection_crate_name::StaticTypeInfo = #reflection_crate_name::StaticTypeInfo {
             debug_name: stringify!(#self_ty),
             layout: Some(::std::alloc::Layout::new::<#self_ty>()),
             is_zeroable: #is_zeroable,
             clone: #clone_fn,
             drop_fn: #drop_fn,
-            mir_type: &MIR_TYPE,
+            dyn_type: &DYN_TYPE,
         };
     };
 
@@ -266,16 +281,16 @@ pub fn attribute_impl_reflect(args: TokenStream, input: TokenStream) -> TokenStr
         mod #mod_name {
             use super::*;
 
-            #mir_type_static
+            #dyn_type_static_var
 
             #type_info_def
 
             #clone_fn_info_def
 
-            unsafe impl crate::util::reflection::Reflect for #self_ty {
-                const TYPE: crate::util::reflection::Type = &TYPE_INFO;
+            unsafe impl #reflection_crate_name::Reflect for #self_ty {
+                const STATIC_TYPE: #reflection_crate_name::StaticType = &TYPE_INFO;
 
-                const MIR_TYPE: &'static ::std::sync::LazyLock<crate::mir::MirType> = &MIR_TYPE;
+                const DYN_TYPE: &'static ::std::sync::LazyLock<#reflection_crate_name::DynType> = &DYN_TYPE;
             }
         }
     }

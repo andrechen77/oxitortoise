@@ -11,21 +11,18 @@ use derive_more::derive::From;
 use either::Either;
 use macro_reflect::{MirReflect, reflect};
 use pretty_print::PrettyPrinter;
+use reflection::{DynType, HasDynPtr as _, Reflect, StaticType, mir};
 
 use super::topology::Point;
 use crate::{
     hir::{CustomVarDecl, HirToMirFnBuilder, TypeMapping},
-    mir::{self, HasDynPtr as _},
     sim::{
         agent_schema::{AgentFieldDescriptor, AgentSchemaField, AgentSchemaFieldGroup},
         color,
         topology::{PointInt, TopologySpec},
-        value::{BoxedAny, NlFloat, NlList, NlString, PackedAny},
+        value::{NlFloat, NlList, NlString, PackedAny},
     },
-    util::{
-        reflection::{Reflect, Type},
-        row_buffer::{self, RowBuffer, RowSchema},
-    },
+    util::row_buffer::{self, RowBuffer, RowSchema},
 };
 
 /// A reference to a patch.
@@ -71,11 +68,10 @@ impl OptionPatchId {
         negate: bool,
         operand: mir::Place,
     ) -> mir::LocalId {
-        let sentinel_pl = builder.mir.add_operation(
-            None,
-            mir::Operation::Const { value: BoxedAny::new(OptionPatchId::NOBODY) },
-        );
-        let opcode = if negate { lir::BinaryOpcode::INeq } else { lir::BinaryOpcode::IEq };
+        let sentinel_pl = builder
+            .mir
+            .add_operation(None, mir::Operation::Const(mir::PodValue::new(OptionPatchId::NOBODY)));
+        let opcode = if negate { mir::BinaryOpcode::INeq } else { mir::BinaryOpcode::IEq };
         let result = builder.mir.add_operation(
             None,
             mir::Operation::BinaryOp {
@@ -325,7 +321,7 @@ impl Patches {
         if let Some(offset) = offset { var_pl.proj_field(offset) } else { var_pl }
     }
 
-    pub fn mir_type_from_schema(schema: &PatchSchema) -> mir::MirType {
+    pub fn mir_type_from_schema(schema: &PatchSchema) -> DynType {
         // this code relies on the fact that the RowBuffer struct is niche
         // optimized so that an Option<RowBuffer> which is known to be Some can
         // be treated as a RowBuffer. A better solution would be to use the
@@ -335,7 +331,7 @@ impl Patches {
         const { assert!(size_of::<RowBuffer>() == size_of::<Option<RowBuffer>>()) };
 
         // we get 4 to match the number of buffers in the Patches struct
-        let buffer_types: [Option<mir::MirType>; 4] = schema
+        let buffer_types: [Option<DynType>; 4] = schema
             .make_row_schemas()
             .map(|schema| schema.map(|s| RowBuffer::self_mir_type_from_metadata(&s)));
         let fields = buffer_types
@@ -348,7 +344,7 @@ impl Patches {
             })
             .collect();
 
-        mir::MirType::new_struct(Layout::new::<Self>(), fields)
+        DynType::new_struct(Layout::new::<Self>(), fields)
     }
 }
 
@@ -468,7 +464,7 @@ pub struct PatchSchema {
 pub enum PatchFieldGroupElement {
     BaseData,
     Pcolor,
-    Custom { var_idx: usize, name: Arc<str>, ty: Type },
+    Custom { var_idx: usize, name: Arc<str>, ty: StaticType },
 }
 
 pub struct PatchFieldGroup {
@@ -508,7 +504,7 @@ impl PatchSchema {
                         pcolor = Some(current_field_desc);
                         agent_schema_field_group
                             .fields
-                            .push(AgentSchemaField::Other(NlFloat::TYPE));
+                            .push(AgentSchemaField::Other(NlFloat::STATIC_TYPE));
                     }
                     PatchFieldGroupElement::Custom { var_idx, name, ty } => {
                         custom_fields_by_idx.insert(var_idx, (name, current_field_desc));
@@ -583,10 +579,10 @@ impl Index<AgentFieldDescriptor> for PatchSchema {
     }
 }
 
-pub fn patch_var_type(schema: &PatchSchema, var: PatchVarDesc) -> Type {
+pub fn patch_var_type(schema: &PatchSchema, var: PatchVarDesc) -> StaticType {
     match var {
-        PatchVarDesc::Pcolor => NlFloat::TYPE,
-        PatchVarDesc::Pos => Point::TYPE,
+        PatchVarDesc::Pcolor => NlFloat::STATIC_TYPE,
+        PatchVarDesc::Pos => Point::STATIC_TYPE,
         PatchVarDesc::Custom(field) => {
             let AgentSchemaField::Other(ty) = schema[schema.custom_fields()[field].1] else {
                 unreachable!("this is a custom field, so it cannot be part of the base data");

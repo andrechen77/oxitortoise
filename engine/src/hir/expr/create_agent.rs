@@ -9,9 +9,9 @@ use crate::{
         Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy, NlAbstractTyAtom,
         TurtleBreedId, build_mir::translate_expr,
     },
-    mir,
     sim::turtle::TurtleId,
 };
+use reflection::mir;
 
 #[derive(Debug, Clone)]
 pub struct CreateTurtles {
@@ -95,26 +95,26 @@ impl CreateTurtles {
 mod create_turtles {
     use crate::{
         exec::jit::JitCallback,
-        mir::HostFunctionInfo,
         sim::{
             topology::Point,
             turtle::{TurtleBreedId, TurtleId},
             value::NlFloat,
         },
-        util::{reflection::Reflect, rng::CanonRng},
+        util::rng::CanonRng,
         workspace::Workspace,
     };
+    use reflection::{Reflect, mir::HostFunctionInfo};
 
     pub static FN_INFO: HostFunctionInfo = HostFunctionInfo {
         debug_name: "create_turtles",
         parameter_types: &[
-            <&mut Workspace>::TYPE,
-            <&mut CanonRng>::TYPE,
-            TurtleBreedId::TYPE,
-            NlFloat::TYPE,
-            <JitCallback<'static, TurtleId, ()>>::TYPE,
+            <&mut Workspace>::STATIC_TYPE,
+            <&mut CanonRng>::STATIC_TYPE,
+            TurtleBreedId::STATIC_TYPE,
+            NlFloat::STATIC_TYPE,
+            <JitCallback<'static, TurtleId, ()>>::STATIC_TYPE,
         ],
-        return_type: <()>::TYPE,
+        return_type: <()>::STATIC_TYPE,
         link_name: "create_turtles",
         link_addr: call as *const u8,
     };

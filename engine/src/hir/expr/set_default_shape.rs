@@ -9,8 +9,8 @@ use crate::{
         Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy, NlAbstractTyAtom,
         TurtleBreedId,
     },
-    mir,
 };
+use reflection::mir;
 
 #[derive(Debug, Clone)]
 pub struct SetDefaultShape {

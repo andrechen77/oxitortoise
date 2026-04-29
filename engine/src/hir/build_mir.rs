@@ -1,13 +1,12 @@
 use std::collections::BTreeMap;
 
-use crate::{
-    hir::{self, NameContext},
-    mir,
-};
+use reflection::mir;
+use tracing::trace;
+
+use crate::hir::{self, NameContext};
 
 mod type_mapping;
 
-use tracing::trace;
 pub use type_mapping::{TypeMapping, make_type_mapping};
 
 pub struct HirToMirFnBuilder<'a, 'b> {

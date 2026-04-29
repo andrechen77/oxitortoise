@@ -119,7 +119,7 @@ impl Default for ExprKind {
 pub struct Nop;
 
 impl Expr for Nop {
-    fn output_type(&self, names: NameContext) -> NlAbstractTy {
+    fn output_type(&self, _names: NameContext) -> NlAbstractTy {
         NlAbstractTyAtom::Unit.into()
     }
 
@@ -134,7 +134,7 @@ impl Expr for Nop {
     fn pretty_print<W: fmt::Write>(
         &self,
         printer: &mut PrettyPrinter<W>,
-        names: NameContext,
+        _names: NameContext,
     ) -> fmt::Result {
         printer.add_fn_call("nop", |_| Ok(()))
     }

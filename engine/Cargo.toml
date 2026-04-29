@@ -9,7 +9,7 @@ either = "1.15.0"
 flagset = "0.4.6"
 slotmap = { workspace = true }
 smallvec = { workspace = true }
-lir = { path = "../lir", package = "oxitortoise_lir" }
+reflection = { path = "../reflection", package = "oxitortoise_reflection" }
 tracing = { workspace = true }
 ambassador = "0.4.2"
 pretty_print = { path = "../pretty_print" }

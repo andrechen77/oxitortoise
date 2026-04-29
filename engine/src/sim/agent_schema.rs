@@ -1,9 +1,7 @@
 use macro_reflect::{MirReflect, reflect};
+use reflection::{Reflect, StaticType};
 
-use crate::util::{
-    reflection::{Reflect, Type},
-    row_buffer::RowSchema,
-};
+use crate::util::row_buffer::RowSchema;
 
 // TODO(mvp) make better, actual documentation for how the agents are laid out
 // hybrid SoA-AoS model: the set of fields for an agent is organized into
@@ -35,7 +33,7 @@ pub enum AgentSchemaField {
     BaseData,
     /// A variable stored anywhere other than the first field of the first
     /// buffer.
-    Other(Type),
+    Other(StaticType),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, MirReflect)]
@@ -78,7 +76,7 @@ pub(crate) fn make_row_schemas<A: Reflect, const N: usize>(
             let ty = match buffer_field {
                 AgentSchemaField::BaseData => {
                     if (buffer_idx, field_idx) == (0, 0) {
-                        A::TYPE
+                        A::STATIC_TYPE
                     } else {
                         panic!("Base data can only be the first field in the first buffer.");
                     }

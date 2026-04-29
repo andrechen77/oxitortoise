@@ -2,31 +2,14 @@ use std::{alloc::Layout, ptr::NonNull, sync::LazyLock};
 
 use macro_reflect::reflect;
 
-use crate::mir::{HostFunctionInfo, MirType};
+use crate::{DynType, Reflect, mir::HostFunctionInfo};
 
 // TODO what to do about lifetimes? could cause unsafety and sadness
-
-/// A trait to indicate that the compiler can generate code to manipulate values
-/// of this type.
-///
-/// # Safety
-///
-/// Implementors must guarantee that the associated `Type` is correct, as
-/// the information will be used to generate and run unsafe code.
-pub unsafe trait Reflect {
-    const TYPE: Type;
-
-    const MIR_TYPE: &LazyLock<MirType>;
-
-    fn mir_type() -> MirType {
-        (*Self::MIR_TYPE).clone()
-    }
-}
 
 /// Information about a type that is used by the engine to generate code that
 /// manipulates values of the corresponding type.
 #[derive(Debug, Clone)]
-pub struct TypeInfo {
+pub struct StaticTypeInfo {
     pub debug_name: &'static str,
     pub layout: Option<Layout>,
     /// Whether this type is valid at the all-zero bit pattern *and* represents
@@ -44,25 +27,25 @@ pub struct TypeInfo {
     /// The caller must guarantee that the passed pointer is a valid pointer to
     /// T that can be dropped, and that that value will never be used again.
     pub drop_fn: Option<unsafe fn(*mut u8)>,
-    pub mir_type: &'static LazyLock<MirType>,
+    pub dyn_type: &'static LazyLock<DynType>,
 }
 
-impl PartialEq for TypeInfo {
+impl PartialEq for StaticTypeInfo {
     fn eq(&self, other: &Self) -> bool {
         std::ptr::eq(self, other)
     }
 }
 
-impl Eq for TypeInfo {}
+impl Eq for StaticTypeInfo {}
 
-impl TypeInfo {
+impl StaticTypeInfo {
     pub fn is<T: Reflect>(&self) -> bool {
         // self.unique_id == Some(Either::Left(std::any::TypeId::of::<T>()))
-        self == T::TYPE
+        self == T::STATIC_TYPE
     }
 }
 
-pub type Type = &'static TypeInfo;
+pub type StaticType = &'static StaticTypeInfo;
 
 #[derive(Debug, Clone)]
 pub enum CloneKind {

@@ -6,12 +6,13 @@ use std::{
 use tracing::{trace, warn};
 
 use crate::{
+    DynType, Reflect,
+    dyn_type::ProjectionError,
     mir::{
-        self, ElementaryStatement, Function, FunctionId, Label, LocalId, MirType, Operation, Place,
-        PlaceOperand, Statement, reflection::ProjectionError,
+        ElementaryStatement, Function, FunctionId, Label, LocalDecl, LocalId, Operation, Place,
+        PlaceOperand, Program, Statement, consolidate_statements,
     },
-    sim::value::NlFloat,
-    util::reflection::{CloneKind, Reflect},
+    static_type::CloneKind,
 };
 
 #[derive(Default)]
@@ -24,7 +25,7 @@ pub struct ProgramBuilder {
 }
 
 pub struct FunctionStub {
-    pub return_ty: MirType,
+    pub return_ty: DynType,
 }
 
 impl ProgramBuilder {
@@ -32,7 +33,7 @@ impl ProgramBuilder {
         Default::default()
     }
 
-    pub fn finish(self) -> mir::Program {
+    pub fn finish(self) -> Program {
         let Self {
             functions,
             function_stubs,
@@ -41,7 +42,7 @@ impl ProgramBuilder {
             next_label: _,
         } = self;
         assert!(function_stubs.is_empty(), "function stubs must be finished");
-        mir::Program { functions }
+        Program { functions }
     }
 
     pub fn completed_function(&self, id: FunctionId) -> Option<&Function> {
@@ -76,8 +77,8 @@ impl ProgramBuilder {
         id
     }
 
-    fn next_label(&mut self) -> mir::Label {
-        let id = mir::Label(self.next_label);
+    fn next_label(&mut self) -> Label {
+        let id = Label(self.next_label);
         self.next_label += 1;
         id
     }
@@ -88,7 +89,7 @@ pub struct FunctionBuilder<'a> {
     debug_name: Option<Arc<str>>,
     fn_id: FunctionId,
     parameters: Vec<LocalId>,
-    locals: BTreeMap<LocalId, mir::LocalDecl>,
+    locals: BTreeMap<LocalId, LocalDecl>,
     // TODO(wishlist) consider replacing this with a more granular data structure
     // that can track moves in and out of iniividual fields. then we would also
     // not need to manually assert when a local is fully initialized.
@@ -117,7 +118,7 @@ impl<'a> FunctionBuilder<'a> {
             unit_local: None,
         };
         new.unit_local =
-            Some(new.create_local(mir::LocalDecl { debug_name: None, ty: <()>::mir_type() }));
+            Some(new.create_local(LocalDecl { debug_name: None, ty: <()>::dyn_type() }));
         new
     }
 
@@ -129,8 +130,8 @@ impl<'a> FunctionBuilder<'a> {
     /// Finishes the function builder and adds the function to the program builder.
     pub fn finish(self) -> FunctionId {
         let body =
-            mir::consolidate_statements(self.statements_out, || self.program_builder.next_label());
-        let function = mir::Function {
+            consolidate_statements(self.statements_out, || self.program_builder.next_label());
+        let function = Function {
             debug_name: self.debug_name,
             parameters: self.parameters,
             local_decls: self.locals,
@@ -151,7 +152,7 @@ impl<'a> FunctionBuilder<'a> {
         self.unit_local.expect("unit local must be set").into()
     }
 
-    pub fn create_parameter(&mut self, decl: mir::LocalDecl) -> LocalId {
+    pub fn create_parameter(&mut self, decl: LocalDecl) -> LocalId {
         let id = self.create_local(decl);
         self.parameters.push(id);
         self.set_as_init(id);
@@ -159,13 +160,13 @@ impl<'a> FunctionBuilder<'a> {
         id
     }
 
-    pub fn create_local(&mut self, decl: mir::LocalDecl) -> LocalId {
+    pub fn create_local(&mut self, decl: LocalDecl) -> LocalId {
         let id = self.program_builder.next_local_id();
         self.locals.insert(id, decl);
         id
     }
 
-    pub fn get_local_mut(&mut self, id: LocalId) -> &mut mir::LocalDecl {
+    pub fn get_local_mut(&mut self, id: LocalId) -> &mut LocalDecl {
         self.locals.get_mut(&id).expect("local must be declared")
     }
 
@@ -177,7 +178,7 @@ impl<'a> FunctionBuilder<'a> {
         self.currently_init_locals.insert(local);
     }
 
-    pub fn type_of_place(&self, place: &Place) -> &mir::MirType {
+    pub fn type_of_place(&self, place: &Place) -> &DynType {
         let local_ty = &self.locals[&place.local].ty;
         let result = place
             .projections
@@ -191,20 +192,20 @@ impl<'a> FunctionBuilder<'a> {
         }
     }
 
-    pub fn type_of_op(&self, op: &Operation) -> MirType {
+    pub fn type_of_op(&self, op: &Operation) -> DynType {
         match op {
             Operation::Operand(operand) => match operand {
                 PlaceOperand::Copy(place) => self.type_of_place(place).clone(),
                 PlaceOperand::Move(local) => self.type_of_place(&local.place()).clone(),
-                PlaceOperand::Borrow(place) => MirType::ref_to(self.type_of_place(place).clone()),
+                PlaceOperand::Borrow(place) => DynType::ref_to(self.type_of_place(place).clone()),
             },
-            Operation::Const { value } => (*value.ty().mir_type).clone(),
+            Operation::Const(pod_value) => pod_value.ty().clone(),
             Operation::FunctionPtr { function: _ } => {
                 // we can probably get away with making no assertions about the type
-                MirType::default()
+                DynType::default()
             }
             Operation::CallHostFunction { function, .. } => {
-                (*function.return_type.mir_type).clone()
+                (*function.return_type.dyn_type).clone()
             }
             Operation::CallUserFunction { function, .. } => self
                 .program_builder
@@ -213,26 +214,27 @@ impl<'a> FunctionBuilder<'a> {
                 .unwrap_or_else(|| {
                     self.program_builder.function_stub(*function).unwrap().return_ty.clone()
                 }),
-            Operation::BinaryOp { opcode, lhs: _, rhs: _ } => match opcode {
-                lir::BinaryOpcode::FAdd
-                | lir::BinaryOpcode::FSub
-                | lir::BinaryOpcode::FMul
-                | lir::BinaryOpcode::FDiv => NlFloat::mir_type(),
-                lir::BinaryOpcode::FLt
-                | lir::BinaryOpcode::FGt
-                | lir::BinaryOpcode::FLte
-                | lir::BinaryOpcode::FGte
-                | lir::BinaryOpcode::FEq
-                | lir::BinaryOpcode::IEq
-                | lir::BinaryOpcode::INeq => bool::mir_type(),
-                lir::BinaryOpcode::And | lir::BinaryOpcode::Or => bool::mir_type(),
-                _ => panic!("unsupported binary opcode: {:?}", opcode),
-            },
-            Operation::UnaryOp { opcode, operand: _ } => match opcode {
-                lir::UnaryOpcode::Not => bool::mir_type(),
-                lir::UnaryOpcode::FNeg => NlFloat::mir_type(),
-                lir::UnaryOpcode::I64ToI32 => u32::mir_type(),
-            },
+            // Operation::BinaryOp { opcode, lhs: _, rhs: _ } => match opcode {
+            //     lir::BinaryOpcode::FAdd
+            //     | lir::BinaryOpcode::FSub
+            //     | lir::BinaryOpcode::FMul
+            //     | lir::BinaryOpcode::FDiv => NlFloat::mir_type(),
+            //     lir::BinaryOpcode::FLt
+            //     | lir::BinaryOpcode::FGt
+            //     | lir::BinaryOpcode::FLte
+            //     | lir::BinaryOpcode::FGte
+            //     | lir::BinaryOpcode::FEq
+            //     | lir::BinaryOpcode::IEq
+            //     | lir::BinaryOpcode::INeq => bool::mir_type(),
+            //     lir::BinaryOpcode::And | lir::BinaryOpcode::Or => bool::mir_type(),
+            //     _ => panic!("unsupported binary opcode: {:?}", opcode),
+            // },
+            // Operation::UnaryOp { opcode, operand: _ } => match opcode {
+            //     lir::UnaryOpcode::Not => bool::mir_type(),
+            //     lir::UnaryOpcode::FNeg => NlFloat::mir_type(),
+            //     lir::UnaryOpcode::I64ToI32 => u32::mir_type(),
+            // },
+            _ => todo!(),
         }
     }
 
@@ -240,7 +242,7 @@ impl<'a> FunctionBuilder<'a> {
         self.program_builder.next_label()
     }
 
-    pub fn add_operation_with_dst(&mut self, dst: mir::Place, op: Operation) {
+    pub fn add_operation_with_dst(&mut self, dst: Place, op: Operation) {
         // make sure that the types match
         let dst_ty = self.type_of_place(&dst);
         let val_ty = self.type_of_op(&op);
@@ -254,11 +256,7 @@ impl<'a> FunctionBuilder<'a> {
         self.add_statement(Statement::Elementary(ElementaryStatement::Assign { dst, op }));
     }
 
-    pub fn add_operation_with_decl(
-        &mut self,
-        local_decl: mir::LocalDecl,
-        op: Operation,
-    ) -> LocalId {
+    pub fn add_operation_with_decl(&mut self, local_decl: LocalDecl, op: Operation) -> LocalId {
         // make sure that the types match
         let val_ty = self.type_of_op(&op);
         if !local_decl.ty.is_supertype_of(&val_ty) {
@@ -277,7 +275,7 @@ impl<'a> FunctionBuilder<'a> {
     }
 
     pub fn add_operation(&mut self, name: Option<Arc<str>>, op: Operation) -> LocalId {
-        let local_decl = mir::LocalDecl { debug_name: name, ty: self.type_of_op(&op) };
+        let local_decl = LocalDecl { debug_name: name, ty: self.type_of_op(&op) };
         self.add_operation_with_decl(local_decl, op)
     }
 
@@ -321,26 +319,24 @@ impl<'a> FunctionBuilder<'a> {
     /// initialized and will be deinitialized before the value is moved in.
     pub fn move_to_init(&mut self, dst_init: Place, src: LocalId) {
         // deinitialize the destination place
-        self.add_statement(mir::Statement::Elementary(mir::ElementaryStatement::Drop {
+        self.add_statement(Statement::Elementary(ElementaryStatement::Drop {
             src: dst_init.clone(),
         }));
 
         // move the value into the place
-        self.add_operation_with_dst(
-            dst_init,
-            mir::Operation::Operand(mir::PlaceOperand::Move(src)),
-        );
+        self.add_operation_with_dst(dst_init, Operation::Operand(PlaceOperand::Move(src)));
     }
 
     pub fn clone_to_uninit(&mut self, src: Place, dst: Place) {
         match self.type_of_place(&src).clone_kind() {
-            CloneKind::Copy => self
-                .add_operation_with_dst(dst, mir::Operation::Operand(mir::PlaceOperand::Copy(src))),
+            CloneKind::Copy => {
+                self.add_operation_with_dst(dst, Operation::Operand(PlaceOperand::Copy(src)))
+            }
             CloneKind::Dynamic { clone_fn_info, .. } => self.add_operation_with_dst(
                 dst,
-                mir::Operation::CallHostFunction {
+                Operation::CallHostFunction {
                     function: clone_fn_info,
-                    args: vec![mir::PlaceOperand::Borrow(src)],
+                    args: vec![PlaceOperand::Borrow(src)],
                 },
             ),
             CloneKind::None => {
@@ -353,10 +349,8 @@ impl<'a> FunctionBuilder<'a> {
     /// deinitialized. The destination place will not be deinitialized (i.e. it is
     /// assumed to be uninitialized). Useful for loading variables from memory.
     pub fn clone_to_new(&mut self, src: Place) -> LocalId {
-        let dst = self.create_local(mir::LocalDecl {
-            debug_name: None,
-            ty: self.type_of_place(&src).clone(),
-        });
+        let dst =
+            self.create_local(LocalDecl { debug_name: None, ty: self.type_of_place(&src).clone() });
         self.clone_to_uninit(src, dst.place());
         dst
     }

@@ -1,14 +1,13 @@
 use std::{fmt, mem::offset_of};
 
-use crate::{mir, util::reflection::Reflect};
+use macro_reflect::{MirReflect, reflect};
+use reflection::{Reflect as _, mir};
 
 use super::{patch::PatchId, value, value::NlFloat};
+pub use heading::Heading;
 
 pub mod diffuse;
 mod heading;
-
-pub use heading::Heading;
-use macro_reflect::{MirReflect, reflect};
 
 /// The type used to refer to integer patch coordinates.
 pub type CoordInt = i32;
@@ -67,7 +66,7 @@ impl Point {
         };
 
         let result_local =
-            builder.create_local(mir::LocalDecl { debug_name: None, ty: Self::mir_type() });
+            builder.create_local(mir::LocalDecl { debug_name: None, ty: Self::dyn_type() });
 
         builder.add_operation_with_dst(
             result_local.place().proj_field(offset_of!(Self, x)),

@@ -4,11 +4,9 @@ use std::{
     ptr::NonNull,
 };
 
-use crate::util::reflection::Reflect;
-use crate::{
-    sim::value::{NlFloat, NlList, NlString},
-    util::reflection::Type,
-};
+use reflection::{Reflect, StaticType};
+
+use crate::sim::value::{NlFloat, NlList, NlString};
 
 pub struct BoxedAny {
     /// Always points to a valid [`Type`] in memory, as if this field were
@@ -16,19 +14,19 @@ pub struct BoxedAny {
     /// value being stored, which follows in memory after `Type`, where the
     /// offset is determined by [`std::alloc::Layout::extend`]. The type itself
     /// is immutable, so the `Type` can never change.
-    inner: NonNull<Type>,
+    inner: NonNull<StaticType>,
 }
 
 /// `BoxedAny` points to a pair of a [`Type`] followed by the actual value
 /// of type `T`. This function returns the overall layout of the whole pair as
 /// well as the offset into the allocation where the value starts.
 fn layout_and_val_offset(val_layout: Layout) -> (Layout, usize) {
-    Layout::new::<Type>().extend(val_layout).unwrap()
+    Layout::new::<StaticType>().extend(val_layout).unwrap()
 }
 
 impl BoxedAny {
     pub fn new<T: Reflect>(value: T) -> Self {
-        let ty = T::TYPE;
+        let ty = T::STATIC_TYPE;
 
         // allocate memory for the value and its type tag
         let (layout, value_start) = layout_and_val_offset(
@@ -42,7 +40,7 @@ impl BoxedAny {
         // move the type tag into the allocated memory
         // SAFETY: the ptr is valid for writes and the allocator should have
         // returned a properly aligned pointer
-        unsafe { std::ptr::write(all_ptr.cast::<Type>().as_ptr(), ty) };
+        unsafe { std::ptr::write(all_ptr.cast::<StaticType>().as_ptr(), ty) };
 
         // move the value into the allocated memory
         // SAFETY: we trust that the Layout::extend API correctly gave an offset
@@ -61,15 +59,15 @@ impl BoxedAny {
     /// # Safety
     ///
     /// The pointer must have come from a call to [`BoxedAny::as_raw`].
-    pub unsafe fn from_raw(ptr: NonNull<Type>) -> Self {
+    pub unsafe fn from_raw(ptr: NonNull<StaticType>) -> Self {
         Self { inner: ptr }
     }
 
-    pub fn as_raw(&self) -> NonNull<Type> {
+    pub fn as_raw(&self) -> NonNull<StaticType> {
         self.inner
     }
 
-    pub fn ty(&self) -> Type {
+    pub fn ty(&self) -> StaticType {
         // SAFETY: this pointer is always valid when used to access `Type`
         // per this type's invariants
         unsafe { *self.inner.as_ptr() }
@@ -78,7 +76,7 @@ impl BoxedAny {
     /// Obtains a pointer to the actual value stored in this [`BoxedAny`].
     /// Panics if the attempted access type does not match the type tag.
     fn ptr_to_val<T: Reflect>(&self) -> NonNull<T> {
-        let ty = T::TYPE;
+        let ty = T::STATIC_TYPE;
         assert!(self.ty() == ty, "type mismatch");
         let (_, offset) = layout_and_val_offset(
             ty.layout.expect("type should have a known layout to be used in a BoxedAny"),

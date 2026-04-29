@@ -7,8 +7,6 @@ use std::{
 
 use macro_reflect::{MirReflect, reflect};
 
-use crate::util::reflection::Reflect;
-
 #[repr(transparent)]
 #[derive(MirReflect)]
 pub struct ErasedRc {
@@ -143,12 +141,12 @@ impl ErasedRcPrefix {
 pub mod create_erased_rc {
     use super::*;
 
-    use crate::mir::HostFunctionInfo;
+    use reflection::{Reflect as _, mir::HostFunctionInfo};
 
     pub const FN_INFO: HostFunctionInfo = HostFunctionInfo {
         debug_name: "create_erased_rc",
-        parameter_types: &[u32::TYPE, u32::TYPE, <fn(NonNull<u8>)>::TYPE],
-        return_type: ErasedRc::TYPE,
+        parameter_types: &[u32::STATIC_TYPE, u32::STATIC_TYPE, <fn(NonNull<u8>)>::STATIC_TYPE],
+        return_type: ErasedRc::STATIC_TYPE,
         link_name: "create_erased_rc",
         link_addr: call as *const u8,
     };

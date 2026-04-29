@@ -9,13 +9,10 @@ use crate::{
         Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy, NlAbstractTyAtom,
         build_mir::translate_expr,
     },
-    mir,
     sim::value::{NlBox, NlList, PackedAny},
-    util::{
-        reflection::Reflect,
-        rng::{CanonRng, Rng as _},
-    },
+    util::rng::{CanonRng, Rng as _},
 };
+use reflection::{Reflect, mir};
 
 #[derive(Debug, Clone)]
 pub struct OneOf {
@@ -77,14 +74,14 @@ impl OneOf {
 }
 
 mod one_of_list {
-    use crate::mir::HostFunctionInfo;
+    use reflection::mir::HostFunctionInfo;
 
     use super::*;
 
     pub static FN_INFO: HostFunctionInfo = HostFunctionInfo {
         debug_name: "one_of_list",
-        parameter_types: &[<&mut CanonRng>::TYPE, NlBox::<NlList>::TYPE],
-        return_type: PackedAny::TYPE,
+        parameter_types: &[<&mut CanonRng>::STATIC_TYPE, NlBox::<NlList>::STATIC_TYPE],
+        return_type: PackedAny::STATIC_TYPE,
         link_name: "one_of_list",
         link_addr: call as *const u8,
     };

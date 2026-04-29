@@ -3,13 +3,13 @@
 use std::fmt::{self, Write};
 
 use pretty_print::PrettyPrinter;
+use reflection::mir;
 
 use crate::{
     hir::{
         Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy, build_mir::translate_expr,
         ty::NlAbstractTyAtom,
     },
-    mir,
     sim::{
         color,
         observer::Globals,

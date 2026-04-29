@@ -1,19 +1,16 @@
 use pretty_print::PrettyPrinter;
+use reflection::{DynType, Reflect, mir};
 
 use std::{alloc::Layout, fmt::Write, mem::offset_of};
 
 use super::shapes::Shapes;
-use crate::{
-    mir,
-    sim::{
-        observer::{Globals, GlobalsSchema},
-        patch::{PatchSchema, Patches},
-        tick::Tick,
-        topology::Topology,
-        turtle::{TurtleSchema, Turtles},
-        value::NlFloat,
-    },
-    util::reflection::Reflect,
+use crate::sim::{
+    observer::{Globals, GlobalsSchema},
+    patch::{PatchSchema, Patches},
+    tick::Tick,
+    topology::Topology,
+    turtle::{TurtleSchema, Turtles},
+    value::NlFloat,
 };
 
 #[derive(Debug)]
@@ -74,19 +71,19 @@ impl World {
         globals_schema: &GlobalsSchema,
         turtle_schema: &TurtleSchema,
         patch_schema: &PatchSchema,
-    ) -> mir::MirType {
+    ) -> DynType {
         let globals_ty = Globals::mir_type_from_schema(globals_schema);
         let turtles_ty = Turtles::mir_type_from_schema(turtle_schema);
         let patches_ty = Patches::mir_type_from_schema(patch_schema);
 
-        mir::MirType::new_struct(
+        DynType::new_struct(
             Layout::new::<Self>(),
             vec![
                 (offset_of!(Self, globals), globals_ty),
                 (offset_of!(Self, turtles), turtles_ty),
                 (offset_of!(Self, patches), patches_ty),
-                (offset_of!(Self, topology), Topology::mir_type()),
-                (offset_of!(Self, tick_counter), Tick::mir_type()),
+                (offset_of!(Self, topology), Topology::dyn_type()),
+                (offset_of!(Self, tick_counter), Tick::dyn_type()),
             ],
         )
     }

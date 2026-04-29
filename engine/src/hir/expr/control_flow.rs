@@ -10,8 +10,8 @@ use crate::{
         Expr, ExprKind, HirToMirFnBuilder, Label, LocalDecl, LocalId, NameContext, NlAbstractTy,
         build_mir::translate_expr,
     },
-    mir,
 };
+use reflection::mir;
 
 use pretty_print::PrettyPrinter;
 use tracing::trace;

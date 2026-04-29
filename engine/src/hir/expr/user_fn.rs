@@ -9,8 +9,8 @@ use crate::{
         Expr, ExprKind, FunctionId, HirToMirFnBuilder, NameContext, NlAbstractTy,
         build_mir::translate_expr,
     },
-    mir,
 };
+use reflection::mir;
 
 #[derive(Debug, Clone)]
 pub struct CallUserFn {

@@ -3,19 +3,18 @@
 use std::fmt;
 
 use pretty_print::PrettyPrinter;
+use reflection::{Reflect, mir};
 
 use crate::{
     hir::{
         Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy, NlAbstractTyAtom,
         build_mir::translate_expr,
     },
-    mir,
     sim::{
         patch::PatchId,
         topology::{Point, Topology},
         world::World,
     },
-    util::reflection::Reflect,
     workspace::Workspace,
 };
 
@@ -275,14 +274,14 @@ impl Expr for PointConstructor {
 }
 
 mod patch_at {
-    use crate::mir::HostFunctionInfo;
+    use reflection::mir::HostFunctionInfo;
 
     use super::*;
 
     pub static FN_INFO: HostFunctionInfo = HostFunctionInfo {
         debug_name: "patch_at",
-        parameter_types: &[<&mut Workspace>::TYPE, Point::TYPE],
-        return_type: PatchId::TYPE,
+        parameter_types: &[<&mut Workspace>::STATIC_TYPE, Point::STATIC_TYPE],
+        return_type: PatchId::STATIC_TYPE,
         link_name: "patch_at",
         link_addr: call as *const u8,
     };

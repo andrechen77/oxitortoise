@@ -3,15 +3,14 @@
 use std::fmt;
 
 use pretty_print::PrettyPrinter;
+use reflection::{Reflect, mir};
 
 use crate::{
     hir::{
         Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy, build_mir::translate_expr,
         ty::NlAbstractTyAtom,
     },
-    mir,
     sim::{color, value::NlFloat},
-    util::reflection::Reflect,
 };
 
 /// NetLogo `scale-color`.
@@ -80,14 +79,19 @@ impl ScaleColor {
 }
 
 mod scale_color {
-    use crate::mir::HostFunctionInfo;
+    use reflection::mir::HostFunctionInfo;
 
     use super::*;
 
     pub static FN_INFO: HostFunctionInfo = HostFunctionInfo {
         debug_name: "scale_color",
-        parameter_types: &[NlFloat::TYPE, NlFloat::TYPE, NlFloat::TYPE, NlFloat::TYPE],
-        return_type: NlFloat::TYPE,
+        parameter_types: &[
+            NlFloat::STATIC_TYPE,
+            NlFloat::STATIC_TYPE,
+            NlFloat::STATIC_TYPE,
+            NlFloat::STATIC_TYPE,
+        ],
+        return_type: NlFloat::STATIC_TYPE,
         link_name: "scale_color",
         link_addr: call as *const u8,
     };

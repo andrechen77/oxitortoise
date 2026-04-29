@@ -3,11 +3,11 @@
 use std::fmt;
 
 use pretty_print::PrettyPrinter;
+use reflection::mir;
 
 use crate::hir::build_mir::translate_expr;
 use crate::hir::ty::NlAbstractTyAtom;
 use crate::hir::{Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy};
-use crate::mir;
 
 #[derive(Debug, Clone)]
 pub struct ClearAll {
@@ -53,12 +53,13 @@ impl ClearAll {
 }
 
 mod clear_all {
-    use crate::{mir::HostFunctionInfo, util::reflection::Reflect, workspace::Workspace};
+    use crate::workspace::Workspace;
+    use reflection::{Reflect, mir::HostFunctionInfo};
 
     pub static FN_INFO: HostFunctionInfo = HostFunctionInfo {
         debug_name: "clear_all",
-        parameter_types: &[<&mut Workspace>::TYPE],
-        return_type: <()>::TYPE,
+        parameter_types: &[<&mut Workspace>::STATIC_TYPE],
+        return_type: <()>::STATIC_TYPE,
         link_name: "clear_all",
         link_addr: call as *const u8,
     };

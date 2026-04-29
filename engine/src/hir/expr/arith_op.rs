@@ -5,6 +5,7 @@ use std::{alloc::Layout, fmt, sync::LazyLock};
 
 use derive_more::derive::TryFrom;
 use pretty_print::PrettyPrinter;
+use reflection::{CloneKind, DynType, Reflect, StaticType, StaticTypeInfo, mir};
 
 use crate::{
     hir::{
@@ -12,12 +13,10 @@ use crate::{
         build_mir::{HirToMirFnBuilder, translate_expr},
         ty::NlAbstractTyAtom,
     },
-    mir::{self, MirType},
     sim::{
         patch::OptionPatchId,
-        value::{BoxedAny, NlFloat, PackedAny},
+        value::{NlFloat, PackedAny},
     },
-    util::reflection::{CloneKind, Reflect, Type, TypeInfo},
 };
 
 #[derive(Debug, Clone, Copy, TryFrom, PartialEq, Eq)]
@@ -50,58 +49,58 @@ pub enum BinaryBoolOpcode {
     Or,
 }
 
-static BINARY_ARITH_OPCODE_TYPE_INFO: TypeInfo = TypeInfo {
+static BINARY_ARITH_OPCODE_TYPE_INFO: StaticTypeInfo = StaticTypeInfo {
     debug_name: "BinaryArithOpcode",
     layout: Some(Layout::new::<BinaryArithOpcode>()),
     is_zeroable: false,
     clone: CloneKind::Copy,
     drop_fn: None,
-    mir_type: &BINARY_ARITH_OPCODE_MIR_TYPE,
+    dyn_type: &BINARY_ARITH_OPCODE_DYN_TYPE,
 };
 
-static BINARY_ARITH_OPCODE_MIR_TYPE: LazyLock<MirType> =
-    LazyLock::new(|| MirType::new_struct_with_static_type::<BinaryArithOpcode>(vec![]));
+static BINARY_ARITH_OPCODE_DYN_TYPE: LazyLock<DynType> =
+    LazyLock::new(|| DynType::new_struct_with_static_type::<BinaryArithOpcode>(vec![]));
 
 unsafe impl Reflect for BinaryArithOpcode {
-    const TYPE: Type = &BINARY_ARITH_OPCODE_TYPE_INFO;
+    const STATIC_TYPE: StaticType = &BINARY_ARITH_OPCODE_TYPE_INFO;
 
-    const MIR_TYPE: &LazyLock<MirType> = &BINARY_ARITH_OPCODE_MIR_TYPE;
+    const DYN_TYPE: &LazyLock<DynType> = &BINARY_ARITH_OPCODE_DYN_TYPE;
 }
 
-static BINARY_CMP_OPCODE_TYPE_INFO: TypeInfo = TypeInfo {
+static BINARY_CMP_OPCODE_TYPE_INFO: StaticTypeInfo = StaticTypeInfo {
     debug_name: "BinaryCmpOpcode",
     layout: Some(Layout::new::<BinaryCmpOpcode>()),
     is_zeroable: false,
     clone: CloneKind::Copy,
     drop_fn: None,
-    mir_type: &BINARY_CMP_OPCODE_MIR_TYPE,
+    dyn_type: &BINARY_CMP_OPCODE_DYN_TYPE,
 };
 
-static BINARY_CMP_OPCODE_MIR_TYPE: LazyLock<MirType> =
-    LazyLock::new(|| MirType::new_struct_with_static_type::<BinaryCmpOpcode>(vec![]));
+static BINARY_CMP_OPCODE_DYN_TYPE: LazyLock<DynType> =
+    LazyLock::new(|| DynType::new_struct_with_static_type::<BinaryCmpOpcode>(vec![]));
 
 unsafe impl Reflect for BinaryCmpOpcode {
-    const TYPE: Type = &BINARY_CMP_OPCODE_TYPE_INFO;
+    const STATIC_TYPE: StaticType = &BINARY_CMP_OPCODE_TYPE_INFO;
 
-    const MIR_TYPE: &LazyLock<MirType> = &BINARY_CMP_OPCODE_MIR_TYPE;
+    const DYN_TYPE: &LazyLock<DynType> = &BINARY_CMP_OPCODE_DYN_TYPE;
 }
 
-static BINARY_BOOL_OPCODE_TYPE_INFO: TypeInfo = TypeInfo {
+static BINARY_BOOL_OPCODE_TYPE_INFO: StaticTypeInfo = StaticTypeInfo {
     debug_name: "BinaryBoolOpcode",
     layout: Some(Layout::new::<BinaryBoolOpcode>()),
     is_zeroable: false,
     clone: CloneKind::Copy,
     drop_fn: None,
-    mir_type: &BINARY_BOOL_OPCODE_MIR_TYPE,
+    dyn_type: &BINARY_BOOL_OPCODE_DYN_TYPE,
 };
 
-static BINARY_BOOL_OPCODE_MIR_TYPE: LazyLock<MirType> =
-    LazyLock::new(|| MirType::new_struct_with_static_type::<BinaryBoolOpcode>(vec![]));
+static BINARY_BOOL_OPCODE_DYN_TYPE: LazyLock<DynType> =
+    LazyLock::new(|| DynType::new_struct_with_static_type::<BinaryBoolOpcode>(vec![]));
 
 unsafe impl Reflect for BinaryBoolOpcode {
-    const TYPE: Type = &BINARY_BOOL_OPCODE_TYPE_INFO;
+    const STATIC_TYPE: StaticType = &BINARY_BOOL_OPCODE_TYPE_INFO;
 
-    const MIR_TYPE: &LazyLock<MirType> = &BINARY_BOOL_OPCODE_MIR_TYPE;
+    const DYN_TYPE: &LazyLock<DynType> = &BINARY_BOOL_OPCODE_DYN_TYPE;
 }
 
 #[derive(Debug, Clone)]
@@ -152,10 +151,10 @@ impl BinaryArith {
 
         let operation = if lhs_ty.is::<NlFloat>() && rhs_ty.is::<NlFloat>() {
             let opcode = match self.op {
-                BinaryArithOpcode::Add => lir::BinaryOpcode::FAdd,
-                BinaryArithOpcode::Sub => lir::BinaryOpcode::FSub,
-                BinaryArithOpcode::Mul => lir::BinaryOpcode::FMul,
-                BinaryArithOpcode::Div => lir::BinaryOpcode::FDiv,
+                BinaryArithOpcode::Add => mir::BinaryOpcode::FAdd,
+                BinaryArithOpcode::Sub => mir::BinaryOpcode::FSub,
+                BinaryArithOpcode::Mul => mir::BinaryOpcode::FMul,
+                BinaryArithOpcode::Div => mir::BinaryOpcode::FDiv,
             };
             mir::Operation::BinaryOp {
                 opcode,
@@ -234,7 +233,7 @@ impl BinaryCmp {
                 let result = !negate;
                 let dst = builder
                     .mir
-                    .add_operation(None, mir::Operation::Const { value: BoxedAny::new(result) });
+                    .add_operation(None, mir::Operation::Const(mir::PodValue::new(result)));
                 return Some(dst);
             }
 
@@ -268,11 +267,11 @@ impl BinaryCmp {
             && (rhs_ty.is::<NlFloat>() || rhs_ty.is::<NlFloat>())
         {
             let opcode = match self.op {
-                Op::Lt => lir::BinaryOpcode::FLt,
-                Op::Lte => lir::BinaryOpcode::FLte,
-                Op::Gt => lir::BinaryOpcode::FGt,
-                Op::Gte => lir::BinaryOpcode::FGte,
-                Op::Eq => lir::BinaryOpcode::FEq,
+                Op::Lt => mir::BinaryOpcode::FLt,
+                Op::Lte => mir::BinaryOpcode::FLte,
+                Op::Gt => mir::BinaryOpcode::FGt,
+                Op::Gte => mir::BinaryOpcode::FGte,
+                Op::Eq => mir::BinaryOpcode::FEq,
                 _ => unimplemented!("unsupported operation"),
             };
             mir::Operation::BinaryOp {
@@ -283,10 +282,7 @@ impl BinaryCmp {
         } else if lhs_ty.is::<PackedAny>() && rhs_ty.is::<PackedAny>() {
             let opcode_pl = builder
                 .mir
-                .add_operation(
-                    None,
-                    mir::Operation::Const { value: BoxedAny::new::<BinaryCmpOpcode>(self.op) },
-                )
+                .add_operation(None, mir::Operation::Const(mir::PodValue::new(self.op)))
                 .place();
             mir::Operation::CallHostFunction {
                 function: &binary_cmp_any_bool::FN_INFO,
@@ -309,12 +305,16 @@ fn binary_cmp_any_bool(_lhs: PackedAny, _rhs: PackedAny, _op: BinaryCmpOpcode) -
 }
 mod binary_cmp_any_bool {
     use super::*;
-    use crate::mir::HostFunctionInfo;
+    use reflection::mir::HostFunctionInfo;
 
     pub static FN_INFO: HostFunctionInfo = HostFunctionInfo {
         debug_name: "binary_cmp_any_bool",
-        parameter_types: &[PackedAny::TYPE, PackedAny::TYPE, BinaryCmpOpcode::TYPE],
-        return_type: bool::TYPE,
+        parameter_types: &[
+            PackedAny::STATIC_TYPE,
+            PackedAny::STATIC_TYPE,
+            BinaryCmpOpcode::STATIC_TYPE,
+        ],
+        return_type: bool::STATIC_TYPE,
         link_name: "binary_cmp_any_bool",
         link_addr: binary_cmp_any_bool as *const u8,
     };
@@ -366,8 +366,8 @@ impl BinaryBool {
 
         let operation = if lhs_ty.is::<bool>() && rhs_ty.is::<bool>() {
             let opcode = match self.op {
-                BinaryBoolOpcode::And => lir::BinaryOpcode::And,
-                BinaryBoolOpcode::Or => lir::BinaryOpcode::Or,
+                BinaryBoolOpcode::And => mir::BinaryOpcode::And,
+                BinaryBoolOpcode::Or => mir::BinaryOpcode::Or,
             };
             mir::Operation::BinaryOp {
                 opcode,
@@ -416,7 +416,7 @@ impl LogicalNot {
     pub fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
         let operand_lcl = translate_expr(builder, &self.operand)?;
         let final_operation = mir::Operation::UnaryOp {
-            opcode: lir::UnaryOpcode::Not,
+            opcode: mir::UnaryOpcode::Not,
             operand: mir::PlaceOperand::Copy(operand_lcl.place()),
         };
         Some(builder.mir.add_operation(None, final_operation))
@@ -458,7 +458,7 @@ impl Negate {
     pub fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
         let operand_local = translate_expr(builder, &self.operand)?;
         let final_operation = mir::Operation::UnaryOp {
-            opcode: lir::UnaryOpcode::FNeg,
+            opcode: mir::UnaryOpcode::FNeg,
             operand: mir::PlaceOperand::Copy(operand_local.place()),
         };
         Some(builder.mir.add_operation(None, final_operation))

@@ -6,6 +6,7 @@ members = [
     "engine",
     "lir_to_wasm",
     "lir_to_cranelift",
+    "reflection",
     "ast_to_hir",
     "pretty_print",
     "ffi_translate/ffi_translate_impl",

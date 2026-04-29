@@ -1,8 +1,7 @@
 use std::ptr::NonNull;
 
 use macro_reflect::{MirReflect, reflect};
-
-use crate::util::reflection::Type;
+use reflection::StaticType;
 
 use super::{BoxedAny, UnpackedAny};
 
@@ -81,7 +80,7 @@ impl PackedAny {
                 // SAFETY: this pointer can only have come from a call to
                 // `BoxedAny::as_raw` because there is no other assignment to
                 // this variant that doesn't use `BoxedAny::as_raw`
-                unsafe { BoxedAny::from_raw(NonNull::new_unchecked(value as *mut Type)) },
+                unsafe { BoxedAny::from_raw(NonNull::new_unchecked(value as *mut StaticType)) },
             ),
             other => unimplemented!("{:b} is not a recognized tag for [`PackedAny`].", other),
         }

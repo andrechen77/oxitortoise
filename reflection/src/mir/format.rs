@@ -222,7 +222,9 @@ impl Operation {
     ) -> fmt::Result {
         match self {
             Operation::Operand(operand) => operand.pretty_print(p, local_decls),
-            Operation::Const { value } => write!(p, "{:?}", value),
+            Operation::Const(pod_value) => {
+                write!(p, "{:?} {:?}", pod_value.ty(), pod_value.bytes())
+            }
             Operation::FunctionPtr { function } => {
                 if let Some(debug_name) = &functions[function].debug_name {
                     write!(p, "{:?}#{}", function, debug_name)
@@ -269,7 +271,9 @@ impl fmt::Debug for Operation {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Operation::Operand(operand) => write!(f, "{:?}", operand),
-            Operation::Const { value } => write!(f, "{:?}", value),
+            Operation::Const(pod_value) => {
+                write!(f, "{:?} {:?}", pod_value.ty(), pod_value.bytes())
+            }
             Operation::FunctionPtr { function } => write!(f, "{:?}", function),
             Operation::BinaryOp { opcode, lhs, rhs } => write!(f, "{lhs:?} {opcode:?} {rhs:?}"),
             Operation::UnaryOp { opcode, operand } => write!(f, "{opcode:?} {operand:?}"),

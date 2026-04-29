@@ -12,12 +12,8 @@ use std::{
     ptr::NonNull,
 };
 
-use crate::{
-    mir::{self, DynPtr, DynPtrMut, HasDynPtr, MirType},
-    util::{
-        lifetime_ptr::{LifetimePtr, LifetimePtrMut},
-        reflection::{Reflect, Type},
-    },
+use reflection::{
+    DynPtr, DynPtrMut, DynType, HasDynPtr, LifetimePtr, LifetimePtrMut, Reflect, StaticType, mir,
 };
 
 #[derive(Debug)]
@@ -108,12 +104,12 @@ pub struct RowSchema {
 #[derive(Debug, Clone)]
 pub struct RowSchemaField {
     pub offset: usize,
-    pub r#type: Type,
+    pub r#type: StaticType,
     pub size: usize,
 }
 
 impl RowSchema {
-    pub fn new(types_and_layouts: &[Type], occupancy_bitfield: bool) -> Self {
+    pub fn new(types_and_layouts: &[StaticType], occupancy_bitfield: bool) -> Self {
         let mut fields = Vec::new();
 
         // find the length of the bitfield to hold whether each column is
@@ -249,7 +245,7 @@ impl<'a, B: AsRef<[u8]> + AsMut<[u8]> + 'a> Row<'a, B> {
 
         // if the field is already present, drop the existing value to replace it
         if self.has_field(field_idx)
-            && let Some(drop_fn) = T::TYPE.drop_fn
+            && let Some(drop_fn) = T::STATIC_TYPE.drop_fn
         {
             // SAFETY: we checked that the type tag matches, so this is the
             // right function to call. we know this value is actually present.
@@ -591,7 +587,7 @@ impl RowBuffer {
         let ptr_to_buffer = RowBuffer::write_mir_get_data_ptr(builder, self_pl);
         let ptr_to_row = ptr_to_buffer.proj_deref().proj_dynamic_index(row_idx);
         let row_ty = builder.type_of_place(&ptr_to_row);
-        let MirType::Struct(struct_def) = &row_ty else {
+        let DynType::Struct(struct_def) = &row_ty else {
             panic!("expected a type with fields, got {:?}", row_ty);
         };
         let (field_offset, _) = struct_def.fields[field_idx];
@@ -617,7 +613,7 @@ unsafe impl HasDynPtr for RowBuffer {
 
         // TODO add type descriptor. default is trivially correct because it
         // makes no assertions about the type
-        let type_desc = MirType::default();
+        let type_desc = DynType::default();
 
         // SAFETY: the pointer is valid for the lifetime `'a` and the type
         // descriptor is correct
@@ -631,7 +627,7 @@ unsafe impl HasDynPtr for RowBuffer {
 
         // TODO add type descriptor. default is trivially correct because it
         // makes no assertions about the type
-        let type_desc = MirType::default();
+        let type_desc = DynType::default();
 
         // SAFETY: the pointer is valid for the lifetime `'a` and the type
         // descriptor is correct
@@ -645,19 +641,19 @@ unsafe impl HasDynPtr for RowBuffer {
         self_pl.proj_field(offset_of!(Self, bytes))
     }
 
-    fn self_mir_type_from_metadata(schema: &RowSchema) -> MirType {
+    fn self_mir_type_from_metadata(schema: &RowSchema) -> DynType {
         let fields = schema
             .fields
             .iter()
-            .map(|field| (field.offset, (*field.r#type.mir_type).clone()))
+            .map(|field| (field.offset, (*field.r#type.dyn_type).clone()))
             .collect();
 
-        MirType::new_struct(
+        DynType::new_struct(
             Layout::new::<Self>(),
             vec![(
                 offset_of!(Self, bytes),
-                MirType::ref_to(MirType::array_of(
-                    MirType::new_struct(schema.layout, fields),
+                DynType::ref_to(DynType::array_of(
+                    DynType::new_struct(schema.layout, fields),
                     None,
                 )),
             )],
@@ -742,7 +738,7 @@ mod tests {
     #[test]
     fn test_basic_insert_retrieve() {
         // Schema with a single u32 field
-        let schema = RowSchema::new(&[u32::TYPE], true);
+        let schema = RowSchema::new(&[u32::STATIC_TYPE], true);
         let mut buffer = RowBuffer::new(schema);
         buffer.ensure_capacity(1);
         {
@@ -755,7 +751,8 @@ mod tests {
 
     #[test]
     fn test_heterogeneous_fields() {
-        let schema = RowSchema::new(&[u32::TYPE, TestStr::TYPE, f64::TYPE], true);
+        let schema =
+            RowSchema::new(&[u32::STATIC_TYPE, TestStr::STATIC_TYPE, f64::STATIC_TYPE], true);
         let mut buffer = RowBuffer::new(schema);
         buffer.ensure_capacity(1);
 
@@ -775,7 +772,10 @@ mod tests {
     #[test]
     fn test_sparse_fields() {
         // create a schema with 4 fields but only insert 2 of them
-        let schema = RowSchema::new(&[u32::TYPE, TestStr::TYPE, f64::TYPE, bool::TYPE], true);
+        let schema = RowSchema::new(
+            &[u32::STATIC_TYPE, TestStr::STATIC_TYPE, f64::STATIC_TYPE, bool::STATIC_TYPE],
+            true,
+        );
         let mut buffer = RowBuffer::new(schema);
         buffer.ensure_capacity(1);
 
@@ -805,7 +805,8 @@ mod tests {
 
     #[test]
     fn test_insert_and_take() {
-        let schema = RowSchema::new(&[u32::TYPE, TestStr::TYPE, f64::TYPE], true);
+        let schema =
+            RowSchema::new(&[u32::STATIC_TYPE, TestStr::STATIC_TYPE, f64::STATIC_TYPE], true);
         let mut buffer = RowBuffer::new(schema);
         buffer.ensure_capacity(1);
 
@@ -847,7 +848,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "type mismatch")]
     fn test_type_mismatch_present_field() {
-        let schema = RowSchema::new(&[u32::TYPE], true);
+        let schema = RowSchema::new(&[u32::STATIC_TYPE], true);
         let mut buffer = RowBuffer::new(schema);
         buffer.ensure_capacity(1);
 
@@ -864,7 +865,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "type mismatch")]
     fn test_type_mismatch_absent_field() {
-        let schema = RowSchema::new(&[u32::TYPE], true);
+        let schema = RowSchema::new(&[u32::STATIC_TYPE], true);
         let mut buffer = RowBuffer::new(schema);
         buffer.ensure_capacity(1);
 
@@ -875,7 +876,8 @@ mod tests {
 
     #[test]
     fn test_capacity_expansion_preserves_data() {
-        let schema = RowSchema::new(&[u32::TYPE, TestStr::TYPE, f64::TYPE], true);
+        let schema =
+            RowSchema::new(&[u32::STATIC_TYPE, TestStr::STATIC_TYPE, f64::STATIC_TYPE], true);
         let mut buffer = RowBuffer::new(schema);
 
         // insert data into the first few rows
@@ -932,8 +934,16 @@ mod tests {
 
     #[test]
     fn test_massive_row_count() {
-        let schema =
-            RowSchema::new(&[bool::TYPE, bool::TYPE, u32::TYPE, f64::TYPE, TestStr::TYPE], true);
+        let schema = RowSchema::new(
+            &[
+                bool::STATIC_TYPE,
+                bool::STATIC_TYPE,
+                u32::STATIC_TYPE,
+                f64::STATIC_TYPE,
+                TestStr::STATIC_TYPE,
+            ],
+            true,
+        );
         let mut buffer = RowBuffer::new(schema);
 
         // create 200 rows with predictable values
@@ -973,7 +983,7 @@ mod tests {
     #[test]
     fn test_change_schema() {
         // create initial buffer with (u32, String) schema
-        let old_schema = RowSchema::new(&[u32::TYPE, TestStr::TYPE], true);
+        let old_schema = RowSchema::new(&[u32::STATIC_TYPE, TestStr::STATIC_TYPE], true);
         let mut buffer = RowBuffer::new_with_capacity(old_schema, 3);
 
         // populate with some data
@@ -994,7 +1004,7 @@ mod tests {
         }
 
         // create new schema with (String, u32) - reversed order
-        let new_schema = RowSchema::new(&[TestStr::TYPE, u32::TYPE], true);
+        let new_schema = RowSchema::new(&[TestStr::STATIC_TYPE, u32::STATIC_TYPE], true);
 
         // change schema, taking ownership of values
         buffer.change_schema(new_schema, |mut old_row, mut new_row| {
@@ -1019,7 +1029,7 @@ mod tests {
 
     #[test]
     fn test_insert_zeroable() {
-        let schema = RowSchema::new(&[u32::TYPE], true);
+        let schema = RowSchema::new(&[u32::STATIC_TYPE], true);
         let mut buffer = RowBuffer::new(schema);
         buffer.ensure_capacity(1);
 
@@ -1043,7 +1053,8 @@ mod tests {
 
     #[test]
     fn test_clear() {
-        let schema = RowSchema::new(&[u32::TYPE, TestStr::TYPE, f64::TYPE], true);
+        let schema =
+            RowSchema::new(&[u32::STATIC_TYPE, TestStr::STATIC_TYPE, f64::STATIC_TYPE], true);
         let mut buffer = RowBuffer::new_with_capacity(schema, 3);
 
         // populate multiple rows with data
@@ -1108,7 +1119,7 @@ mod tests {
 
     #[test]
     fn test_basic_always_present() {
-        let schema = RowSchema::new(&[u32::TYPE], false);
+        let schema = RowSchema::new(&[u32::STATIC_TYPE], false);
         let mut buffer = RowBuffer::new(schema);
         buffer.ensure_capacity(1);
         {
@@ -1122,7 +1133,8 @@ mod tests {
 
     #[test]
     fn test_heterogeneous_always_present() {
-        let schema = RowSchema::new(&[u32::TYPE, bool::TYPE, f64::TYPE], false);
+        let schema =
+            RowSchema::new(&[u32::STATIC_TYPE, bool::STATIC_TYPE, f64::STATIC_TYPE], false);
         let mut buffer = RowBuffer::new(schema);
         buffer.ensure_capacity(1);
         {
@@ -1139,7 +1151,10 @@ mod tests {
 
     #[test]
     fn test_massive_always_present() {
-        let schema = RowSchema::new(&[bool::TYPE, bool::TYPE, u32::TYPE, f64::TYPE], false);
+        let schema = RowSchema::new(
+            &[bool::STATIC_TYPE, bool::STATIC_TYPE, u32::STATIC_TYPE, f64::STATIC_TYPE],
+            false,
+        );
         let mut buffer = RowBuffer::new(schema);
         let num_rows = 200;
         buffer.ensure_capacity(num_rows);
@@ -1161,7 +1176,7 @@ mod tests {
 
     #[test]
     fn test_insert_zeroable_always_present() {
-        let schema = RowSchema::new(&[u32::TYPE], false);
+        let schema = RowSchema::new(&[u32::STATIC_TYPE], false);
         let mut buffer = RowBuffer::new(schema);
         buffer.ensure_capacity(1);
         {
@@ -1179,14 +1194,14 @@ mod tests {
     )]
     fn test_panic_nonzeroable_always_present() {
         // String is not zeroable
-        let schema = RowSchema::new(&[TestStr::TYPE], false);
+        let schema = RowSchema::new(&[TestStr::STATIC_TYPE], false);
         let _ = RowBuffer::new(schema);
     }
 
     #[test]
     #[should_panic(expected = "cannot take a field if the occupancy bitfield is omitted")]
     fn test_panic_take_always_present() {
-        let schema = RowSchema::new(&[u32::TYPE], false);
+        let schema = RowSchema::new(&[u32::STATIC_TYPE], false);
         let mut buffer = RowBuffer::new(schema);
         buffer.ensure_capacity(1);
         let mut row = buffer.row_mut(0);
@@ -1196,7 +1211,7 @@ mod tests {
     #[test]
     fn test_take_array() {
         // create a schema with a single u32 field, always present
-        let schema = RowSchema::new(&[u32::TYPE], false);
+        let schema = RowSchema::new(&[u32::STATIC_TYPE], false);
         let mut buffer = RowBuffer::new_with_capacity(schema, 5);
 
         // populate the buffer with some values
@@ -1231,7 +1246,7 @@ mod tests {
     #[should_panic(expected = "cannot reinterpret the row buffer as an array of type u32")]
     fn test_take_array_wrong_type() {
         // create a schema with a single f64 field, always present
-        let schema = RowSchema::new(&[f64::TYPE], false);
+        let schema = RowSchema::new(&[f64::STATIC_TYPE], false);
         let mut buffer = RowBuffer::new_with_capacity(schema, 3);
 
         // try to take as u32 - should panic
@@ -1242,7 +1257,7 @@ mod tests {
     #[should_panic(expected = "cannot reinterpret the row buffer as an array of type u32")]
     fn test_take_array_multiple_fields() {
         // create a schema with multiple fields, always present
-        let schema = RowSchema::new(&[u32::TYPE, f64::TYPE], false);
+        let schema = RowSchema::new(&[u32::STATIC_TYPE, f64::STATIC_TYPE], false);
         let mut buffer = RowBuffer::new_with_capacity(schema, 3);
 
         // try to take as u32 - should panic because there are multiple fields
@@ -1253,7 +1268,7 @@ mod tests {
     #[should_panic(expected = "cannot reinterpret the row buffer as an array of type u32")]
     fn test_take_array_with_occupancy_bitfield() {
         // create a schema with occupancy bitfield (sparse fields)
-        let schema = RowSchema::new(&[u32::TYPE], true);
+        let schema = RowSchema::new(&[u32::STATIC_TYPE], true);
         let mut buffer = RowBuffer::new_with_capacity(schema, 3);
 
         // try to take as u32 - should panic because there's an occupancy bitfield

@@ -1,18 +1,10 @@
-use std::{collections::HashMap, sync::Arc};
-
-use crate::install_lir::Obj;
+use std::{collections::BTreeMap, sync::Arc};
 
 use cranelift_jit::{JITBuilder, JITModule};
-use engine::{
-    exec::jit::{InstallLir, InstallLirError},
-    lir,
-    sim::value::PackedAny,
-    util::rng::CanonRng,
-    workspace::Workspace,
-};
+use engine::{sim::value::PackedAny, util::rng::CanonRng, workspace::Workspace};
 use lir_to_cranelift::{
     cranelift_codegen::{self, settings},
-    cranelift_module, lir_to_cranelift,
+    cranelift_module, lir, lir_to_cranelift,
 };
 
 // TODO handle cleaning up old functions that are no longer needed
@@ -48,10 +40,14 @@ impl Default for LirInstaller {
     }
 }
 
-impl InstallLir for LirInstaller {
-    type Obj = Obj;
-
-    unsafe fn install_lir(&mut self, lir: &lir::Program) -> Result<Self::Obj, InstallLirError> {
+impl LirInstaller {
+    unsafe fn install_lir(
+        &mut self,
+        lir: &lir::Program,
+    ) -> BTreeMap<
+        lir::FunctionId,
+        unsafe extern "C" fn(&mut Workspace, &mut CanonRng, *mut PackedAny, u32),
+    > {
         let lir_to_clm_fn_id = lir_to_cranelift(
             &mut self.module,
             lir,
@@ -68,14 +64,10 @@ impl InstallLir for LirInstaller {
         );
         self.module.finalize_definitions().unwrap();
 
-        let entrypoints = HashMap::from_iter(
+        BTreeMap::from_iter(
             lir.user_functions
                 .iter()
-                .filter_map(
-                    |(lir_fn_id, function)| {
-                        if function.is_entrypoint { Some(lir_fn_id) } else { None }
-                    },
-                )
+                .filter_map(|(lir_fn_id, function)| function.is_entrypoint.then_some(lir_fn_id))
                 .map(|lir_fn_id| {
                     // TODO for sanity, verify that each entrypoint has the
                     // signature specified in `JitEntrypoint`. However, Wasm
@@ -100,7 +92,6 @@ impl InstallLir for LirInstaller {
                     };
                     (lir_fn_id, fn_ptr)
                 }),
-        );
-        Ok(Obj { entrypoints })
+        )
     }
 }

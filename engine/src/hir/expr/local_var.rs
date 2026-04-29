@@ -10,8 +10,8 @@ use crate::{
         Expr, ExprKind, HirToMirFnBuilder, LocalId, NameContext, NlAbstractTy, NlAbstractTyAtom,
         build_mir::translate_expr,
     },
-    mir,
 };
+use reflection::mir;
 
 #[derive(Debug, Clone)]
 pub struct GetLocalVar {

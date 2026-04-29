@@ -3,24 +3,25 @@
 //! From the perspective of this code, all turtles belong to a breed. Unbreeded
 //! turtles belong to a special breed that acts like the `turtles` agentset.
 
-use std::alloc::Layout;
-use std::collections::BTreeMap;
-use std::fmt::{self, Debug, Write};
-use std::mem::offset_of;
-use std::ops::Index;
-use std::sync::Arc;
+use std::{
+    alloc::Layout,
+    collections::BTreeMap,
+    fmt::{self, Debug, Write},
+    mem::offset_of,
+    ops::Index,
+    sync::Arc,
+};
 
 use derive_more::Display;
 use derive_more::derive::{From, Into};
 use either::Either;
 use macro_reflect::{MirReflect, reflect};
 use pretty_print::PrettyPrinter;
+use reflection::{DynType, HasDynPtr as _, Reflect, StaticType, mir};
 
-use crate::hir::{CustomVarDecl, TypeMapping};
-use crate::mir::{self, HasDynPtr as _};
-use crate::sim::color;
-use crate::util::reflection::Reflect;
 use crate::{
+    hir::{CustomVarDecl, TypeMapping},
+    sim::color,
     sim::{
         agent_schema::{AgentFieldDescriptor, AgentSchemaField, AgentSchemaFieldGroup},
         topology::{Heading, Point},
@@ -28,7 +29,6 @@ use crate::{
     },
     util::{
         gen_slot_tracker::{GenIndex, GenSlotTracker},
-        reflection::Type,
         rng::Rng,
         row_buffer::{RowBuffer, RowSchema},
     },
@@ -295,7 +295,7 @@ impl Turtles {
         let turtle_idx = builder.add_operation(
             Some("turtle_idx".into()),
             mir::Operation::UnaryOp {
-                opcode: lir::UnaryOpcode::I64ToI32,
+                opcode: mir::UnaryOpcode::I64ToI32,
                 operand: mir::PlaceOperand::Copy(turtle_id),
             },
         );
@@ -308,7 +308,7 @@ impl Turtles {
         if let Some(offset) = offset { var_pl.proj_field(offset) } else { var_pl }
     }
 
-    pub fn mir_type_from_schema(schema: &TurtleSchema) -> mir::MirType {
+    pub fn mir_type_from_schema(schema: &TurtleSchema) -> DynType {
         // this code relies on the fact that the RowBuffer struct is niche
         // optimized so that an Option<RowBuffer> which is known to be Some can
         // be treated as a RowBuffer. A better solution would be to use the
@@ -318,7 +318,7 @@ impl Turtles {
         const { assert!(size_of::<RowBuffer>() == size_of::<Option<RowBuffer>>()) };
 
         // we get 4 to match the number of buffers in the Turtles struct
-        let buffer_types: [Option<mir::MirType>; 4] = schema
+        let buffer_types: [Option<DynType>; 4] = schema
             .make_row_schemas()
             .map(|schema| schema.map(|s| RowBuffer::self_mir_type_from_metadata(&s)));
         let fields = buffer_types
@@ -331,7 +331,7 @@ impl Turtles {
             })
             .collect();
 
-        mir::MirType::new_struct(Layout::new::<Self>(), fields)
+        DynType::new_struct(Layout::new::<Self>(), fields)
     }
 }
 
@@ -510,7 +510,7 @@ pub enum TurtleFieldGroupElement {
     BaseData,
     Position,
     Heading,
-    Custom { name: Arc<str>, ty: Type },
+    Custom { name: Arc<str>, ty: StaticType },
 }
 
 pub struct TurtleFieldGroup {
@@ -549,7 +549,9 @@ impl TurtleSchema {
                             panic!("position cannot be included more than once");
                         }
                         position = Some(current_field_desc);
-                        agent_schema_field_group.fields.push(AgentSchemaField::Other(Point::TYPE));
+                        agent_schema_field_group
+                            .fields
+                            .push(AgentSchemaField::Other(Point::STATIC_TYPE));
                     }
                     TurtleFieldGroupElement::Heading => {
                         if heading.is_some() {
@@ -558,7 +560,7 @@ impl TurtleSchema {
                         heading = Some(current_field_desc);
                         agent_schema_field_group
                             .fields
-                            .push(AgentSchemaField::Other(Heading::TYPE));
+                            .push(AgentSchemaField::Other(Heading::STATIC_TYPE));
                     }
                     TurtleFieldGroupElement::Custom { name, ty } => {
                         custom_fields.push((name, current_field_desc));
@@ -612,14 +614,14 @@ impl TurtleSchema {
         }
     }
 
-    pub fn var_type(&self, var: TurtleVarDesc) -> Type {
+    pub fn var_type(&self, var: TurtleVarDesc) -> StaticType {
         match var {
-            TurtleVarDesc::Who => NlFloat::TYPE,
-            TurtleVarDesc::Color => NlFloat::TYPE,
-            TurtleVarDesc::Size => NlFloat::TYPE,
-            TurtleVarDesc::Pos => Point::TYPE,
-            TurtleVarDesc::Xcor => NlFloat::TYPE,
-            TurtleVarDesc::Ycor => NlFloat::TYPE,
+            TurtleVarDesc::Who => NlFloat::STATIC_TYPE,
+            TurtleVarDesc::Color => NlFloat::STATIC_TYPE,
+            TurtleVarDesc::Size => NlFloat::STATIC_TYPE,
+            TurtleVarDesc::Pos => Point::STATIC_TYPE,
+            TurtleVarDesc::Xcor => NlFloat::STATIC_TYPE,
+            TurtleVarDesc::Ycor => NlFloat::STATIC_TYPE,
             TurtleVarDesc::Custom(field) => {
                 let var_desc = self.custom_fields()[field].1;
                 let AgentSchemaField::Other(ty) = self[var_desc] else {
@@ -652,14 +654,14 @@ impl Index<AgentFieldDescriptor> for TurtleSchema {
     }
 }
 
-pub fn turtle_var_type(schema: &TurtleSchema, var: TurtleVarDesc) -> Type {
+pub fn turtle_var_type(schema: &TurtleSchema, var: TurtleVarDesc) -> StaticType {
     match var {
-        TurtleVarDesc::Who => NlFloat::TYPE,
-        TurtleVarDesc::Color => NlFloat::TYPE,
-        TurtleVarDesc::Size => NlFloat::TYPE,
-        TurtleVarDesc::Pos => Point::TYPE,
-        TurtleVarDesc::Xcor => NlFloat::TYPE,
-        TurtleVarDesc::Ycor => NlFloat::TYPE,
+        TurtleVarDesc::Who => NlFloat::STATIC_TYPE,
+        TurtleVarDesc::Color => NlFloat::STATIC_TYPE,
+        TurtleVarDesc::Size => NlFloat::STATIC_TYPE,
+        TurtleVarDesc::Pos => Point::STATIC_TYPE,
+        TurtleVarDesc::Xcor => NlFloat::STATIC_TYPE,
+        TurtleVarDesc::Ycor => NlFloat::STATIC_TYPE,
         TurtleVarDesc::Custom(field) => {
             let AgentSchemaField::Other(ty) = schema[schema.custom_fields()[field].1] else {
                 unreachable!("this is a custom field, so it cannot be part of the base data");

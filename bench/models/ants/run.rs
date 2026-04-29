@@ -1,10 +1,7 @@
 use std::io;
 
 use ast_to_hir::{HirResult, serde_json};
-use engine::{
-    hir::{self, hir_to_mir, make_type_mapping},
-    mir,
-};
+use engine::hir::{self, hir_to_mir, make_type_mapping};
 use tracing::{Level, info};
 use tracing_subscriber::{
     Layer as _, filter::Targets, fmt::MakeWriter, layer::SubscriberExt as _,
@@ -134,6 +131,7 @@ fn main() {
 
     let mir_program = hir_to_mir(&program);
     write_to_file("before.mir", mir_program.pretty_print().as_bytes());
+    write_to_file("ugly_mir", format!("{:#?}", mir_program).as_bytes());
 
     // let (lir_program, hir_to_lir_fns) = hir_to_lir::<LirInstaller>(&program);
     // let lir_str = lir_program.pretty_print();

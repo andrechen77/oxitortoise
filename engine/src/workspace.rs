@@ -5,9 +5,9 @@ use std::{
 };
 
 use macro_reflect::{MirReflect, reflect};
+use reflection::{DynType, mir};
 
 use crate::{
-    mir,
     sim::{observer::GlobalsSchema, patch::PatchSchema, turtle::TurtleSchema, world::World},
     util::rng::CanonRng,
 };
@@ -32,9 +32,9 @@ impl Workspace {
         globals_schema: &GlobalsSchema,
         turtle_schema: &TurtleSchema,
         patch_schema: &PatchSchema,
-    ) -> mir::MirType {
+    ) -> DynType {
         let world_ty = World::mir_type_from_schemas(globals_schema, turtle_schema, patch_schema);
-        mir::MirType::new_struct(Layout::new::<Self>(), vec![(offset_of!(Self, world), world_ty)])
+        DynType::new_struct(Layout::new::<Self>(), vec![(offset_of!(Self, world), world_ty)])
     }
 }
 

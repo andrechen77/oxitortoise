@@ -18,10 +18,9 @@ use crate::{
         build_mir::{self, HirToMirFnTranslator, translate_expr},
         ty::NlAbstractTyAtom,
     },
-    mir,
-    sim::value::BoxedAny,
-    util::{rc::create_erased_rc, reflection::Reflect},
+    util::rc::create_erased_rc,
 };
+use reflection::{DynType, Reflect, mir};
 
 #[derive(Debug, Clone)]
 pub struct Closure {
@@ -90,10 +89,10 @@ impl Closure {
         let mut inner_translator = HirToMirFnTranslator::default();
 
         let (env, env_ty) = if self.captures.is_empty() {
-            let env_ty = <*mut u8>::mir_type();
+            let env_ty = <*mut u8>::dyn_type();
             let env = builder.mir.add_operation_with_decl(
                 mir::LocalDecl { debug_name: None, ty: env_ty.clone() },
-                mir::Operation::Const { value: BoxedAny::new(std::ptr::null_mut::<u8>()) },
+                mir::Operation::Const(mir::PodValue::new(std::ptr::null_mut::<u8>())),
             );
             (env, env_ty)
         } else {
@@ -193,7 +192,7 @@ impl Closure {
 fn mir_create_anon_struct(
     builder: &mut HirToMirFnBuilder,
     values: &[mir::Place],
-) -> (mir::LocalId, mir::MirType) {
+) -> (mir::LocalId, DynType) {
     // aggregate the fields together to find the total layout as well as offsets
     // and types of each field
     let mut total_layout = Layout::new::<()>();
@@ -209,14 +208,14 @@ fn mir_create_anon_struct(
     }
 
     // now put it all together to create a definition of the struct type
-    let struct_ty = mir::MirType::new_struct(total_layout, fields.clone());
+    let struct_ty = DynType::new_struct(total_layout, fields.clone());
 
     // define a function that will drop all the values in the struct
     let drop_fn = {
         let mut drop_fn_builder = builder.mir.create_another_function();
 
         // add the parameter: a pointer to the struct being dropped
-        let param_ty = mir::MirType::ref_to(struct_ty.clone());
+        let param_ty = DynType::ref_to(struct_ty.clone());
         let param =
             drop_fn_builder.create_parameter(mir::LocalDecl { debug_name: None, ty: param_ty });
 
@@ -234,10 +233,8 @@ fn mir_create_anon_struct(
     // call a host function to allocate the struct on the heap
     let size: u32 = total_layout.size().try_into().unwrap();
     let align: u32 = total_layout.align().try_into().unwrap();
-    let size =
-        builder.mir.add_operation(None, mir::Operation::Const { value: BoxedAny::new(size) });
-    let align =
-        builder.mir.add_operation(None, mir::Operation::Const { value: BoxedAny::new(align) });
+    let size = builder.mir.add_operation(None, mir::Operation::Const(mir::PodValue::new(size)));
+    let align = builder.mir.add_operation(None, mir::Operation::Const(mir::PodValue::new(align)));
     let drop_fn =
         builder.mir.add_operation(None, mir::Operation::FunctionPtr { function: drop_fn });
     let erased_rc = builder.mir.add_operation(

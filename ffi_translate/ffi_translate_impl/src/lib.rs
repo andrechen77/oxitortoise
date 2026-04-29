@@ -172,9 +172,9 @@ pub fn ffi_translate_impl(
             pub static INFO: HostFunctionInfo = HostFunctionInfo {
                 name: #export_name_string,
                 parameter_types: &[
-                    #(<#new_inputs_types as AsLir>::TYPE,)*
+                    #(<#new_inputs_types as AsLir>::STATIC_TYPE,)*
                 ],
-                return_type: &[#(<#output_type as AsLir>::TYPE,)*],
+                return_type: &[#(<#output_type as AsLir>::STATIC_TYPE,)*],
             };
 
             #[unsafe(export_name = #export_name_string)]
@@ -304,10 +304,10 @@ mod tests {
                 pub static INFO: HostFunctionInfo = HostFunctionInfo {
                     name: "my_function_unmangled",
                     parameter_types: &[
-                        < < <MyPair as Fc>::Components as Ci<0usize> >::Component as AsLir>::TYPE,
-                        < < <MyPair as Fc>::Components as Ci<1usize> >::Component as AsLir>::TYPE,
-                        < < <MyPair as Fc>::Components as Ci<0usize> >::Component as AsLir>::TYPE,
-                        < < <MyPair as Fc>::Components as Ci<1usize> >::Component as AsLir>::TYPE,
+                        < < <MyPair as Fc>::Components as Ci<0usize> >::Component as AsLir>::STATIC_TYPE,
+                        < < <MyPair as Fc>::Components as Ci<1usize> >::Component as AsLir>::STATIC_TYPE,
+                        < < <MyPair as Fc>::Components as Ci<0usize> >::Component as AsLir>::STATIC_TYPE,
+                        < < <MyPair as Fc>::Components as Ci<1usize> >::Component as AsLir>::STATIC_TYPE,
                     ],
                     return_type: &[],
                 };
@@ -366,12 +366,12 @@ mod tests {
                 pub static INFO: HostFunctionInfo = HostFunctionInfo {
                     name: "my_function_unmangled",
                     parameter_types: &[
-                        < < <MyPair as Fc>::Components as Ci<0usize> >::Component as AsLir>::TYPE,
-                        < < <MyPair as Fc>::Components as Ci<1usize> >::Component as AsLir>::TYPE,
-                        < < <MyPair as Fc>::Components as Ci<0usize> >::Component as AsLir>::TYPE,
-                        < < <MyPair as Fc>::Components as Ci<1usize> >::Component as AsLir>::TYPE,
+                        < < <MyPair as Fc>::Components as Ci<0usize> >::Component as AsLir>::STATIC_TYPE,
+                        < < <MyPair as Fc>::Components as Ci<1usize> >::Component as AsLir>::STATIC_TYPE,
+                        < < <MyPair as Fc>::Components as Ci<0usize> >::Component as AsLir>::STATIC_TYPE,
+                        < < <MyPair as Fc>::Components as Ci<1usize> >::Component as AsLir>::STATIC_TYPE,
                     ],
-                    return_type: &[<Thing as AsLir>::TYPE,],
+                    return_type: &[<Thing as AsLir>::STATIC_TYPE,],
                 };
 
 

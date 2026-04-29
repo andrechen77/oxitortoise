@@ -1,4 +1,6 @@
-use crate::{mir, sim::value::NlFloat, util::rng::Rng};
+use reflection::mir;
+
+use crate::{sim::value::NlFloat, util::rng::Rng};
 
 pub const BLACK: NlFloat = NlFloat::new(0.0);
 pub const GRAY: NlFloat = NlFloat::new(5.0);
@@ -44,12 +46,12 @@ pub fn mir_wrap_color(builder: &mut mir::FunctionBuilder, color: mir::Place) -> 
 mod wrap_color {
     use super::*;
 
-    use crate::{mir::HostFunctionInfo, util::reflection::Reflect};
+    use reflection::{Reflect as _, mir::HostFunctionInfo};
 
     pub static FN_INFO: HostFunctionInfo = HostFunctionInfo {
         debug_name: "wrap_color",
-        parameter_types: &[NlFloat::TYPE],
-        return_type: NlFloat::TYPE,
+        parameter_types: &[NlFloat::STATIC_TYPE],
+        return_type: NlFloat::STATIC_TYPE,
         link_name: "wrap_color",
         link_addr: call as *const u8,
     };

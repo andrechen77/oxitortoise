@@ -1,23 +1,21 @@
 use std::{collections::BTreeMap, fmt, sync::Arc};
 
-use crate::{sim::value::BoxedAny, util::reflection::Type};
+use derive_more::Debug;
+pub use lir::{BinaryOpcode, UnaryOpcode};
+
+use crate::{DynType, Reflect, StaticType};
+
+pub use builder::{FunctionBuilder, FunctionStub, ProgramBuilder};
 
 mod builder;
 mod format;
-mod reflection;
-
-pub use builder::{FunctionBuilder, FunctionStub, ProgramBuilder};
-use derive_more::Debug;
-pub use reflection::{
-    DynPtr, DynPtrMut, HasDynPtr, MirReflect, MirType, MirTypeArray, MirTypeStruct,
-};
 
 #[derive(Debug)]
 #[debug("{debug_name}")]
 pub struct HostFunctionInfo {
     pub debug_name: &'static str,
-    pub parameter_types: &'static [Type],
-    pub return_type: Type,
+    pub parameter_types: &'static [StaticType],
+    pub return_type: StaticType,
     /// Meaningful on Wasm targets. The function is exported by this name.
     pub link_name: &'static str,
     /// Meaningfun on native targets. The function is located at this address.
@@ -62,7 +60,7 @@ pub struct Function {
 #[derive(Debug)]
 pub struct LocalDecl {
     pub debug_name: Option<Arc<str>>,
-    pub ty: MirType,
+    pub ty: DynType,
 }
 
 #[derive(Debug)]
@@ -178,7 +176,7 @@ pub enum Operation {
     /// Directly produces the operand.
     Operand(PlaceOperand),
     /// Produces a new instance of the specified value.
-    Const { value: BoxedAny }, // use BoxedAny because it can represent non-NetLogo types too
+    Const(PodValue),
     /// Lowers to the address of the specified function.
     FunctionPtr { function: FunctionId },
     /// A binary arithmetic between two scalars.
@@ -197,6 +195,28 @@ pub enum Operation {
     /// Calls a host function, taking the function's arguments from the given
     /// places and producing the return value.
     CallHostFunction { function: &'static HostFunctionInfo, args: Vec<PlaceOperand> },
+}
+
+pub struct PodValue {
+    /// The type of the value.
+    ty: DynType,
+    /// The bytes of the value.
+    bytes: Arc<[u8]>,
+}
+
+impl PodValue {
+    pub fn new<T: Reflect + Copy>(_value: T) -> Self {
+        let _ty = T::dyn_type();
+        todo!("TODO implement this without UB somehow, probably by using the type info");
+    }
+
+    pub fn ty(&self) -> &DynType {
+        &self.ty
+    }
+
+    pub fn bytes(&self) -> &[u8] {
+        &self.bytes
+    }
 }
 
 impl LocalId {
@@ -219,7 +239,7 @@ impl Place {
 }
 
 impl Function {
-    fn return_ty(&self) -> &MirType {
+    fn return_ty(&self) -> &DynType {
         &self.local_decls[&self.return_local].ty
     }
 }

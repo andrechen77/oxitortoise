@@ -3,18 +3,17 @@
 use std::fmt;
 
 use pretty_print::PrettyPrinter;
+use reflection::{Reflect, mir};
 
 use crate::{
     hir::{
         Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy, build_mir::translate_expr,
         expr::Agentset, ty::NlAbstractTyAtom,
     },
-    mir,
     sim::{
         patch::{OptionPatchId, PatchId},
         turtle::TurtleId,
     },
-    util::reflection::Reflect,
 };
 
 #[derive(Debug, Clone)]
@@ -111,9 +110,10 @@ impl Ask {
 }
 
 mod ask_all_turtles {
+    use reflection::mir::HostFunctionInfo;
+
     use crate::{
         exec::jit::JitCallback,
-        mir::HostFunctionInfo,
         sim::{turtle::TurtleId, value::agentset::shuffled_turtles},
         util::rng::CanonRng,
         workspace::Workspace,
@@ -124,14 +124,14 @@ mod ask_all_turtles {
     pub static FN_INFO: HostFunctionInfo = HostFunctionInfo {
         debug_name: "ask_all_turtles",
         parameter_types: &[
-            <&mut Workspace>::TYPE,
-            <&mut CanonRng>::TYPE,
+            <&mut Workspace>::STATIC_TYPE,
+            <&mut CanonRng>::STATIC_TYPE,
             // The lifetime is not actually 'static, but rather the
             // existentially quantified lifetime that would have been inferred
             // if it was part of a real Rust signature
-            <JitCallback<'static, TurtleId, ()>>::TYPE,
+            <JitCallback<'static, TurtleId, ()>>::STATIC_TYPE,
         ],
-        return_type: <()>::TYPE,
+        return_type: <()>::STATIC_TYPE,
         link_name: "ask_all_turtles",
         link_addr: call as *const u8,
     };
@@ -151,25 +151,23 @@ mod ask_all_turtles {
 mod ask_all_patches {
     use crate::{
         exec::jit::JitCallback,
-        mir::HostFunctionInfo,
         sim::{patch::PatchId, value::agentset::shuffled_patches},
         util::rng::CanonRng,
         workspace::Workspace,
     };
-
-    use super::*;
+    use reflection::{Reflect as _, mir::HostFunctionInfo};
 
     pub static FN_INFO: HostFunctionInfo = HostFunctionInfo {
         debug_name: "ask_all_patches",
         parameter_types: &[
-            <&mut Workspace>::TYPE,
-            <&mut CanonRng>::TYPE,
+            <&mut Workspace>::STATIC_TYPE,
+            <&mut CanonRng>::STATIC_TYPE,
             // The lifetime is not actually 'static, but rather the
             // existentially quantified lifetime that would have been inferred
             // if it was part of a real Rust signature
-            <JitCallback<'static, PatchId, ()>>::TYPE,
+            <JitCallback<'static, PatchId, ()>>::STATIC_TYPE,
         ],
-        return_type: <()>::TYPE,
+        return_type: <()>::STATIC_TYPE,
         link_name: "ask_all_patches",
         link_addr: call as *const u8,
     };
@@ -247,7 +245,7 @@ impl Of {
             ExprKind::Agentset(Agentset::AllTurtles) => todo!(),
             ExprKind::Agentset(Agentset::AllPatches) => todo!(),
             other => {
-                let recipients_local = translate_expr(builder, recipients)?;
+                let recipients_local = translate_expr(builder, other)?;
                 let recipients_ty = builder.mir.type_of_place(&recipients_local.place());
                 if recipients_ty.is::<PatchId>() || recipients_ty.is::<OptionPatchId>() {
                     // FIXME option shouldn't be here, this is just to make it compile for now

@@ -9,10 +9,10 @@ use crate::{
         Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy, NlAbstractTyAtom,
         build_mir::translate_expr,
     },
-    mir,
     sim::value::NlFloat,
     util::rng::{CanonRng, Rng as _},
 };
+use reflection::mir;
 
 #[derive(Debug, Clone)]
 pub struct RandomInt {
@@ -64,14 +64,14 @@ impl RandomInt {
 }
 
 mod random_int {
-    use crate::{mir::HostFunctionInfo, util::reflection::Reflect};
+    use reflection::{Reflect, mir::HostFunctionInfo};
 
     use super::*;
 
     pub static FN_INFO: HostFunctionInfo = HostFunctionInfo {
         debug_name: "random_int",
-        parameter_types: &[<&mut CanonRng>::TYPE, NlFloat::TYPE],
-        return_type: NlFloat::TYPE,
+        parameter_types: &[<&mut CanonRng>::STATIC_TYPE, NlFloat::STATIC_TYPE],
+        return_type: NlFloat::STATIC_TYPE,
         link_addr: call as *const u8,
         link_name: "random_int",
     };

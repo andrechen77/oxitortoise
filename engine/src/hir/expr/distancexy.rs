@@ -3,6 +3,7 @@
 use std::fmt;
 
 use pretty_print::PrettyPrinter;
+use reflection::{Reflect, mir};
 
 use crate::{
     hir::{
@@ -13,14 +14,12 @@ use crate::{
             turtle_var_place,
         },
     },
-    mir,
     sim::{
         patch::{PatchId, PatchVarDesc},
         topology::{self, Point},
         turtle::{TurtleId, TurtleVarDesc},
         value::NlFloat,
     },
-    util::reflection::Reflect,
 };
 
 #[derive(Debug, Clone)]
@@ -120,14 +119,14 @@ impl Distancexy {
 }
 
 mod euclidean_distance_no_wrap {
-    use crate::mir::HostFunctionInfo;
+    use reflection::mir::HostFunctionInfo;
 
     use super::*;
 
     pub static FN_INFO: HostFunctionInfo = HostFunctionInfo {
         debug_name: "distancexy",
-        parameter_types: &[<Point>::TYPE, <Point>::TYPE],
-        return_type: <NlFloat>::TYPE,
+        parameter_types: &[<Point>::STATIC_TYPE, <Point>::STATIC_TYPE],
+        return_type: <NlFloat>::STATIC_TYPE,
         link_name: "distancexy",
         link_addr: call as *const u8,
     };

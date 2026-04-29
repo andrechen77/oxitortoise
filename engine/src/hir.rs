@@ -9,6 +9,7 @@ use crate::sim::turtle::{TurtleBreed, TurtleBreedId};
 mod build_mir;
 pub mod expr;
 mod format;
+mod transform;
 mod ty;
 mod type_inference;
 

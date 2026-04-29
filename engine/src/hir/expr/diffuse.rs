@@ -3,11 +3,11 @@
 use std::fmt;
 
 use pretty_print::PrettyPrinter;
+use reflection::{Reflect, mir};
 
 use crate::{
     hir::NlAbstractTyAtom,
     sim::{agent_schema::AgentFieldDescriptor, value::NlFloat},
-    util::reflection::Reflect,
     workspace::Workspace,
 };
 
@@ -15,7 +15,6 @@ use crate::{
     hir::{
         Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy, build_mir::translate_expr,
     },
-    mir,
     sim::patch::PatchVarDesc,
 };
 
@@ -72,14 +71,18 @@ impl Diffuse {
 }
 
 mod diffuse_8_single_variable_buffer {
-    use crate::mir::HostFunctionInfo;
+    use reflection::mir::HostFunctionInfo;
 
     use super::*;
 
     pub static FN_INFO: HostFunctionInfo = HostFunctionInfo {
         debug_name: "diffuse_8_single_variable_buffer",
-        parameter_types: &[<&mut Workspace>::TYPE, AgentFieldDescriptor::TYPE, NlFloat::TYPE],
-        return_type: <()>::TYPE,
+        parameter_types: &[
+            <&mut Workspace>::STATIC_TYPE,
+            AgentFieldDescriptor::STATIC_TYPE,
+            NlFloat::STATIC_TYPE,
+        ],
+        return_type: <()>::STATIC_TYPE,
         link_name: "diffuse_8_single_variable_buffer",
         link_addr: call as *const u8,
     };

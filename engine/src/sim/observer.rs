@@ -8,15 +8,12 @@ use std::{
 
 use either::Either;
 use pretty_print::PrettyPrinter;
+use reflection::{DynType, HasDynPtr as _, Reflect, StaticType, mir};
 
 use crate::{
     hir::TypeMapping,
-    mir::{self, HasDynPtr as _},
     sim::value::{NlFloat, NlList, NlString, PackedAny},
-    util::{
-        reflection::{Reflect, Type},
-        row_buffer::{RowBuffer, RowSchema},
-    },
+    util::row_buffer::{RowBuffer, RowSchema},
 };
 
 pub struct Globals {
@@ -81,11 +78,11 @@ impl Globals {
         ptr.proj_deref().proj_static_index(0).proj_field(byte_offset)
     }
 
-    pub fn mir_type_from_schema(schema: &GlobalsSchema) -> mir::MirType {
+    pub fn mir_type_from_schema(schema: &GlobalsSchema) -> DynType {
         let row_schema = schema.make_row_schema();
         let row_buffer_pointee_ty = RowBuffer::self_mir_type_from_metadata(&row_schema);
 
-        mir::MirType::new_struct(
+        DynType::new_struct(
             Layout::new::<Self>(),
             vec![(offset_of!(Self, data), row_buffer_pointee_ty)],
         )
@@ -136,11 +133,11 @@ impl fmt::Debug for Globals {
 
 #[derive(Debug, Clone)]
 pub struct GlobalsSchema {
-    custom_fields: Vec<(Arc<str>, Type)>,
+    custom_fields: Vec<(Arc<str>, StaticType)>,
 }
 
 impl GlobalsSchema {
-    pub fn new_with_custom_fields(custom_fields: Vec<(Arc<str>, Type)>) -> Self {
+    pub fn new_with_custom_fields(custom_fields: Vec<(Arc<str>, StaticType)>) -> Self {
         Self { custom_fields }
     }
 
@@ -153,7 +150,7 @@ impl GlobalsSchema {
         self.make_row_schema().field(field_index).offset
     }
 
-    pub fn field_type(&self, field_index: usize) -> Type {
+    pub fn field_type(&self, field_index: usize) -> StaticType {
         self.custom_fields[field_index].1
     }
 }

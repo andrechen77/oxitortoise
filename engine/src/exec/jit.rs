@@ -1,44 +1,10 @@
 use std::{marker::PhantomData, mem::offset_of};
 
 use crate::{
-    hir::HirToMirFnBuilder,
-    mir,
-    sim::value::PackedAny,
-    util::{reflection::Reflect, rng::CanonRng},
-    workspace::Workspace,
+    hir::HirToMirFnBuilder, sim::value::PackedAny, util::rng::CanonRng, workspace::Workspace,
 };
 use macro_reflect::{MirReflect, reflect};
-
-pub enum InstallLirError {
-    /// Installer state was corrupted and cannot be used to install new
-    /// functions.
-    InstallerPoisoned,
-    /// The runtime encountered an error while instantiating the new functions.
-    /// We have no further information.
-    RuntimeError,
-}
-
-pub trait InstallLir {
-    type Obj: InstalledObj;
-
-    /// Installs the specified LIR program into the current instance. Potential
-    /// callbacks and entrypoints in the LIR program are also installed in the
-    /// function table, and must have the correct signature.
-    ///
-    /// # Safety
-    ///
-    /// The LIR program being installed will use the same namespace and
-    /// indirect function table as the current instance. The code must not
-    /// cause undefined behavior when the functions are called according to the
-    /// safety requirements articulated in the following.
-    /// - [`JitEntrypoint::new`]
-    /// - [`JitCallback::new`]
-    unsafe fn install_lir(&mut self, lir: &lir::Program) -> Result<Self::Obj, InstallLirError>;
-}
-
-pub trait InstalledObj {
-    fn entrypoint(&self, fn_id: lir::FunctionId) -> JitEntrypoint<'_>;
-}
+use reflection::{Reflect, mir};
 
 // TODO(wishlist) currently we have hardcoded constants to define what the
 // indices of all parameters are for entrypoints and callbacks, i.e. functions
@@ -159,7 +125,7 @@ where
         };
 
         let result_local =
-            builder.mir.create_local(mir::LocalDecl { debug_name: None, ty: Self::mir_type() });
+            builder.mir.create_local(mir::LocalDecl { debug_name: None, ty: Self::dyn_type() });
 
         let call_fn =
             builder.mir.add_operation(None, mir::Operation::FunctionPtr { function: call_fn });

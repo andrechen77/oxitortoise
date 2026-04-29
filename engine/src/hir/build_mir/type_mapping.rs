@@ -1,8 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+use reflection::{DynType, Reflect};
+
 use crate::{
     hir::{self, Expr, ExprKind, NlAbstractTy, NlAbstractTyAtom, expr},
-    mir::MirType,
     sim::{
         observer::GlobalsSchema,
         patch::{
@@ -13,7 +14,7 @@ use crate::{
         turtle::{TurtleId, TurtleSchema},
         value::{NlBox, NlFloat, NlList, PackedAny},
     },
-    util::{reflection::Reflect, rng::CanonRng},
+    util::rng::CanonRng,
     workspace::Workspace,
 };
 
@@ -22,14 +23,14 @@ pub struct TypeMapping {
     globals_schema: GlobalsSchema,
     turtle_schema: TurtleSchema,
     patch_schema: PatchSchema,
-    workspace_ptr_ty: MirType,
+    workspace_ptr_ty: DynType,
     local_var_tys: BTreeMap<hir::LocalId, LocalVarMapping>,
-    function_return_tys: BTreeMap<hir::FunctionId, MirType>,
+    function_return_tys: BTreeMap<hir::FunctionId, DynType>,
 }
 
 #[derive(Debug)]
 pub struct LocalVarMapping {
-    ty: MirType,
+    ty: DynType,
     // TODO instead of a separate boolean field, we could encode the heap
     // allocation requirement in the type itself by having the type be a
     // rc-pointer to the type of the value
@@ -56,15 +57,15 @@ impl TypeMapping {
         &self.patch_schema
     }
 
-    pub fn workspace_ptr_ty(&self) -> MirType {
+    pub fn workspace_ptr_ty(&self) -> DynType {
         self.workspace_ptr_ty.clone()
     }
 
-    pub fn local_var_ty(&self, local_id: hir::LocalId) -> MirType {
+    pub fn local_var_ty(&self, local_id: hir::LocalId) -> DynType {
         self.local_var_tys[&local_id].ty.clone()
     }
 
-    pub fn function_return_ty(&self, fn_id: hir::FunctionId) -> MirType {
+    pub fn function_return_ty(&self, fn_id: hir::FunctionId) -> DynType {
         self.function_return_tys[&fn_id].clone()
     }
 }
@@ -218,34 +219,34 @@ fn make_workspace_ptr_type(
     globals_schema: &GlobalsSchema,
     turtle_schema: &TurtleSchema,
     patch_schema: &PatchSchema,
-) -> MirType {
-    MirType::ref_to(Workspace::mir_type_from_schemas(globals_schema, turtle_schema, patch_schema))
+) -> DynType {
+    DynType::ref_to(Workspace::mir_type_from_schemas(globals_schema, turtle_schema, patch_schema))
 }
 
-pub fn mir_repr_simple(abstract_ty: &NlAbstractTy) -> MirType {
+pub fn mir_repr_simple(abstract_ty: &NlAbstractTy) -> DynType {
     let un = match abstract_ty {
         NlAbstractTy::Workspace => {
             unimplemented!("workspace type cannot be lowered in a simple manner")
         }
-        NlAbstractTy::Rng => return MirType::ref_to(CanonRng::mir_type()),
+        NlAbstractTy::Rng => return DynType::ref_to(CanonRng::dyn_type()),
         NlAbstractTy::Union(un) => un,
     };
 
     if let Some(atom) = un.get_atom() {
         return match atom {
-            NlAbstractTyAtom::Unit => <()>::mir_type(),
-            NlAbstractTyAtom::Float => NlFloat::mir_type(),
-            NlAbstractTyAtom::Boolean => bool::mir_type(),
+            NlAbstractTyAtom::Unit => <()>::dyn_type(),
+            NlAbstractTyAtom::Float => NlFloat::dyn_type(),
+            NlAbstractTyAtom::Boolean => bool::dyn_type(),
             NlAbstractTyAtom::String => todo!(),
-            NlAbstractTyAtom::Point => Point::mir_type(),
-            NlAbstractTyAtom::Patch => PatchId::mir_type(),
-            NlAbstractTyAtom::Turtle => TurtleId::mir_type(),
+            NlAbstractTyAtom::Point => Point::dyn_type(),
+            NlAbstractTyAtom::Patch => PatchId::dyn_type(),
+            NlAbstractTyAtom::Turtle => TurtleId::dyn_type(),
             NlAbstractTyAtom::Link => todo!(""),
             NlAbstractTyAtom::Agentset { agent_type: _ } => todo!(""),
-            NlAbstractTyAtom::Nobody => <()>::mir_type(),
+            NlAbstractTyAtom::Nobody => <()>::dyn_type(),
             NlAbstractTyAtom::Closure(_) => todo!(),
             // could add other specializations for lists here
-            NlAbstractTyAtom::List { .. } => <NlBox<NlList>>::mir_type(),
+            NlAbstractTyAtom::List { .. } => <NlBox<NlList>>::dyn_type(),
         };
     }
 
@@ -254,9 +255,9 @@ pub fn mir_repr_simple(abstract_ty: &NlAbstractTy) -> MirType {
     }
 
     if un.is_only_2(&NlAbstractTyAtom::Nobody, &NlAbstractTyAtom::Patch) {
-        return OptionPatchId::mir_type();
+        return OptionPatchId::dyn_type();
     }
 
     // as a last resort, use an any type
-    PackedAny::mir_type()
+    PackedAny::dyn_type()
 }

@@ -6,15 +6,14 @@ use std::{
 };
 
 use pretty_print::PrettyPrinter;
+use reflection::{Reflect, mir};
 
 use crate::{
     hir::{
         Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy, NlAbstractTyAtom,
         build_mir::translate_expr,
     },
-    mir,
     sim::value::{NlBox, NlFloat, NlList, NlString, PackedAny},
-    util::reflection::Reflect,
 };
 
 #[derive(Debug, Clone)]
@@ -76,9 +75,7 @@ impl NumberLiteral {
     pub fn write_mir_execution(&self, builder: &mut HirToMirFnBuilder) -> Option<mir::LocalId> {
         Some(builder.mir.add_operation(
             None,
-            mir::Operation::Const {
-                value: crate::sim::value::BoxedAny::new(NlFloat::new(self.value)),
-            },
+            mir::Operation::Const(mir::PodValue::new(NlFloat::new(self.value))),
         ))
     }
 }
@@ -194,14 +191,14 @@ impl ListLiteral {
 }
 
 mod list_new {
-    use crate::mir::HostFunctionInfo;
+    use reflection::mir::HostFunctionInfo;
 
     use super::*;
 
     pub static FN_INFO: HostFunctionInfo = HostFunctionInfo {
         debug_name: "list_new",
         parameter_types: &[],
-        return_type: NlBox::<NlList>::TYPE,
+        return_type: NlBox::<NlList>::STATIC_TYPE,
         link_name: "list_new",
         link_addr: call as *const u8,
     };
@@ -212,14 +209,14 @@ mod list_new {
 }
 
 mod list_push {
-    use crate::mir::HostFunctionInfo;
+    use reflection::mir::HostFunctionInfo;
 
     use super::*;
 
     pub static FN_INFO: HostFunctionInfo = HostFunctionInfo {
         debug_name: "list_push",
-        parameter_types: &[NlBox::<NlList>::TYPE, PackedAny::TYPE],
-        return_type: NlBox::<NlList>::TYPE,
+        parameter_types: &[NlBox::<NlList>::STATIC_TYPE, PackedAny::STATIC_TYPE],
+        return_type: NlBox::<NlList>::STATIC_TYPE,
         link_name: "list_push",
         link_addr: call as *const u8,
     };

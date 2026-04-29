@@ -3,15 +3,14 @@
 use std::fmt::{self, Write};
 
 use pretty_print::PrettyPrinter;
+use reflection::{Reflect, mir};
 
 use crate::{
     hir::{
         Expr, ExprKind, HirToMirFnBuilder, NameContext, NlAbstractTy, NlAbstractTyAtom,
         build_mir::translate_expr,
     },
-    mir,
     sim::{patch::OptionPatchId, turtle::TurtleId, value::NlFloat},
-    util::reflection::Reflect,
     workspace::Workspace,
 };
 
@@ -293,7 +292,7 @@ impl PatchRelative {
                 let distance_negated = builder.mir.add_operation(
                     None,
                     mir::Operation::UnaryOp {
-                        opcode: lir::UnaryOpcode::FNeg,
+                        opcode: mir::UnaryOpcode::FNeg,
                         operand: mir::PlaceOperand::Copy(distance.place()),
                     },
                 );
@@ -327,14 +326,19 @@ impl PatchRelative {
 }
 
 mod patch_right_and_ahead {
-    use crate::mir::HostFunctionInfo;
+    use reflection::mir::HostFunctionInfo;
 
     use super::*;
 
     pub static FN_INFO: HostFunctionInfo = HostFunctionInfo {
         debug_name: "patch_right_and_ahead",
-        parameter_types: &[<&mut Workspace>::TYPE, TurtleId::TYPE, NlFloat::TYPE, NlFloat::TYPE],
-        return_type: <OptionPatchId>::TYPE,
+        parameter_types: &[
+            <&mut Workspace>::STATIC_TYPE,
+            TurtleId::STATIC_TYPE,
+            NlFloat::STATIC_TYPE,
+            NlFloat::STATIC_TYPE,
+        ],
+        return_type: <OptionPatchId>::STATIC_TYPE,
         link_name: "patch_right_and_ahead",
         link_addr: call as *const u8,
     };
@@ -360,14 +364,19 @@ mod patch_right_and_ahead {
 }
 
 mod patch_ahead {
-    use crate::{mir::HostFunctionInfo, sim::patch::OptionPatchId};
+    use crate::sim::patch::OptionPatchId;
+    use reflection::mir::HostFunctionInfo;
 
     use super::*;
 
     pub static FN_INFO: HostFunctionInfo = HostFunctionInfo {
         debug_name: "patch_ahead",
-        parameter_types: &[<&mut Workspace>::TYPE, TurtleId::TYPE, NlFloat::TYPE],
-        return_type: <OptionPatchId>::TYPE,
+        parameter_types: &[
+            <&mut Workspace>::STATIC_TYPE,
+            TurtleId::STATIC_TYPE,
+            NlFloat::STATIC_TYPE,
+        ],
+        return_type: <OptionPatchId>::STATIC_TYPE,
         link_name: "patch_ahead",
         link_addr: call as *const u8,
     };
@@ -390,14 +399,18 @@ mod patch_ahead {
 }
 
 mod turtle_rotate {
-    use crate::mir::HostFunctionInfo;
+    use reflection::mir::HostFunctionInfo;
 
     use super::*;
 
     pub static FN_INFO: HostFunctionInfo = HostFunctionInfo {
         debug_name: "turtle_rotate",
-        parameter_types: &[<&mut Workspace>::TYPE, TurtleId::TYPE, NlFloat::TYPE],
-        return_type: <()>::TYPE,
+        parameter_types: &[
+            <&mut Workspace>::STATIC_TYPE,
+            TurtleId::STATIC_TYPE,
+            NlFloat::STATIC_TYPE,
+        ],
+        return_type: <()>::STATIC_TYPE,
         link_name: "turtle_rotate",
         link_addr: call as *const u8,
     };
@@ -410,14 +423,18 @@ mod turtle_rotate {
 }
 
 mod turtle_forward {
-    use crate::mir::HostFunctionInfo;
+    use reflection::mir::HostFunctionInfo;
 
     use super::*;
 
     pub static FN_INFO: HostFunctionInfo = HostFunctionInfo {
         debug_name: "turtle_forward",
-        parameter_types: &[<&mut Workspace>::TYPE, TurtleId::TYPE, NlFloat::TYPE],
-        return_type: <()>::TYPE,
+        parameter_types: &[
+            <&mut Workspace>::STATIC_TYPE,
+            TurtleId::STATIC_TYPE,
+            NlFloat::STATIC_TYPE,
+        ],
+        return_type: <()>::STATIC_TYPE,
         link_name: "turtle_forward",
         link_addr: call as *const u8,
     };
