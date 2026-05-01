@@ -2,8 +2,8 @@ use proc_macro_crate::{FoundCrate, crate_name};
 use proc_macro2::{Span, TokenStream};
 use quote::{ToTokens, quote};
 use syn::{
-    Data, DeriveInput, Fields, Ident, ItemImpl, Meta, parse::Parse, parse2, punctuated::Punctuated,
-    token::Comma,
+    Data, DeriveInput, Fields, Ident, ItemImpl, Meta, Type, parse::Parse, parse2,
+    punctuated::Punctuated, token::Comma,
 };
 
 /// Attributes parsed from `#[reflect(...)]`.
@@ -123,29 +123,27 @@ pub fn derive_impl_mir_reflect(input: proc_macro2::TokenStream) -> proc_macro2::
                 if let Some(attr) =
                     field.attrs.iter().find(|attr| attr.meta.path().is_ident("mir_accessible"))
                 {
-                    let unchecked = if let Meta::List(list) = &attr.meta {
-                        match list.parse_args::<Ident>() {
-                            Ok(ident) if ident == "unchecked_type" => {}
-                            Ok(_) => {
-                                return syn::Error::new_spanned(attr, "expected `unchecked_type`")
-                                    .to_compile_error();
-                            }
+                    let mut unsafe_as_tokens = None;
+                    if let Meta::List(list) = &attr.meta {
+                        let inner: Meta = match parse2(list.tokens.clone()) {
+                            Ok(parsed) => parsed,
                             Err(e) => return e.to_compile_error(),
+                        };
+                        if let Meta::List(inner_list) = &inner
+                            && inner_list.path.is_ident("unsafe_as")
+                        {
+                            let ty = match inner_list.parse_args::<Type>() {
+                                Ok(parsed) => parsed,
+                                Err(e) => return e.to_compile_error(),
+                            };
+                            unsafe_as_tokens = Some(ty);
                         }
-                        true
-                    } else {
-                        false
-                    };
+                    }
+
                     let ident = field.ident.as_ref().unwrap();
-                    let ty = &field.ty;
-                    let field_entry = if unchecked {
-                        quote! {
-                            (::std::mem::offset_of!(Self, #ident), #reflection_crate_name::DynType::default())
-                        }
-                    } else {
-                        quote! {
-                            (::std::mem::offset_of!(Self, #ident), <#ty as #reflection_crate_name::Reflect>::dyn_type())
-                        }
+                    let ty = unsafe_as_tokens.as_ref().unwrap_or(&field.ty);
+                    let field_entry = quote! {
+                        (::std::mem::offset_of!(Self, #ident), <#ty as #reflection_crate_name::Reflect>::dyn_type())
                     };
                     mir_accessible_field_entries.push(field_entry);
                 } else {
