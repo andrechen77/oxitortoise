@@ -61,7 +61,7 @@ static BINARY_ARITH_OPCODE_TYPE_INFO: StaticTypeInfo = StaticTypeInfo {
 };
 
 static BINARY_ARITH_OPCODE_DYN_TYPE: LazyLock<DynType> =
-    LazyLock::new(|| DynType::new_struct_with_static_type::<BinaryArithOpcode>(vec![]));
+    LazyLock::new(|| DynType::new_struct_with_static_type::<BinaryArithOpcode>(vec![], false));
 
 unsafe impl Reflect for BinaryArithOpcode {
     const STATIC_TYPE: StaticType = &BINARY_ARITH_OPCODE_TYPE_INFO;
@@ -80,7 +80,7 @@ static BINARY_CMP_OPCODE_TYPE_INFO: StaticTypeInfo = StaticTypeInfo {
 };
 
 static BINARY_CMP_OPCODE_DYN_TYPE: LazyLock<DynType> =
-    LazyLock::new(|| DynType::new_struct_with_static_type::<BinaryCmpOpcode>(vec![]));
+    LazyLock::new(|| DynType::new_struct_with_static_type::<BinaryCmpOpcode>(vec![], false));
 
 unsafe impl Reflect for BinaryCmpOpcode {
     const STATIC_TYPE: StaticType = &BINARY_CMP_OPCODE_TYPE_INFO;
@@ -99,7 +99,7 @@ static BINARY_BOOL_OPCODE_TYPE_INFO: StaticTypeInfo = StaticTypeInfo {
 };
 
 static BINARY_BOOL_OPCODE_DYN_TYPE: LazyLock<DynType> =
-    LazyLock::new(|| DynType::new_struct_with_static_type::<BinaryBoolOpcode>(vec![]));
+    LazyLock::new(|| DynType::new_struct_with_static_type::<BinaryBoolOpcode>(vec![], false));
 
 unsafe impl Reflect for BinaryBoolOpcode {
     const STATIC_TYPE: StaticType = &BINARY_BOOL_OPCODE_TYPE_INFO;

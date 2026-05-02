@@ -36,7 +36,7 @@ pub enum DynType {
 
 #[derive(PartialEq, Eq)]
 pub struct DynTypeStruct {
-    /// The fields of the type. This may not be a complete list.
+    /// The fields of the type.
     pub fields: Vec<(usize, DynType)>,
     pub layout: Layout,
 }
@@ -52,6 +52,7 @@ pub struct DynTypeStaticStruct {
     pub static_ty: StaticType,
     /// Any additional information about the fields of this struct.
     pub fields: Vec<(usize, DynType)>,
+    pub exhaustive_fields: bool,
 }
 
 impl DynType {
@@ -127,8 +128,15 @@ impl DynType {
         Self::Struct(Arc::new(DynTypeStruct { fields, layout }))
     }
 
-    pub fn new_struct_with_static_type<T: Reflect>(fields: Vec<(usize, DynType)>) -> Self {
-        Self::StaticStruct(Arc::new(DynTypeStaticStruct { static_ty: T::STATIC_TYPE, fields }))
+    pub fn new_struct_with_static_type<T: Reflect>(
+        fields: Vec<(usize, DynType)>,
+        exhaustive_fields: bool,
+    ) -> Self {
+        Self::StaticStruct(Arc::new(DynTypeStaticStruct {
+            static_ty: T::STATIC_TYPE,
+            fields,
+            exhaustive_fields,
+        }))
     }
 
     pub fn ref_to(pointee: DynType) -> Self {
@@ -162,12 +170,16 @@ impl fmt::Debug for DynType {
                 }
             }
             DynType::StaticStruct(struct_def) => {
-                let DynTypeStaticStruct { static_ty, fields } = struct_def.as_ref();
+                let DynTypeStaticStruct { static_ty, fields, exhaustive_fields } =
+                    struct_def.as_ref();
                 write!(f, "{}", static_ty.debug_name)?;
                 if !fields.is_empty() {
                     write!(f, " + {{")?;
                     for (offset, field) in fields {
                         write!(f, " {}: {:?},", offset, field)?;
+                    }
+                    if !exhaustive_fields {
+                        write!(f, " ...")?;
                     }
                     write!(f, " }}")?;
                 }
@@ -242,6 +254,7 @@ impl DynType {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub struct ProjectionError;
 
 unsafe impl<T> CreateDynType for &mut T
@@ -264,7 +277,7 @@ where
 
 unsafe impl CreateDynType for () {
     fn create_dyn_type() -> DynType {
-        DynType::new_struct_with_static_type::<()>(vec![])
+        DynType::new_struct_with_static_type::<()>(vec![], true)
     }
 }
 
@@ -277,7 +290,7 @@ macro_rules! impl_reflect_for_primitive {
             fn create_dyn_type() -> DynType {
                 // even if it's not actually a struct, a struct with
                 // inaccessible fields is a good representation of the type
-                DynType::new_struct_with_static_type::<Self>(vec![])
+                DynType::new_struct_with_static_type::<Self>(vec![], false)
             }
         }
     };

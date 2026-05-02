@@ -118,7 +118,7 @@ pub fn derive_impl_mir_reflect(input: proc_macro2::TokenStream) -> proc_macro2::
                 Fields::Unnamed(u) => u.unnamed.iter().collect(),
             };
             let mut mir_accessible_field_entries = Vec::new();
-            let mut _is_exhaustive = true; // can use this if deciding whether the struct is complete
+            let mut is_exhaustive = true; // can use this if deciding whether the struct is complete
             for field in fields {
                 if let Some(attr) =
                     field.attrs.iter().find(|attr| attr.meta.path().is_ident("mir_accessible"))
@@ -147,7 +147,7 @@ pub fn derive_impl_mir_reflect(input: proc_macro2::TokenStream) -> proc_macro2::
                     };
                     mir_accessible_field_entries.push(field_entry);
                 } else {
-                    _is_exhaustive = false;
+                    is_exhaustive = false;
                 }
             }
 
@@ -155,6 +155,7 @@ pub fn derive_impl_mir_reflect(input: proc_macro2::TokenStream) -> proc_macro2::
                 fn create_dyn_type() -> #reflection_crate_name::DynType {
                     #reflection_crate_name::DynType::new_struct_with_static_type::<Self>(
                         vec![#(#mir_accessible_field_entries),*],
+                        #is_exhaustive,
                     )
                 }
             }
