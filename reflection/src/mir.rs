@@ -8,6 +8,8 @@ use crate::{DynType, Reflect, StaticType};
 
 pub use builder::{FunctionBuilder, FunctionStub, ProgramBuilder};
 
+mod analysis;
+mod build_lir;
 mod builder;
 mod format;
 

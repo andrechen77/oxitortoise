@@ -1,4 +1,4 @@
-use std::fmt::{self, Write};
+use std::fmt::{self, Debug, Write};
 
 pub struct PrettyPrinter<W> {
     out: W,
@@ -130,6 +130,32 @@ impl<W: Write> Write for PrettyPrinter<W> {
         for line in lines {
             self.line()?;
             write!(self.out, "{}", line)?;
+        }
+        Ok(())
+    }
+}
+
+pub struct PadAdapter<W> {
+    out: W,
+    on_newline: bool,
+}
+
+impl<W> PadAdapter<W> {
+    pub fn new(out: W) -> Self {
+        Self { out, on_newline: false }
+    }
+}
+
+impl<W: Write> Write for PadAdapter<W> {
+    // stolen from the core::fmt::builder::PadAdapter struct
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        for s in s.split_inclusive('\n') {
+            if self.on_newline {
+                self.out.write_str("    ")?;
+            }
+
+            self.on_newline = s.ends_with('\n');
+            self.out.write_str(s)?;
         }
         Ok(())
     }

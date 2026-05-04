@@ -639,6 +639,7 @@ dependencies = [
  "macro_reflect",
  "oxitortoise_lir",
  "pretty_print",
+ "smallvec",
  "tracing",
 ]
 

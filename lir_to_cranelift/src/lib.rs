@@ -14,7 +14,7 @@ use cranelift_frontend as clf;
 // rather than the core Cranelift IR
 use cranelift_module as clm;
 use either::Either;
-use lir::smallvec::{SmallVec, smallvec};
+use lir::smallvec::SmallVec;
 use target_lexicon::Triple;
 
 pub extern crate cranelift_codegen;
@@ -40,8 +40,11 @@ where
         // the different function ids ensure that names never collide
         let unique_name =
             format!("{:?} {}", lir_fn_id, lir_fn.debug_fn_name.as_deref().unwrap_or("unnamed"));
-        let parameter_types = &lir_fn.local_vars[..lir_fn.num_parameters.into()].raw;
-        let signature = translate_fn_signature(parameter_types, &lir_fn.body.output_type, triple);
+        let signature = translate_fn_signature(
+            lir_fn.parameters.iter().map(|param| lir_fn.registers[*param].ty),
+            lir_fn.return_values.iter().map(|param| lir_fn.registers[*param].ty),
+            triple,
+        );
         let clm_fn_id = module
             .declare_function(
                 &unique_name,
@@ -64,8 +67,8 @@ where
             let clm_fn_id = match lir_fn {
                 Either::Left(host_fn) => {
                     let host_fn_signature = translate_fn_signature(
-                        host_fn.parameter_types,
-                        host_fn.return_type,
+                        host_fn.parameter_types.iter().copied(),
+                        host_fn.return_type.iter().copied(),
                         triple,
                     );
                     module
@@ -119,15 +122,16 @@ fn translate_function(
     // https://users.rust-lang.org/t/calling-a-rust-function-from-cranelift/103948
     let call_conv = isa::CallConv::triple_default(triple);
     let signature = clir::Signature {
-        params: (0..lir.num_parameters)
-            .map(|i| translate_val_type(lir.local_vars[lir::VarId(i)], triple))
+        params: lir
+            .parameters
+            .iter()
+            .map(|param| translate_val_type(lir.registers[*param].ty, triple))
             .map(clir::AbiParam::new)
             .collect(),
         returns: lir
-            .body
-            .output_type
+            .return_values
             .iter()
-            .map(|&t| translate_val_type(t, triple))
+            .map(|ret| translate_val_type(lir.registers[*ret].ty, triple))
             .map(clir::AbiParam::new)
             .collect(),
         call_conv,
@@ -139,22 +143,20 @@ fn translate_function(
     // we currently do not use the stack for anything
     assert_eq!(lir.stack_space, 0);
 
-    let lir_types = lir::infer_output_types(lir);
+    // let lir_types = lir::infer_output_types(lir);
 
     let mut builder = FunctionBuilder {
         cl: &mut clf_builder,
         lir_function: lir,
-        lir_types: &lir_types,
         host_fn_imports: HashMap::new(),
         user_fn_imports: HashMap::new(),
-        value_map: HashMap::new(),
         var_map: HashMap::new(),
         break_targets: HashMap::new(),
     };
 
     // declare all local variables
-    for (lir_var_id, var_ty) in lir.local_vars.iter_enumerated() {
-        let cl_var_id = builder.cl.declare_var(translate_val_type(*var_ty, triple));
+    for (lir_var_id, var_ty) in lir.registers.iter_enumerated() {
+        let cl_var_id = builder.cl.declare_var(translate_val_type(var_ty.ty, triple));
         builder.var_map.insert(lir_var_id, cl_var_id);
     }
 
@@ -165,22 +167,17 @@ fn translate_function(
     builder.cl.switch_to_block(entry_bb);
 
     // make parameters available as cranelift variables
-    let lir_parameters = lir.local_vars[..lir.num_parameters.into()].keys();
     let cl_parameters = builder.cl.block_params(entry_bb).to_vec().into_iter();
-    for (lir_var_id, cl_val) in lir_parameters.zip(cl_parameters) {
+    for (lir_var_id, cl_val) in lir.parameters.iter().zip(cl_parameters) {
         builder.cl.def_var(builder.var_map[&lir_var_id], cl_val);
     }
 
     // write the instructions
-    let return_values = translate_insn_seq_with_end_break(
-        &mut builder,
-        &lir.body.output_type,
-        [lir.body.body],
-        triple,
-        |builder| {
-            translate_insn_seq(builder, lir.body.body, triple, add_fn);
-        },
-    );
+    translate_insn_seq_with_end_break(&mut builder, [lir.body.body], |builder| {
+        translate_insn_seq(builder, lir.body.body, triple, add_fn);
+    });
+    let return_values: Vec<_> =
+        lir.return_values.iter().map(|ret| builder.cl.use_var(builder.var_map[ret])).collect();
     builder.cl.ins().return_(&return_values);
 
     // we are done building the function
@@ -190,15 +187,12 @@ fn translate_function(
 struct FunctionBuilder<'a, 'b> {
     cl: &'a mut clf::FunctionBuilder<'b>,
     lir_function: &'a lir::Function,
-    lir_types: &'a HashMap<lir::ValRef, lir::ValType>,
     /// Maps each LIR host fn reference to a Cranelift function reference
     host_fn_imports: HashMap<lir::HostFunction, clir::FuncRef>,
     /// Maps each LIR user function reference to a Cranelift function reference
     user_fn_imports: HashMap<lir::FunctionId, clir::FuncRef>,
-    /// Maps each LIR value reference to a Cranelift value
-    value_map: HashMap<lir::ValRef, clir::Value>,
-    /// Maps each LIR variable id to a Cranelift variable.
-    var_map: HashMap<lir::VarId, clf::Variable>,
+    /// Maps each LIR register to a Cranelift variable.
+    var_map: HashMap<lir::Reg, clf::Variable>,
     /// Maps each instruction sequence id to the block that control should jump
     /// to when an LIR break instruction targets that instruction sequence id
     break_targets: HashMap<lir::InsnSeqId, clir::Block>,
@@ -213,268 +207,240 @@ fn translate_insn_seq(
         &mut clir::Function,
     ) -> clir::FuncRef,
 ) {
-    for (insn_idx, insn) in builder.lir_function.insn_seqs[insn_seq_id].iter_enumerated() {
-        let lir_pc = lir::InsnPc(insn_seq_id, insn_idx);
-        let cl_values: SmallVec<[clir::Value; 1]> = match insn {
-            lir::InsnKind::Break { target, values } => {
+    for insn in &builder.lir_function.insn_seqs[insn_seq_id] {
+        match insn {
+            lir::InsnKind::Break { target } => {
                 let dst_bb = builder.break_targets[target];
-                let values: Vec<_> = values
-                    .iter()
-                    .map(|arg| clir::BlockArg::Value(builder.value_map[arg]))
-                    .collect();
-                let insn_ref = builder.cl.ins().jump(dst_bb, &values);
-                builder.cl.inst_results(insn_ref).iter().copied().collect() // should be empty tbh
+                builder.cl.ins().jump(dst_bb, &[]);
             }
-            lir::InsnKind::ConditionalBreak { target, condition, values } => {
-                let condition = builder.value_map[condition];
+            lir::InsnKind::ConditionalBreak { target, condition } => {
+                let condition = builder.cl.use_var(builder.var_map[condition]);
                 let break_bb = builder.break_targets[target];
 
                 // create a BB for the continuation without breaking
                 let cont_bb = builder.cl.create_block();
 
-                let values: Vec<_> = values
-                    .iter()
-                    .map(|arg| clir::BlockArg::Value(builder.value_map[arg]))
-                    .collect();
-                let insn_ref = builder.cl.ins().brif(condition, break_bb, &values, cont_bb, &[]);
+                builder.cl.ins().brif(condition, break_bb, &[], cont_bb, &[]);
 
                 // switch to the continuation BB to keep adding instructions
                 builder.cl.switch_to_block(cont_bb);
                 builder.cl.seal_block(cont_bb);
-
-                builder.cl.inst_results(insn_ref).iter().copied().collect() // should be empty tbh
             }
-            lir::InsnKind::Block(lir::Block { output_type, body }) => {
-                translate_insn_seq_with_end_break(
-                    builder,
-                    output_type,
-                    [*body],
-                    triple,
-                    |builder| {
-                        translate_insn_seq(builder, *body, triple, add_fn);
-                    },
-                )
+            lir::InsnKind::Block(lir::Block { body }) => {
+                translate_insn_seq_with_end_break(builder, [*body], |builder| {
+                    translate_insn_seq(builder, *body, triple, add_fn);
+                });
             }
-            lir::InsnKind::IfElse(lir::IfElse { output_type, condition, then_body, else_body }) => {
+            lir::InsnKind::IfElse(lir::IfElse { condition, then_body, else_body }) => {
                 // create a BB for each branch
                 let then_bb = builder.cl.create_block();
                 let else_bb = builder.cl.create_block();
 
                 // add the branch instruction
-                let condition = builder.value_map[condition];
+                let condition = builder.cl.use_var(builder.var_map[condition]);
                 builder.cl.ins().brif(condition, then_bb, &[], else_bb, &[]);
                 builder.cl.seal_block(then_bb);
                 builder.cl.seal_block(else_bb);
 
-                translate_insn_seq_with_end_break(
-                    builder,
-                    output_type,
-                    [*then_body, *else_body],
-                    triple,
-                    |builder| {
-                        // add instructions to each branch
-                        builder.cl.switch_to_block(then_bb);
-                        translate_insn_seq(builder, *then_body, triple, add_fn);
-                        builder.cl.switch_to_block(else_bb);
-                        translate_insn_seq(builder, *else_body, triple, add_fn);
-                    },
-                )
+                translate_insn_seq_with_end_break(builder, [*then_body, *else_body], |builder| {
+                    // add instructions to each branch
+                    builder.cl.switch_to_block(then_bb);
+                    translate_insn_seq(builder, *then_body, triple, add_fn);
+                    builder.cl.switch_to_block(else_bb);
+                    translate_insn_seq(builder, *else_body, triple, add_fn);
+                });
             }
             lir::InsnKind::Loop(lir::Loop { .. }) => {
                 todo!("idt this instruction is currently used")
             }
-            lir::InsnKind::LoopArg { .. } => {
-                unimplemented!("idt this instruction is currently used")
-            }
-            lir::InsnKind::CallHostFunction { function, output_type: _, args } => {
-                let func_ref = *builder
-                    .host_fn_imports
-                    .entry(*function)
-                    .or_insert_with(|| add_fn(Either::Left(*function), builder.cl.func));
-                let args: Vec<_> = args.iter().map(|arg| builder.value_map[arg]).collect();
-                let insn_ref = builder.cl.ins().call(func_ref, &args);
-                builder.cl.inst_results(insn_ref).iter().copied().collect()
-            }
-            lir::InsnKind::CallUserFunction { function, output_type: _, args } => {
-                let func_ref = *builder
-                    .user_fn_imports
-                    .entry(*function)
-                    .or_insert_with(|| add_fn(Either::Right(*function), builder.cl.func));
-                let args: Vec<_> = args.iter().map(|arg| builder.value_map[arg]).collect();
-                let insn_ref = builder.cl.ins().call(func_ref, &args);
-                builder.cl.inst_results(insn_ref).iter().copied().collect()
-            }
-            lir::InsnKind::CallIndirectFunction { function, output_type, args } => {
-                let callee = builder.value_map[function];
-                let arg_types: Vec<_> = args.iter().map(|arg| builder.lir_types[arg]).collect();
-                let signature = translate_fn_signature(&arg_types, output_type, triple);
-                let sig_ref = builder.cl.import_signature(signature);
-                let args: Vec<_> = args.iter().map(|arg| builder.value_map[arg]).collect();
-                let insn_ref = builder.cl.ins().call_indirect(sig_ref, callee, &args);
-                builder.cl.inst_results(insn_ref).iter().copied().collect()
-            }
-            lir::InsnKind::UserFunctionPtr { function } => {
-                let func_ref = *builder
-                    .user_fn_imports
-                    .entry(*function)
-                    .or_insert_with(|| add_fn(Either::Right(*function), builder.cl.func));
-                let val = builder
-                    .cl
-                    .ins()
-                    .func_addr(translate_val_type(lir::ValType::FnPtr, triple), func_ref);
-                smallvec![val]
-            }
-            lir::InsnKind::Const(val) => {
-                let val = match *val {
-                    lir::Value::I8(val) => builder.cl.ins().iconst(clir::types::I8, val as i64),
-                    lir::Value::I32(val) => builder.cl.ins().iconst(clir::types::I32, val as i64),
-                    lir::Value::I64(val) => builder.cl.ins().iconst(clir::types::I64, val as i64),
-                    lir::Value::F64(val) => builder.cl.ins().f64const(val),
-                    lir::Value::Ptr(val) => builder
-                        .cl
-                        .ins()
-                        .iconst(translate_val_type(lir::ValType::Ptr, triple), val.addr() as i64),
-                    lir::Value::FnPtr(_) => {
-                        unimplemented!("cannot embed function pointers into consts")
+            lir::InsnKind::SingleVal { out, insn } => {
+                let val = match insn {
+                    lir::SingleValInsn::Const { val } => match *val {
+                        lir::Value::I8(val) => builder.cl.ins().iconst(clir::types::I8, val as i64),
+                        lir::Value::I32(val) => {
+                            builder.cl.ins().iconst(clir::types::I32, val as i64)
+                        }
+                        lir::Value::I64(val) => {
+                            builder.cl.ins().iconst(clir::types::I64, val as i64)
+                        }
+                        lir::Value::F64(val) => builder.cl.ins().f64const(val),
+                        lir::Value::Ptr(val) => builder.cl.ins().iconst(
+                            translate_val_type(lir::ValType::Ptr, triple),
+                            val.addr() as i64,
+                        ),
+                        lir::Value::FnPtr(_) => {
+                            unimplemented!("cannot embed function pointers into consts")
+                        }
+                    },
+                    lir::SingleValInsn::UserFunctionPtr { function } => {
+                        let func_ref = *builder
+                            .user_fn_imports
+                            .entry(*function)
+                            .or_insert_with(|| add_fn(Either::Right(*function), builder.cl.func));
+                        builder
+                            .cl
+                            .ins()
+                            .func_addr(translate_val_type(lir::ValType::FnPtr, triple), func_ref)
+                    }
+                    lir::SingleValInsn::DeriveField { offset, ptr } => {
+                        let ptr = builder.cl.use_var(builder.var_map[ptr]);
+                        builder.cl.ins().iadd_imm(ptr, i64::try_from(*offset).unwrap())
+                    }
+                    lir::SingleValInsn::DeriveElement { element_size, ptr, index } => {
+                        let ptr = builder.cl.use_var(builder.var_map[ptr]);
+                        let index = builder.cl.use_var(builder.var_map[index]);
+                        let index_promoted = builder.cl.ins().sextend(clir::types::I64, index);
+                        let offset = builder
+                            .cl
+                            .ins()
+                            .imul_imm(index_promoted, i64::try_from(*element_size).unwrap());
+                        builder.cl.ins().iadd(ptr, offset)
+                    }
+                    lir::SingleValInsn::MemLoad { r#type, offset, ptr } => {
+                        let ptr = builder.cl.use_var(builder.var_map[ptr]);
+                        let load_ty = translate_mem_op_type(*r#type, triple);
+                        builder.cl.ins().load(
+                            load_ty,
+                            clir::MemFlags::new(),
+                            ptr,
+                            i32::try_from(*offset).unwrap(),
+                        )
+                    }
+                    lir::SingleValInsn::StackLoad { r#type: _, offset: _ } => {
+                        unimplemented!("currently unused")
+                    }
+                    lir::SingleValInsn::StackAddr { offset: _ } => {
+                        unimplemented!("currently unused")
+                    }
+                    lir::SingleValInsn::UnaryOp { op, operand } => {
+                        let operand = builder.cl.use_var(builder.var_map[operand]);
+                        match op {
+                            lir::UnaryOpcode::FNeg => builder.cl.ins().fneg(operand),
+                            lir::UnaryOpcode::Not => {
+                                builder.cl.ins().icmp_imm(clir::condcodes::IntCC::Equal, operand, 0)
+                            }
+                            lir::UnaryOpcode::I64ToI32 => {
+                                builder.cl.ins().ireduce(clir::types::I32, operand)
+                            }
+                        }
+                    }
+                    lir::SingleValInsn::BinaryOp { op, lhs, rhs } => {
+                        let lhs = builder.cl.use_var(builder.var_map[lhs]);
+                        let rhs = builder.cl.use_var(builder.var_map[rhs]);
+                        use lir::BinaryOpcode as B;
+                        match op {
+                            B::IAdd => builder.cl.ins().iadd(lhs, rhs),
+                            B::ISub => builder.cl.ins().isub(lhs, rhs),
+                            B::IMul => builder.cl.ins().imul(lhs, rhs),
+                            B::FAdd => builder.cl.ins().fadd(lhs, rhs),
+                            B::FSub => builder.cl.ins().fsub(lhs, rhs),
+                            B::FMul => builder.cl.ins().fmul(lhs, rhs),
+                            B::FDiv => builder.cl.ins().fdiv(lhs, rhs),
+                            B::And => builder.cl.ins().band(lhs, rhs),
+                            B::Or => builder.cl.ins().bor(lhs, rhs),
+                            B::SLt | B::SGt | B::ULt | B::UGt | B::IEq | B::INeq => {
+                                let cond = match op {
+                                    B::SLt => clir::condcodes::IntCC::SignedLessThan,
+                                    B::SGt => clir::condcodes::IntCC::SignedGreaterThan,
+                                    B::ULt => clir::condcodes::IntCC::UnsignedLessThan,
+                                    B::UGt => clir::condcodes::IntCC::UnsignedGreaterThan,
+                                    B::IEq => clir::condcodes::IntCC::Equal,
+                                    B::INeq => clir::condcodes::IntCC::NotEqual,
+                                    _ => unreachable!(),
+                                };
+                                builder.cl.ins().icmp(cond, lhs, rhs)
+                            }
+                            B::FLt | B::FLte | B::FGt | B::FGte | B::FEq => {
+                                let cond = match op {
+                                    B::FLt => clir::condcodes::FloatCC::LessThan,
+                                    B::FLte => clir::condcodes::FloatCC::LessThanOrEqual,
+                                    B::FGt => clir::condcodes::FloatCC::GreaterThan,
+                                    B::FGte => clir::condcodes::FloatCC::GreaterThanOrEqual,
+                                    B::FEq => clir::condcodes::FloatCC::Equal,
+                                    _ => unreachable!(),
+                                };
+                                builder.cl.ins().fcmp(cond, lhs, rhs)
+                            }
+                        }
                     }
                 };
-                smallvec![val]
+                let out_var = builder.var_map[out];
+                builder.cl.def_var(out_var, val);
             }
-            lir::InsnKind::BinaryOp { op, lhs, rhs } => {
-                let lhs = builder.value_map[lhs];
-                let rhs = builder.value_map[rhs];
-                use lir::BinaryOpcode as B;
-                let val = match op {
-                    B::IAdd => builder.cl.ins().iadd(lhs, rhs),
-                    B::ISub => builder.cl.ins().isub(lhs, rhs),
-                    B::IMul => builder.cl.ins().imul(lhs, rhs),
-                    B::FAdd => builder.cl.ins().fadd(lhs, rhs),
-                    B::FSub => builder.cl.ins().fsub(lhs, rhs),
-                    B::FMul => builder.cl.ins().fmul(lhs, rhs),
-                    B::FDiv => builder.cl.ins().fdiv(lhs, rhs),
-                    B::And => builder.cl.ins().band(lhs, rhs),
-                    B::Or => builder.cl.ins().bor(lhs, rhs),
-                    B::SLt | B::SGt | B::ULt | B::UGt | B::IEq | B::INeq => {
-                        let cond = match op {
-                            B::SLt => clir::condcodes::IntCC::SignedLessThan,
-                            B::SGt => clir::condcodes::IntCC::SignedGreaterThan,
-                            B::ULt => clir::condcodes::IntCC::UnsignedLessThan,
-                            B::UGt => clir::condcodes::IntCC::UnsignedGreaterThan,
-                            B::IEq => clir::condcodes::IntCC::Equal,
-                            B::INeq => clir::condcodes::IntCC::NotEqual,
-                            _ => unreachable!(),
-                        };
-                        builder.cl.ins().icmp(cond, lhs, rhs)
+            lir::InsnKind::MultiVal { out, insn } => {
+                let vals: SmallVec<[clir::Value; 1]> = match insn {
+                    lir::MultiValInsn::CallHostFunction { function, args } => {
+                        let func_ref = *builder
+                            .host_fn_imports
+                            .entry(*function)
+                            .or_insert_with(|| add_fn(Either::Left(*function), builder.cl.func));
+                        let args: Vec<_> = args
+                            .iter()
+                            .map(|arg| builder.cl.use_var(builder.var_map[arg]))
+                            .collect();
+                        let insn_ref = builder.cl.ins().call(func_ref, &args);
+                        builder.cl.inst_results(insn_ref).iter().copied().collect()
                     }
-                    B::FLt | B::FLte | B::FGt | B::FGte | B::FEq => {
-                        let cond = match op {
-                            B::FLt => clir::condcodes::FloatCC::LessThan,
-                            B::FLte => clir::condcodes::FloatCC::LessThanOrEqual,
-                            B::FGt => clir::condcodes::FloatCC::GreaterThan,
-                            B::FGte => clir::condcodes::FloatCC::GreaterThanOrEqual,
-                            B::FEq => clir::condcodes::FloatCC::Equal,
-                            _ => unreachable!(),
-                        };
-                        builder.cl.ins().fcmp(cond, lhs, rhs)
+                    lir::MultiValInsn::CallUserFunction { function, args } => {
+                        let func_ref = *builder
+                            .user_fn_imports
+                            .entry(*function)
+                            .or_insert_with(|| add_fn(Either::Right(*function), builder.cl.func));
+                        let args: Vec<_> = args
+                            .iter()
+                            .map(|arg| builder.cl.use_var(builder.var_map[arg]))
+                            .collect();
+                        let insn_ref = builder.cl.ins().call(func_ref, &args);
+                        builder.cl.inst_results(insn_ref).iter().copied().collect()
                     }
-                };
-                smallvec![val]
-            }
-            lir::InsnKind::UnaryOp { op, operand } => {
-                let operand = builder.value_map[operand];
-                let val = match op {
-                    lir::UnaryOpcode::FNeg => builder.cl.ins().fneg(operand),
-                    lir::UnaryOpcode::Not => {
-                        builder.cl.ins().icmp_imm(clir::condcodes::IntCC::Equal, operand, 0)
-                    }
-                    lir::UnaryOpcode::I64ToI32 => {
-                        builder.cl.ins().ireduce(clir::types::I32, operand)
+                    lir::MultiValInsn::CallIndirectFunction { function, args } => {
+                        let callee = builder.cl.use_var(builder.var_map[function]);
+                        let arg_types =
+                            args.iter().map(|arg| builder.lir_function.registers[*arg].ty);
+                        let output_types =
+                            out.iter().map(|out| builder.lir_function.registers[*out].ty);
+                        let signature = translate_fn_signature(arg_types, output_types, triple);
+                        let sig_ref = builder.cl.import_signature(signature);
+                        let args: Vec<_> = args
+                            .iter()
+                            .map(|arg| builder.cl.use_var(builder.var_map[arg]))
+                            .collect();
+                        let insn_ref = builder.cl.ins().call_indirect(sig_ref, callee, &args);
+                        builder.cl.inst_results(insn_ref).iter().copied().collect()
                     }
                 };
-                smallvec![val]
-            }
-            lir::InsnKind::DeriveField { offset, ptr } => {
-                let ptr = builder.value_map[ptr];
-                let val = builder.cl.ins().iadd_imm(ptr, i64::try_from(*offset).unwrap());
-                smallvec![val]
-            }
-            lir::InsnKind::DeriveElement { element_size, ptr, index } => {
-                let ptr = builder.value_map[ptr];
-                let index = builder.value_map[index];
-                let index_promoted = builder.cl.ins().sextend(clir::types::I64, index);
-                let offset = builder
-                    .cl
-                    .ins()
-                    .imul_imm(index_promoted, i64::try_from(*element_size).unwrap());
-                let val = builder.cl.ins().iadd(ptr, offset);
-                smallvec![val]
-            }
-            lir::InsnKind::MemLoad { r#type, offset, ptr } => {
-                let ptr = builder.value_map[ptr];
-                let load_ty = translate_mem_op_type(*r#type, triple);
-                let val = builder.cl.ins().load(
-                    load_ty,
-                    clir::MemFlags::new(),
-                    ptr,
-                    i32::try_from(*offset).unwrap(),
-                );
-                smallvec![val]
+                assert_eq!(out.len(), vals.len());
+                for (out, val) in out.iter().zip(vals) {
+                    let out_var = builder.var_map[out];
+                    builder.cl.def_var(out_var, val);
+                }
             }
             lir::InsnKind::MemStore { r#type: _, offset, ptr, value } => {
-                let ptr = builder.value_map[ptr];
-                let value = builder.value_map[value];
+                let ptr = builder.cl.use_var(builder.var_map[ptr]);
+                let value = builder.cl.use_var(builder.var_map[value]);
                 builder.cl.ins().store(
                     clir::MemFlags::new(),
                     value,
                     ptr,
                     i32::try_from(*offset).unwrap(),
                 );
-                smallvec![]
-            }
-            lir::InsnKind::StackLoad { .. } => {
-                unimplemented!("currently unused")
             }
             lir::InsnKind::StackStore { .. } => {
                 unimplemented!("currently unused")
             }
-            lir::InsnKind::StackAddr { .. } => {
-                unimplemented!("currently unused")
-            }
-            lir::InsnKind::VarLoad { var_id } => {
-                let var = builder.var_map[var_id];
-                let val = builder.cl.use_var(var);
-                smallvec![val]
-            }
-            lir::InsnKind::VarStore { var_id, value } => {
-                let var = builder.var_map[var_id];
-                let value = builder.value_map[value];
-                builder.cl.def_var(var, value);
-                smallvec![]
-            }
         };
-        // make the values available for later instructions
-        for (i, cl_value) in cl_values.iter().enumerate() {
-            let val_ref = lir::ValRef(lir_pc, u8::try_from(i).unwrap());
-            builder.value_map.insert(val_ref, *cl_value);
-        }
     }
 }
 
 /// Translates a LIR instruction sequence such that any breaks targeting the
 /// specified instruction sequence will jump to the end of the instruction sequence.
-/// Returns the Cranelift SSA values of the results of breaking to that instruction sequence.
 fn translate_insn_seq_with_end_break<const N: usize>(
     builder: &mut FunctionBuilder,
-    break_values: &[lir::ValType],
     targeted_insn_seq_ids: [lir::InsnSeqId; N],
-    triple: &Triple,
     add_instructions: impl FnOnce(&mut FunctionBuilder),
-) -> SmallVec<[clir::Value; 1]> {
+) {
     // create a new BB for any breaks that target the instruction sequence
     let break_bb = builder.cl.create_block();
-    for val_type in break_values {
-        builder.cl.append_block_param(break_bb, translate_val_type(*val_type, triple));
-    }
     for targeted_insn_seq_id in targeted_insn_seq_ids {
         builder.break_targets.insert(targeted_insn_seq_id, break_bb);
     }
@@ -487,9 +453,6 @@ fn translate_insn_seq_with_end_break<const N: usize>(
     // switch to the new BB to keep adding instructions
     builder.cl.switch_to_block(break_bb);
     builder.cl.seal_block(break_bb);
-
-    // make the output of the LIR block available in builder.value_map
-    builder.cl.block_params(break_bb).iter().copied().collect()
 }
 
 fn translate_val_type(val_type: lir::ValType, triple: &Triple) -> clir::Type {
@@ -515,24 +478,19 @@ fn translate_mem_op_type(mem_op_type: lir::ValType, triple: &Triple) -> clir::Ty
 }
 
 fn translate_fn_signature(
-    params: &[lir::ValType],
-    returns: &[lir::ValType],
+    params: impl Iterator<Item = lir::ValType>,
+    returns: impl Iterator<Item = lir::ValType>,
     triple: &Triple,
 ) -> clir::Signature {
-    let params = params
-        .iter()
-        .map(|param| translate_val_type(*param, triple))
-        .map(clir::AbiParam::new)
-        .collect();
-    let returns = returns
-        .iter()
-        .map(|ret| translate_val_type(*ret, triple))
-        .map(clir::AbiParam::new)
-        .collect();
+    let params =
+        params.map(|param| translate_val_type(param, triple)).map(clir::AbiParam::new).collect();
+    let returns =
+        returns.map(|ret| translate_val_type(ret, triple)).map(clir::AbiParam::new).collect();
     let call_conv = isa::CallConv::triple_default(triple);
     clir::Signature { params, returns, call_conv }
 }
 
+/*
 #[cfg(test)]
 mod test {
     use std::sync::Arc;
@@ -711,3 +669,4 @@ mod test {
         }
     }
 }
+*/
