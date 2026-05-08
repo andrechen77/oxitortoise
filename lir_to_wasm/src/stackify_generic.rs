@@ -77,10 +77,10 @@ pub struct StackManipulators<V> {
     /// The values for the getters to insert at this idx. These are inserted
     /// after the captures but before the instruction at the idx is executed.
     pub getters: Vec<V>,
-    /// The inputs to the instruction at this idx.
-    pub inputs: SmallVec<[V; 2]>,
-    /// The outputs of the instruction at this idx.
-    pub outputs: SmallVec<[V; 1]>,
+    // /// The inputs to the instruction at this idx.
+    // pub inputs: SmallVec<[V; 2]>,
+    // /// The outputs of the instruction at this idx.
+    // pub outputs: SmallVec<[V; 1]>,
 }
 
 // impl<V> Default for StackManipulators<V> {
@@ -232,8 +232,8 @@ pub fn stackify_single<V, Idx>(
         available_getters.insert(*output, succ_idx);
     }
 
-    stack_manips[my_idx].inputs = inputs;
-    stack_manips[my_idx].outputs = outputs;
+    // stack_manips[my_idx].inputs = inputs;
+    // stack_manips[my_idx].outputs = outputs;
 }
 
 /// Given that a subsequence of instructions has been stackified and results in
@@ -354,9 +354,9 @@ mod tests {
         let mut getters = HashMap::from([("a", 0), ("b", 1)]);
         let mut stk = stackification! {
             inputs [];
-            [0] cap(0) get[] [] => [];
-            [1] cap(0) get[] [] => [];
-            [2] cap(0) get[] [] => [];
+            [0] cap(0) get[];
+            [1] cap(0) get[];
+            [2] cap(0) get[];
         };
 
         stackify_single::<V, Idx>(
@@ -376,9 +376,9 @@ mod tests {
             stk,
             stackification! {
                 inputs [];
-                [0] cap(0) get[] [] => [];
-                [1] cap(0) get[] [] => [];
-                [2] cap(0) get[] [] => [];
+                [0] cap(0) get[];
+                [1] cap(0) get[];
+                [2] cap(0) get[];
             }
         );
     }
@@ -393,9 +393,9 @@ mod tests {
         let mut getters = HashMap::from([("a", 0), ("b", 1), ("c", 2)]);
         let mut stk = stackification! {
             inputs [];
-            [0] cap(0) get[] [] => [];
-            [1] cap(0) get[] [] => [];
-            [2] cap(0) get[] [] => [];
+            [0] cap(0) get[];
+            [1] cap(0) get[];
+            [2] cap(0) get[];
         };
 
         stackify_single::<V, Idx>(
@@ -413,9 +413,9 @@ mod tests {
             stk,
             stackification! {
                 inputs [];
-                [0] cap(0) get[] [] => [];
-                [1] cap(0) get[] [] => [];
-                [2] cap(0) get[] ["a", "b", "c"] => ["x"];
+                [0] cap(0) get[];
+                [1] cap(0) get[];
+                [2] cap(0) get[];
             }
         );
     }
@@ -431,10 +431,10 @@ mod tests {
         let mut getters = HashMap::from([("a", 0), ("b", 1), ("c", 2), ("d", 3)]);
         let mut stk = stackification! {
             inputs [];
-            [0] cap(0) get[] [] => [];
-            [1] cap(0) get[] [] => [];
-            [2] cap(0) get[] [] => [];
-            [3] cap(0) get[] [] => [];
+            [0] cap(0) get[];
+            [1] cap(0) get[];
+            [2] cap(0) get[];
+            [3] cap(0) get[];
         };
 
         stackify_single::<V, Idx>(
@@ -459,10 +459,10 @@ mod tests {
             stk,
             stackification! {
                 inputs [];
-                [0] cap(0) get[] [] => [];
-                [1] cap(0) get[] [] => [];
-                [2] cap(0) get["b"] [] => [];
-                [3] cap(0) get[] ["c", "b", "d"] => ["x"];
+                [0] cap(0) get[];
+                [1] cap(0) get[];
+                [2] cap(0) get["b"];
+                [3] cap(0) get[];
             }
         );
     }
@@ -478,10 +478,10 @@ mod tests {
         let mut getters = HashMap::from([("a", 0), ("b", 1), ("c", 2), ("d", 3)]);
         let mut stk = stackification! {
             inputs [];
-            [0] cap(0) get[] [] => [];
-            [1] cap(0) get[] [] => [];
-            [2] cap(0) get[] [] => [];
-            [3] cap(0) get[] [] => [];
+            [0] cap(0) get[];
+            [1] cap(0) get[];
+            [2] cap(0) get[];
+            [3] cap(0) get[];
         };
 
         stackify_single::<V, Idx>(
@@ -502,10 +502,10 @@ mod tests {
             stk,
             stackification! {
                 inputs [];
-                [0] cap(0) get[] [] => [];
-                [1] cap(0) get[] [] => [];
-                [2] cap(1) get[] [] => [];
-                [3] cap(0) get[] ["b", "d"] => ["x"];
+                [0] cap(0) get[];
+                [1] cap(0) get[];
+                [2] cap(1) get[];
+                [3] cap(0) get[];
             }
         );
     }
@@ -521,10 +521,10 @@ mod tests {
         let mut getters = HashMap::from([("a", 0), ("b", 1), ("c", 2), ("d", 3)]);
         let mut stk = stackification! {
             inputs [];
-            [0] cap(0) get[] [] => [];
-            [1] cap(0) get[] [] => [];
-            [2] cap(0) get[] [] => [];
-            [3] cap(0) get[] [] => [];
+            [0] cap(0) get[];
+            [1] cap(0) get[];
+            [2] cap(0) get[];
+            [3] cap(0) get[];
         };
 
         stackify_single::<V, Idx>(
@@ -554,10 +554,10 @@ mod tests {
             stk,
             stackification! {
                 inputs [];
-                [0] cap(0) get[] [] => [];
-                [1] cap(0) get[] [] => [];
-                [2] cap(0) get[] [] => [];
-                [3] cap(1) get[] ["c"] => ["x", "y", "z"];
+                [0] cap(0) get[];
+                [1] cap(0) get[];
+                [2] cap(0) get[];
+                [3] cap(1) get[];
             }
         );
     }
@@ -576,10 +576,10 @@ mod tests {
             HashMap::from([("a", 0), ("b", 1), ("c", 2), ("d", 2), ("e", 2), ("f", 3)]);
         let mut stk = stackification! {
             inputs [];
-            [0] cap(0) get[] [] => [];
-            [1] cap(0) get[] [] => [];
-            [2] cap(0) get[] [] => [];
-            [3] cap(0) get[] [] => [];
+            [0] cap(0) get[];
+            [1] cap(0) get[];
+            [2] cap(0) get[];
+            [3] cap(0) get[];
         };
 
         stackify_single::<V, Idx>(
@@ -607,10 +607,10 @@ mod tests {
             stk,
             stackification! {
                 inputs [];
-                [0] cap(0) get[] [] => [];
-                [1] cap(0) get[] [] => [];
-                [2] cap(0) get[] [] => [];
-                [3] cap(0) get[] ["c", "d", "e", "f"] => ["x"];
+                [0] cap(0) get[];
+                [1] cap(0) get[];
+                [2] cap(0) get[];
+                [3] cap(0) get[];
             }
         );
     }
@@ -626,8 +626,8 @@ mod tests {
         let mut getters = HashMap::from([("a", 0), ("b", 1), ("c", 1), ("d", 1)]);
         let mut stk = stackification! {
             inputs [];
-            [0] cap(0) get[] [] => [];
-            [1] cap(0) get[] [] => [];
+            [0] cap(0) get[];
+            [1] cap(0) get[];
         };
 
         stackify_single::<V, Idx>(
@@ -648,8 +648,8 @@ mod tests {
             stk,
             stackification! {
                 inputs [];
-                [0] cap(0) get[] [] => [];
-                [1] cap(1) get[] ["b", "c"] => ["x"];
+                [0] cap(0) get[];
+                [1] cap(1) get[];
             }
         );
     }
@@ -666,9 +666,9 @@ mod tests {
         let mut getters = HashMap::from([("a", 0), ("b", 1), ("c", 1), ("d", 1), ("e", 2)]);
         let mut stk = stackification! {
             inputs [];
-            [0] cap(0) get[] [] => [];
-            [1] cap(0) get[] [] => [];
-            [2] cap(0) get[] [] => [];
+            [0] cap(0) get[];
+            [1] cap(0) get[];
+            [2] cap(0) get[];
         };
 
         stackify_single::<V, Idx>(
@@ -696,9 +696,9 @@ mod tests {
             stk,
             stackification! {
                 inputs [];
-                [0] cap(0) get[] [] => [];
-                [1] cap(0) get[] [] => [];
-                [2] cap(0) get[] ["c", "d", "e"] => ["x"];
+                [0] cap(0) get[];
+                [1] cap(0) get[];
+                [2] cap(0) get[];
             }
         );
     }
@@ -729,12 +729,12 @@ mod tests {
         ]);
         let mut stk = stackification! {
             inputs [];
-            [0] cap(0) get[] [] => [];
-            [1] cap(0) get[] [] => [];
-            [2] cap(0) get[] [] => [];
-            [3] cap(0) get[] [] => [];
-            [4] cap(0) get[] [] => [];
-            [5] cap(0) get[] [] => [];
+            [0] cap(0) get[];
+            [1] cap(0) get[];
+            [2] cap(0) get[];
+            [3] cap(0) get[];
+            [4] cap(0) get[];
+            [5] cap(0) get[];
         };
 
         stackify_single::<V, Idx>(
@@ -754,12 +754,12 @@ mod tests {
             stk,
             stackification! {
                 inputs [];
-                [0] cap(0) get[] [] => [];
-                [1] cap(0) get[] [] => [];
-                [2] cap(1) get[] [] => [];
-                [3] cap(4) get["e", "g"] [] => [];
-                [4] cap(1) get[] [] => [];
-                [5] cap(0) get[] ["b", "e", "g", "i"] => ["x"];
+                [0] cap(0) get[];
+                [1] cap(0) get[];
+                [2] cap(1) get[];
+                [3] cap(4) get["e", "g"];
+                [4] cap(1) get[];
+                [5] cap(0) get[];
             }
         );
     }
@@ -790,12 +790,12 @@ mod tests {
         ]);
         let mut stk = stackification! {
             inputs [];
-            [0] cap(0) get[] [] => [];
-            [1] cap(0) get[] [] => [];
-            [2] cap(0) get[] [] => [];
-            [3] cap(0) get[] [] => [];
-            [4] cap(0) get[] [] => [];
-            [5] cap(0) get[] [] => [];
+            [0] cap(0) get[];
+            [1] cap(0) get[];
+            [2] cap(0) get[];
+            [3] cap(0) get[];
+            [4] cap(0) get[];
+            [5] cap(0) get[];
         };
 
         stackify_single::<V, Idx>(
@@ -821,12 +821,12 @@ mod tests {
             stk,
             stackification! {
                 inputs [];
-                [0] cap(0) get[] [] => [];
-                [1] cap(0) get[] [] => [];
-                [2] cap(0) get[] [] => [];
-                [3] cap(2) get["g"] [] => [];
-                [4] cap(1) get[] [] => [];
-                [5] cap(0) get[] ["e", "g", "i"] => ["x"];
+                [0] cap(0) get[];
+                [1] cap(0) get[];
+                [2] cap(0) get[];
+                [3] cap(2) get["g"];
+                [4] cap(1) get[];
+                [5] cap(0) get[];
             }
         );
     }
@@ -846,13 +846,13 @@ mod tests {
             HashMap::from([("a", 0), ("b", 1), ("c", 2), ("d", 3), ("x", 4), ("y", 4), ("z", 5)]);
         let mut stk = stackification! {
             inputs [];
-            [0] cap(0) get[] [] => [];
-            [1] cap(0) get[] [] => [];
-            [2] cap(0) get[] [] => [];
-            [3] cap(0) get[] [] => [];
-            [4] cap(0) get[] [] => [];
-            [5] cap(0) get[] [] => [];
-            [6] cap(0) get[] [] => [];
+            [0] cap(0) get[];
+            [1] cap(0) get[];
+            [2] cap(0) get[];
+            [3] cap(0) get[];
+            [4] cap(0) get[];
+            [5] cap(0) get[];
+            [6] cap(0) get[];
         };
 
         stackify_single::<V, Idx>(
@@ -892,13 +892,13 @@ mod tests {
             stk,
             stackification! {
                 inputs [];
-                [0] cap(0) get[] [] => [];
-                [1] cap(0) get[] [] => [];
-                [2] cap(0) get[] [] => [];
-                [3] cap(0) get[] [] => [];
-                [4] cap(0) get[] [] => [];
-                [5] cap(0) get[] [] => [];
-                [6] cap(1) get["d"] ["y", "d"] => ["w"];
+                [0] cap(0) get[];
+                [1] cap(0) get[];
+                [2] cap(0) get[];
+                [3] cap(0) get[];
+                [4] cap(0) get[];
+                [5] cap(0) get[];
+                [6] cap(1) get["d"];
             }
         );
     }
@@ -913,9 +913,9 @@ mod tests {
         let mut getters = HashMap::from([("a", 0), ("b", 1), ("c", 2)]);
         let mut stk = stackification! {
             inputs [];
-            [0] cap(0) get[] [] => [];
-            [1] cap(0) get[] [] => [];
-            [2] cap(0) get[] [] => [];
+            [0] cap(0) get[];
+            [1] cap(0) get[];
+            [2] cap(0) get[];
         };
 
         stackify_single::<V, Idx>(
@@ -936,9 +936,9 @@ mod tests {
             stk,
             stackification! {
                 inputs [];
-                [0] cap(0) get[] [] => [];
-                [1] cap(0) get["b"] [] => [];
-                [2] cap(1) get[] ["b", "b"] => ["x"];
+                [0] cap(0) get[];
+                [1] cap(0) get["b"];
+                [2] cap(1) get[];
             }
         );
     }
@@ -953,9 +953,9 @@ mod tests {
         let mut getters = HashMap::from([("a", 0), ("b", 1), ("c", 2)]);
         let mut stk = stackification! {
             inputs [];
-            [0] cap(0) get[] [] => [];
-            [1] cap(0) get[] [] => [];
-            [2] cap(0) get[] [] => [];
+            [0] cap(0) get[];
+            [1] cap(0) get[];
+            [2] cap(0) get[];
         };
 
         stackify_single::<V, Idx>(
@@ -975,9 +975,9 @@ mod tests {
             stk,
             stackification! {
                 inputs [];
-                [0] cap(0) get[] [] => [];
-                [1] cap(0) get["a", "b"] [] => [];
-                [2] cap(1) get[] ["b", "a", "b"] => ["x"];
+                [0] cap(0) get[];
+                [1] cap(0) get["a", "b"];
+                [2] cap(1) get[];
             }
         );
     }
@@ -1004,8 +1004,6 @@ mod tests {
             manips: ti_vec![StackManipulators {
                 captures: 0,
                 getters: vec![],
-                inputs: smallvec![],
-                outputs: smallvec![],
             }; insns.len() + 1],
         };
 
@@ -1043,11 +1041,11 @@ mod tests {
             stk,
             stackification! {
                 inputs [];
-                [0] cap(0) get[] [] => ["a"];
-                [1] cap(1) get[] [] => ["b"];
-                [2] cap(1) get[] [] => ["c"];
-                [3] cap(1) get[] [] => ["d"];
-                [4] cap(1) get[] [] => [];
+                [0] cap(0) get[];
+                [1] cap(1) get[];
+                [2] cap(1) get[];
+                [3] cap(1) get[];
+                [4] cap(1) get[];
             }
         );
     }
@@ -1068,12 +1066,12 @@ mod tests {
             stk,
             stackification! {
                 inputs [];
-                [0] cap(0) get[] [] => ["a"];
-                [1] cap(0) get[] [] => ["b"];
-                [2] cap(0) get[] [] => ["c"];
-                [3] cap(0) get[] [] => ["d"];
-                [4] cap(0) get[] ["a", "b", "c", "d"] => ["e"];
-                [5] cap(1) get[] [] => [];
+                [0] cap(0) get[];
+                [1] cap(0) get[];
+                [2] cap(0) get[];
+                [3] cap(0) get[];
+                [4] cap(0) get[];
+                [5] cap(1) get[];
             }
         );
     }
@@ -1094,12 +1092,12 @@ mod tests {
             stk,
             stackification! {
                 inputs [];
-                [0] cap(0) get[] [] => ["a"];
-                [1] cap(1) get[] [] => ["b"];
-                [2] cap(0) get[] [] => ["c"];
-                [3] cap(1) get[] [] => ["d"];
-                [4] cap(0) get[] ["b", "d"] => ["e"];
-                [5] cap(1) get[] [] => [];
+                [0] cap(0) get[];
+                [1] cap(1) get[];
+                [2] cap(0) get[];
+                [3] cap(1) get[];
+                [4] cap(0) get[];
+                [5] cap(1) get[];
             }
         );
     }
@@ -1120,12 +1118,12 @@ mod tests {
             stk,
             stackification! {
                 inputs [];
-                [0] cap(0) get[] [] => ["a"];
-                [1] cap(1) get[] [] => ["b"];
-                [2] cap(0) get[] [] => ["c"];
-                [3] cap(1) get[] [] => ["d"];
-                [4] cap(0) get["c", "a"] ["b", "d", "c", "a"] => ["e"];
-                [5] cap(1) get[] [] => [];
+                [0] cap(0) get[];
+                [1] cap(1) get[];
+                [2] cap(0) get[];
+                [3] cap(1) get[];
+                [4] cap(0) get["c", "a"];
+                [5] cap(1) get[];
             }
         );
     }
@@ -1144,10 +1142,10 @@ mod tests {
             stk,
             stackification! {
                 inputs [];
-                [0] cap(0) get[] [] => ["a"];
-                [1] cap(0) get["a"] [] => ["b"];
-                [2] cap(0) get[] ["a", "a", "b"] => ["c"];
-                [3] cap(1) get[] [] => [];
+                [0] cap(0) get[];
+                [1] cap(0) get["a"];
+                [2] cap(0) get[];
+                [3] cap(1) get[];
             }
         );
     }
@@ -1168,12 +1166,12 @@ mod tests {
             stk,
             stackification! {
                 inputs [];
-                [0] cap(0) get[] [] => ["a"];
-                [1] cap(0) get[] [] => ["b"];
-                [2] cap(0) get[] ["a", "b"] => ["c"];
-                [3] cap(1) get["b", "a"] [] => ["d"];
-                [4] cap(0) get[] ["b", "a", "d"] => ["e"];
-                [5] cap(1) get[] [] => [];
+                [0] cap(0) get[];
+                [1] cap(0) get[];
+                [2] cap(0) get[];
+                [3] cap(1) get["b", "a"];
+                [4] cap(0) get[];
+                [5] cap(1) get[];
             }
         );
     }
@@ -1193,11 +1191,11 @@ mod tests {
             stk,
             stackification! {
                 inputs [];
-                [0] cap(0) get[] [] => ["a"];
-                [1] cap(0) get[] ["a"] => ["b"];
-                [2] cap(1) get["a", "b", "b", "a", "b"] ["a", "b"] => ["c"];
-                [3] cap(0) get[] ["a", "b", "b", "c"] => ["d"];
-                [4] cap(1) get[] [] => [];
+                [0] cap(0) get[];
+                [1] cap(0) get[];
+                [2] cap(1) get["a", "b", "b", "a", "b"];
+                [3] cap(0) get[];
+                [4] cap(1) get[];
             }
         );
     }
@@ -1221,15 +1219,15 @@ mod tests {
             stk,
             stackification! {
                 inputs [];
-                [0] cap(0) get[] [] => ["a"];
-                [1] cap(0) get[] [] => ["b"];
-                [2] cap(0) get[] ["a", "b"] => ["c"];
-                [3] cap(0) get["b"] ["b"] => ["d"];
-                [4] cap(1) get[] [] => ["e"];
-                [5] cap(0) get[] ["e"] => ["f"];
-                [6] cap(0) get[] ["c", "f"] => ["g"];
-                [7] cap(1) get["a", "g"] ["a", "g"] => ["h"];
-                [8] cap(1) get[] [] => [];
+                [0] cap(0) get[];
+                [1] cap(0) get[];
+                [2] cap(0) get[];
+                [3] cap(0) get["b"];
+                [4] cap(1) get[];
+                [5] cap(0) get[];
+                [6] cap(0) get[];
+                [7] cap(1) get["a", "g"];
+                [8] cap(1) get[];
             }
         );
     }
@@ -1248,10 +1246,10 @@ mod tests {
             stk,
             stackification! {
                 inputs [];
-                [0] cap(0) get["ex0"] ["ex0"] => ["a"];
-                [1] cap(0) get[] ["a"] => ["b"];
-                [2] cap(0) get["a"] ["b", "a"] => ["c"];
-                [3] cap(1) get[] [] => [];
+                [0] cap(0) get["ex0"];
+                [1] cap(0) get[];
+                [2] cap(0) get["a"];
+                [3] cap(1) get[];
             }
         )
     }
@@ -1272,12 +1270,12 @@ mod tests {
             stk,
             stackification! {
                 inputs [];
-                [0] cap(0) get[] [] => ["a"];
-                [1] cap(0) get[] [] => ["b"];
-                [2] cap(0) get[] ["a", "b"] => ["c"];
-                [3] cap(0) get["b", "a"] ["a"] => ["d"];
-                [4] cap(0) get[] ["c", "b", "d"] => ["e"];
-                [5] cap(1) get[] [] => [];
+                [0] cap(0) get[];
+                [1] cap(0) get[];
+                [2] cap(0) get[];
+                [3] cap(0) get["b", "a"];
+                [4] cap(0) get[];
+                [5] cap(1) get[];
             }
         )
     }
@@ -1299,13 +1297,13 @@ mod tests {
             stk,
             stackification! {
                 inputs [];
-                [0] cap(0) get[] [] => ["a"];
-                [1] cap(0) get[] [] => ["b"];
-                [2] cap(0) get[] [] => ["c"];
-                [3] cap(0) get[] ["b", "c"] => ["d"];
-                [4] cap(0) get[] ["d"] => ["e"];
-                [5] cap(1) get["d"] ["a", "d"] => ["f"];
-                [6] cap(1) get[] [] => [];
+                [0] cap(0) get[];
+                [1] cap(0) get[];
+                [2] cap(0) get[];
+                [3] cap(0) get[];
+                [4] cap(0) get[];
+                [5] cap(1) get["d"];
+                [6] cap(1) get[];
             }
         );
     }
@@ -1327,13 +1325,13 @@ mod tests {
             stk,
             stackification! {
                 inputs [];
-                [0] cap(0) get[] [] => ["a"];
-                [1] cap(1) get[] [] => ["b"];
-                [2] cap(0) get[] [] => ["c"];
-                [3] cap(0) get[] ["b", "c"] => ["d"];
-                [4] cap(0) get[] ["d"] => ["e"];
-                [5] cap(1) get["d", "a"] ["d", "a"] => ["f"];
-                [6] cap(1) get[] [] => [];
+                [0] cap(0) get[];
+                [1] cap(1) get[];
+                [2] cap(0) get[];
+                [3] cap(0) get[];
+                [4] cap(0) get[];
+                [5] cap(1) get["d", "a"];
+                [6] cap(1) get[];
             }
         );
     }
@@ -1357,15 +1355,15 @@ mod tests {
             stk,
             stackification! {
                 inputs [];
-                [0] cap(0) get[] [] => ["a"];
-                [1] cap(0) get[] [] => ["b"];
-                [2] cap(0) get[] [] => ["c"];
-                [3] cap(0) get[] [] => ["d"];
-                [4] cap(0) get[] [] => ["e"];
-                [5] cap(0) get[] ["b", "c", "d", "e"] => ["b", "c", "d"];
-                [6] cap(3) get["c"] ["a", "c"] => ["f"];
-                [7] cap(1) get["d", "b"] ["d", "b"] => ["g"];
-                [8] cap(1) get[] [] => [];
+                [0] cap(0) get[];
+                [1] cap(0) get[];
+                [2] cap(0) get[];
+                [3] cap(0) get[];
+                [4] cap(0) get[];
+                [5] cap(0) get[];
+                [6] cap(3) get["c"];
+                [7] cap(1) get["d", "b"];
+                [8] cap(1) get[];
             }
         );
     }

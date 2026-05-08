@@ -6,7 +6,7 @@ edition = "2024"
 [dependencies]
 bytemuck = { workspace = true }
 derive_more = { workspace = true }
-either = "1.15.0"
+either = { workspace = true }
 flagset = "0.4.6"
 slotmap = { workspace = true }
 smallvec = { workspace = true }

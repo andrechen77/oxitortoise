@@ -11,3 +11,4 @@ pretty_print = { path = "../pretty_print" }
 macro_reflect = { path = "../macro_reflect/macro_reflect" }
 bytemuck = { workspace = true }
 smallvec = { workspace = true }
+either = { workspace = true }

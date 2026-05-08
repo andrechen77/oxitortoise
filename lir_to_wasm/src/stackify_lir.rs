@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
-use lir::smallvec::{SmallVec, ToSmallVec, smallvec};
+use lir::smallvec::{self, SmallVec, ToSmallVec, smallvec};
 use lir::typed_index_collections::ti_vec;
-use lir::{Block, Function, IfElse, InsnIdx, InsnKind, InsnPc, InsnSeqId, Loop, ValRef};
+use lir::{Block, Function, IfElse, InsnKind, InsnSeqId, Loop, MultiValInsn, Reg, SingleValInsn};
 
 use crate::stackify_generic::{self, InsnSeqStackification, StackManipulators};
 
@@ -34,23 +34,35 @@ fn factor_common_prefix<T: PartialEq, const N: usize>(mut sequences: [&mut Vec<T
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
-pub enum ValRefOrStackPtr {
-    ValRef(ValRef),
+pub enum Val {
+    Reg {
+        /// The register whose value we want to use.
+        reg: Reg,
+        /// A monotonically increasing index that differentiates between
+        /// different values of the same register if the register was modified.
+        nonce: u32,
+    },
+    /// The stack pointer of the current function. This cannot change.
     StackPtr,
 }
 
-impl From<ValRef> for ValRefOrStackPtr {
-    fn from(v: ValRef) -> Self {
-        ValRefOrStackPtr::ValRef(v)
-    }
+#[derive(Default)]
+struct ValTracker {
+    /// Maps each register to the nonce of the last value of the register that
+    /// was set. If a register does not exist in this map, its value was never
+    /// set.
+    current_reg_nonces: HashMap<Reg, u32>,
 }
 
-impl ValRefOrStackPtr {
-    pub fn unwrap_val_ref(self) -> ValRef {
-        match self {
-            ValRefOrStackPtr::ValRef(v) => v,
-            ValRefOrStackPtr::StackPtr => panic!("expected a val ref, but got a stack ptr"),
-        }
+impl ValTracker {
+    fn set_reg(&mut self, reg: Reg) -> Val {
+        let nonce = self.current_reg_nonces.entry(reg).and_modify(|nonce| *nonce += 1).or_insert(0);
+        Val::Reg { reg, nonce: *nonce }
+    }
+
+    /// Panics if the register has never been set.
+    fn get_reg(&self, reg: Reg) -> Val {
+        Val::Reg { reg, nonce: self.current_reg_nonces[&reg] }
     }
 }
 
@@ -58,218 +70,139 @@ impl ValRefOrStackPtr {
 pub struct CfgStackification {
     /// Maps each instruction sequence to the set of manipulators to be injected
     /// to get proper stack machine execution.
-    pub seqs: HashMap<InsnSeqId, InsnSeqStackification<ValRefOrStackPtr, InsnIdx>>,
+    pub seqs: HashMap<InsnSeqId, InsnSeqStackification<Val, usize>>,
 }
 
 pub fn stackify_cfg(function: &Function) -> CfgStackification {
+    let mut vals = ValTracker::default();
     let mut result = CfgStackification { seqs: HashMap::new() };
-    stackify_insn_seq(function, function.body.body, &mut result.seqs);
-    fn stackify_insn_seq(
-        function: &Function,
-        seq_id: InsnSeqId,
-        out: &mut HashMap<InsnSeqId, InsnSeqStackification<ValRefOrStackPtr, InsnIdx>>,
-    ) {
-        // start the sequence with a fresh operand stack and no manipulators
-        let mut op_stack = Vec::new();
-        let mut getters = HashMap::new();
+    for (insn_seq_id, insn_seq) in function.insn_seqs.iter_enumerated() {
+        let stackification = stackify_insn_seq(insn_seq, &mut vals);
+        result.seqs.insert(insn_seq_id, stackification);
+    }
 
-        let insns = &function.insn_seqs[seq_id];
+    result
+}
 
-        // TODO there used to be an assertion here that the instruction sequence
-        // was stackified in order relative to other instruction sequences. why
-        // was this assertion made and is the fact that we had to remove it
-        // indicative of a bug?
-        let old = out.insert(
-            seq_id,
-            InsnSeqStackification {
-                inputs: vec![],
-                manips: ti_vec![StackManipulators {
-                    captures: 0,
-                    getters: vec![],
-                    inputs: smallvec![],
-                    outputs: smallvec![],
-                }; insns.len() + 1],
-            },
+fn stackify_insn_seq(
+    insn_seq: &[InsnKind],
+    vals: &mut ValTracker,
+) -> InsnSeqStackification<Val, usize> {
+    // start the sequence with a fresh operand stack and no manipulators
+    let mut op_stack = Vec::new();
+    let mut getters = HashMap::new();
+
+    let mut output = InsnSeqStackification {
+        inputs: vec![],
+        manips: ti_vec![StackManipulators {
+            captures: 0,
+            getters: vec![],
+        }; insn_seq.len() + 1],
+    };
+
+    for (insn_idx, insn) in insn_seq.iter().enumerate() {
+        let (inputs, outputs) = to_inputs_and_outputs(vals, insn);
+        stackify_generic::stackify_single(
+            &mut op_stack,
+            &mut getters,
+            &mut output.manips,
+            insn_idx,
+            inputs,
+            outputs,
         );
-        assert!(old.is_none(), "an insn seq should not be stackified twice");
+    }
 
-        for (insn_idx, insn) in insns.iter_enumerated() {
-            let pc = InsnPc(seq_id, insn_idx);
-            let (inputs, outputs): (
-                SmallVec<[ValRefOrStackPtr; 2]>,
-                SmallVec<[ValRefOrStackPtr; 1]>,
-            ) = match insn {
-                InsnKind::LoopArg { .. } => {
-                    // this doesn't actually output onto the stack. this is
-                    // because arguments are just symbolic and don't translate
-                    // to Wasm instructions
-                    (smallvec![], smallvec![])
-                }
-                InsnKind::Const { .. } => (smallvec![], smallvec![ValRef(pc, 0).into()]),
-                InsnKind::UserFunctionPtr { .. } => (smallvec![], smallvec![ValRef(pc, 0).into()]),
-                InsnKind::DeriveField { ptr, .. } => {
-                    (smallvec![(*ptr).into()], smallvec![ValRef(pc, 0).into()])
-                }
-                InsnKind::DeriveElement { ptr, index, .. } => {
-                    (smallvec![(*ptr).into(), (*index).into()], smallvec![ValRef(pc, 0).into()])
-                }
-                InsnKind::MemLoad { ptr, .. } => {
-                    (smallvec![(*ptr).into()], smallvec![ValRef(pc, 0).into()])
-                }
-                InsnKind::MemStore { ptr, value, .. } => {
-                    (smallvec![(*ptr).into(), (*value).into()], smallvec![])
-                }
-                InsnKind::StackLoad { .. } => (smallvec![], smallvec![ValRef(pc, 0).into()]),
-                InsnKind::StackStore { value, .. } => {
-                    (smallvec![ValRefOrStackPtr::StackPtr, (*value).into()], smallvec![])
-                }
-                InsnKind::VarLoad { .. } => (smallvec![], smallvec![ValRef(pc, 0).into()]),
-                InsnKind::VarStore { value, .. } => (smallvec![(*value).into()], smallvec![]),
-                InsnKind::StackAddr { .. } => (smallvec![], smallvec![ValRef(pc, 0).into()]),
-                InsnKind::CallHostFunction { args, output_type, .. } => (
-                    args.iter().map(|v| (*v).into()).collect(),
-                    (0..output_type.len())
-                        .map(|i| ValRef(pc, i.try_into().unwrap()).into())
-                        .collect(),
-                ),
-                InsnKind::CallUserFunction { args, output_type, .. } => (
-                    args.iter().map(|v| (*v).into()).collect(),
-                    (0..output_type.len())
-                        .map(|i| ValRef(pc, i.try_into().unwrap()).into())
-                        .collect(),
-                ),
-                InsnKind::CallIndirectFunction { function, args, output_type } => (
-                    {
-                        let mut inputs: SmallVec<_> = args.iter().map(|v| (*v).into()).collect();
-                        inputs.push((*function).into());
-                        inputs
-                    },
-                    (0..output_type.len())
-                        .map(|i| ValRef(pc, i.try_into().unwrap()).into())
-                        .collect(),
-                ),
-                InsnKind::UnaryOp { operand, .. } => {
-                    (smallvec![(*operand).into()], smallvec![ValRef(pc, 0).into()])
-                }
-                InsnKind::BinaryOp { lhs, rhs, .. } => {
-                    (smallvec![(*lhs).into(), (*rhs).into()], smallvec![ValRef(pc, 0).into()])
-                }
-                InsnKind::Break { values, .. } => {
-                    (values.iter().map(|v| (*v).into()).collect(), smallvec![])
-                }
-                InsnKind::ConditionalBreak { condition, values, .. } => {
-                    let outputs: SmallVec<[ValRefOrStackPtr; 1]> =
-                        values.iter().map(|v| (*v).into()).collect();
-                    let mut inputs = outputs.to_smallvec();
-                    inputs.push((*condition).into());
-                    (inputs, outputs)
-                }
-                InsnKind::Block(Block { body, output_type }) => {
-                    // generate val refs for the outputs
-                    let outputs = (0..output_type.len())
-                        .map(|i| ValRef(pc, i.try_into().unwrap()).into())
-                        .collect();
+    // any excess operands on the stack should be eliminated
+    stackify_generic::remove_excess_operands(
+        op_stack.drain(..).zip(std::iter::repeat(false)),
+        &mut output.manips,
+        insn_seq.len(),
+    );
 
-                    // stackify the inner block
-                    stackify_insn_seq(function, *body, out);
+    output
+}
 
-                    // turn all leading getters into inputs to the block
-                    let leading_manips = &mut out.get_mut(body).unwrap().manips[InsnIdx(0)];
-                    assert_eq!(
-                        leading_manips.captures, 0,
-                        "an insn seq stackified without parameters should not have any leading captures"
-                    );
-                    let leading_getters = std::mem::take(&mut leading_manips.getters);
-                    let inputs = leading_getters.to_smallvec();
-                    out.get_mut(body).unwrap().inputs = leading_getters;
-
-                    (inputs, outputs)
+fn to_inputs_and_outputs(
+    v: &mut ValTracker,
+    insn: &InsnKind,
+) -> (SmallVec<[Val; 2]>, SmallVec<[Val; 1]>) {
+    match insn {
+        InsnKind::SingleVal { out, insn } => {
+            let inputs = match insn {
+                SingleValInsn::Const { val: _ } => smallvec![],
+                SingleValInsn::DeriveField { offset: _, ptr } => smallvec!(v.get_reg(*ptr)),
+                SingleValInsn::DeriveElement { element_size: _, ptr, index } => {
+                    smallvec!(v.get_reg(*ptr), v.get_reg(*index))
                 }
-                InsnKind::IfElse(IfElse { condition, output_type, then_body, else_body }) => {
-                    // generate val refs for the outputs
-                    let outputs = (0..output_type.len())
-                        .map(|i| ValRef(pc, i.try_into().unwrap()).into())
-                        .collect();
-
-                    // stackify the inner blocks
-                    stackify_insn_seq(function, *then_body, out);
-                    stackify_insn_seq(function, *else_body, out);
-
-                    // turn common leading getters into inputs to the if-else
-                    let then_leading_manips =
-                        &mut out.get_mut(then_body).unwrap().manips[InsnIdx(0)];
-                    assert_eq!(then_leading_manips.captures, 0);
-                    let mut then_leading_getters = std::mem::take(&mut then_leading_manips.getters);
-                    let else_leading_manips =
-                        &mut out.get_mut(else_body).unwrap().manips[InsnIdx(0)];
-                    assert_eq!(else_leading_manips.captures, 0);
-                    let mut else_leading_getters = std::mem::take(&mut else_leading_manips.getters);
-                    let common_prefix = factor_common_prefix([
-                        &mut then_leading_getters,
-                        &mut else_leading_getters,
-                    ]);
-                    let mut inputs = common_prefix.to_smallvec();
-                    inputs.push((*condition).into());
-                    out.get_mut(then_body).unwrap().inputs = common_prefix.clone();
-                    out.get_mut(then_body).unwrap().manips[InsnIdx(0)].getters =
-                        then_leading_getters;
-                    out.get_mut(else_body).unwrap().inputs = common_prefix;
-                    out.get_mut(else_body).unwrap().manips[InsnIdx(0)].getters =
-                        else_leading_getters;
-
-                    (inputs, outputs)
-                }
-                InsnKind::Loop(Loop { inputs, output_type, body }) => {
-                    // generate val refs for the outputs
-                    let outputs = (0..output_type.len())
-                        .map(|i| ValRef(pc, i.try_into().unwrap()).into())
-                        .collect();
-
-                    // stackify the inner block
-                    stackify_insn_seq(function, *body, out);
-
-                    let inputs = inputs.iter().map(|v| (*v).into()).collect();
-
-                    (inputs, outputs)
+                SingleValInsn::UserFunctionPtr { function: _ } => smallvec![],
+                SingleValInsn::MemLoad { r#type: _, offset: _, ptr } => smallvec!(v.get_reg(*ptr)),
+                SingleValInsn::StackLoad { r#type: _, offset: _ } => smallvec![],
+                SingleValInsn::StackAddr { offset: _ } => smallvec![],
+                SingleValInsn::UnaryOp { op: _, operand } => smallvec!(v.get_reg(*operand)),
+                SingleValInsn::BinaryOp { op: _, lhs, rhs } => {
+                    smallvec!(v.get_reg(*lhs), v.get_reg(*rhs))
                 }
             };
-            stackify_generic::stackify_single(
-                &mut op_stack,
-                &mut getters,
-                &mut out.get_mut(&seq_id).unwrap().manips,
-                insn_idx,
-                inputs,
-                outputs,
-            );
+            let output = v.set_reg(*out);
+            (inputs, smallvec![output])
         }
-
-        // any excess operands on the stack should be eliminated
-        stackify_generic::remove_excess_operands(
-            op_stack.drain(..).zip(std::iter::repeat(false)),
-            &mut out.get_mut(&seq_id).unwrap().manips,
-            insns.next_key(),
-        );
-    }
-
-    result
-}
-
-/// Within an entire function, counts the number of getters exist for each
-/// value.
-pub fn count_getters(stk: &CfgStackification) -> HashMap<ValRef, usize> {
-    let mut result = HashMap::new();
-    for seq in stk.seqs.values() {
-        for manips in &seq.manips {
-            for v in &manips.getters {
-                if let ValRefOrStackPtr::ValRef(v) = v {
-                    *result.entry(*v).or_insert(0) += 1;
+        InsnKind::MultiVal { out, insn } => {
+            let inputs = match insn {
+                MultiValInsn::CallHostFunction { function: _, args }
+                | MultiValInsn::CallUserFunction { function: _, args }
+                | MultiValInsn::CallIndirectFunction { function: _, args } => {
+                    args.iter().map(|reg| v.get_reg(*reg)).collect()
                 }
-            }
+            };
+            let outputs = out.iter().map(|reg| v.set_reg(*reg)).collect();
+            (inputs, outputs)
         }
+        InsnKind::MemStore { r#type: _, offset: _, ptr, value } => {
+            let inputs = smallvec![v.get_reg(*ptr), v.get_reg(*value)];
+            let outputs = smallvec![];
+            (inputs, outputs)
+        }
+        InsnKind::StackStore { r#type: _, offset: _, value } => {
+            let inputs = smallvec![Val::StackPtr, v.get_reg(*value)];
+            let outputs = smallvec![];
+            (inputs, outputs)
+        }
+        InsnKind::Break { target: _ } => (smallvec![], smallvec![]),
+        InsnKind::ConditionalBreak { target: _, condition } => {
+            let inputs = smallvec![v.get_reg(*condition)];
+            let outputs = smallvec![];
+            (inputs, outputs)
+        }
+        // For these control flow instructions, we used to have an algorithm
+        // that turned leading getters of the block into inputs to the block,
+        // and any operands left on the stack when the block ended would be
+        // outputs of the block. This required stackifying the inner instruction
+        // sequence too, requiring mutual recursion between this function and
+        // the `stackify_insn_seq` function. The resulting code was clever but
+        // not super necessary, so this comment is what remains of it.
+        InsnKind::Block(_block) => (smallvec![], smallvec![]),
+        InsnKind::IfElse(_if_else) => (smallvec![], smallvec![]),
+        InsnKind::Loop(_loop) => (smallvec![], smallvec![]),
     }
-    result
 }
 
+// /// Within an entire function, counts the number of getters exist for each
+// /// value.
+// pub fn count_getters(stk: &CfgStackification) -> HashMap<ValRef, usize> {
+//     let mut result = HashMap::new();
+//     for seq in stk.seqs.values() {
+//         for manips in &seq.manips {
+//             for v in &manips.getters {
+//                 if let ValRefOrStackPtr::ValRef(v) = v {
+//                     *result.entry(*v).or_insert(0) += 1;
+//                 }
+//             }
+//         }
+//     }
+//     result
+// }
+
+/*
 #[cfg(test)]
 mod tests {
     use lir::lir_function;
@@ -437,3 +370,4 @@ mod tests {
         );
     }
 }
+*/

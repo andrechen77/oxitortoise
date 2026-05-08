@@ -57,8 +57,8 @@ new_key_type! {
 
 #[derive(Debug, Clone)]
 pub struct HostFunctionInfo {
-    pub parameter_types: &'static [ValType],
-    pub return_type: &'static [ValType],
+    pub parameter_types: Vec<ValType>,
+    pub return_type: Vec<ValType>,
     pub addr: *const u8,
     /// Meaningful on Wasm targets only. Import the function by this name.
     pub name: &'static str,
@@ -68,23 +68,30 @@ pub struct HostFunctionInfo {
 /// is always used for a function pointer so it is actually safe to share.
 unsafe impl Sync for HostFunctionInfo {}
 
-#[derive(Debug, Copy, Clone, Deref, Display)]
+#[derive(Debug, Clone, Deref, Display, Hash, PartialEq, Eq)]
 #[deref(forward)]
 #[display("{:?}", self.0.name)]
-pub struct HostFunction(pub &'static HostFunctionInfo);
+pub struct HostFunction(pub Arc<HostFunctionInfo>);
 
-impl PartialEq for HostFunction {
-    fn eq(&self, other: &Self) -> bool {
-        std::ptr::eq(self.0, other.0)
+impl HostFunction {
+    pub fn new(info: HostFunctionInfo) -> Self {
+        Self(Arc::new(info))
     }
 }
-impl Eq for HostFunction {}
 
-impl std::hash::Hash for HostFunction {
+impl std::hash::Hash for HostFunctionInfo {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        (self.0 as *const HostFunctionInfo).hash(state);
+        self.addr.hash(state);
+        self.name.hash(state);
     }
 }
+
+impl PartialEq for HostFunctionInfo {
+    fn eq(&self, other: &Self) -> bool {
+        self.addr == other.addr && self.name == other.name
+    }
+}
+impl Eq for HostFunctionInfo {}
 
 #[derive(PartialEq, Eq)]
 pub struct Function {

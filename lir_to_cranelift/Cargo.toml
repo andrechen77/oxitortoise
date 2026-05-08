@@ -10,7 +10,7 @@ cranelift-module = "0.129.0"
 target-lexicon = "0.13"
 lir = { path = "../lir", package = "oxitortoise_lir" }
 tracing = "0.1.41"
-either = "1.15.0"
+either = { workspace = true }
 
 [dev-dependencies]
 cranelift-jit = "0.129.0"

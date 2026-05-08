@@ -13,7 +13,7 @@ mod build_lir;
 mod builder;
 mod format;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 #[debug("{debug_name}")]
 pub struct HostFunctionInfo {
     pub debug_name: &'static str,
@@ -23,6 +23,13 @@ pub struct HostFunctionInfo {
     pub link_name: &'static str,
     /// Meaningfun on native targets. The function is located at this address.
     pub link_addr: *const u8,
+}
+
+impl std::hash::Hash for HostFunctionInfo {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.link_name.hash(state);
+        self.link_addr.hash(state);
+    }
 }
 
 // SAFETY: the only thing that prevents the struct from being Sync is the raw
@@ -246,6 +253,16 @@ impl Place {
 impl Function {
     fn return_ty(&self) -> &DynType {
         &self.local_decls[&self.return_local].ty
+    }
+
+    // TODO deduplicate this function with the one in mir builder
+    pub fn place_ty(&self, place: &Place) -> &DynType {
+        let Place { local, projections } = place;
+        let mut ty = &self.local_decls[local].ty;
+        for projection in projections {
+            ty = ty.project(*projection).expect("should be able to project type");
+        }
+        ty
     }
 }
 

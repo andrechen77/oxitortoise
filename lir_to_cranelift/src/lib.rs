@@ -370,10 +370,10 @@ fn translate_insn_seq(
             lir::InsnKind::MultiVal { out, insn } => {
                 let vals: SmallVec<[clir::Value; 1]> = match insn {
                     lir::MultiValInsn::CallHostFunction { function, args } => {
-                        let func_ref = *builder
-                            .host_fn_imports
-                            .entry(*function)
-                            .or_insert_with(|| add_fn(Either::Left(*function), builder.cl.func));
+                        let func_ref =
+                            *builder.host_fn_imports.entry(function.clone()).or_insert_with_key(
+                                |function| add_fn(Either::Left(function.clone()), builder.cl.func),
+                            );
                         let args: Vec<_> = args
                             .iter()
                             .map(|arg| builder.cl.use_var(builder.var_map[arg]))

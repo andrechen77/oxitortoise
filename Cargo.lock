@@ -636,6 +636,7 @@ version = "0.1.0"
 dependencies = [
  "bytemuck",
  "derive_more",
+ "either",
  "macro_reflect",
  "oxitortoise_lir",
  "pretty_print",
